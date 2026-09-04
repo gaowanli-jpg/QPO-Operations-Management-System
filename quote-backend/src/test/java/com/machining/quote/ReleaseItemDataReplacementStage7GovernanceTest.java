@@ -120,7 +120,7 @@ class ReleaseItemDataReplacementStage7GovernanceTest {
         summary.setUnmatchedCount(1);
         summary.setSkippedCount(2);
         Map<String, Integer> changedFieldCounts = new LinkedHashMap<>();
-        changedFieldCounts.put("description", 2);
+        changedFieldCounts.put("materialName", 2);
         changedFieldCounts.put("customerOrderNo", 2);
 
         Method auditSummary = ReleaseItemDataReplacementService.class.getDeclaredMethod(

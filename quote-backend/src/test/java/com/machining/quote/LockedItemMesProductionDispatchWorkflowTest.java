@@ -109,6 +109,8 @@ class LockedItemMesProductionDispatchWorkflowTest extends LockedItemMesProductio
         assertThat(request.getMaterialShape()).isEqualTo("板材");
         assertThat(request.getSurfaceTreatment()).isEqualTo("Anodized");
         assertThat(request.getDescription()).isEqualTo("Bracket");
+        assertThat(request.getItems()).singleElement().satisfies(item ->
+                assertThat(item.getCustomerRequirements()).isEqualTo("材料名称：6061\n表面处理：Anodized"));
         assertThat(request.getRemark()).isEqualTo("Rush");
         assertThat(request.getDeliveryDate()).isEqualTo(LocalDate.of(2026, 8, 12));
         assertThat(request.getProcessRoute()).singleElement().satisfies(route -> {

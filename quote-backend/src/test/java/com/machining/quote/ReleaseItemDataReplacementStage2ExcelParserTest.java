@@ -55,18 +55,18 @@ class ReleaseItemDataReplacementStage2ExcelParserTest {
     void blankOptionalCellsDoNotCreateClearOperationsAndUnknownOnlyRowsAreIgnored() throws Exception {
         byte[] workbook = workbookBytes(
                 0,
-                List.of("图号", "版本", "物料描述", "备注", "未知列"),
+                List.of("图号", "版本", "材料名称", "备注", "未知列"),
                 List.of(
                         row("P-001", "A", "  ", null, "ignored"),
                         row(null, null, null, null, "unknown-only"),
-                        row("P-002", "B", "新描述", "", null)));
+                        row("P-002", "B", "新材料名称", "", null)));
 
         ReleaseItemDataReplacementExcelParseResult result = parse(workbook);
 
         assertThat(result.getRows()).hasSize(2);
         assertThat(result.getRows().get(0).getValues()).isEmpty();
         assertThat(result.getRows().get(1).getValues())
-                .containsExactly(Map.entry("description", "新描述"));
+                .containsExactly(Map.entry("materialName", "新材料名称"));
     }
 
     @Test
@@ -78,13 +78,13 @@ class ReleaseItemDataReplacementStage2ExcelParserTest {
             CellStyle dateStyle = source.createCellStyle();
             dateStyle.setDataFormat(creationHelper.createDataFormat().getFormat("yyyy-mm-dd"));
             Sheet sheet = source.createSheet("replacement");
-            writeHeaders(sheet.createRow(0), List.of("图号", "版本", "内部目标交期", "物料描述", "通过数量"));
+            writeHeaders(sheet.createRow(0), List.of("图号", "版本", "内部目标交期", "材料名称", "通过数量"));
             Row data = sheet.createRow(1);
             data.createCell(0).setCellFormula("\"P-\"&\"003\"");
             data.createCell(1).setCellFormula("\"c\"");
             data.createCell(2).setCellFormula("DATE(2026,8,16)");
             data.getCell(2).setCellStyle(dateStyle);
-            data.createCell(3).setCellFormula("\"公式描述\"");
+            data.createCell(3).setCellFormula("\"公式材料名称\"");
             data.createCell(4).setCellFormula("1+2");
             source.getCreationHelper().createFormulaEvaluator().evaluateAll();
             source.write(output);
@@ -97,7 +97,7 @@ class ReleaseItemDataReplacementStage2ExcelParserTest {
         assertThat(parsed.getNormalizedVersion()).isEqualTo("C");
         assertThat(parsed.getValues())
                 .containsEntry("internalTargetLeadTime", LocalDate.of(2026, 8, 16))
-                .containsEntry("description", "公式描述")
+                .containsEntry("materialName", "公式材料名称")
                 .containsEntry("acceptedQty", 3);
         assertThat(parsed.getErrors()).isEmpty();
     }

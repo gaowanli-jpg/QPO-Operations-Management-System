@@ -88,10 +88,12 @@ class ReleaseItemDataReplacementStage1CharacterizationTest {
         OrderRfq order = order(101, QuoteStatusWorkflow.PARTIALLY_RELEASED);
         ItemQuoteVersion item = item(201, 101, 10);
         item.setDescription("old description");
+        item.setMaterialName("old material name");
         item.setSurfaceTreatment("old surface");
         item.setRemark("old remark");
         OrderDeliveryTicket historicalTicket = ticket(9001, 201, 4);
         historicalTicket.setDescription("released description");
+        historicalTicket.setMaterialName("released material name");
         historicalTicket.setSurfaceTreatment("released surface");
         historicalTicket.setRemark("released remark");
 
@@ -102,11 +104,13 @@ class ReleaseItemDataReplacementStage1CharacterizationTest {
 
         context.service.updateReleaseItemFields(201L, fieldRequest());
 
-        assertThat(item.getDescription()).isEqualTo("new description");
+        assertThat(item.getDescription()).isEqualTo("old description");
+        assertThat(item.getMaterialName()).isEqualTo("new material name");
         assertThat(item.getSurfaceTreatment()).isEqualTo("new surface");
         assertThat(item.getRemark()).isEqualTo("new remark");
         assertThat(historicalTicket.getQty()).isEqualTo(4);
         assertThat(historicalTicket.getDescription()).isEqualTo("released description");
+        assertThat(historicalTicket.getMaterialName()).isEqualTo("released material name");
         assertThat(historicalTicket.getSurfaceTreatment()).isEqualTo("released surface");
         assertThat(historicalTicket.getRemark()).isEqualTo("released remark");
         verify(context.itemMapper).updateById(item);
@@ -119,10 +123,12 @@ class ReleaseItemDataReplacementStage1CharacterizationTest {
         OrderRfq order = order(101, QuoteStatusWorkflow.PARTIALLY_RELEASED);
         ItemQuoteVersion item = item(201, 101, 10);
         item.setDescription("old description");
+        item.setMaterialName("old material name");
         item.setSurfaceTreatment("old surface");
         item.setRemark("old remark");
         OrderDeliveryTicket historicalTicket = ticket(9001, 201, 10);
         historicalTicket.setDescription("released description");
+        historicalTicket.setMaterialName("released material name");
         historicalTicket.setSurfaceTreatment("released surface");
         historicalTicket.setRemark("released remark");
 
@@ -133,10 +139,12 @@ class ReleaseItemDataReplacementStage1CharacterizationTest {
 
         context.service.updateReleaseItemFields(201L, fieldRequest());
 
-        assertThat(item.getDescription()).isEqualTo("new description");
+        assertThat(item.getDescription()).isEqualTo("old description");
+        assertThat(item.getMaterialName()).isEqualTo("new material name");
         assertThat(item.getSurfaceTreatment()).isEqualTo("new surface");
         assertThat(item.getRemark()).isEqualTo("new remark");
         assertThat(historicalTicket.getDescription()).isEqualTo("released description");
+        assertThat(historicalTicket.getMaterialName()).isEqualTo("released material name");
         assertThat(historicalTicket.getSurfaceTreatment()).isEqualTo("released surface");
         assertThat(historicalTicket.getRemark()).isEqualTo("released remark");
         verify(context.itemMapper).updateById(item);
@@ -211,7 +219,7 @@ class ReleaseItemDataReplacementStage1CharacterizationTest {
         ReleaseItemFieldUpdateReq request = new ReleaseItemFieldUpdateReq();
         request.setSourceType(ReleaseSourceType.RFQ);
         request.setRfqId(101);
-        request.setDescription(" new description ");
+        request.setMaterialName(" new material name ");
         request.setSurfaceTreatment(" new surface ");
         request.setRemark(" new remark ");
         return request;

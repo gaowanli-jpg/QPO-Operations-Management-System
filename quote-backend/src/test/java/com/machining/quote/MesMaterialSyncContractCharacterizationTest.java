@@ -172,7 +172,7 @@ class MesMaterialSyncContractCharacterizationTest extends MesMaterialSyncTestSup
         item.setDrawingVersion("A");
         item.setDrawingUrls(List.of("http://qpo.local/p100.pdf"));
         item.setRemark("Rush");
-        item.setCustomerRequirements("物料描述：Bracket\n表面处理：Anodized");
+        item.setCustomerRequirements("材料名称：Bracket\n表面处理：Anodized");
         req.setItems(List.of(item));
 
         JsonNode payload = serialize(req);
@@ -185,7 +185,7 @@ class MesMaterialSyncContractCharacterizationTest extends MesMaterialSyncTestSup
                 .isEqualTo("http://qpo.local/p100.pdf");
         assertThat(payload.path("items").get(0).path("remark").asText()).isEqualTo("Rush");
         assertThat(payload.path("items").get(0).path("customerRequirements").asText())
-                .isEqualTo("物料描述：Bracket\n表面处理：Anodized");
+                .isEqualTo("材料名称：Bracket\n表面处理：Anodized");
         assertThat(payload.has("mesRequestId")).isFalse();
         assertThat(payload.path("items").get(0).has("partNo")).isFalse();
         assertThat(payload.path("items").get(0).has("drawingUrl")).isFalse();

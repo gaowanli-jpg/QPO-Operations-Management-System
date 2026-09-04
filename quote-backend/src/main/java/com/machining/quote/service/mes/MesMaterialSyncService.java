@@ -775,7 +775,7 @@ public class MesMaterialSyncService {
         item.setDrawingUrls(List.of(businessFileService.externalReadableUrl(required(drawingUrl, "Drawing URL cannot be blank"))));
         item.setRemark(trimToNull(ticket.getRemark()));
         item.setCustomerRequirements(MesCustomerRequirementsAssembler.assemble(
-                ticket.getDescription(),
+                ticket.getMaterialName(),
                 ticket.getSurfaceTreatment()));
         String groupKey = normalizeKeyPart(customerCode) + "|" + normalizeKeyPart(customerName) + "|" + normalizeKeyPart(internalProjectNo);
         return new MaterialBatchPlan(
@@ -1287,7 +1287,7 @@ public class MesMaterialSyncService {
         item.setDrawingUrls(List.of(businessFileService.externalReadableUrl(required(drawingUrl, "图纸不能为空"))));
         item.setRemark(trimToNull(ticket.getRemark()));
         item.setCustomerRequirements(MesCustomerRequirementsAssembler.assemble(
-                ticket.getDescription(),
+                ticket.getMaterialName(),
                 ticket.getSurfaceTreatment()));
         req.setItems(List.of(item));
         return req;

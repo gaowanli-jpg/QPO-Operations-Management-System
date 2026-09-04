@@ -131,6 +131,7 @@ class ReleaseVersionDrawingStage1Test {
         OrderRfq order = releaseOrder(101, "RFQ-101");
         ItemQuoteVersion item = releaseItem(201, 101, "P-001", "A");
         item.setDescription("old description");
+        item.setMaterialName("old material name");
         item.setSurfaceTreatment("old surface");
         item.setRemark("old remark");
         when(orderMapper.selectByIdForUpdate(101)).thenReturn(order);
@@ -141,7 +142,7 @@ class ReleaseVersionDrawingStage1Test {
         ReleaseItemFieldUpdateReq req = new ReleaseItemFieldUpdateReq();
         req.setSourceType(ReleaseSourceType.RFQ);
         req.setRfqId(101);
-        req.setDescription(" updated description ");
+        req.setMaterialName(" updated material name ");
         req.setSurfaceTreatment(" anodized ");
         req.setRemark(" updated remark ");
         Map<String, Object> result = service.updateReleaseItemFields(201L, req);
@@ -151,10 +152,12 @@ class ReleaseVersionDrawingStage1Test {
         assertThat(row)
                 .containsEntry("id", 201)
                 .containsEntry("sourceType", ReleaseSourceType.RFQ.name())
-                .containsEntry("description", "updated description")
+                .containsEntry("description", "old description")
+                .containsEntry("materialName", "updated material name")
                 .containsEntry("surfaceTreatment", "anodized")
                 .containsEntry("remark", "updated remark");
-        assertThat(item.getDescription()).isEqualTo("updated description");
+        assertThat(item.getDescription()).isEqualTo("old description");
+        assertThat(item.getMaterialName()).isEqualTo("updated material name");
         assertThat(item.getSurfaceTreatment()).isEqualTo("anodized");
         assertThat(item.getRemark()).isEqualTo("updated remark");
         verify(itemMapper).updateById(item);
@@ -176,6 +179,7 @@ class ReleaseVersionDrawingStage1Test {
         SalesOrderHeader order = salesOrder(2001L, "SO-2001");
         SalesOrderItem item = salesOrderItem(3001L, 2001L, "P-SO-001", "B");
         item.setDescription("old sales description");
+        item.setMaterialName("old sales material name");
         item.setSurfaceTreatment("old sales surface");
         item.setRemark("old sales remark");
         when(salesOrderHeaderMapper.selectByIdForUpdate(2001L)).thenReturn(order);
@@ -185,7 +189,7 @@ class ReleaseVersionDrawingStage1Test {
         ReleaseItemFieldUpdateReq req = new ReleaseItemFieldUpdateReq();
         req.setSourceType(ReleaseSourceType.SALES_ORDER);
         req.setSourceOrderId(2001L);
-        req.setDescription(" sales description ");
+        req.setMaterialName(" sales material name ");
         req.setSurfaceTreatment(" passivation ");
         req.setRemark(" sales remark ");
         Map<String, Object> result = service.updateReleaseItemFields(3001L, req);
@@ -195,10 +199,12 @@ class ReleaseVersionDrawingStage1Test {
         assertThat(row)
                 .containsEntry("id", 3001L)
                 .containsEntry("sourceType", ReleaseSourceType.SALES_ORDER.name())
-                .containsEntry("description", "sales description")
+                .containsEntry("description", "old sales description")
+                .containsEntry("materialName", "sales material name")
                 .containsEntry("surfaceTreatment", "passivation")
                 .containsEntry("remark", "sales remark");
-        assertThat(item.getDescription()).isEqualTo("sales description");
+        assertThat(item.getDescription()).isEqualTo("old sales description");
+        assertThat(item.getMaterialName()).isEqualTo("sales material name");
         assertThat(item.getSurfaceTreatment()).isEqualTo("passivation");
         assertThat(item.getRemark()).isEqualTo("sales remark");
         verify(salesOrderItemMapper).updateById(item);

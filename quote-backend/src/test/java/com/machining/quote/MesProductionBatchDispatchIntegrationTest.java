@@ -79,6 +79,10 @@ class MesProductionBatchDispatchIntegrationTest {
                 .containsExactly("10", "20");
         assertThat(request.getItems()).extracting(MesProductionDispatchReq.Item::getProductCode)
                 .containsExactly("MAT-001", "MAT-002");
+        assertThat(request.getItems()).extracting(MesProductionDispatchReq.Item::getCustomerRequirements)
+                .containsExactly(
+                        "材料名称：Material note P-1\n表面处理：Anodized",
+                        "材料名称：Material note P-2\n表面处理：Anodized");
         assertThat(request.getItems()).allSatisfy(row -> {
             assertThat(row.getDemandQty()).isEqualTo(row.getMakeQty());
             assertThat(row.getBuyQty()).isZero();
@@ -464,6 +468,7 @@ class MesProductionBatchDispatchIntegrationTest {
         allocation.setPartNo("P-" + id);
         allocation.setVersion("A");
         allocation.setDescription("Bracket");
+        allocation.setMaterialName("Material note P-" + id);
         allocation.setSurfaceTreatment("Anodized");
         allocation.setRemark("Rush");
         allocation.setDeliveryDate(LocalDate.of(2026, 8, 20));

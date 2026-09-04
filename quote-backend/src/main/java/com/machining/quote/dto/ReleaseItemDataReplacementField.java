@@ -12,7 +12,7 @@ public enum ReleaseItemDataReplacementField {
     VERSION("版本", "version", ValueType.MATCH_KEY, 20, false),
     INTERNAL_TARGET_LEAD_TIME("内部目标交期", "internalTargetLeadTime", ValueType.DATE, null, true),
     ACCEPTED_QTY("通过数量", "acceptedQty", ValueType.POSITIVE_INTEGER, null, false),
-    DESCRIPTION("物料描述", "description", ValueType.TEXT, 500, true),
+    MATERIAL_NAME("材料名称", "materialName", ValueType.TEXT, 500, true),
     SURFACE_TREATMENT("表面处理", "surfaceTreatment", ValueType.TEXT, 200, true),
     REMARK("备注", "remark", ValueType.TEXT, 500, true),
     SALES_ORDER_DATE("下单日期", "salesOrderDate", ValueType.DATE, null, true),

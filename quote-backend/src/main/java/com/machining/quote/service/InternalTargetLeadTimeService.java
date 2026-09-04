@@ -370,7 +370,7 @@ public class InternalTargetLeadTimeService {
         assertReleaseItemMutable(item, listTicketsForItems(rfqId, List.of(item)));
 
         Map<String, Object> before = buildItemRow(item);
-        item.setDescription(trimToNull(req == null ? null : req.getDescription()));
+        item.setMaterialName(trimToNull(req == null ? null : req.getMaterialName()));
         item.setSurfaceTreatment(trimToNull(req == null ? null : req.getSurfaceTreatment()));
         item.setRemark(trimToNull(req == null ? null : req.getRemark()));
         itemMapper.updateById(item);
@@ -402,7 +402,7 @@ public class InternalTargetLeadTimeService {
         }
 
         Map<String, Object> before = buildSalesOrderItemRow(item, order);
-        item.setDescription(trimToNull(req == null ? null : req.getDescription()));
+        item.setMaterialName(trimToNull(req == null ? null : req.getMaterialName()));
         item.setSurfaceTreatment(trimToNull(req == null ? null : req.getSurfaceTreatment()));
         item.setRemark(trimToNull(req == null ? null : req.getRemark()));
         salesOrderItemMapper.updateById(item);

@@ -62,7 +62,11 @@ class MesMaterialSyncServiceTest extends MesMaterialSyncTestSupport {
         MesMaterialClient client = mock(MesMaterialClient.class);
         AuditService auditService = mock(AuditService.class);
         SourceItemMaterialNoSyncService sourceSyncService = mock(SourceItemMaterialNoSyncService.class);
-        when(ticketMapper.selectById(123)).thenReturn(ticket());
+        OrderDeliveryTicket ticket = ticket();
+        ticket.setDescription("Part description");
+        ticket.setMaterialName("Material note");
+        ticket.setSurfaceTreatment("Anodized");
+        when(ticketMapper.selectById(123)).thenReturn(ticket);
         when(orderMapper.selectById(88)).thenReturn(order());
         when(itemMapper.selectById(77)).thenReturn(item("/uploads/drawings/p100.pdf"));
         MesMaterialResolveResp response = mesProductResponse("MES-7788", "EXISTING_PRODUCT", "MP202608050001", "created");
@@ -100,6 +104,8 @@ class MesMaterialSyncServiceTest extends MesMaterialSyncTestSupport {
         assertThat(req.getItems().get(0).getDrawingVersion()).isEqualTo("A");
         assertThat(req.getItems().get(0).getDrawingUrls()).containsExactly("http://qpo.local/uploads/drawings/p100.pdf");
         assertThat(req.getItems().get(0).getRemark()).isEqualTo("release remark");
+        assertThat(req.getItems().get(0).getCustomerRequirements())
+                .isEqualTo("材料名称：Material note\n表面处理：Anodized");
         ArgumentCaptor<OrderDeliveryTicketMesRequest> requestCaptor = ArgumentCaptor.forClass(OrderDeliveryTicketMesRequest.class);
         verify(mesRequestMapper).insert(requestCaptor.capture());
         assertThat(requestCaptor.getValue().getMesRequestId()).isEqualTo(req.getMesRequestId());

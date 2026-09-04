@@ -38,7 +38,7 @@ class ReleaseItemDataReplacementStage1ContractTest {
                         tuple("版本", "version", MATCH_KEY, 20, false),
                         tuple("内部目标交期", "internalTargetLeadTime", DATE, null, true),
                         tuple("通过数量", "acceptedQty", POSITIVE_INTEGER, null, false),
-                        tuple("物料描述", "description", TEXT, 500, true),
+                        tuple("材料名称", "materialName", TEXT, 500, true),
                         tuple("表面处理", "surfaceTreatment", TEXT, 200, true),
                         tuple("备注", "remark", TEXT, 500, true),
                         tuple("下单日期", "salesOrderDate", DATE, null, true),
@@ -62,6 +62,9 @@ class ReleaseItemDataReplacementStage1ContractTest {
     void fieldMappingNormalizesWhitespaceWithoutAcceptingUnknownAliases() {
         assertThat(ReleaseItemDataReplacementField.fromHeader(" 客户\n订单号 "))
                 .contains(ReleaseItemDataReplacementField.CUSTOMER_ORDER_NO);
+        assertThat(ReleaseItemDataReplacementField.fromHeader(" 材料\n名称 "))
+                .contains(ReleaseItemDataReplacementField.MATERIAL_NAME);
+        assertThat(ReleaseItemDataReplacementField.fromHeader("物料描述")).isEmpty();
         assertThat(ReleaseItemDataReplacementField.fromHeader("内部 目标 交期"))
                 .contains(ReleaseItemDataReplacementField.INTERNAL_TARGET_LEAD_TIME);
         assertThat(ReleaseItemDataReplacementField.fromHeader("客户订单编号")).isEmpty();
@@ -71,10 +74,10 @@ class ReleaseItemDataReplacementStage1ContractTest {
     @Test
     void previewAndConfirmDtosExposeTypedSummaryRowsChangesAndQuantityDrafts() throws Exception {
         ReleaseItemDataReplacementChangeDTO change = new ReleaseItemDataReplacementChangeDTO();
-        change.setField("description");
-        change.setLabel("物料描述");
-        change.setBeforeValue("旧描述");
-        change.setAfterValue("新描述");
+        change.setField("materialName");
+        change.setLabel("材料名称");
+        change.setBeforeValue("旧材料名称");
+        change.setAfterValue("新材料名称");
 
         ReleaseItemDataReplacementRowDTO row = new ReleaseItemDataReplacementRowDTO();
         row.setExcelRowNumber(5);
@@ -98,7 +101,7 @@ class ReleaseItemDataReplacementStage1ContractTest {
         preview.setSuccess(true);
         preview.setCanConfirm(true);
         preview.setPreviewFingerprint("fingerprint");
-        preview.setRecognizedFields(List.of("description", "acceptedQty"));
+        preview.setRecognizedFields(List.of("materialName", "acceptedQty"));
         preview.setSummary(summary);
         preview.setRows(List.of(row));
 
@@ -121,7 +124,7 @@ class ReleaseItemDataReplacementStage1ContractTest {
         assertThat(previewJson.path("previewFingerprint").asText()).isEqualTo("fingerprint");
         assertThat(previewJson.path("rows").get(0).path("status").asText()).isEqualTo("CHANGED");
         assertThat(previewJson.path("rows").get(0).path("changes").get(0).path("field").asText())
-                .isEqualTo("description");
+                .isEqualTo("materialName");
         assertThat(confirmJson.path("affectedRows").get(0).path("releaseItemKey").asText())
                 .isEqualTo("RFQ:201");
         assertThat(confirmJson.path("acceptedQtyUpdates").get(0).path("acceptedQty").asInt())

@@ -264,7 +264,7 @@ POST /api/v1/mes/openapi/material-preparation/create
         "http://qpo-test.example/api/files/..."
       ],
       "remark": "QPO MES E2E material preparation",
-      "customerRequirements": "物料描述：精密安装板\n表面处理：本色阳极氧化"
+      "customerRequirements": "材料名称：精密安装板\n表面处理：本色阳极氧化"
     }
   ]
 }
@@ -283,16 +283,16 @@ POST /api/v1/mes/openapi/material-preparation/create
 | `items[].drawingUrls` | 是 | 当前绑定图纸经 `BusinessFileService.externalReadableUrl` 转换后的绝对 URL | QPO 阻断 |
 | `items[].standard` | 否 | 当前 QPO 没有已确认同义字段 | 不发送，禁止用材料名称/描述代替 |
 | `items[].remark` | 否 | 提单备注快照 | 空时不发送 |
-| `items[].customerRequirements` | 否 | 提单 `description` 和 `surface_treatment` 快照 | 按下述固定格式拼接；两项都空时不发送 |
+| `items[].customerRequirements` | 否 | 提单 `material_name` 和 `surface_treatment` 快照 | 按下述固定格式拼接；两项都空时不发送 |
 
 `customerRequirements` 组装规则：
 
 ```text
-物料描述：{description}
+材料名称：{materialName}
 表面处理：{surfaceTreatment}
 ```
 
-- 只输出非空项，保持“物料描述”在前、“表面处理”在后，使用 `\n` 分隔。
+- 只输出非空项，保持“材料名称”在前、“表面处理”在后，使用 `\n` 分隔。
 - 对每项先 trim；将字段内部的 `\r\n/\r` 统一为 `\n`，保留有业务意义的内部换行。
 - 不添加空标签、不使用 `null`、`-` 或其他占位值。
 - `remark` 始终使用提单备注快照独立发送，不能并入 `customerRequirements`，也不能反向使用客户需求覆盖备注。
@@ -514,7 +514,7 @@ POST /api/v1/mes/openapi/demand/create
       "stockQty": 0,
       "requiredDate": "2026-08-20T23:59:59",
       "remark": "QPO MES E2E production demand",
-      "customerRequirements": "物料描述：精密安装板\n表面处理：本色阳极氧化",
+      "customerRequirements": "材料名称：精密安装板\n表面处理：本色阳极氧化",
       "bom": [],
       "processRoute": [
         {
@@ -547,7 +547,7 @@ POST /api/v1/mes/openapi/demand/create
 | `items[].stockQty` | 是 | 常量 `0` | 已锁库存行不进入本接口 |
 | `items[].requiredDate` | 是 | `allocation.delivery_date` | 按 Asia/Shanghai 理解业务日期，序列化为当天 `23:59:59` 的 ISO 本地日期时间；为空阻断，不伪造当前日期 |
 | `items[].remark` | 否 | allocation 备注快照 | 空时不发送 |
-| `items[].customerRequirements` | 否 | allocation `description` 和 `surface_treatment` 快照 | 完全复用第 5.2 节固定拼接规则；两项都空时不发送 |
+| `items[].customerRequirements` | 否 | allocation `material_name` 和 `surface_treatment` 快照 | 完全复用第 5.2 节固定拼接规则；两项都空时不发送 |
 | `items[].bom` | 否 | 已确认子件物料号及父子用量 | 详见 5.7 |
 | `items[].processRoute` | 否 | allocation 标准工艺路线快照 | 详见 5.8 |
 
@@ -1194,7 +1194,7 @@ MES batch reconcile completed batchId={} matchedCount={} pendingCount={} failedC
 
 - 只包含第 5.2 节字段。
 - `items` 真正包含多行。
-- `customerRequirements` 只由提单物料描述和表面处理按固定标签、顺序和换行组装；两项都空时不发送。
+- `customerRequirements` 只由提单材料名称和表面处理按固定标签、顺序和换行组装；两项都空时不发送。
 - `remark` 独立发送，不能混入 `customerRequirements`。
 - 不发送 QPO IDs、价格或完整文件内容。
 - 图纸 URL 是 MES 可访问绝对地址。
@@ -1296,7 +1296,7 @@ Cookie=<真实值>
 
 - 两条请求都使用 `bizId + items[]`。
 - 生产请求不包含任何 QPO 内部字段。
-- 两条请求的 `customerRequirements` 都只包含带标签的非空物料描述和表面处理，备注独立发送。
+- 两条请求的 `customerRequirements` 都只包含带标签的非空材料名称和表面处理，备注独立发送。
 - 数量、交期、BOM 和工艺映射符合第 5 章。
 - 数字/字符串成功码均可安全解析。
 
@@ -1452,7 +1452,7 @@ docker compose --env-file erp.env ps
 1. 数据中心 token 获取成功，日志不出现 token。
 2. QPO 图纸 URL 可从 MES 测试服务器访问。
 3. 使用 `QPO-MES-E2E-` 统一测试标识前缀创建直接导入销售订单和至少两条零件，并准备一张由 RFQ 正式提单派生的销售订单；每个完整编号保持唯一。
-4. 两条同客户同项目零件一次批量创建物料准备任务，MES 收到的 `customerRequirements` 为物料描述和表面处理，`remark` 独立且正确。
+4. 两条同客户同项目零件一次批量创建物料准备任务，MES 收到的 `customerRequirements` 为材料名称和表面处理，`remark` 独立且正确。
 5. 已存在图号版本返回 `EXISTING_PRODUCT` 并立即写回物料号。
 6. 新图号版本返回 `PENDING_CREATE`，页面显示待 MES 创建。
 7. MES 创建完成后调用数据中心批量回调入口，数据中心转发到 QPO 后写回正式物料号、来源零件和 follower；正常链路不依赖 QPO 主动查询。
@@ -1564,7 +1564,7 @@ docker compose --env-file erp.env ps
 - 前端批量操作对应后端真实批量外呼，而不是循环单条请求。
 - 一个 bizId 对多行的状态、指纹、幂等和结果均可追踪。
 - 已有物料和新建物料两种路径都有明确状态，且新物料最终能回写 QPO。
-- `customerRequirements` 在物料准备和生产需求中均由物料描述与表面处理生成，备注保持独立字段。
+- `customerRequirements` 在物料准备和生产需求中均由材料名称与表面处理生成，备注保持独立字段。
 - 新物料通过 QPO 定义业务契约、数据中心安全转发、MES 适配投递的增量批量回调完成原子、幂等写回，正常链路不依赖主动查询。
 - 生产 demand 对 RFQ 派生订单和直接导入订单都使用唯一解析出的正式销售订单号、行号、MES 物料号、待产数量和真实交期。
 - BOM 与工艺路线只发送 MES 接收的字段，不发送价格或 QPO 内部结构。
@@ -1583,6 +1583,6 @@ docker compose --env-file erp.env ps
 6. 生产下发只负责 `PRODUCTION_REQUIRED`，数量不重复包含已锁库存或在产量。
 7. 缺少正式业务字段时阻断，不使用相似字段代填。
 8. 复用现有权限，不新增用户权限。
-9. `customerRequirements` 固定由物料描述和表面处理拼接，`remark` 继续独立发送。
+9. `customerRequirements` 固定由材料名称和表面处理拼接，`remark` 继续独立发送。
 10. QPO 定义物料结果批量回调的最终业务契约；数据中心向 MES 发布入口、衔接独立鉴权并透传 QPO 结果；MES 负责至少一次投递、重试和告警；只读查询仅作核对补充。
 11. `QPO-MES-E2E-` 是测试数据统一标识前缀，完整编号必须唯一，正式业务不使用该前缀。

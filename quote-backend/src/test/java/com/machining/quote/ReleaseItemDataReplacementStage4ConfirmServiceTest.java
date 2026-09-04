@@ -54,14 +54,15 @@ class ReleaseItemDataReplacementStage4ConfirmServiceTest {
     @Test
     void confirmIsTransactionalLocksInOrderUpdatesEachChangedItemOnceAndReturnsDraftInstructions() throws Exception {
         ReleaseItemDataReplacementExcelParseResult parsed = parseResult(
-                List.of("description", "remark", "salesOrderDate", "acceptedQty"),
+                List.of("materialName", "remark", "salesOrderDate", "acceptedQty"),
                 excelRow(2, "P-001", "A", values(
-                        "description", "new description",
+                        "materialName", "new material name",
                         "remark", "new remark",
                         "salesOrderDate", LocalDate.of(2026, 8, 20))),
                 excelRow(3, "P-002", "A", values("acceptedQty", 2)));
         ItemQuoteVersion changed = item(201, 101, "P-001", "A", 10);
         changed.setDescription("old description");
+        changed.setMaterialName("old material name");
         changed.setRemark("old remark");
         ItemQuoteVersion quantityOnly = item(202, 102, "P-002", "A", 5);
         TestContext context = context(
@@ -90,7 +91,8 @@ class ReleaseItemDataReplacementStage4ConfirmServiceTest {
         order.verify(context.itemMapper).selectByIdForUpdate(201);
         order.verify(context.itemMapper).selectByIdForUpdate(202);
 
-        assertThat(changed.getDescription()).isEqualTo("new description");
+        assertThat(changed.getDescription()).isEqualTo("old description");
+        assertThat(changed.getMaterialName()).isEqualTo("new material name");
         assertThat(changed.getRemark()).isEqualTo("new remark");
         assertThat(changed.getSalesOrderDate()).isEqualTo(LocalDate.of(2026, 8, 20));
         assertThat(quantityOnly.getQty()).isEqualTo(5);
@@ -120,10 +122,10 @@ class ReleaseItemDataReplacementStage4ConfirmServiceTest {
     @Test
     void changedTargetOrTicketQuantityRejectsStaleFingerprintBeforeUpdates() {
         ReleaseItemDataReplacementExcelParseResult parsed = parseResult(
-                List.of("description"),
-                excelRow(2, "P-001", "A", values("description", "new")));
+                List.of("materialName"),
+                excelRow(2, "P-001", "A", values("materialName", "new")));
         ItemQuoteVersion item = item(201, 101, "P-001", "A", 5);
-        item.setDescription("old");
+        item.setMaterialName("old");
         TestContext changedTarget = context(
                 parsed,
                 List.of(order(101, "RFQ-101", "ACME")),
@@ -131,7 +133,7 @@ class ReleaseItemDataReplacementStage4ConfirmServiceTest {
                 List.of());
         String fingerprint = changedTarget.service.preview(List.of(ReleaseOrderSource.rfq(101)), stream())
                 .getPreviewFingerprint();
-        item.setDescription("changed after preview");
+        item.setMaterialName("changed after preview");
 
         assertThatThrownBy(() -> changedTarget.service.confirm(
                 List.of(ReleaseOrderSource.rfq(101)), stream(), fingerprint))
@@ -163,11 +165,11 @@ class ReleaseItemDataReplacementStage4ConfirmServiceTest {
     @Test
     void changedOrderStatusOrCustomerRejectsAsFingerprintConflict() {
         ReleaseItemDataReplacementExcelParseResult parsed = parseResult(
-                List.of("description"),
-                excelRow(2, "P-001", "A", values("description", "new")));
+                List.of("materialName"),
+                excelRow(2, "P-001", "A", values("materialName", "new")));
         OrderRfq order = order(101, "RFQ-101", "ACME");
         ItemQuoteVersion item = item(201, 101, "P-001", "A", 5);
-        item.setDescription("old");
+        item.setMaterialName("old");
         TestContext context = context(parsed, List.of(order), List.of(item), List.of());
         String fingerprint = context.service.preview(List.of(ReleaseOrderSource.rfq(101)), stream())
                 .getPreviewFingerprint();
@@ -188,13 +190,13 @@ class ReleaseItemDataReplacementStage4ConfirmServiceTest {
     @Test
     void updateFailureStopsBatchBeforeAuditAndQuantityOnlyConfirmationDoesNotWriteAudit() {
         ReleaseItemDataReplacementExcelParseResult parsed = parseResult(
-                List.of("description"),
-                excelRow(2, "P-001", "A", values("description", "new-1")),
-                excelRow(3, "P-002", "A", values("description", "new-2")));
+                List.of("materialName"),
+                excelRow(2, "P-001", "A", values("materialName", "new-1")),
+                excelRow(3, "P-002", "A", values("materialName", "new-2")));
         ItemQuoteVersion first = item(201, 101, "P-001", "A", 5);
-        first.setDescription("old-1");
+        first.setMaterialName("old-1");
         ItemQuoteVersion second = item(202, 101, "P-002", "A", 5);
-        second.setDescription("old-2");
+        second.setMaterialName("old-2");
         TestContext failing = context(
                 parsed,
                 List.of(order(101, "RFQ-101", "ACME")),
@@ -239,8 +241,8 @@ class ReleaseItemDataReplacementStage4ConfirmServiceTest {
     @Test
     void auditTargetIdUsesBoundedBatchIdentifierForLargeRfqSets() {
         ReleaseItemDataReplacementExcelParseResult parsed = parseResult(
-                List.of("description"),
-                excelRow(2, "P-900", "A", values("description", "new")));
+                List.of("materialName"),
+                excelRow(2, "P-900", "A", values("materialName", "new")));
         List<OrderRfq> orders = new ArrayList<>();
         List<ReleaseOrderSource> sources = new ArrayList<>();
         for (int index = 0; index < 40; index++) {
@@ -249,7 +251,7 @@ class ReleaseItemDataReplacementStage4ConfirmServiceTest {
             sources.add(ReleaseOrderSource.rfq(rfqId));
         }
         ItemQuoteVersion changed = item(9001, 100000, "P-900", "A", 5);
-        changed.setDescription("old");
+        changed.setMaterialName("old");
         TestContext context = context(parsed, orders, List.of(changed), List.of());
         String fingerprint = context.service.preview(sources, stream()).getPreviewFingerprint();
 
@@ -276,8 +278,8 @@ class ReleaseItemDataReplacementStage4ConfirmServiceTest {
         return summary.get("updatedItemCount").equals(1)
                 && summary.get("quantityAppliedCount").equals(1)
                 && summary.containsKey("changedFieldCounts")
-                && !text.contains("new description")
-                && !text.contains("old description")
+                && !text.contains("new material name")
+                && !text.contains("old material name")
                 && !text.contains("beforeValue")
                 && !text.contains("afterValue")
                 && !text.contains("rows");
@@ -313,6 +315,7 @@ class ReleaseItemDataReplacementStage4ConfirmServiceTest {
                     row.put("id", item.getId());
                     row.put("releaseItemKey", "RFQ:" + item.getId());
                     row.put("description", item.getDescription());
+                    row.put("materialName", item.getMaterialName());
                     row.put("remark", item.getRemark());
                     row.put("salesOrderDate", item.getSalesOrderDate());
                     row.put("qty", item.getQty());

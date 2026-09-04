@@ -62,7 +62,7 @@ class MesRealContractTest {
                 .containsEntry("drawingNo", "QPO-MES-E2E-P001")
                 .containsEntry("drawingVersion", "A")
                 .containsEntry("remark", "QPO MES E2E material preparation")
-                .containsEntry("customerRequirements", "物料描述：精密安装板\n二级\n表面处理：本色阳极氧化")
+                .containsEntry("customerRequirements", "材料名称：精密安装板\n二级\n表面处理：本色阳极氧化")
                 .doesNotContainKeys("ticketId", "sourceType", "sourceOrderId", "sourceItemId", "rfqId", "itemId", "standard");
         assertThat(items(payload).get(1))
                 .containsEntry("drawingVersion", "")
@@ -113,7 +113,7 @@ class MesRealContractTest {
                 .containsEntry("buyQty", 0)
                 .containsEntry("stockQty", 0)
                 .containsEntry("requiredDate", "2026-08-20T23:59:59")
-                .containsEntry("customerRequirements", "物料描述：精密安装板\n表面处理：本色阳极氧化")
+                .containsEntry("customerRequirements", "材料名称：精密安装板\n表面处理：本色阳极氧化")
                 .containsEntry("remark", "QPO MES E2E production demand")
                 .doesNotContainKeys("allocationId", "ticketId", "sourceType", "sourceOrderId", "sourceItemId", "partNo", "version", "materialNo", "productionQty", "ticketQty", "assemblyRelations");
         assertThat(row.get("bom")).asList().singleElement().satisfies(bom -> assertThat(castMap(bom))

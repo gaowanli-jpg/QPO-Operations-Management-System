@@ -7,7 +7,7 @@ public class ReleaseItemFieldUpdateReq {
     private ReleaseSourceType sourceType;
     private Integer rfqId;
     private Long sourceOrderId;
-    private String description;
+    private String materialName;
     private String surfaceTreatment;
     private String remark;
 }

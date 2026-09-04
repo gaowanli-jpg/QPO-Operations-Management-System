@@ -34,8 +34,8 @@ describe('release item data replacement stage 6 state convergence', () => {
         id: 1,
         sourceType: 'RFQ',
         sourceItemId: 1,
-        description: 'old desc',
-        descriptionDraft: 'local desc draft',
+        materialName: 'old material name',
+        materialNameDraft: 'local material name draft',
         remark: 'old remark',
         remarkDraft: 'local remark draft',
         customerOrderNo: 'old order',
@@ -47,8 +47,8 @@ describe('release item data replacement stage 6 state convergence', () => {
         id: 2,
         sourceType: 'RFQ',
         sourceItemId: 2,
-        description: 'qty row',
-        descriptionDraft: 'qty row draft',
+        materialName: 'qty row material',
+        materialNameDraft: 'qty row material draft',
         remainingQty: 8
       }
     ]
@@ -59,8 +59,8 @@ describe('release item data replacement stage 6 state convergence', () => {
         id: 3,
         sourceType: 'RFQ',
         sourceItemId: 3,
-        description: 'other selected',
-        descriptionDraft: 'other draft',
+        materialName: 'other selected material',
+        materialNameDraft: 'other material draft',
         remainingQty: 9
       }
     }
@@ -82,7 +82,7 @@ describe('release item data replacement stage 6 state convergence', () => {
             id: 1,
             sourceType: 'RFQ',
             sourceItemId: 1,
-            description: 'db desc',
+            materialName: 'db material name',
             remark: 'db remark unchanged by Excel',
             customerOrderNo: 'db order',
             remainingQty: 10
@@ -92,7 +92,7 @@ describe('release item data replacement stage 6 state convergence', () => {
             id: 2,
             sourceType: 'RFQ',
             sourceItemId: 2,
-            description: 'qty row from db',
+            materialName: 'qty row material from db',
             remainingQty: 8
           }
         ],
@@ -104,7 +104,7 @@ describe('release item data replacement stage 6 state convergence', () => {
             itemId: 1,
             status: 'CHANGED',
             changes: [
-              { field: 'description' },
+              { field: 'materialName' },
               { field: 'customerOrderNo' }
             ]
           },
@@ -114,23 +114,23 @@ describe('release item data replacement stage 6 state convergence', () => {
     })
 
     expect(result.itemList[0]).toMatchObject({
-      description: 'db desc',
-      descriptionDraft: 'db desc',
+      materialName: 'db material name',
+      materialNameDraft: 'db material name',
       customerOrderNo: 'db order',
       customerOrderNoDraft: 'db order',
       remark: 'db remark unchanged by Excel',
       remarkDraft: 'local remark draft'
     })
     expect(selectedItemIdMap['RFQ:1']).toMatchObject({
-      description: 'db desc',
-      descriptionDraft: 'db desc',
+      materialName: 'db material name',
+      materialNameDraft: 'db material name',
       customerOrderNo: 'db order',
       customerOrderNoDraft: 'db order',
       remarkDraft: 'local remark draft'
     })
     expect(selectedItemIdMap['RFQ:2']).toMatchObject({
       releaseItemKey: 'RFQ:2',
-      description: 'qty row from db'
+      materialName: 'qty row material from db'
     })
     expect(acceptedQtyMap).toMatchObject({
       'RFQ:1': 2,
@@ -138,7 +138,7 @@ describe('release item data replacement stage 6 state convergence', () => {
       'RFQ:3': 7
     })
     expect(selectedItemIdMap['RFQ:3']).toMatchObject({
-      descriptionDraft: 'other draft'
+      materialNameDraft: 'other material draft'
     })
   })
 
@@ -148,7 +148,7 @@ describe('release item data replacement stage 6 state convergence', () => {
         {
           itemId: 1,
           changes: [
-            { field: 'description', label: '物料描述' },
+            { field: 'materialName', label: '材料名称' },
             { field: 'customerOrderNo', label: '客户订单号' }
           ]
         },
@@ -160,8 +160,8 @@ describe('release item data replacement stage 6 state convergence', () => {
       selectedRowsByKey: {
         'RFQ:1': {
           releaseItemKey: 'RFQ:1',
-          description: 'old desc',
-          descriptionDraft: 'unsaved desc',
+          materialName: 'old material name',
+          materialNameDraft: 'unsaved material name',
           customerOrderNo: 'same order',
           customerOrderNoDraft: 'same order',
           remark: 'old remark',
@@ -178,8 +178,8 @@ describe('release item data replacement stage 6 state convergence', () => {
     expect(conflicts).toEqual([
       {
         releaseItemKey: 'RFQ:1',
-        field: 'description',
-        label: '物料描述'
+        field: 'materialName',
+        label: '材料名称'
       }
     ])
   })
@@ -191,8 +191,8 @@ describe('release item data replacement stage 6 state convergence', () => {
         id: 8,
         sourceType: 'RFQ',
         sourceItemId: 8,
-        description: 'old desc',
-        descriptionDraft: 'visible unsaved desc',
+        materialName: 'old material name',
+        materialNameDraft: 'visible unsaved material name',
         remark: 'old remark',
         remarkDraft: 'visible unsaved remark',
         remainingQty: 6
@@ -205,7 +205,7 @@ describe('release item data replacement stage 6 state convergence', () => {
       previewRows: [
         {
           itemId: 8,
-          changes: [{ field: 'description', label: '物料描述' }]
+          changes: [{ field: 'materialName', label: '材料名称' }]
         }
       ],
       selectedRowsByKey: Object.fromEntries(itemList.map(row => [rowKey(row), row])),
@@ -224,7 +224,7 @@ describe('release item data replacement stage 6 state convergence', () => {
             id: 8,
             sourceType: 'RFQ',
             sourceItemId: 8,
-            description: 'db desc',
+            materialName: 'db material name',
             remark: 'db remark unchanged by Excel',
             remainingQty: 6
           }
@@ -233,18 +233,18 @@ describe('release item data replacement stage 6 state convergence', () => {
         previewRows: [
           {
             itemId: 8,
-            changes: [{ field: 'description', label: '物料描述' }]
+            changes: [{ field: 'materialName', label: '材料名称' }]
           }
         ]
       }
     })
 
     expect(conflicts).toEqual([
-      { releaseItemKey: 'RFQ:8', field: 'description', label: '物料描述' }
+      { releaseItemKey: 'RFQ:8', field: 'materialName', label: '材料名称' }
     ])
     expect(result.itemList[0]).toMatchObject({
-      description: 'db desc',
-      descriptionDraft: 'db desc',
+      materialName: 'db material name',
+      materialNameDraft: 'db material name',
       remark: 'db remark unchanged by Excel',
       remarkDraft: 'visible unsaved remark'
     })

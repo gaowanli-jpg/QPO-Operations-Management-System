@@ -1,7 +1,7 @@
 export const RELEASE_ITEM_DRAFT_SOURCES = {
   internalTargetLeadTimeDraft: 'internalTargetLeadTime',
   versionDraft: 'version',
-  descriptionDraft: 'description',
+  materialNameDraft: 'materialName',
   surfaceTreatmentDraft: 'surfaceTreatment',
   remarkDraft: 'remark',
   salesOrderDateDraft: 'salesOrderDate',
@@ -16,7 +16,7 @@ const RELEASE_DRAFT_CHANGE_GROUPS = {
   version: [['versionDraft', 'version']],
   internalTargetLeadTime: [['internalTargetLeadTimeDraft', 'internalTargetLeadTime']],
   fields: [
-    ['descriptionDraft', 'description'],
+    ['materialNameDraft', 'materialName'],
     ['surfaceTreatmentDraft', 'surfaceTreatment'],
     ['remarkDraft', 'remark']
   ],

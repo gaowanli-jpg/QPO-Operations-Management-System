@@ -42,13 +42,14 @@ describe('market release draft persistence', () => {
     const hydrated = hydrateReleaseItemDrafts({
       id: 302,
       version: 'A',
-      description: 'Part',
+      materialName: 'Material note',
       salesOrderDate: '2026-08-08',
       customerOrderNo: null
     })
 
     expect(hydrated.versionDraft).toBe('A')
-    expect(hydrated.descriptionDraft).toBe('Part')
+    expect(hydrated.materialNameDraft).toBe('Material note')
+    expect(hydrated.descriptionDraft).toBeUndefined()
     expect(hydrated.salesOrderDateDraft).toBe('2026-08-08')
     expect(hydrated.customerOrderNoDraft).toBe('')
   })
@@ -78,8 +79,8 @@ describe('market release draft persistence', () => {
       {
         id: 403,
         releaseItemKey: 'RFQ:403',
-        description: 'Same description',
-        descriptionDraft: 'Same description'
+        materialName: 'Same material name',
+        materialNameDraft: 'Same material name'
       }
     ]
 

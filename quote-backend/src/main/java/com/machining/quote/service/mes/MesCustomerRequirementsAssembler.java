@@ -7,11 +7,11 @@ public final class MesCustomerRequirementsAssembler {
     private MesCustomerRequirementsAssembler() {
     }
 
-    public static String assemble(String description, String surfaceTreatment) {
+    public static String assemble(String materialName, String surfaceTreatment) {
         List<String> lines = new ArrayList<>();
-        String normalizedDescription = normalize(description);
-        if (normalizedDescription != null) {
-            lines.add("物料描述：" + normalizedDescription);
+        String normalizedMaterialName = normalize(materialName);
+        if (normalizedMaterialName != null) {
+            lines.add("材料名称：" + normalizedMaterialName);
         }
         String normalizedSurfaceTreatment = normalize(surfaceTreatment);
         if (normalizedSurfaceTreatment != null) {

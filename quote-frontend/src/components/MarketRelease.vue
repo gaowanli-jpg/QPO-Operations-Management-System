@@ -406,11 +406,11 @@
                 </template>
               </el-table-column>
               <el-table-column prop="engineeringMaterialName" label="材料" width="110" show-overflow-tooltip />
-              <el-table-column prop="description" label="物料描述" width="240" show-overflow-tooltip>
+              <el-table-column prop="materialName" label="材料名称" width="240" show-overflow-tooltip>
                 <template #default="{ row }">
                   <div class="row-field-editor">
                     <el-input
-                      v-model="row.descriptionDraft"
+                      v-model="row.materialNameDraft"
                       size="small"
                       maxlength="500"
                       clearable
@@ -1342,14 +1342,14 @@ const persistReleaseItemVersion = async (row) => {
 
 const persistReleaseItemFields = async (row) => {
   requireReleaseRowId(row)
-  row.descriptionDraft = String(row.descriptionDraft ?? '').trim()
+  row.materialNameDraft = String(row.materialNameDraft ?? '').trim()
   row.surfaceTreatmentDraft = String(row.surfaceTreatmentDraft ?? '').trim()
   row.remarkDraft = String(row.remarkDraft ?? '').trim()
   const response = await updateReleaseItemFields(row.id, {
     sourceType: row.sourceType || 'RFQ',
     sourceOrderId: row.sourceOrderId,
     rfqId: row.rfqId || selectedRfqId.value,
-    description: row.descriptionDraft,
+    materialName: row.materialNameDraft,
     surfaceTreatment: row.surfaceTreatmentDraft,
     remark: row.remarkDraft
   })
@@ -1357,7 +1357,7 @@ const persistReleaseItemFields = async (row) => {
   return mergeSavedReleaseItemRow(row, {
     ...row,
     ...savedData,
-    descriptionDraft: savedData.description ?? '',
+    materialNameDraft: savedData.materialName ?? '',
     surfaceTreatmentDraft: savedData.surfaceTreatment ?? '',
     remarkDraft: savedData.remark ?? ''
   })

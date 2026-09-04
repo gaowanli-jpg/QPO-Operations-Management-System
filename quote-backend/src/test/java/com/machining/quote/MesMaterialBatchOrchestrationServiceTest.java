@@ -78,6 +78,8 @@ class MesMaterialBatchOrchestrationServiceTest {
         assertThat(req.getItems()).hasSize(2);
         assertThat(req.getItems()).extracting(MesMaterialResolveReq.Item::getDrawingNo)
                 .containsExactly("P-EXIST", "P-PENDING");
+        assertThat(req.getItems().get(0).getCustomerRequirements())
+                .isEqualTo("材料名称：Material note P-EXIST\n表面处理：Anodized");
         verify(fixture.sourceSync).syncConfirmedMaterialNo(existing, "MAT-EXIST-601", "MES material resolved");
     }
 
@@ -220,6 +222,7 @@ class MesMaterialBatchOrchestrationServiceTest {
         ticket.setVersion(version);
         ticket.setInternalProjectNo(projectNo);
         ticket.setDescription("Precision bracket " + partNo);
+        ticket.setMaterialName("Material note " + partNo);
         ticket.setSurfaceTreatment("Anodized");
         ticket.setRemark("Remark " + partNo);
         ticket.setMesSyncStatus("PENDING");

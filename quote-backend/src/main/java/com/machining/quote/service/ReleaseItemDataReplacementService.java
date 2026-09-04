@@ -401,7 +401,7 @@ public class ReleaseItemDataReplacementService {
         Object value = change.getAfterValue();
         switch (change.getField()) {
             case "internalTargetLeadTime" -> item.setInternalTargetLeadTime(stringValue(value));
-            case "description" -> item.setDescription(stringValue(value));
+            case "materialName" -> item.setMaterialName(stringValue(value));
             case "surfaceTreatment" -> item.setSurfaceTreatment(stringValue(value));
             case "remark" -> item.setRemark(stringValue(value));
             case "salesOrderDate" -> item.setSalesOrderDate((LocalDate) value);
@@ -690,7 +690,7 @@ public class ReleaseItemDataReplacementService {
     private Object currentValue(ItemQuoteVersion item, ReleaseItemDataReplacementField field) {
         return switch (field) {
             case INTERNAL_TARGET_LEAD_TIME -> item.getInternalTargetLeadTime();
-            case DESCRIPTION -> item.getDescription();
+            case MATERIAL_NAME -> item.getMaterialName();
             case SURFACE_TREATMENT -> item.getSurfaceTreatment();
             case REMARK -> item.getRemark();
             case SALES_ORDER_DATE -> item.getSalesOrderDate();

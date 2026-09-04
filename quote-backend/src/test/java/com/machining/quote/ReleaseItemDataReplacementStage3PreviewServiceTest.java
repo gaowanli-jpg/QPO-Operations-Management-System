@@ -49,15 +49,15 @@ class ReleaseItemDataReplacementStage3PreviewServiceTest {
     @Test
     void previewsMultipleSameCustomerRfqsAndProducesEveryNonErrorOutcomeWithoutWrites() {
         ReleaseItemDataReplacementExcelParseResult parsed = parseResult(
-                List.of("description", "remark", "acceptedQty"),
-                excelRow(2, "P-001", "A", values("description", "new description")),
+                List.of("materialName", "remark", "acceptedQty"),
+                excelRow(2, "P-001", "A", values("materialName", "new material name")),
                 excelRow(3, "P-002", "A", values("acceptedQty", 2)),
                 excelRow(4, "P-003", "A", values("remark", "same remark")),
-                excelRow(5, "P-004", "A", values("description", "ignored after release")),
-                excelRow(6, "P-999", "A", values("description", "unmatched")));
+                excelRow(5, "P-004", "A", values("materialName", "ignored after release")),
+                excelRow(6, "P-999", "A", values("materialName", "unmatched")));
 
         ItemQuoteVersion changed = item(201, 101, "P-001", "A", 10, QuoteStatusWorkflow.QUOTED);
-        changed.setDescription("old description");
+        changed.setMaterialName("old material name");
         ItemQuoteVersion quantityOnly = item(202, 101, "P-002", "A", 5, QuoteStatusWorkflow.QUOTED);
         ItemQuoteVersion unchanged = item(203, 102, "P-003", "A", 6, QuoteStatusWorkflow.QUOTED);
         unchanged.setRemark("same remark");
@@ -78,7 +78,7 @@ class ReleaseItemDataReplacementStage3PreviewServiceTest {
 
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.isCanConfirm()).isTrue();
-        assertThat(result.getRecognizedFields()).containsExactly("description", "remark", "acceptedQty");
+        assertThat(result.getRecognizedFields()).containsExactly("materialName", "remark", "acceptedQty");
         assertThat(result.getPreviewFingerprint()).matches("[0-9a-f]{64}");
         assertThat(result.getRows()).extracting(ReleaseItemDataReplacementRowDTO::getStatus)
                 .containsExactly(
@@ -93,14 +93,14 @@ class ReleaseItemDataReplacementStage3PreviewServiceTest {
         assertThat(changedRow.getRfqNo()).isEqualTo("RFQ-101");
         assertThat(changedRow.getItemId()).isEqualTo(201);
         assertThat(changedRow.getChanges()).singleElement().satisfies(change -> {
-            assertThat(change.getField()).isEqualTo("description");
-            assertThat(change.getLabel()).isEqualTo("物料描述");
-            assertThat(change.getBeforeValue()).isEqualTo("old description");
-            assertThat(change.getAfterValue()).isEqualTo("new description");
+            assertThat(change.getField()).isEqualTo("materialName");
+            assertThat(change.getLabel()).isEqualTo("材料名称");
+            assertThat(change.getBeforeValue()).isEqualTo("old material name");
+            assertThat(change.getAfterValue()).isEqualTo("new material name");
         });
         assertThat(result.getRows().get(1).getAcceptedQty()).isEqualTo(2);
         assertThat(result.getRows().get(3).getChanges()).singleElement().satisfies(change -> {
-            assertThat(change.getField()).isEqualTo("description");
+            assertThat(change.getField()).isEqualTo("materialName");
             assertThat(change.getAfterValue()).isEqualTo("ignored after release");
         });
         assertThat(result.getRows().get(3).getReason()).isEmpty();
@@ -164,8 +164,8 @@ class ReleaseItemDataReplacementStage3PreviewServiceTest {
     @Test
     void duplicateDatabasePartVersionIsAnErrorAndCannotSelectAnArbitraryItem() {
         ReleaseItemDataReplacementExcelParseResult parsed = parseResult(
-                List.of("description"),
-                excelRow(2, "P-001", "A", values("description", "new")));
+                List.of("materialName"),
+                excelRow(2, "P-001", "A", values("materialName", "new")));
         TestContext context = context(
                 parsed,
                 List.of(order(101, "RFQ-101", "ACME", QuoteStatusWorkflow.QUOTED)),
@@ -220,10 +220,10 @@ class ReleaseItemDataReplacementStage3PreviewServiceTest {
     @Test
     void fingerprintIsStableForSourceOrderButChangesWithUserOrRelevantItemState() {
         ReleaseItemDataReplacementExcelParseResult parsed = parseResult(
-                List.of("description"),
-                excelRow(2, "P-001", "A", values("description", "new")));
+                List.of("materialName"),
+                excelRow(2, "P-001", "A", values("materialName", "new")));
         ItemQuoteVersion item = item(201, 101, "P-001", "A", 10, QuoteStatusWorkflow.QUOTED);
-        item.setDescription("old");
+        item.setMaterialName("old");
         TestContext context = context(
                 parsed,
                 List.of(
@@ -245,7 +245,7 @@ class ReleaseItemDataReplacementStage3PreviewServiceTest {
         assertThat(otherUser).isNotEqualTo(first);
 
         AuthContext.set(new AuthContext.SessionUser(7, "market", "Market", "MARKET_USER"));
-        item.setDescription("changed after preview");
+        item.setMaterialName("changed after preview");
         String changedState = context.service.preview(
                 List.of(ReleaseOrderSource.rfq(101), ReleaseOrderSource.rfq(102)), stream()).getPreviewFingerprint();
         assertThat(changedState).isNotEqualTo(first);
@@ -254,8 +254,8 @@ class ReleaseItemDataReplacementStage3PreviewServiceTest {
     @Test
     void rejectsNonRfqCrossCustomerAndInvalidStatusBeforeLoadingItems() {
         ReleaseItemDataReplacementExcelParseResult parsed = parseResult(
-                List.of("description"),
-                excelRow(2, "P-001", "A", values("description", "new")));
+                List.of("materialName"),
+                excelRow(2, "P-001", "A", values("materialName", "new")));
 
         TestContext salesOrder = context(parsed, List.of(), List.of(), List.of());
         assertThatThrownBy(() -> salesOrder.service.preview(
@@ -293,8 +293,8 @@ class ReleaseItemDataReplacementStage3PreviewServiceTest {
     @Test
     void dataScopeDenialReturnsGenericForbiddenBeforeReadingItemsOrTickets() {
         ReleaseItemDataReplacementExcelParseResult parsed = parseResult(
-                List.of("description"),
-                excelRow(2, "SECRET-PART", "A", values("description", "new")));
+                List.of("materialName"),
+                excelRow(2, "SECRET-PART", "A", values("materialName", "new")));
         TestContext context = context(
                 parsed,
                 List.of(order(101, "RFQ-SECRET", "SECRET-CUSTOMER", QuoteStatusWorkflow.QUOTED)),

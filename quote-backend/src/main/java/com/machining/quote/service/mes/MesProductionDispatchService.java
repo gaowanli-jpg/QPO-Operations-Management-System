@@ -206,7 +206,7 @@ public class MesProductionDispatchService {
         item.setRequiredDate(allocation.getDeliveryDate().atTime(23, 59, 59));
         item.setRemark(trimToNull(allocation.getRemark()));
         item.setCustomerRequirements(MesCustomerRequirementsAssembler.assemble(
-                allocation.getDescription(),
+                allocation.getMaterialName(),
                 allocation.getSurfaceTreatment()));
         item.setBom(bom);
         item.setProcessRoute(buildProcessRoute(allocation.getProcessRoute()));
@@ -686,7 +686,7 @@ public class MesProductionDispatchService {
         }
         item.setRemark(trimToNull(allocation.getRemark()));
         item.setCustomerRequirements(MesCustomerRequirementsAssembler.assemble(
-                allocation.getDescription(),
+                allocation.getMaterialName(),
                 allocation.getSurfaceTreatment()));
         item.setBom(buildBom(allocation));
         item.setProcessRoute(buildProcessRoute(allocation.getProcessRoute()));
