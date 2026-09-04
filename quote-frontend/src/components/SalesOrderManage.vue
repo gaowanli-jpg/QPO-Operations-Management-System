@@ -165,6 +165,15 @@
           <el-button v-permission="'market:sales-order:supplement-drawing'" type="primary" plain :disabled="Number(drawingSummary?.missingDrawingCount || 0) === 0" @click="openSupplementDialog">
             补传图纸
           </el-button>
+          <el-button
+            v-permission="'market:sales-order:production-task-notice-export'"
+            plain
+            :loading="productionTaskNoticeExportPending"
+            :disabled="productionTaskNoticeExportPending"
+            @click="handleProductionTaskNoticeExport"
+          >
+            导出生产任务通知单
+          </el-button>
         </div>
 
         <el-tabs v-model="activeDetailTab" class="detail-tabs" @tab-change="handleDetailTabChange">
@@ -316,6 +325,7 @@ import SupplementDrawingDialog from './order/SupplementDrawingDialog.vue'
 import { usePendingAction } from '../composables/usePendingAction'
 import {
   discardSalesOrder,
+  downloadSalesOrderProductionTaskNotice,
   getSalesOrder,
   getSalesOrderDrawingSummary,
   listSalesOrderItems,
@@ -332,7 +342,8 @@ const SALES_ORDER_STATUSES = ['已报价', '部分已提单', '已生成提单',
 const SALES_ORDER_STATUS_LOCKED_REASON = '销售订单已同步 U9，不能废弃'
 const salesOrderActionKeys = {
   statusChange: (orderId) => `sales-order:status-change:${orderId || 'none'}`,
-  supplementDrawings: (orderId) => `sales-order:supplement-drawings:${orderId || 'none'}`
+  supplementDrawings: (orderId) => `sales-order:supplement-drawings:${orderId || 'none'}`,
+  productionTaskNoticeExport: (orderId) => `sales-order:production-task-notice-export:${orderId || 'none'}`
 }
 const SALES_ORDER_STATUS_ACTIONS = [
   {
@@ -398,6 +409,7 @@ const customerPickerVisible = ref(false)
 
 const missingDrawingItems = computed(() => drawingSummary.value?.missingItems || detailItemList.value.filter(item => !item.drawingUrl))
 const supplementUploadPending = computed(() => isPending(salesOrderActionKeys.supplementDrawings(orderDetail.value?.orderInfo?.id)))
+const productionTaskNoticeExportPending = computed(() => isPending(salesOrderActionKeys.productionTaskNoticeExport(orderDetail.value?.orderInfo?.id)))
 const autoReleaseSummary = computed(() => {
   const summary = orderDetail.value?.summary || {}
   return {
@@ -609,6 +621,24 @@ const openSupplementDialog = () => {
   supplementFiles.value = []
   supplementVersionFiles.value = []
   supplementVisible.value = true
+}
+
+const handleProductionTaskNoticeExport = async () => {
+  const salesOrderId = orderDetail.value?.orderInfo?.id
+  if (!salesOrderId) return ElMessage.warning('请先打开销售订单详情。')
+  const salesOrderNo = orderDetail.value?.orderInfo?.salesOrderNo || salesOrderId
+  return runAction(salesOrderActionKeys.productionTaskNoticeExport(salesOrderId), async () => {
+    const result = await downloadSalesOrderProductionTaskNotice(salesOrderId, `${salesOrderNo}-生产任务通知单.xlsx`)
+    if (result?.success === false) {
+      throw new Error(result.message || '导出生产任务通知单失败。')
+    }
+    ElMessage.success('生产任务通知单已开始下载。')
+  }).catch((error) => {
+    if (error) {
+      console.error(error)
+      ElMessage.error(error.message || '导出生产任务通知单失败。')
+    }
+  })
 }
 
 const refreshCurrentDetail = async () => {

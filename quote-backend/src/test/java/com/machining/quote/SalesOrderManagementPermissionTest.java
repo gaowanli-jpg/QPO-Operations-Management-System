@@ -11,6 +11,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class SalesOrderManagementPermissionTest {
     private static final Path BASELINE_SEED = Path.of("src", "main", "resources", "db", "migration", "V2__qpo_baseline_seed_data.sql");
+    private static final Path PRODUCTION_TASK_NOTICE_PERMISSION = Path.of("src", "main", "resources", "db", "migration", "V38__sales_order_production_task_notice_export_permission.sql");
     private static final Path PERMISSION_SERVICE = Path.of("src", "main", "java", "com", "machining", "quote", "service", "PermissionService.java");
     private static final Path SYSTEM_ROLE_SERVICE = Path.of("src", "main", "java", "com", "machining", "quote", "service", "SystemRoleService.java");
     private static final Path PERMISSION_DOC = Path.of("..", "docs", "QPO\u6743\u9650\u7528\u6237\u4f53\u7cfb", "02-\u6743\u9650\u70b9\u6e05\u5355\u4e0e\u73b0\u6709\u89d2\u8272\u6620\u5c04.md");
@@ -52,12 +53,30 @@ class SalesOrderManagementPermissionTest {
                         "permission(193L, \"BUTTON\", \"market:sales-order:supplement-drawing\"",
                         "permission(194L, \"BUTTON\", \"market:sales-order:discard\"",
                         "permission(195L, \"BUTTON\", \"market:sales-order:restore\"",
+                        "permission(215L, \"BUTTON\", \"market:sales-order:production-task-notice-export\"",
                         "Map.entry(\"market:sales-order:view\", Set.of(\"MARKET_USER\", \"MARKET_MANAGER\", \"READONLY\"))",
                         "Map.entry(\"market:sales-order:supplement-drawing\", Set.of(\"MARKET_USER\", \"MARKET_MANAGER\"))",
                         "Map.entry(\"market:sales-order:discard\", Set.of(\"MARKET_MANAGER\"))",
-                        "Map.entry(\"market:sales-order:restore\", Set.of(\"MARKET_MANAGER\"))"
+                        "Map.entry(\"market:sales-order:restore\", Set.of(\"MARKET_MANAGER\"))",
+                        "Map.entry(\"market:sales-order:production-task-notice-export\", Set.of(\"MARKET_USER\", \"MARKET_MANAGER\"))"
                 )
                 .doesNotContain("permission(190L, \"MENU\", \"market:history-order:view\"");
+    }
+
+    @Test
+    void productionTaskNoticeExportPermissionIsAppendOnlyMigration() throws IOException {
+        String migration = read(PRODUCTION_TASK_NOTICE_PERMISSION);
+
+        assertThat(migration)
+                .contains(
+                        "market:sales-order:production-task-notice-export",
+                        "导出生产任务通知单",
+                        "MARKET_USER",
+                        "MARKET_MANAGER",
+                        "ON CONFLICT (id) DO UPDATE SET",
+                        "ON CONFLICT (role_id, permission_id) DO NOTHING"
+                )
+                .doesNotContain("READONLY");
     }
 
     @Test
@@ -83,6 +102,7 @@ class SalesOrderManagementPermissionTest {
                         "market:sales-order:supplement-drawing",
                         "market:sales-order:discard",
                         "market:sales-order:restore",
+                        "market:sales-order:production-task-notice-export",
                         "/sales-orders"
                 );
         assertThat(adminDoc)

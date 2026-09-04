@@ -1,12 +1,14 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest'
-import { request } from '../api'
+import { downloadFile, request } from '../api'
 import * as orderApi from './orderApi'
 
 vi.mock('../api', () => ({
+  downloadFile: vi.fn(),
   request: vi.fn()
 }))
 
 beforeEach(() => {
+  downloadFile.mockReset()
   request.mockReset()
 })
 
@@ -121,6 +123,15 @@ describe('orderApi', () => {
       data: formData,
       headers: { 'Content-Type': 'multipart/form-data' }
     })
+  })
+
+  test('downloads sales order production task notice through sales order management endpoint', async () => {
+    await orderApi.downloadSalesOrderProductionTaskNotice(901, '生产任务通知单.xlsx')
+
+    expect(downloadFile).toHaveBeenCalledWith(
+      '/api/market/sales-order-management/orders/901/production-task-notice/export',
+      '生产任务通知单.xlsx'
+    )
   })
 
   test('exposes order item maintenance endpoints', async () => {

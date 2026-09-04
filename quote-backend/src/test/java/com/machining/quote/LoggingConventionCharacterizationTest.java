@@ -44,6 +44,7 @@ class LoggingConventionCharacterizationTest {
         assertHasLogger("service/OrderManagementService.java", "OrderManagementService");
         assertHasLogger("service/DeliveryService.java", "DeliveryService");
         assertHasLogger("service/DeliveryDocumentService.java", "DeliveryDocumentService");
+        assertHasLogger("service/SalesOrderProductionTaskNoticeExportService.java", "SalesOrderProductionTaskNoticeExportService");
         assertHasLogger("service/wms/WmsReservationBatchService.java", "WmsReservationBatchService");
         assertHasLogger("service/QuoteProcessService.java", "QuoteProcessService");
         assertHasLogger("service/InternalTargetLeadTimeService.java", "InternalTargetLeadTimeService");
@@ -107,6 +108,15 @@ class LoggingConventionCharacterizationTest {
                 .contains("Delivery document export rejected")
                 .contains("Delivery document export failed")
                 .contains("log.error(\"Delivery document export failed");
+
+        assertThat(source("service/SalesOrderProductionTaskNoticeExportService.java"))
+                .contains("Sales order production task notice export started")
+                .contains("Sales order production task notice export completed")
+                .contains("Sales order production task notice export rejected")
+                .contains("Sales order production task notice export failed")
+                .contains("rowCount={}")
+                .contains("durationMs={}")
+                .doesNotContain("requestPayload", "responsePayload", "Authorization", "token={}");
 
         assertThat(source("service/wms/WmsReservationBatchService.java"))
                 .contains("WMS reservation batch started")

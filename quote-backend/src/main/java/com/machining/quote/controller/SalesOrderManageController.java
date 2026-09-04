@@ -9,6 +9,8 @@ import com.machining.quote.dto.ProcessSheetDTO;
 import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.SalesOrderItem;
 import com.machining.quote.service.SalesOrderManageService;
+import com.machining.quote.service.SalesOrderProductionTaskNoticeExportService;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -20,6 +22,9 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 
@@ -28,6 +33,8 @@ import java.util.Map;
 public class SalesOrderManageController {
     @Autowired
     private SalesOrderManageService salesOrderManageService;
+    @Autowired
+    private SalesOrderProductionTaskNoticeExportService productionTaskNoticeExportService;
 
     @GetMapping("/customers")
     @RequirePermission("market:sales-order:customer-select")
@@ -89,6 +96,17 @@ public class SalesOrderManageController {
     @RequirePermission("market:sales-order:view")
     public Map<String, Object> getDrawingSummary(@PathVariable Long salesOrderId) {
         return salesOrderManageService.getDrawingSummary(salesOrderId);
+    }
+
+    @GetMapping("/orders/{salesOrderId}/production-task-notice/export")
+    @RequirePermission("market:sales-order:production-task-notice-export")
+    public void exportProductionTaskNotice(@PathVariable Long salesOrderId, HttpServletResponse response) throws IOException {
+        byte[] bytes = productionTaskNoticeExportService.export(salesOrderId);
+        response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        String fileName = salesOrderId + "-生产任务通知单.xlsx";
+        String encodedName = URLEncoder.encode(fileName, StandardCharsets.UTF_8).replaceAll("\\+", "%20");
+        response.setHeader("Content-Disposition", "attachment; filename*=UTF-8''" + encodedName);
+        response.getOutputStream().write(bytes);
     }
 
     @PostMapping("/orders/{salesOrderId}/discard")

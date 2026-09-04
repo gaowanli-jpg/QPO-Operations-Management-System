@@ -1,4 +1,4 @@
-import { request } from '../api'
+import { downloadFile, request } from '../api'
 
 const CUSTOMER_ENDPOINTS = {
   'market-rfq': '/api/market/rfq/customers',
@@ -123,3 +123,8 @@ export const supplementSalesOrderDrawings = (salesOrderId, formData) => request(
   data: formData,
   headers: { 'Content-Type': 'multipart/form-data' }
 })
+
+export const downloadSalesOrderProductionTaskNotice = (salesOrderId, fallbackName = `${salesOrderId}-生产任务通知单.xlsx`) => downloadFile(
+  `/api/market/sales-order-management/orders/${salesOrderId}/production-task-notice/export`,
+  fallbackName
+)

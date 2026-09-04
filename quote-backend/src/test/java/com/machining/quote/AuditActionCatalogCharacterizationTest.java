@@ -61,6 +61,7 @@ class AuditActionCatalogCharacterizationTest {
         assertThat(AuditService.inferModule("DICT_PRICING_MARKUP_FEE_DELETE")).isEqualTo("DICT");
         assertThat(AuditService.inferModule("SALES_ORDER_CHANGE_ITEM_UPDATE")).isEqualTo("CHANGE");
         assertThat(AuditService.inferModule("SALES_ORDER_CHANGE_ITEM_DATA_REPLACEMENT")).isEqualTo("CHANGE");
+        assertThat(AuditService.inferModule("SALES_ORDER_PRODUCTION_TASK_NOTICE_EXPORT")).isEqualTo("MARKET");
         assertThat(AuditService.inferModule("SYSTEM_U9_ORG_CONFIG_UPDATE")).isEqualTo("SYSTEM");
 
         assertThat(AuditService.labelForAction("AUTH_ACCOUNT_LOCKED")).isNotEqualTo("AUTH_ACCOUNT_LOCKED");
@@ -97,6 +98,7 @@ class AuditActionCatalogCharacterizationTest {
         assertThat(AuditService.labelForAction("DICT_PRICING_MARKUP_FEE_DELETE")).isNotEqualTo("DICT_PRICING_MARKUP_FEE_DELETE");
         assertThat(AuditService.labelForAction("SALES_ORDER_CHANGE_ITEM_UPDATE")).isNotEqualTo("SALES_ORDER_CHANGE_ITEM_UPDATE");
         assertThat(AuditService.labelForAction("SALES_ORDER_CHANGE_ITEM_DATA_REPLACEMENT")).isNotEqualTo("SALES_ORDER_CHANGE_ITEM_DATA_REPLACEMENT");
+        assertThat(AuditService.labelForAction("SALES_ORDER_PRODUCTION_TASK_NOTICE_EXPORT")).isNotEqualTo("SALES_ORDER_PRODUCTION_TASK_NOTICE_EXPORT");
         assertThat(AuditService.labelForAction("SYSTEM_U9_ORG_CONFIG_UPDATE")).isNotEqualTo("SYSTEM_U9_ORG_CONFIG_UPDATE");
         assertThat(AuditService.labelForAction("AUTH_DATACENTER_SSO_SUCCESS")).contains("数据中心SSO");
         assertThat(AuditService.labelForAction("AUTH_DATACENTER_SSO_FAILED")).contains("数据中心SSO");
@@ -213,6 +215,11 @@ class AuditActionCatalogCharacterizationTest {
     void salesOrderChangeAuditActionsExposeStableChineseLabels() {
         assertThat(AuditService.labelForAction("SALES_ORDER_CHANGE_ITEM_UPDATE")).isEqualTo("销售变更保存零件行");
         assertThat(AuditService.labelForAction("SALES_ORDER_CHANGE_ITEM_DATA_REPLACEMENT")).isEqualTo("销售变更表格数据替换");
+    }
+
+    @Test
+    void salesOrderProductionTaskNoticeExportAuditActionExposesStableChineseLabel() {
+        assertThat(AuditService.labelForAction("SALES_ORDER_PRODUCTION_TASK_NOTICE_EXPORT")).isEqualTo("导出生产任务通知单");
     }
 
     @Test

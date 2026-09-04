@@ -20,13 +20,15 @@ describe('sales order management governance and drawings', () => {
       'getSalesOrderDrawingSummary',
       'discardSalesOrder',
       'restoreSalesOrder',
-      'supplementSalesOrderDrawings'
+      'supplementSalesOrderDrawings',
+      'downloadSalesOrderProductionTaskNotice'
     ]) {
       expect(orderApi).toContain(`export const ${apiName}`)
       expect(salesOrderManage).toContain(apiName)
     }
     expect(orderApi).toContain('/api/market/sales-order-management/orders')
     expect(orderApi).toContain('/api/market/sales-order-management/orders/${salesOrderId}/supplement-drawings')
+    expect(orderApi).toContain('/api/market/sales-order-management/orders/${salesOrderId}/production-task-notice/export')
     expect(orderApi).not.toContain('/api/market/sales-order-management/items/${itemId}/drawings')
   })
 
@@ -61,6 +63,16 @@ describe('sales order management governance and drawings', () => {
     expect(salesOrderManage).not.toContain('supplementSalesOrderItemDrawings')
     expect(salesOrderManage).toContain('await fetchDetailItems()')
     expect(salesOrderManage).toContain('await loadOrders()')
+  })
+
+  test('detail view exposes secured production task notice export action', () => {
+    expect(salesOrderManage).toContain('导出生产任务通知单')
+    expect(salesOrderManage).toContain("v-permission=\"'market:sales-order:production-task-notice-export'\"")
+    expect(salesOrderManage).toContain('productionTaskNoticeExport: (orderId) => `sales-order:production-task-notice-export:${orderId || \'none\'}`')
+    expect(salesOrderManage).toContain('productionTaskNoticeExportPending')
+    expect(salesOrderManage).toContain('downloadSalesOrderProductionTaskNotice')
+    expect(salesOrderManage).toContain('handleProductionTaskNoticeExport')
+    expect(salesOrderManage).toContain('runAction(salesOrderActionKeys.productionTaskNoticeExport(salesOrderId)')
   })
 
   test('detail view uses backend pagination for independent sales order tabs', () => {

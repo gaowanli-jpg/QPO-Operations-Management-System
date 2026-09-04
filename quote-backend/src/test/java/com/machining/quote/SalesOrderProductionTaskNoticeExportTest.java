@@ -1,0 +1,241 @@
+package com.machining.quote;
+
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.machining.quote.entity.SalesOrderHeader;
+import com.machining.quote.entity.SalesOrderItem;
+import com.machining.quote.mapper.SalesOrderHeaderMapper;
+import com.machining.quote.mapper.SalesOrderItemMapper;
+import com.machining.quote.service.AuditService;
+import com.machining.quote.service.DataScopeService;
+import com.machining.quote.service.SalesOrderProductionTaskNoticeExportService;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.ss.usermodel.WorkbookFactory;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.test.util.ReflectionTestUtils;
+
+import java.io.ByteArrayInputStream;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Map;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+class SalesOrderProductionTaskNoticeExportTest {
+
+    @Test
+    void exportFillsProductionTaskNoticeTemplateFromSalesOrderHeaderAndItems() throws Exception {
+        SalesOrderHeader header = new SalesOrderHeader();
+        header.setId(900L);
+        header.setSalesOrderNo("SOQPO-900");
+        header.setDocumentNo("DOC-900");
+        header.setSalesOrderDate(LocalDate.of(2026, 9, 4));
+        header.setCustomerName("客户A");
+
+        SalesOrderItem repeated = item(901L, 900L, 1, "已匹配");
+        repeated.setInternalProjectNo("IP-001");
+        repeated.setCustomerOrderNo("PO-001");
+        repeated.setCustomerProjectNo("CP-001");
+        repeated.setPartNo("PN-001");
+        repeated.setQty(3);
+        repeated.setVersion("A");
+        repeated.setEngineeringMaterialName("进口 6061");
+        repeated.setSurfaceTreatment("本色阳极");
+        repeated.setSalesOrderDate(LocalDate.of(2026, 9, 5));
+        repeated.setInternalDeliveryDate(LocalDate.of(2026, 9, 20));
+        repeated.setRemark("首件备注");
+
+        SalesOrderItem fresh = item(902L, 900L, 2, "未匹配");
+        fresh.setInternalProjectNo("IP-002");
+        fresh.setCustomerOrderNo("PO-002");
+        fresh.setCustomerProjectNo("CP-002");
+        fresh.setPartNo("PN-002");
+        fresh.setQty(5);
+        fresh.setVersion("B");
+        fresh.setEngineeringMaterialName("SUS304");
+        fresh.setMaterialName("不应优先使用的销售材料");
+        fresh.setSurfaceTreatment("钝化");
+        fresh.setSalesOrderDate(LocalDate.of(2026, 9, 6));
+        fresh.setInternalDeliveryDate(LocalDate.of(2026, 9, 25));
+        fresh.setRemark("第二件备注");
+
+        Fixture fixture = fixture(header, List.of(fresh, repeated));
+
+        byte[] bytes = fixture.service.export(900L);
+
+        verify(fixture.dataScopeService).assertCanAccessSalesOrder(header);
+        verify(fixture.itemMapper).selectList(any(QueryWrapper.class));
+        ArgumentCaptor<Object> afterDataCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(fixture.auditService).record(
+                eq("SALES_ORDER_PRODUCTION_TASK_NOTICE_EXPORT"),
+                eq("sales_order_header"),
+                eq(900L),
+                isNull(),
+                afterDataCaptor.capture(),
+                eq("MARKET"),
+                eq("SUCCESS"),
+                eq(AuditService.labelForAction("SALES_ORDER_PRODUCTION_TASK_NOTICE_EXPORT")),
+                isNull()
+        );
+        assertThat((Map<String, Object>) afterDataCaptor.getValue())
+                .containsEntry("salesOrderId", 900L)
+                .containsEntry("salesOrderNo", "SOQPO-900")
+                .containsEntry("rowCount", 2);
+
+        try (Workbook workbook = WorkbookFactory.create(new ByteArrayInputStream(bytes))) {
+            Sheet sheet = workbook.getSheet("StandardDocPrintTemplate");
+            assertThat(sheet).isNotNull();
+            assertThat(text(sheet, 3, "M")).isEqualTo("常熟市兆恒众力精密机械有限公司");
+            assertThat(text(sheet, 5, "Q")).isEqualTo("生产任务通知单");
+            assertThat(text(sheet, 8, "AA")).isEqualTo("下单日期：");
+            assertThat(text(sheet, 8, "AD")).isEqualTo("2026-09-04");
+            assertThat(text(sheet, 67, "AB")).isEqualTo("表单编号：SOQPO-900");
+
+            assertThat(text(sheet, 12, "B")).isEqualTo("10");
+            assertThat(text(sheet, 12, "E")).isEqualTo("重复");
+            assertThat(text(sheet, 12, "H")).isEqualTo("IP-001");
+            assertThat(text(sheet, 12, "J")).isEqualTo("PO-001");
+            assertThat(text(sheet, 12, "L")).isEqualTo("CP-001");
+            assertThat(text(sheet, 12, "P")).isEqualTo("PN-001");
+            assertThat(text(sheet, 12, "T")).isEqualTo("3");
+            assertThat(text(sheet, 12, "U")).isEqualTo("A");
+            assertThat(text(sheet, 12, "V")).isEqualTo("进口 6061");
+            assertThat(text(sheet, 12, "Y")).isEqualTo("本色阳极");
+            assertThat(text(sheet, 12, "AC")).isEqualTo("2026-09-05");
+            assertThat(text(sheet, 12, "AF")).isEqualTo("2026-09-20");
+            assertThat(text(sheet, 12, "AG")).isEqualTo("首件备注");
+
+            assertThat(text(sheet, 13, "B")).isEqualTo("20");
+            assertThat(text(sheet, 13, "E")).isEqualTo("新件");
+            assertThat(text(sheet, 13, "H")).isEqualTo("IP-002");
+            assertThat(text(sheet, 13, "T")).isEqualTo("5");
+            assertThat(text(sheet, 13, "V")).isEqualTo("SUS304");
+            assertThat(text(sheet, 13, "AF")).isEqualTo("2026-09-25");
+            assertThat(text(sheet, 13, "AG")).isEqualTo("第二件备注");
+
+            assertThat(text(sheet, 14, "B")).isBlank();
+            assertThat(text(sheet, 14, "P")).isBlank();
+            assertThat(sheet.getNumMergedRegions()).isGreaterThan(500);
+        }
+    }
+
+    @Test
+    void exportKeepsTemplateFooterBelowExtendedDataRows() throws Exception {
+        SalesOrderHeader header = new SalesOrderHeader();
+        header.setId(910L);
+        header.setSalesOrderNo("SOQPO-910");
+        header.setSalesOrderDate(LocalDate.of(2026, 9, 4));
+
+        List<SalesOrderItem> items = java.util.stream.IntStream.rangeClosed(1, 53)
+                .mapToObj(index -> {
+                    SalesOrderItem item = item(9100L + index, 910L, index, index % 2 == 0 ? "已匹配" : "未匹配");
+                    item.setPartNo("PN-" + index);
+                    item.setQty(1);
+                    item.setEngineeringMaterialName("6061");
+                    return item;
+                })
+                .toList();
+
+        Fixture fixture = fixture(header, items);
+
+        byte[] bytes = fixture.service.export(910L);
+
+        try (Workbook workbook = WorkbookFactory.create(new ByteArrayInputStream(bytes))) {
+            Sheet sheet = workbook.getSheet("StandardDocPrintTemplate");
+            assertThat(text(sheet, 64, "B")).isEqualTo("530");
+            assertThat(text(sheet, 64, "P")).isEqualTo("PN-53");
+            assertThat(text(sheet, 67, "AB")).isBlank();
+            assertThat(text(sheet, 69, "AB")).isEqualTo("表单编号：SOQPO-910");
+        }
+    }
+
+    @Test
+    void controllerEndpointIsSecuredAndWritesXlsxDownload() throws Exception {
+        SalesOrderProductionTaskNoticeExportService service = mock(SalesOrderProductionTaskNoticeExportService.class);
+        byte[] bytes = new byte[] { 1, 2, 3 };
+        when(service.export(901L)).thenReturn(bytes);
+
+        com.machining.quote.controller.SalesOrderManageController controller = new com.machining.quote.controller.SalesOrderManageController();
+        ReflectionTestUtils.setField(controller, "productionTaskNoticeExportService", service);
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        controller.exportProductionTaskNotice(901L, response);
+
+        assertThat(response.getContentType()).isEqualTo("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        assertThat(response.getHeader("Content-Disposition"))
+                .contains("filename*=UTF-8''")
+                .contains("901")
+                .contains("%E7%94%9F%E4%BA%A7%E4%BB%BB%E5%8A%A1%E9%80%9A%E7%9F%A5%E5%8D%95.xlsx");
+        assertThat(response.getContentAsByteArray()).containsExactly(bytes);
+    }
+
+    private Fixture fixture(SalesOrderHeader header, List<SalesOrderItem> items) {
+        SalesOrderHeaderMapper headerMapper = mock(SalesOrderHeaderMapper.class);
+        SalesOrderItemMapper itemMapper = mock(SalesOrderItemMapper.class);
+        DataScopeService dataScopeService = mock(DataScopeService.class);
+        AuditService auditService = mock(AuditService.class);
+        when(headerMapper.selectById(header.getId())).thenReturn(header);
+        when(itemMapper.selectList(any(QueryWrapper.class))).thenReturn(items);
+        SalesOrderProductionTaskNoticeExportService service = new SalesOrderProductionTaskNoticeExportService();
+        ReflectionTestUtils.setField(service, "salesOrderHeaderMapper", headerMapper);
+        ReflectionTestUtils.setField(service, "salesOrderItemMapper", itemMapper);
+        ReflectionTestUtils.setField(service, "dataScopeService", dataScopeService);
+        ReflectionTestUtils.setField(service, "auditService", auditService);
+        return new Fixture(service, headerMapper, itemMapper, dataScopeService, auditService);
+    }
+
+    private SalesOrderItem item(Long id, Long salesOrderId, Integer lineNo, String matchStatus) {
+        SalesOrderItem item = new SalesOrderItem();
+        item.setId(id);
+        item.setSalesOrderId(salesOrderId);
+        item.setLineNo(lineNo);
+        item.setMatchStatus(matchStatus);
+        item.setQty(1);
+        item.setBaseCost(BigDecimal.ONE);
+        return item;
+    }
+
+    private String text(Sheet sheet, int oneBasedRow, String column) {
+        Row row = sheet.getRow(oneBasedRow - 1);
+        if (row == null) {
+            return "";
+        }
+        var cell = row.getCell(columnIndex(column));
+        if (cell == null) {
+            return "";
+        }
+        return switch (cell.getCellType()) {
+            case STRING -> cell.getStringCellValue();
+            case NUMERIC -> BigDecimal.valueOf(cell.getNumericCellValue()).stripTrailingZeros().toPlainString();
+            case BOOLEAN -> String.valueOf(cell.getBooleanCellValue());
+            case FORMULA -> cell.getCellFormula();
+            case BLANK, _NONE, ERROR -> "";
+        };
+    }
+
+    private int columnIndex(String column) {
+        int result = 0;
+        for (int i = 0; i < column.length(); i++) {
+            result = result * 26 + (column.charAt(i) - 'A' + 1);
+        }
+        return result - 1;
+    }
+
+    private record Fixture(
+            SalesOrderProductionTaskNoticeExportService service,
+            SalesOrderHeaderMapper headerMapper,
+            SalesOrderItemMapper itemMapper,
+            DataScopeService dataScopeService,
+            AuditService auditService) {
+    }
+}
