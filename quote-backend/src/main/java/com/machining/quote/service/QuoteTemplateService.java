@@ -1,12 +1,9 @@
 package com.machining.quote.service;
 
 import com.machining.quote.dto.QuoteTemplateConfigReq;
-import org.apache.poi.ss.usermodel.DataFormatter;
-import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
-import org.apache.poi.ss.usermodel.Cell;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,11 +21,8 @@ import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.StandardCopyOption;
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.HashSet;
-import java.util.Set;
 
 @Service
 public class QuoteTemplateService {
@@ -37,13 +31,6 @@ public class QuoteTemplateService {
     private static final String META_FILENAME = "quote-template.properties";
     private static final String HEADER_ROW_NUMBER_KEY = "headerRowNumber";
     private static final int DEFAULT_HEADER_ROW_NUMBER = 8;
-    private static final List<String> REQUIRED_HEADERS = List.of(
-            "序号", "图号", "物料描述", "图纸状态", "材料名称", "表面处理", "版本", "数量", "单位",
-            "含税单价", "含税总价", "交货周期", "备注"
-    );
-    private static final List<String> DETAIL_REQUIRED_HEADERS = List.of("费率(%)", "基础成本");
-    private static final List<String> PROMOTED_PROCESS_HEADERS = List.of("类型", "工时/金额", "单价", "费用");
-    private static final List<String> STANDARD_PROCESS_HEADERS = List.of("大类编码", "大类名称", "具体工艺", "工时", "小时价格", "金额");
 
     @Value("${erp.upload-dir}")
     private String uploadDir;
@@ -162,34 +149,8 @@ public class QuoteTemplateService {
                 throw new RuntimeException("报价单模板必须至少包含一个工作表");
             }
             Sheet sheet = workbook.getSheetAt(0);
-            TemplateLayout layout = templateLayout();
-            Row headerRow = sheet.getRow(layout.headerRowIndex());
-            if (headerRow == null) {
-                throw new RuntimeException("报价单模板第 " + layout.headerRowNumber() + " 行必须包含表头");
-            }
-
-            DataFormatter formatter = new DataFormatter();
-            Set<String> headers = new HashSet<>();
-            for (Cell cell : headerRow) {
-                String header = normalizeHeader(formatter.formatCellValue(cell));
-                if (!header.isEmpty()) {
-                    headers.add(header);
-                }
-            }
-            List<String> missing = REQUIRED_HEADERS.stream()
-                    .filter(header -> !headers.contains(normalizeHeader(header)))
-                    .toList();
-            if (!missing.isEmpty()) {
-                throw new RuntimeException("报价单模板缺少必要表头：" + String.join("、", missing));
-            }
-            List<String> missingDetailHeaders = DETAIL_REQUIRED_HEADERS.stream()
-                    .filter(header -> !hasDetailHeader(headers, header))
-                    .toList();
-            if (!missingDetailHeaders.isEmpty()) {
-                throw new RuntimeException("报价单模板缺少详细报价单必要表头：" + String.join("、", missingDetailHeaders));
-            }
-            if (!hasDetailHeader(headers, "工艺名称") && !hasPromotedProcessHeaders(headers) && !hasStandardProcessHeaders(headers)) {
-                throw new RuntimeException("报价单模板缺少详细报价单必要表头：工艺名称或大类编码、大类名称、具体工艺、工时、小时价格、金额");
+            if (sheet == null) {
+                throw new RuntimeException("报价单模板必须至少包含一个工作表");
             }
         } catch (RuntimeException e) {
             throw e;
@@ -303,39 +264,6 @@ public class QuoteTemplateService {
 
     private Path metaPath() {
         return templateDir().resolve(META_FILENAME).normalize();
-    }
-
-    private String normalizeHeader(String value) {
-        if (value == null) {
-            return "";
-        }
-        return value
-                .replace('\u00A0', ' ')
-                .replace('\u3000', ' ')
-                .replace('\uFEFF', ' ')
-                .replace('（', '(')
-                .replace('）', ')')
-                .replace('％', '%')
-                .replaceAll("[\\s\\u200B\\u200C\\u200D]+", "")
-                .trim();
-    }
-
-    private boolean hasDetailHeader(Set<String> headers, String requiredHeader) {
-        String normalized = normalizeHeader(requiredHeader);
-        if ("费率(%)".equals(requiredHeader)) {
-            return headers.stream().anyMatch(header -> header.contains(normalized));
-        }
-        return headers.contains(normalized);
-    }
-
-    private boolean hasPromotedProcessHeaders(Set<String> headers) {
-        return PROMOTED_PROCESS_HEADERS.stream()
-                .allMatch(header -> headers.contains(normalizeHeader(header)));
-    }
-
-    private boolean hasStandardProcessHeaders(Set<String> headers) {
-        return STANDARD_PROCESS_HEADERS.stream()
-                .allMatch(header -> headers.contains(normalizeHeader(header)));
     }
 
     public record TemplateLayout(int headerRowNumber, int groupRowIndex, int headerRowIndex, int detailStartRowIndex) {

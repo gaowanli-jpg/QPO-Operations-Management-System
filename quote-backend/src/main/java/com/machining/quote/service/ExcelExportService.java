@@ -398,8 +398,11 @@ public class ExcelExportService {
 
     private List<List<String>> buildQuoteHead(List<String> processNames, List<String> feeNames) {
         List<List<String>> head = new ArrayList<>();
-        for (String title : List.of("序号", "图号", "物料描述", "图纸状态", "材料名称", "材料编码", "材料类型", "材质分类", "表面处理", "版本", "数量", "单位", "重量(KG)", "材料费")) {
+        for (String title : List.of("序号", "图号", "物料描述", "图纸状态", "材料名称", "表面处理", "版本", "数量", "单位")) {
             head.add(List.of("基础信息", title));
+        }
+        for (String title : List.of("重量(KG)", "材料费")) {
+            head.add(List.of("材料费", title));
         }
         for (String processName : processNames) {
             for (String title : QuoteProcessExportSupport.QUOTE_PROCESS_VALUE_HEADERS) {
@@ -454,9 +457,6 @@ public class ExcelExportService {
         row.add(safe(item.getDescription()));
         row.add(resolveDrawingStatus(item));
         row.add(safe(item.getMaterialName()));
-        row.add(safe(item.getEngineeringMaterialCode()));
-        row.add(safe(item.getEngineeringMaterialTypeName()));
-        row.add(safe(item.getEngineeringMaterialCategory()));
         row.add(safe(item.getSurfaceTreatment()));
         row.add(safe(item.getVersion()));
         row.add(safeInt(item.getQty()));
@@ -502,9 +502,6 @@ public class ExcelExportService {
         row.add(safe(item.getDescription()));
         row.add("无图");
         row.add(safe(item.getMaterialName()));
-        row.add(safe(item.getEngineeringMaterialCode()));
-        row.add(safe(item.getEngineeringMaterialTypeName()));
-        row.add(safe(item.getEngineeringMaterialCategory()));
         row.add(safe(item.getSurfaceTreatment()));
         row.add(safe(item.getVersion()));
         row.add(safeInt(item.getQty()));

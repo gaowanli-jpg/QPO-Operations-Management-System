@@ -109,6 +109,111 @@ class QuoteOptimizedExportCustomerWeightTest {
         }
     }
 
+    @Test
+    void customerTemplateDetailRebuildsKnownSystemDetailTableWhenTemplateMiddleIsNotCanonical() throws Exception {
+        ItemQuoteVersion item = quotedNormalItem();
+        item.setFeeData(List.of(
+                fee("运输", "BASIC_PERCENT", 10.0, 4.4),
+                fee("税", "TAX", 13.0, 6.292)
+        ));
+        QuoteTemplateExportService service = new QuoteTemplateExportService();
+        OrderRfqMapper orderRfqMapper = mock(OrderRfqMapper.class);
+        ItemQuoteVersionMapper itemMapper = mock(ItemQuoteVersionMapper.class);
+        QuoteProcessService quoteProcessService = mock(QuoteProcessService.class);
+        QuoteTemplateService quoteTemplateService = mock(QuoteTemplateService.class);
+
+        when(orderRfqMapper.selectById(RFQ_ID)).thenReturn(order());
+        when(itemMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(item));
+        when(quoteTemplateService.openTemplateWorkbook()).thenReturn(nonCanonicalMiddleTemplateWorkbook());
+        when(quoteTemplateService.templateLayout()).thenReturn(new QuoteTemplateService.TemplateLayout(8, 6, 7, 8));
+
+        ReflectionTestUtils.setField(service, "orderRfqMapper", orderRfqMapper);
+        ReflectionTestUtils.setField(service, "itemMapper", itemMapper);
+        ReflectionTestUtils.setField(service, "quoteProcessService", quoteProcessService);
+        ReflectionTestUtils.setField(service, "quoteTemplateService", quoteTemplateService);
+        ReflectionTestUtils.setField(service, "leadTimeService", new LeadTimeService());
+
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        service.exportTemplateQuoteDetail(RFQ_ID, response);
+
+        try (Workbook workbook = workbook(response)) {
+            Sheet sheet = workbook.getSheetAt(0);
+            assertThat(text(sheet, 0, 0)).isEqualTo("客户报价单模板");
+            assertThat(text(sheet, 2, 0)).isEqualTo("询价日：");
+            assertThat(text(sheet, 9, 0)).isEqualTo("QUOTATION VALIDITY");
+
+            assertThat(text(sheet, 6, 0)).isEqualTo("基础信息");
+            assertThat(text(sheet, 6, 9)).isEqualTo("材料费");
+            assertThat(text(sheet, 7, 0)).isEqualTo("序号");
+            assertThat(text(sheet, 7, 1)).isEqualTo("图号");
+            assertThat(text(sheet, 7, 2)).isEqualTo("物料描述");
+            assertThat(text(sheet, 7, 3)).isEqualTo("图纸状态");
+            assertThat(text(sheet, 7, 4)).isEqualTo("材料名称");
+            assertThat(text(sheet, 7, 5)).isEqualTo("表面处理");
+            assertThat(text(sheet, 7, 6)).isEqualTo("版本");
+            assertThat(text(sheet, 7, 7)).isEqualTo("数量");
+            assertThat(text(sheet, 7, 8)).isEqualTo("单位");
+            assertThat(text(sheet, 7, 9)).isEqualTo("重量(KG)");
+            assertThat(text(sheet, 7, 10)).isEqualTo("材料费");
+
+            assertThat(sheetText(sheet))
+                    .doesNotContain("模板旧工艺")
+                    .doesNotContain("客户权重费率(%)")
+                    .doesNotContain("客户权重金额")
+                    .doesNotContain("材料编码")
+                    .doesNotContain("材料类型")
+                    .doesNotContain("材质分类");
+            assertThat(text(sheet, 8, 1)).isEqualTo("P-OPT-001");
+            assertThat(text(sheet, 8, 5)).isEqualTo("阳极");
+            assertThat(text(sheet, 8, 9)).isEqualTo("1");
+            assertThat(text(sheet, 8, 10)).isEqualTo("30");
+        }
+    }
+
+    @Test
+    void customerTemplateSimpleRebuildsKnownSystemSimpleTableWhenTemplateMiddleIsNotCanonical() throws Exception {
+        ItemQuoteVersion item = quotedNormalItem();
+        QuoteTemplateExportService service = new QuoteTemplateExportService();
+        OrderRfqMapper orderRfqMapper = mock(OrderRfqMapper.class);
+        ItemQuoteVersionMapper itemMapper = mock(ItemQuoteVersionMapper.class);
+        QuoteProcessService quoteProcessService = mock(QuoteProcessService.class);
+        QuoteTemplateService quoteTemplateService = mock(QuoteTemplateService.class);
+
+        when(orderRfqMapper.selectById(RFQ_ID)).thenReturn(order());
+        when(itemMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(item));
+        when(quoteTemplateService.openTemplateWorkbook()).thenReturn(nonCanonicalMiddleTemplateWorkbook());
+        when(quoteTemplateService.templateLayout()).thenReturn(new QuoteTemplateService.TemplateLayout(8, 6, 7, 8));
+
+        ReflectionTestUtils.setField(service, "orderRfqMapper", orderRfqMapper);
+        ReflectionTestUtils.setField(service, "itemMapper", itemMapper);
+        ReflectionTestUtils.setField(service, "quoteProcessService", quoteProcessService);
+        ReflectionTestUtils.setField(service, "quoteTemplateService", quoteTemplateService);
+        ReflectionTestUtils.setField(service, "leadTimeService", new LeadTimeService());
+
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        service.exportTemplateQuoteSimple(RFQ_ID, response);
+
+        try (Workbook workbook = workbook(response)) {
+            Sheet sheet = workbook.getSheetAt(0);
+            assertThat(text(sheet, 0, 0)).isEqualTo("客户报价单模板");
+            assertThat(text(sheet, 2, 0)).isEqualTo("询价日：");
+            assertThat(text(sheet, 9, 0)).isEqualTo("QUOTATION VALIDITY");
+
+            assertThat(text(sheet, 6, 0)).isEqualTo("基础信息");
+            assertThat(text(sheet, 6, 12)).isEqualTo("合计");
+            assertThat(text(sheet, 7, 0)).isEqualTo("序号");
+            assertThat(text(sheet, 7, 1)).isEqualTo("图号");
+            assertThat(text(sheet, 7, 2)).isEqualTo("物料描述");
+            assertThat(text(sheet, 7, 5)).isEqualTo("材料编码");
+            assertThat(text(sheet, 7, 12)).isEqualTo("含税单价");
+            assertThat(text(sheet, 7, 15)).isEqualTo("备注");
+            assertThat(sheetText(sheet)).doesNotContain("模板旧工艺");
+            assertThat(text(sheet, 8, 1)).isEqualTo("P-OPT-001");
+            assertThat(text(sheet, 8, 5)).isEmpty();
+            assertThat(text(sheet, 8, 12)).isEqualTo("54.692");
+        }
+    }
+
     private ExportFixture excelFixture(ItemQuoteVersion item) {
         ExcelExportService service = new ExcelExportService();
         OrderRfqMapper orderRfqMapper = mock(OrderRfqMapper.class);
@@ -207,6 +312,34 @@ class QuoteOptimizedExportCustomerWeightTest {
         groupRow.getCell(11).setCellValue("加工明细");
         groupRow.getCell(15).setCellValue("百分比费用");
         groupRow.getCell(21).setCellValue("合计");
+        sheet.createRow(8).createCell(0).setCellValue(1);
+        sheet.createRow(9).createCell(0).setCellValue("QUOTATION VALIDITY");
+        return workbook;
+    }
+
+    private Workbook nonCanonicalMiddleTemplateWorkbook() {
+        Workbook workbook = new XSSFWorkbook();
+        Sheet sheet = workbook.createSheet("报价单");
+        sheet.createRow(0).createCell(0).setCellValue("客户报价单模板");
+        Row infoRow = sheet.createRow(2);
+        infoRow.createCell(0).setCellValue("询价日：");
+        infoRow.createCell(8).setCellValue("RFQ No.");
+
+        Row groupRow = sheet.createRow(6);
+        Row headerRow = sheet.createRow(7);
+        List<String> headers = List.of(
+                "模板旧序号", "模板旧图号", "模板旧列", "客户权重费率(%)", "客户权重金额",
+                "含税单价", "含税总价", "交货周期", "备注"
+        );
+        for (int col = 0; col < headers.size(); col++) {
+            groupRow.createCell(col).setCellValue("");
+            headerRow.createCell(col).setCellValue(headers.get(col));
+            sheet.setColumnWidth(col, 12 * 256);
+        }
+        groupRow.getCell(0).setCellValue("模板旧基础信息");
+        groupRow.getCell(2).setCellValue("模板旧工艺");
+        groupRow.getCell(3).setCellValue("模板旧百分比费用");
+        groupRow.getCell(5).setCellValue("模板旧合计");
         sheet.createRow(8).createCell(0).setCellValue(1);
         sheet.createRow(9).createCell(0).setCellValue("QUOTATION VALIDITY");
         return workbook;

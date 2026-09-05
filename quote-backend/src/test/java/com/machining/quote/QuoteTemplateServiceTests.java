@@ -18,10 +18,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class QuoteTemplateServiceTests {
-    private static final List<String> REQUIRED_HEADERS = List.of(
-            "序号", "图号", "物料描述", "图纸状态", "材料名称", "表面处理", "版本", "数量", "单位",
-            "含税单价", "含税总价", "交货周期", "备注"
-    );
     private static final List<String> VALID_TEMPLATE_HEADERS = List.of(
             "序号", "图号", "物料描述", "图纸状态", "材料名称", "表面处理", "版本", "数量", "单位",
             "工艺名称", "类型", "工时/金额", "单价", "费用",
@@ -43,7 +39,7 @@ class QuoteTemplateServiceTests {
     }
 
     @Test
-    void uploadTemplateRejectsMissingRequiredHeaders() throws Exception {
+    void uploadTemplateAcceptsMissingDetailHeadersBecauseMiddleTableIsGeneratedBySystem() throws Exception {
         QuoteTemplateService service = service();
         byte[] bytes = workbookBytes(List.of("序号", "图号", "数量"));
         MockMultipartFile file = new MockMultipartFile(
@@ -53,9 +49,10 @@ class QuoteTemplateServiceTests {
                 bytes
         );
 
-        assertThatThrownBy(() -> service.uploadTemplate(file))
-                .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("缺少必要表头");
+        var status = service.uploadTemplate(file);
+
+        assertThat(status).containsEntry("exists", true);
+        assertThat(status).containsEntry("fileName", "quote.xlsx");
     }
 
     @Test
@@ -75,30 +72,20 @@ class QuoteTemplateServiceTests {
     }
 
     @Test
-    void uploadTemplateValidatesConfiguredHeaderRowNumber() throws Exception {
+    void uploadTemplateKeepsConfiguredHeaderRowNumberWithoutRequiringHeadersOnThatRow() throws Exception {
         QuoteTemplateService service = service();
         QuoteTemplateConfigReq req = new QuoteTemplateConfigReq();
         req.setHeaderRowNumber(10);
         service.updateConfig(req);
 
-        MockMultipartFile invalidAtConfiguredRow = new MockMultipartFile(
-                "templateFile",
-                "bad.xlsx",
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                workbookBytes(VALID_TEMPLATE_HEADERS, 8)
-        );
-        assertThatThrownBy(() -> service.uploadTemplate(invalidAtConfiguredRow))
-                .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("第 10 行必须包含表头");
-
-        MockMultipartFile validAtConfiguredRow = new MockMultipartFile(
+        MockMultipartFile templateWithoutConfiguredHeaderRow = new MockMultipartFile(
                 "templateFile",
                 "客户模板.xlsx",
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                workbookBytes(VALID_TEMPLATE_HEADERS, 10)
+                workbookBytes(VALID_TEMPLATE_HEADERS, 8)
         );
 
-        var status = service.uploadTemplate(validAtConfiguredRow);
+        var status = service.uploadTemplate(templateWithoutConfiguredHeaderRow);
 
         assertThat(status).containsEntry("exists", true);
         assertThat(status).containsEntry("headerRowNumber", 10);

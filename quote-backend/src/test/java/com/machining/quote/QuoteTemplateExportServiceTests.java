@@ -134,20 +134,66 @@ class QuoteTemplateExportServiceTests {
 
         try (Workbook workbook = WorkbookFactory.create(new ByteArrayInputStream(response.getContentAsByteArray()))) {
             Sheet sheet = workbook.getSheetAt(0);
-            assertThat(groupHeaderCol(sheet, "下料")).isEqualTo(14);
-            assertThat(text(sheet, HEADER_ROW_INDEX, 5)).isEqualTo("材料编码");
-            assertThat(text(sheet, HEADER_ROW_INDEX, 6)).isEqualTo("材料类型");
-            assertThat(text(sheet, HEADER_ROW_INDEX, 7)).isEqualTo("材质分类");
-            assertThat(text(sheet, HEADER_ROW_INDEX, 14)).isEqualTo("类型");
-            assertThat(text(sheet, HEADER_ROW_INDEX, 15)).isEqualTo("工时/金额");
-            assertThat(text(sheet, HEADER_ROW_INDEX, 16)).isEqualTo("单价");
-            assertThat(text(sheet, HEADER_ROW_INDEX, 17)).isEqualTo("费用");
+            assertThat(groupHeaderCol(sheet, "下料")).isEqualTo(11);
+            assertThat(text(sheet, 6, 9)).isEqualTo("材料费");
+            assertThat(rowContains(sheet, HEADER_ROW_INDEX, "材料编码")).isFalse();
+            assertThat(rowContains(sheet, HEADER_ROW_INDEX, "材料类型")).isFalse();
+            assertThat(rowContains(sheet, HEADER_ROW_INDEX, "材质分类")).isFalse();
+            assertThat(text(sheet, HEADER_ROW_INDEX, 11)).isEqualTo("类型");
+            assertThat(text(sheet, HEADER_ROW_INDEX, 12)).isEqualTo("工时/金额");
+            assertThat(text(sheet, HEADER_ROW_INDEX, 13)).isEqualTo("单价");
+            assertThat(text(sheet, HEADER_ROW_INDEX, 14)).isEqualTo("费用");
             assertThat(rowContains(sheet, HEADER_ROW_INDEX, "运输费率(%)")).isTrue();
-            assertThat(text(sheet, DETAIL_START_ROW_INDEX, 14)).isEqualTo("工时");
-            assertThat(text(sheet, DETAIL_START_ROW_INDEX, 15)).isEqualTo("1");
-            assertThat(text(sheet, DETAIL_START_ROW_INDEX, 16)).isEqualTo("10");
-            assertThat(text(sheet, DETAIL_START_ROW_INDEX, 17)).isEqualTo("10");
+            assertThat(text(sheet, DETAIL_START_ROW_INDEX, 11)).isEqualTo("工时");
+            assertThat(text(sheet, DETAIL_START_ROW_INDEX, 12)).isEqualTo("1");
+            assertThat(text(sheet, DETAIL_START_ROW_INDEX, 13)).isEqualTo("10");
+            assertThat(text(sheet, DETAIL_START_ROW_INDEX, 14)).isEqualTo("10");
             assertThat(text(sheet, DETAIL_START_ROW_INDEX, headerCol(sheet, "基础成本"))).isEqualTo("70");
+        }
+    }
+
+    @Test
+    void detailTemplateExportRebuildsSystemDetailTableWhenTemplateMiddleIsNotCanonical() throws Exception {
+        try (Workbook workbook = nonCanonicalMiddleTemplateWorkbook();
+             ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+            workbook.write(outputStream);
+            Files.write(quoteTemplateService.templatePath(), outputStream.toByteArray());
+        }
+        OrderRfq order = createOrder();
+        createQuotedItems(order.getId(), 1);
+
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        quoteTemplateExportService.exportTemplateQuoteDetail(order.getId(), response);
+
+        try (Workbook workbook = WorkbookFactory.create(new ByteArrayInputStream(response.getContentAsByteArray()))) {
+            Sheet sheet = workbook.getSheetAt(0);
+            assertThat(text(sheet, 0, 0)).isEqualTo("客户报价单模板");
+            assertThat(text(sheet, 2, 0)).isEqualTo("询价日：");
+            assertThat(text(sheet, DETAIL_START_ROW_INDEX + 1, 0)).isEqualTo("QUOTATION VALIDITY");
+
+            assertThat(text(sheet, 6, 0)).isEqualTo("基础信息");
+            assertThat(text(sheet, 6, 9)).isEqualTo("材料费");
+            assertThat(text(sheet, HEADER_ROW_INDEX, 0)).isEqualTo("序号");
+            assertThat(text(sheet, HEADER_ROW_INDEX, 1)).isEqualTo("图号");
+            assertThat(text(sheet, HEADER_ROW_INDEX, 2)).isEqualTo("物料描述");
+            assertThat(text(sheet, HEADER_ROW_INDEX, 3)).isEqualTo("图纸状态");
+            assertThat(text(sheet, HEADER_ROW_INDEX, 4)).isEqualTo("材料名称");
+            assertThat(text(sheet, HEADER_ROW_INDEX, 5)).isEqualTo("表面处理");
+            assertThat(text(sheet, HEADER_ROW_INDEX, 6)).isEqualTo("版本");
+            assertThat(text(sheet, HEADER_ROW_INDEX, 7)).isEqualTo("数量");
+            assertThat(text(sheet, HEADER_ROW_INDEX, 8)).isEqualTo("单位");
+            assertThat(text(sheet, HEADER_ROW_INDEX, 9)).isEqualTo("重量(KG)");
+            assertThat(text(sheet, HEADER_ROW_INDEX, 10)).isEqualTo("材料费");
+
+            assertThat(rowContains(sheet, HEADER_ROW_INDEX, "材料编码")).isFalse();
+            assertThat(rowContains(sheet, HEADER_ROW_INDEX, "材料类型")).isFalse();
+            assertThat(rowContains(sheet, HEADER_ROW_INDEX, "材质分类")).isFalse();
+            assertThat(rowContains(sheet, 6, "模板旧工艺")).isFalse();
+
+            assertThat(text(sheet, DETAIL_START_ROW_INDEX, 1)).isEqualTo("'=P-001");
+            assertThat(text(sheet, DETAIL_START_ROW_INDEX, 5)).isEqualTo("阳极");
+            assertThat(text(sheet, DETAIL_START_ROW_INDEX, 9)).isEqualTo("1.5");
+            assertThat(text(sheet, DETAIL_START_ROW_INDEX, 10)).isEqualTo("20");
         }
     }
 
@@ -464,6 +510,34 @@ class QuoteTemplateExportServiceTests {
 
         Row row = sheet.createRow(DETAIL_START_ROW_INDEX);
         row.createCell(0).setCellValue(1);
+        sheet.createRow(DETAIL_START_ROW_INDEX + 1).createCell(0).setCellValue("QUOTATION VALIDITY");
+        return workbook;
+    }
+
+    private Workbook nonCanonicalMiddleTemplateWorkbook() {
+        Workbook workbook = new XSSFWorkbook();
+        Sheet sheet = workbook.createSheet("第2份");
+        sheet.createRow(0).createCell(0).setCellValue("客户报价单模板");
+        Row infoRow = sheet.createRow(2);
+        infoRow.createCell(0).setCellValue("询价日：");
+        infoRow.createCell(8).setCellValue("RFQ No.");
+
+        Row groupRow = sheet.createRow(6);
+        Row headerRow = sheet.createRow(HEADER_ROW_INDEX);
+        List<String> headers = List.of(
+                "模板旧序号", "模板旧图号", "模板旧列", "客户权重费率(%)", "客户权重金额",
+                "含税单价", "含税总价", "交货周期", "备注"
+        );
+        for (int col = 0; col < headers.size(); col++) {
+            groupRow.createCell(col).setCellValue("");
+            headerRow.createCell(col).setCellValue(headers.get(col));
+            sheet.setColumnWidth(col, 12 * 256);
+        }
+        groupRow.getCell(0).setCellValue("模板旧基础信息");
+        groupRow.getCell(2).setCellValue("模板旧工艺");
+        groupRow.getCell(3).setCellValue("模板旧百分比费用");
+        groupRow.getCell(5).setCellValue("模板旧合计");
+        sheet.createRow(DETAIL_START_ROW_INDEX).createCell(0).setCellValue(1);
         sheet.createRow(DETAIL_START_ROW_INDEX + 1).createCell(0).setCellValue("QUOTATION VALIDITY");
         return workbook;
     }

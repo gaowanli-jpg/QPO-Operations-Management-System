@@ -154,6 +154,93 @@ class ExcelExportServiceProcessSheetTests {
         );
     }
 
+    @Test
+    @SuppressWarnings("unchecked")
+    void detailedQuoteSheetMovesMaterialCostUnderOwnGroupAndOmitsMaterialIdentityColumns() {
+        ExcelExportService service = new ExcelExportService();
+        ReflectionTestUtils.setField(service, "leadTimeService", new LeadTimeService());
+
+        String basic = "\u57fa\u7840\u4fe1\u606f";
+        String materialCostGroup = "\u6750\u6599\u8d39";
+        List<List<String>> head = ReflectionTestUtils.invokeMethod(service, "buildQuoteHead", List.of(), List.of());
+
+        assertThat(head.subList(0, 11)).containsExactly(
+                List.of(basic, "\u5e8f\u53f7"),
+                List.of(basic, "\u56fe\u53f7"),
+                List.of(basic, "\u7269\u6599\u63cf\u8ff0"),
+                List.of(basic, "\u56fe\u7eb8\u72b6\u6001"),
+                List.of(basic, "\u6750\u6599\u540d\u79f0"),
+                List.of(basic, "\u8868\u9762\u5904\u7406"),
+                List.of(basic, "\u7248\u672c"),
+                List.of(basic, "\u6570\u91cf"),
+                List.of(basic, "\u5355\u4f4d"),
+                List.of(materialCostGroup, "\u91cd\u91cf(KG)"),
+                List.of(materialCostGroup, "\u6750\u6599\u8d39")
+        );
+        assertThat(head).doesNotContain(
+                List.of(basic, "\u6750\u6599\u7f16\u7801"),
+                List.of(basic, "\u6750\u6599\u7c7b\u578b"),
+                List.of(basic, "\u6750\u8d28\u5206\u7c7b")
+        );
+
+        ItemQuoteVersion quoted = detailedQuoteItem();
+        List<Object> quotedRow = ReflectionTestUtils.invokeMethod(service, "buildQuoteRow", quoted, 1, List.of(), List.of(), true);
+        assertThat(quotedRow).hasSize(head.size());
+        assertThat(quotedRow.subList(0, 11)).containsExactly(
+                1,
+                "P-100",
+                "Part name",
+                "\u6709\u56fe",
+                "Material name",
+                "Anodized",
+                "A",
+                2,
+                "pcs",
+                2.5,
+                45.0
+        );
+
+        ItemQuoteVersion missingDrawing = detailedQuoteItem();
+        missingDrawing.setDrawingUrl(null);
+        List<Object> missingDrawingRow = ReflectionTestUtils.invokeMethod(service, "buildQuoteRow", missingDrawing, 1, List.of(), List.of(), true);
+        assertThat(missingDrawingRow).hasSize(head.size());
+        assertThat(missingDrawingRow.subList(0, 11)).containsExactly(
+                1,
+                "P-100",
+                "Part name",
+                "\u65e0\u56fe",
+                "Material name",
+                "Anodized",
+                "A",
+                2,
+                "pcs",
+                "",
+                ""
+        );
+    }
+
+    private ItemQuoteVersion detailedQuoteItem() {
+        ItemQuoteVersion item = new ItemQuoteVersion();
+        item.setPartNo("P-100");
+        item.setDescription("Part name");
+        item.setDrawingUrl("/drawings/P-100.pdf");
+        item.setMaterialName("Material name");
+        item.setEngineeringMaterialCode("MAT-45");
+        item.setEngineeringMaterialTypeName("Raw");
+        item.setEngineeringMaterialCategory("Steel");
+        item.setSurfaceTreatment("Anodized");
+        item.setVersion("A");
+        item.setQty(2);
+        item.setUnit("pcs");
+        item.setMaterialData(Map.of("weight", 2.5, "cost", 45.0));
+        item.setBaseCost(100.0);
+        item.setTaxIncludedUnitPrice(120.0);
+        item.setTaxIncludedTotalPrice(240.0);
+        item.setQuoteLeadTime("2026-03-25");
+        item.setRemark("remark");
+        return item;
+    }
+
     private Map<String, Object> standardRoute() {
         Map<String, Object> route = new LinkedHashMap<>();
         route.put("processDetailId", 7L);
