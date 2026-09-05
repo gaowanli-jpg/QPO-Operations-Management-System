@@ -74,7 +74,7 @@
         type="info"
         :closable="false"
         show-icon
-        title="板材、棒材、管材价格为空或 0 时，核价会使用统一价格兜底。"
+        title="板材、棒材、管材价格为空时，核价会使用统一价格兜底；维护为 0 时按 0 计算。"
       />
     </el-form>
     <template #footer>

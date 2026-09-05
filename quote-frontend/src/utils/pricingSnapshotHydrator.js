@@ -17,16 +17,16 @@ const firstNumber = (...values) => {
   return null
 }
 
-const positiveNumberOrNull = (value) => {
+const nonNegativeNumberOrNull = (value) => {
   const numericValue = numberOrNull(value)
-  return numericValue != null && numericValue > 0 ? numericValue : null
+  return numericValue != null && numericValue >= 0 ? numericValue : null
 }
 
 export const materialCodeKey = normalizeCodeKey
 export const processDetailIdKey = normalizeIdKey
 
 export const effectiveMaterialDensity = (material = {}) => (
-  positiveNumberOrNull(material.density) ?? positiveNumberOrNull(material.mesDensityRaw)
+  nonNegativeNumberOrNull(material.density) ?? nonNegativeNumberOrNull(material.mesDensityRaw)
 )
 
 export const buildPricingOptionIndex = ({ materialOptions = [], processOptions = [] } = {}) => {

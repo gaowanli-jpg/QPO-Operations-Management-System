@@ -649,13 +649,13 @@ const numberOrNull = (value) => {
   return Number.isFinite(numericValue) ? numericValue : null
 }
 
-const positiveNumberOrNull = (value) => {
+const nonNegativeNumberOrNull = (value) => {
   const numericValue = numberOrNull(value)
-  return numericValue != null && numericValue > 0 ? numericValue : null
+  return numericValue != null && numericValue >= 0 ? numericValue : null
 }
 
 const resolveMaterialEffectiveDensity = (row = {}) => (
-  positiveNumberOrNull(materialPriceDraft(row, 'density')) ?? positiveNumberOrNull(row.mesDensityRaw)
+  nonNegativeNumberOrNull(materialPriceDraft(row, 'density')) ?? nonNegativeNumberOrNull(row.mesDensityRaw)
 )
 
 const formatDensityNumber = (value) => {

@@ -10,9 +10,9 @@ const numberOrNull = (value) => {
   return Number.isFinite(numericValue) ? numericValue : null
 }
 
-const positiveNumberOrNull = (value) => {
+const nonNegativeNumberOrNull = (value) => {
   const numericValue = numberOrNull(value)
-  return numericValue != null && numericValue > 0 ? numericValue : null
+  return numericValue != null && numericValue >= 0 ? numericValue : null
 }
 
 export const normalizeSpecCode = (value) => String(value || '').trim().toUpperCase()
@@ -55,7 +55,7 @@ export const isBarShape = (shape) => String(shape || '').trim() === '棒材'
 
 export const isTubeShape = (shape) => String(shape || '').trim() === '管材'
 
-export const effectiveShapePrice = (shapePrice, unifiedPrice) => positiveNumberOrNull(shapePrice) ?? positiveNumberOrNull(unifiedPrice)
+export const effectiveShapePrice = (shapePrice, unifiedPrice) => nonNegativeNumberOrNull(shapePrice) ?? nonNegativeNumberOrNull(unifiedPrice)
 
 export const effectiveSpecPrice = (spec = {}, shape = '板材') => {
   if (isBarShape(shape)) return effectiveShapePrice(spec.barPrice, spec.unifiedPrice)
@@ -64,17 +64,17 @@ export const effectiveSpecPrice = (spec = {}, shape = '板材') => {
 }
 
 export const unitPriceSource = (spec = {}, shape = '板材') => {
-  if (isBarShape(shape) && positiveNumberOrNull(spec.barPrice) != null) return 'BAR_PRICE'
-  if (isTubeShape(shape) && positiveNumberOrNull(spec.tubePrice) != null) return 'TUBE_PRICE'
-  if (!isBarShape(shape) && !isTubeShape(shape) && positiveNumberOrNull(spec.platePrice) != null) return 'PLATE_PRICE'
-  return positiveNumberOrNull(spec.unifiedPrice) != null ? 'UNIFIED_PRICE' : null
+  if (isBarShape(shape) && nonNegativeNumberOrNull(spec.barPrice) != null) return 'BAR_PRICE'
+  if (isTubeShape(shape) && nonNegativeNumberOrNull(spec.tubePrice) != null) return 'TUBE_PRICE'
+  if (!isBarShape(shape) && !isTubeShape(shape) && nonNegativeNumberOrNull(spec.platePrice) != null) return 'PLATE_PRICE'
+  return nonNegativeNumberOrNull(spec.unifiedPrice) != null ? 'UNIFIED_PRICE' : null
 }
 
 export const hasMaterialSpecPrice = (spec = {}) => (
-  positiveNumberOrNull(spec.unifiedPrice) != null
-  || positiveNumberOrNull(spec.platePrice) != null
-  || positiveNumberOrNull(spec.barPrice) != null
-  || positiveNumberOrNull(spec.tubePrice) != null
+  nonNegativeNumberOrNull(spec.unifiedPrice) != null
+  || nonNegativeNumberOrNull(spec.platePrice) != null
+  || nonNegativeNumberOrNull(spec.barPrice) != null
+  || nonNegativeNumberOrNull(spec.tubePrice) != null
 )
 
 export const hasAnyMaterialSpecPrice = (priceSpecs = []) => normalizePriceSpecs(priceSpecs).some(hasMaterialSpecPrice)

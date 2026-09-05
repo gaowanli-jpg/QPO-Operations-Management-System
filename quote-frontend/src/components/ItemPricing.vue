@@ -872,13 +872,13 @@ const numberOrNullForSnapshot = (value) => {
   return Number.isFinite(numericValue) ? numericValue : null
 }
 
-const positiveNumberOrNullForSnapshot = (value) => {
+const nonNegativeNumberOrNullForSnapshot = (value) => {
   const numericValue = numberOrNullForSnapshot(value)
-  return numericValue != null && numericValue > 0 ? numericValue : null
+  return numericValue != null && numericValue >= 0 ? numericValue : null
 }
 
 const effectiveMaterialDensity = (material = {}) => (
-  positiveNumberOrNullForSnapshot(material.density) ?? positiveNumberOrNullForSnapshot(material.mesDensityRaw)
+  nonNegativeNumberOrNullForSnapshot(material.density) ?? nonNegativeNumberOrNullForSnapshot(material.mesDensityRaw)
 )
 
 const normalizeGlobalConfig = (config) => {

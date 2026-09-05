@@ -123,10 +123,16 @@ public final class MaterialPriceSpecSupport {
             shapePrice = spec.getPlatePrice();
             source = "PLATE_PRICE";
         }
-        if (isPositive(shapePrice)) {
+        if (isNegative(shapePrice)) {
+            throw new IllegalArgumentException(source + "不能小于 0");
+        }
+        if (isNonNegative(shapePrice)) {
             return new PriceResolution(shapePrice, source);
         }
-        if (isPositive(spec.getUnifiedPrice())) {
+        if (isNegative(spec.getUnifiedPrice())) {
+            throw new IllegalArgumentException("UNIFIED_PRICE不能小于 0");
+        }
+        if (isNonNegative(spec.getUnifiedPrice())) {
             return new PriceResolution(spec.getUnifiedPrice(), "UNIFIED_PRICE");
         }
         return new PriceResolution(null, null);
@@ -219,7 +225,7 @@ public final class MaterialPriceSpecSupport {
     }
 
     private static Double effectiveShapePrice(Double shapePrice, Double unifiedPrice) {
-        return isPositive(shapePrice) ? shapePrice : isPositive(unifiedPrice) ? unifiedPrice : null;
+        return isNonNegative(shapePrice) ? shapePrice : isNonNegative(unifiedPrice) ? unifiedPrice : null;
     }
 
     private static boolean isBarShape(String shape) {
@@ -230,8 +236,12 @@ public final class MaterialPriceSpecSupport {
         return "管材".equals(shape) || "绠℃潗".equals(shape) || "TUBE".equalsIgnoreCase(firstText(shape, ""));
     }
 
-    private static boolean isPositive(Double value) {
-        return value != null && value > 0;
+    private static boolean isNonNegative(Double value) {
+        return value != null && value >= 0;
+    }
+
+    private static boolean isNegative(Double value) {
+        return value != null && value < 0;
     }
 
     private static Double nonNegative(Double value, String label) {
@@ -242,7 +252,7 @@ public final class MaterialPriceSpecSupport {
     }
 
     private static Double normalizePrice(Double value) {
-        return value == null || value == 0 ? null : value;
+        return value;
     }
 
     private static String firstText(String value, String fallback) {

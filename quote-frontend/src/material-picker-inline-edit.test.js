@@ -27,7 +27,7 @@ describe('material picker inline density and price editing', () => {
     expect(picker).toContain("v-permission=\"'engineer:dict:material-manage'\"")
     expect(picker).toContain('formatMesDensity(row.mesDensityRaw)')
     expect(picker).toContain('formatEffectiveMaterialDensity(row)')
-    expect(picker).toContain("positiveNumberOrNull(materialPriceDraft(row, 'density')) ?? positiveNumberOrNull(row.mesDensityRaw)")
+    expect(picker).toContain("nonNegativeNumberOrNull(materialPriceDraft(row, 'density')) ?? nonNegativeNumberOrNull(row.mesDensityRaw)")
     expect(picker).toContain('formatDensityNumber')
     expect(picker).not.toContain("materialPriceDraft(row, 'mesDensityRaw')")
     expect(picker).not.toContain("setMaterialPriceDraft(row, 'mesDensityRaw'")

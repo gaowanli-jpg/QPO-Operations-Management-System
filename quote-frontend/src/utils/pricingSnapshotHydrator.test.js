@@ -112,7 +112,7 @@ describe('pricingSnapshotHydrator', () => {
     expect(hydrated).not.toHaveProperty('tubePrice')
   })
 
-  test('treats non-positive material density as missing and falls back to MES density', () => {
+  test('treats zero material density as maintained instead of falling back to MES density', () => {
     const optionIndex = buildPricingOptionIndex({
       materialOptions: [{
         id: 8,
@@ -124,7 +124,7 @@ describe('pricingSnapshotHydrator', () => {
       }]
     })
 
-    expect(hydrateMaterialPricingSnapshot({ materialCode: 'MAT-AL' }, optionIndex).density).toBe(2700)
+    expect(hydrateMaterialPricingSnapshot({ materialCode: 'MAT-AL' }, optionIndex).density).toBe(0)
   })
 
   test('leaves unresolved or extra-fee process rows unchanged', () => {

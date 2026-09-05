@@ -131,26 +131,77 @@ class EngineerServiceMaterialCalculationTests {
     }
 
     @Test
-    void rejectsSelectedMaterialWhenShapePriceIsZero() {
+    void allowsZeroShapePriceAsAnEffectiveMaterialPrice() {
         EngineerService service = new EngineerService();
         DictMaterialMapper materialMapper = mock(DictMaterialMapper.class);
         when(materialMapper.selectList(any()))
                 .thenReturn(List.of(material("MES-MAT-002", "MES Material Zero Price", 1L, "MES", 7850.0, 0.0)));
         ReflectionTestUtils.setField(service, "materialMapper", materialMapper);
-        setOptionalField(service, "materialPriceSpecMapper", specMapper(0.0, 0.0, null, null));
+        setOptionalField(service, "materialPriceSpecMapper", specMapper(99.0, 0.0, null, null));
         setOptionalField(service, "materialTypeMapper", materialTypeMapper());
 
         Map<String, Object> materialData = new LinkedHashMap<>();
         materialData.put("materialCode", "MES-MAT-002");
         materialData.put("priceSpecCode", "SPEC_1");
-        materialData.put("shape", "鏉挎潗");
+        materialData.put("shape", "PLATE");
         materialData.put("weight", 1.0);
+
+        Double cost = ReflectionTestUtils.invokeMethod(service, "calculateMaterialCost", materialData);
+
+        assertThat(cost).isEqualTo(0.0);
+        assertThat(materialData.get("unitPrice")).isEqualTo(0.0);
+        assertThat(materialData.get("unitPriceSource")).isEqualTo("PLATE_PRICE");
+    }
+
+    @Test
+    void allowsZeroDensityWithMetricDimensionsAsAZeroWeightSnapshot() {
+        EngineerService service = new EngineerService();
+        DictMaterialMapper materialMapper = mock(DictMaterialMapper.class);
+        DictMaterial material = material("MES-MAT-ZERO-DENSITY", "MES Material Zero Density", 1L, "MES", 0.0, 7.1);
+        material.setMesDensityRaw(null);
+        when(materialMapper.selectList(any())).thenReturn(List.of(material));
+        ReflectionTestUtils.setField(service, "materialMapper", materialMapper);
+        setOptionalField(service, "materialPriceSpecMapper", specMapper(7.1, null, null, null));
+        setOptionalField(service, "materialTypeMapper", materialTypeMapper());
+
+        Map<String, Object> materialData = new LinkedHashMap<>();
+        materialData.put("materialCode", "MES-MAT-ZERO-DENSITY");
+        materialData.put("priceSpecCode", "SPEC_1");
+        materialData.put("shape", "PLATE");
+        materialData.put("dimensionUnit", "m");
+        materialData.put("dimensions", Map.of("L", 0.2, "W", 0.1, "T", 0.01));
+
+        Double cost = ReflectionTestUtils.invokeMethod(service, "calculateMaterialCost", materialData);
+
+        assertThat(cost).isEqualTo(0.0);
+        assertThat(materialData.get("density")).isEqualTo(0.0);
+        assertThat((Double) materialData.get("volume")).isCloseTo(0.0002, within(0.000000001));
+        assertThat(materialData.get("weight")).isEqualTo(0.0);
+        assertThat(materialData.get("cost")).isEqualTo(0.0);
+    }
+
+    @Test
+    void rejectsNegativeSpecificDensityInsteadOfFallingBackToMesDensity() {
+        EngineerService service = new EngineerService();
+        DictMaterialMapper materialMapper = mock(DictMaterialMapper.class);
+        DictMaterial material = material("MES-MAT-NEG-DENSITY", "MES Material Negative Density", 1L, "MES", -1.0, 7.1);
+        material.setMesDensityRaw("7850.0");
+        when(materialMapper.selectList(any())).thenReturn(List.of(material));
+        ReflectionTestUtils.setField(service, "materialMapper", materialMapper);
+        setOptionalField(service, "materialPriceSpecMapper", specMapper(7.1, null, null, null));
+        setOptionalField(service, "materialTypeMapper", materialTypeMapper());
+
+        Map<String, Object> materialData = new LinkedHashMap<>();
+        materialData.put("materialCode", "MES-MAT-NEG-DENSITY");
+        materialData.put("priceSpecCode", "SPEC_1");
+        materialData.put("shape", "PLATE");
+        materialData.put("dimensionUnit", "m");
+        materialData.put("dimensions", Map.of("L", 0.2, "W", 0.1, "T", 0.01));
 
         assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(service, "calculateMaterialCost", materialData))
                 .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("MES-MAT-002")
-                .hasMessageContaining("MES Material Zero Price")
-                .hasMessageContaining("鏉挎潗");
+                .hasMessageContaining("材料密度不能小于 0")
+                .hasMessageContaining("MES-MAT-NEG-DENSITY");
     }
 
     @Test
