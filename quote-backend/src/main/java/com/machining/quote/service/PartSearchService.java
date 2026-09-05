@@ -174,6 +174,7 @@ public class PartSearchService {
         row.setVersion(item.getVersion());
         row.setUntaxedUnitPrice(decimal(item.getUntaxedUnitPrice()));
         row.setTaxIncludedUnitPrice(decimal(item.getTaxIncludedUnitPrice()));
+        row.setDrawingUrl(item.getDrawingUrl());
         row.setOrderId(item.getRfqId() == null ? null : item.getRfqId().longValue());
         row.setOrderNo(order == null ? null : order.getRfqNo());
         row.setOrderStatus(order == null ? null : order.getStatus());
@@ -189,6 +190,7 @@ public class PartSearchService {
         row.setVersion(item.getVersion());
         row.setUntaxedUnitPrice(item.getUntaxedUnitPrice());
         row.setTaxIncludedUnitPrice(item.getTaxIncludedUnitPrice());
+        row.setDrawingUrl(item.getDrawingUrl());
         row.setOrderId(item.getSalesOrderId());
         row.setOrderNo(order == null ? null : order.getSalesOrderNo());
         row.setOrderStatus(order == null ? null : order.getStatus());

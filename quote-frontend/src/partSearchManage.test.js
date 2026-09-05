@@ -42,4 +42,43 @@ describe('PartSearchManage', () => {
     expect(component).not.toContain('@click="save')
     expect(component).not.toContain('v-permission="\'market:order:update-item\'"')
   })
+
+  test('places part preview after tax included price in both query tables', () => {
+    const rfqPane = component.slice(component.indexOf('<el-tab-pane label="询价零件"'), component.indexOf('<el-tab-pane label="销售零件"'))
+    const salesPane = component.slice(component.indexOf('<el-tab-pane label="销售零件"'), component.indexOf('</el-tabs>'))
+
+    for (const pane of [rfqPane, salesPane]) {
+      const taxColumnIndex = pane.indexOf('label="含税单价"')
+      const previewColumnIndex = pane.indexOf('label="零件预览"')
+      const orderColumnIndex = pane.indexOf('prop="orderNo" label="所属订单号"')
+
+      expect(taxColumnIndex).toBeGreaterThan(-1)
+      expect(previewColumnIndex).toBeGreaterThan(taxColumnIndex)
+      expect(orderColumnIndex).toBeGreaterThan(previewColumnIndex)
+      expect(pane).toContain('@click.stop="openPdfPreview(scope.row.drawingUrl, scope.row.partNo)"')
+      expect(pane).toContain('<el-tag v-else type="info" size="small">无图</el-tag>')
+    }
+  })
+
+  test('translates backend detail keys instead of showing raw english field names', () => {
+    for (const label of [
+      "salesOrderDate: '下单日期'",
+      "customerDeliveryDate: '客户交期'",
+      "internalDeliveryDate: '内部交期'",
+      "quoteLeadTime: '报价承诺交期'",
+      "customerOrderTitle: '客户下单抬头'",
+      "engineeringMaterialCode: '核价材料编码'",
+      "engineeringMaterialTypeCode: '核价材料类型编码'",
+      "repeatMatchEligible: '可作为重复件匹配来源'",
+      "materialData: '材料核价明细'",
+      "processRoute: '工艺路线'",
+      "feeData: '费用明细'"
+    ]) {
+      expect(component).toContain(label)
+    }
+
+    expect(component).toContain('label: formatDetailLabel(key, labels)')
+    expect(component).toContain('formatStructuredValue(value)')
+    expect(component).not.toContain('label: labels[key] || key')
+  })
 })

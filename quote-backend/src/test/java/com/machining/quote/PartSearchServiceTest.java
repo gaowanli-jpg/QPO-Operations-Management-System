@@ -35,6 +35,7 @@ class PartSearchServiceTest {
         Fixture fixture = fixture();
         ItemQuoteVersion versionA = rfqItem(101, 11, "P-100", "A", 12.34, 13.95, "已报价");
         ItemQuoteVersion versionB = rfqItem(102, 12, "P-100", "B", 15.00, 16.95, "已提单");
+        versionB.setDrawingUrl("/uploads/rfq/P-100-B.pdf");
         when(fixture.itemMapper.selectCount(any(QueryWrapper.class))).thenReturn(2L);
         when(fixture.itemMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(versionB, versionA));
         when(fixture.orderMapper.selectBatchIds(List.of(12, 11))).thenReturn(List.of(
@@ -51,6 +52,7 @@ class PartSearchServiceTest {
                         org.assertj.core.groups.Tuple.tuple("P-100", "A", "RFQ-11"));
         assertThat(result.getRecords().get(0).getUntaxedUnitPrice()).isEqualByComparingTo("15.00");
         assertThat(result.getRecords().get(0).getTaxIncludedUnitPrice()).isEqualByComparingTo("16.95");
+        assertThat(result.getRecords().get(0).getDrawingUrl()).isEqualTo("/uploads/rfq/P-100-B.pdf");
 
         ArgumentCaptor<QueryWrapper<ItemQuoteVersion>> captor = ArgumentCaptor.forClass(QueryWrapper.class);
         verify(fixture.itemMapper).selectList(captor.capture());
@@ -86,6 +88,7 @@ class PartSearchServiceTest {
     void salesSearchUsesSalesOrderNumberAndSalesOrderScope() {
         Fixture fixture = fixture();
         SalesOrderItem item = salesItem(201L, 31L, "S-200", "C", "88.88", "100.44", "已报价");
+        item.setDrawingUrl("/uploads/sales/S-200-C.pdf");
         when(fixture.salesItemMapper.selectCount(any(QueryWrapper.class))).thenReturn(1L);
         when(fixture.salesItemMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(item));
         when(fixture.salesHeaderMapper.selectBatchIds(List.of(31L))).thenReturn(List.of(salesOrder(31L, "SO-31", "已生成提单")));
@@ -98,6 +101,7 @@ class PartSearchServiceTest {
         assertThat(row.getOrderStatus()).isEqualTo("已生成提单");
         assertThat(row.getItemStatus()).isEqualTo("已报价");
         assertThat(row.getTaxIncludedUnitPrice()).isEqualByComparingTo("100.44");
+        assertThat(row.getDrawingUrl()).isEqualTo("/uploads/sales/S-200-C.pdf");
 
         ArgumentCaptor<QueryWrapper<SalesOrderItem>> captor = ArgumentCaptor.forClass(QueryWrapper.class);
         verify(fixture.salesItemMapper).selectList(captor.capture());

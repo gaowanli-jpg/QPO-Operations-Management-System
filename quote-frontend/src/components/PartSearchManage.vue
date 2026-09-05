@@ -42,6 +42,20 @@
             <el-table-column label="含税单价" min-width="120" align="right">
               <template #default="scope">{{ formatPrice(scope.row.taxIncludedUnitPrice) }}</template>
             </el-table-column>
+            <el-table-column label="零件预览" width="104" align="center">
+              <template #default="scope">
+                <el-button
+                  v-if="scope.row.drawingUrl"
+                  type="primary"
+                  size="small"
+                  plain
+                  @click.stop="openPdfPreview(scope.row.drawingUrl, scope.row.partNo)"
+                >
+                  预览
+                </el-button>
+                <el-tag v-else type="info" size="small">无图</el-tag>
+              </template>
+            </el-table-column>
             <el-table-column prop="orderNo" label="所属订单号" min-width="180" show-overflow-tooltip />
             <el-table-column prop="itemStatus" label="状态" width="120" align="center" show-overflow-tooltip>
               <template #default="scope">
@@ -65,6 +79,20 @@
             </el-table-column>
             <el-table-column label="含税单价" min-width="120" align="right">
               <template #default="scope">{{ formatPrice(scope.row.taxIncludedUnitPrice) }}</template>
+            </el-table-column>
+            <el-table-column label="零件预览" width="104" align="center">
+              <template #default="scope">
+                <el-button
+                  v-if="scope.row.drawingUrl"
+                  type="primary"
+                  size="small"
+                  plain
+                  @click.stop="openPdfPreview(scope.row.drawingUrl, scope.row.partNo)"
+                >
+                  预览
+                </el-button>
+                <el-tag v-else type="info" size="small">无图</el-tag>
+              </template>
             </el-table-column>
             <el-table-column prop="orderNo" label="所属订单号" min-width="180" show-overflow-tooltip />
             <el-table-column prop="itemStatus" label="状态" width="120" align="center" show-overflow-tooltip>
@@ -108,12 +136,35 @@
           <h3 class="detail-section-title">零件字段</h3>
           <el-table :data="itemDetailEntries" border stripe max-height="520" class="detail-field-table">
             <el-table-column prop="label" label="字段" width="220" show-overflow-tooltip />
-            <el-table-column prop="value" label="内容" show-overflow-tooltip />
+            <el-table-column prop="value" label="内容" show-overflow-tooltip>
+              <template #default="scope">
+                <span class="detail-field-value">{{ scope.row.value }}</span>
+              </template>
+            </el-table-column>
           </el-table>
         </template>
         <el-empty v-else description="请选择零件查看详情" />
       </div>
     </el-drawer>
+
+    <el-dialog
+      v-model="pdfVisible"
+      :title="`图纸预览：${pdfTitle}`"
+      width="75%"
+      top="5vh"
+      destroy-on-close
+    >
+      <div v-loading="!pdfLoaded" class="pdf-frame-shell">
+        <iframe
+          v-if="currentPdfSrc"
+          :src="currentPdfSrc"
+          width="100%"
+          height="100%"
+          frameborder="0"
+          @load="pdfLoaded = true"
+        ></iframe>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -126,6 +177,11 @@ import {
   listRfqPartSearchItems,
   listSalesPartSearchItems
 } from '../services/partSearchApi'
+import {
+  createAuthenticatedObjectUrl,
+  readFileErrorMessage,
+  revokeObjectUrl
+} from '../api'
 
 const activeSource = ref('rfq')
 const filters = reactive({ partNo: '', version: '' })
@@ -137,6 +193,10 @@ const loading = ref(false)
 const detailVisible = ref(false)
 const detailLoading = ref(false)
 const detail = ref(null)
+const pdfVisible = ref(false)
+const pdfLoaded = ref(false)
+const pdfTitle = ref('')
+const currentPdfSrc = ref('')
 
 const ORDER_SUMMARY_LABELS = {
   id: '订单ID',
@@ -160,6 +220,12 @@ const ITEM_FIELD_LABELS = {
   id: '零件ID',
   rfqId: '询价订单ID',
   salesOrderId: '销售订单ID',
+  sourceType: '来源类型',
+  sourceOrderId: '来源订单ID',
+  sourceItemId: '来源零件ID',
+  sourceTicketId: '来源提单行ID',
+  salesOrderDate: '下单日期',
+  salesOrderLineNo: '销售订单行号',
   lineNo: '行号',
   partNo: '图号',
   version: '版本',
@@ -167,23 +233,105 @@ const ITEM_FIELD_LABELS = {
   materialName: '材料名称',
   materialNo: '物料号',
   materialNoStatus: '物料号状态',
+  materialNoSource: '物料号来源',
+  materialNoSourceTicketId: '物料号来源提单行ID',
+  materialNoSyncedAt: '物料号同步时间',
+  materialNoMessage: '物料号同步说明',
   qty: '数量',
   orderType: '订单类型',
   customerOrderNo: '客户订单号',
   customerProjectNo: '客户项目号',
+  customerOrderTitle: '客户下单抬头',
   internalProjectNo: '内部项目号',
+  salesMaterialNo: '销售物料号',
+  customerDeliveryDate: '客户交期',
+  internalDeliveryDate: '内部交期',
   engineeringMaterialName: '核价材料',
+  engineeringMaterialCode: '核价材料编码',
+  engineeringMaterialTypeCode: '核价材料类型编码',
+  engineeringMaterialTypeName: '核价材料类型',
+  engineeringMaterialCategory: '材质分类',
   materialShape: '材料形态',
   surfaceTreatment: '表面处理',
+  unit: '单位',
   leadTime: '交货周期',
+  quoteLeadTime: '报价承诺交期',
   internalTargetLeadTime: '内部目标交期',
+  materialGrossWeight: '材料毛重',
+  partNetWeight: '零件净重',
+  quoteMode: '核价模式',
+  assemblyFee: '组装费',
+  materialData: '材料核价明细',
+  processRoute: '工艺路线',
+  feeData: '费用明细',
+  baseCost: '基础成本',
   untaxedUnitPrice: '未税单价',
   taxIncludedUnitPrice: '含税单价',
   untaxedTotalPrice: '未税总价',
   taxIncludedTotalPrice: '含税总价',
+  repeatMatchEligible: '可作为重复件匹配来源',
+  shippedQty: '已发货数量',
+  unshippedQty: '未发货数量',
+  releasedQty: '已提单数量',
+  remainingQty: '剩余数量',
+  hasDrawing: '是否有图',
+  matchedRfqId: '匹配询价订单ID',
+  matchedItemId: '匹配询价零件ID',
+  matchStatus: '匹配状态',
+  matchMessage: '匹配说明',
+  itemType: '零件类型',
+  assemblyRelationStatus: '组合件关系状态',
+  previousStatusBeforeDiscard: '废弃前状态',
   status: '状态',
   drawingUrl: '图纸状态',
-  remark: '备注'
+  remark: '备注',
+  createdAt: '创建时间',
+  updatedAt: '更新时间'
+}
+
+const STRUCTURED_FIELD_LABELS = {
+  ...ORDER_SUMMARY_LABELS,
+  ...ITEM_FIELD_LABELS,
+  code: '编码',
+  name: '名称',
+  label: '名称',
+  materialCode: '材料编码',
+  materialTypeCode: '材料类型编码',
+  materialTypeName: '材料类型',
+  materialCategory: '材质分类',
+  density: '实际使用密度',
+  mesDensity: 'MES密度',
+  specificDensity: '具体密度',
+  platePrice: '板材价',
+  barPrice: '棒材价',
+  tubePrice: '管材价',
+  unitPrice: '单价',
+  cost: '成本',
+  amount: '金额',
+  dimensions: '尺寸',
+  dimensionUnit: '尺寸单位',
+  shape: '材料形态',
+  processCode: '工艺编码',
+  processName: '工艺名称',
+  detailName: '具体工艺',
+  categoryName: '工艺大类',
+  detailHourlyRate: '具体工时单价',
+  hourlyRate: '工时单价',
+  effectiveHourlyRate: '实际工时单价',
+  unitWorkHours: '单件工时',
+  inputValue: '输入值',
+  inputVal: '输入值',
+  calcType: '计价方式',
+  lineCost: '行成本',
+  routeType: '工艺类型',
+  optionKey: '选项标识',
+  sortNo: '排序',
+  feeName: '费用名称',
+  feeRate: '费用比例',
+  pricingScope: '费用适用范围',
+  enabled: '是否启用',
+  remarks: '备注',
+  detailRemarks: '具体工艺备注'
 }
 
 const orderSummaryEntries = computed(() => toEntries(detail.value?.orderSummary || {}, ORDER_SUMMARY_LABELS))
@@ -192,6 +340,13 @@ const itemDetailEntries = computed(() => toEntries(detail.value?.itemDetail || {
 watch([page, pageSize], () => {
   if (filters.partNo.trim()) {
     loadRows()
+  }
+})
+
+watch(pdfVisible, (visible) => {
+  if (!visible) {
+    cleanupPdfSrc()
+    pdfLoaded.value = false
   }
 })
 
@@ -274,6 +429,27 @@ const openDetail = async (row) => {
   }
 }
 
+const cleanupPdfSrc = () => {
+  revokeObjectUrl(currentPdfSrc.value)
+  currentPdfSrc.value = ''
+}
+
+const openPdfPreview = async (url, partNo) => {
+  if (!url) {
+    return ElMessage.warning('当前零件没有绑定图纸。')
+  }
+  pdfTitle.value = partNo || '未命名图纸'
+  pdfLoaded.value = false
+  cleanupPdfSrc()
+  pdfVisible.value = true
+  try {
+    currentPdfSrc.value = await createAuthenticatedObjectUrl(url)
+  } catch (error) {
+    pdfVisible.value = false
+    ElMessage.error(await readFileErrorMessage(error) || '图纸预览失败。')
+  }
+}
+
 const formatPrice = (value) => {
   if (value === null || value === undefined || value === '') return '-'
   const number = Number(value)
@@ -284,15 +460,34 @@ const toEntries = (source, labels) => Object.entries(source)
   .filter(([, value]) => value !== undefined)
   .map(([key, value]) => ({
     key,
-    label: labels[key] || key,
+    label: formatDetailLabel(key, labels),
     value: formatFieldValue(key, value)
   }))
+
+const formatDetailLabel = (key, labels = {}) => labels[key] || STRUCTURED_FIELD_LABELS[key] || '其他字段'
 
 const formatFieldValue = (key, value) => {
   if (value === null || value === undefined || value === '') return '-'
   if (key === 'drawingUrl') return value ? '有图' : '无图'
-  if (typeof value === 'object') return JSON.stringify(value)
+  if (typeof value === 'object') return formatStructuredValue(value)
   return String(value)
+}
+
+const formatStructuredValue = (value) => {
+  if (Array.isArray(value)) {
+    if (value.length === 0) return '-'
+    return value.map((entry, index) => `${index + 1}. ${formatStructuredEntry(entry)}`).join('\n')
+  }
+  return formatStructuredEntry(value)
+}
+
+const formatStructuredEntry = (value) => {
+  if (value === null || value === undefined || value === '') return '-'
+  if (typeof value !== 'object') return String(value)
+  const entries = Object.entries(value)
+    .filter(([, entryValue]) => entryValue !== undefined && entryValue !== null && entryValue !== '')
+    .map(([entryKey, entryValue]) => `${formatDetailLabel(entryKey, STRUCTURED_FIELD_LABELS)}：${formatFieldValue(entryKey, entryValue)}`)
+  return entries.length ? entries.join('；') : '-'
 }
 </script>
 
@@ -342,6 +537,18 @@ const formatFieldValue = (key, value) => {
 
 .detail-field-table {
   margin-top: var(--erp-space-2);
+}
+
+.detail-field-value {
+  white-space: pre-line;
+}
+
+.pdf-frame-shell {
+  height: 72vh;
+  overflow: hidden;
+  border: 1px solid var(--erp-border);
+  border-radius: var(--erp-radius-md);
+  background: var(--erp-surface-soft);
 }
 
 @media (max-width: 760px) {

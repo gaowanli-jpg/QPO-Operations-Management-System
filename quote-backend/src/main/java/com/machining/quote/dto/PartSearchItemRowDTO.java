@@ -12,6 +12,7 @@ public class PartSearchItemRowDTO {
     private String version;
     private BigDecimal untaxedUnitPrice;
     private BigDecimal taxIncludedUnitPrice;
+    private String drawingUrl;
     private Long orderId;
     private String orderNo;
     private String orderStatus;
