@@ -504,8 +504,8 @@ public class RfqReleaseSalesOrderService {
         item.setCustomerOrderTitle(fields.customerOrderTitle());
         item.setInternalProjectNo(fields.internalProjectNo());
         copyConfirmedMaterial(source, item);
-        item.setCustomerDeliveryDate(source.getCustomerDeliveryDate());
-        item.setInternalDeliveryDate(source.getInternalDeliveryDate());
+        item.setCustomerDeliveryDate(resolveReleaseCustomerDeliveryDate(source, fields.salesOrderDate()));
+        item.setInternalDeliveryDate(resolveReleaseInternalDeliveryDate(source, fields.salesOrderDate()));
         item.setMaterialName(source.getMaterialName());
         item.setEngineeringMaterialCode(MaterialDataResolver.materialCode(source));
         item.setEngineeringMaterialName(MaterialDataResolver.engineeringMaterialName(source));
@@ -554,6 +554,30 @@ public class RfqReleaseSalesOrderService {
         }
         target.setMaterialNo(null);
         target.setMaterialNoStatus(MATERIAL_UNCONFIRMED);
+    }
+
+    private LocalDate resolveReleaseCustomerDeliveryDate(ItemQuoteVersion source, LocalDate salesOrderDate) {
+        LocalDate resolved = resolveLeadTimeDate(salesOrderDate, leadTimeService().effectiveLeadTime(source));
+        return resolved == null ? source.getCustomerDeliveryDate() : resolved;
+    }
+
+    private LocalDate resolveReleaseInternalDeliveryDate(ItemQuoteVersion source, LocalDate salesOrderDate) {
+        LocalDate resolved = resolveLeadTimeDate(salesOrderDate, leadTimeService().effectiveDeliveryLeadTime(source));
+        return resolved == null ? source.getInternalDeliveryDate() : resolved;
+    }
+
+    private LocalDate resolveLeadTimeDate(LocalDate salesOrderDate, String leadTime) {
+        if (isBlank(leadTime)) {
+            return null;
+        }
+        return leadTimeService().resolveDeliveryDate(salesOrderDate, leadTime);
+    }
+
+    private LeadTimeService leadTimeService() {
+        if (leadTimeService == null) {
+            leadTimeService = new LeadTimeService();
+        }
+        return leadTimeService;
     }
 
     private void initializeTicketMaterial(OrderDeliveryTicket ticket, ItemQuoteVersion source) {
