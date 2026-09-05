@@ -16,6 +16,7 @@ class PartSearchPermissionTest {
     private static final Path PERMISSION_SERVICE = Path.of("src", "main", "java", "com", "machining", "quote", "service", "PermissionService.java");
     private static final Path SYSTEM_ROLE_SERVICE = Path.of("src", "main", "java", "com", "machining", "quote", "service", "SystemRoleService.java");
     private static final Path MIGRATION = Path.of("src", "main", "resources", "db", "migration", "V37__part_search_permission.sql");
+    private static final Path ADMIN_GRANT_MIGRATION = Path.of("src", "main", "resources", "db", "migration", "V39__part_search_super_admin_permission.sql");
     private static final Path PERMISSION_DOC = Path.of("..", "docs", "QPO权限用户体系", "02-权限点清单与现有角色映射.md");
     private static final Path LOG_DOC = Path.of("..", "docs", "QPO日志模块", "03-日志运维说明.md");
 
@@ -56,7 +57,7 @@ class PartSearchPermissionTest {
     }
 
     @Test
-    void migrationAndFallbackCatalogExposePartSearchToReadOnlyOrderUsers() throws IOException {
+    void migrationAndFallbackCatalogExposePartSearchToReadOnlyOrderUsersAndAdmins() throws IOException {
         assertThat(read(MIGRATION))
                 .contains(
                         "market:part-search:view",
@@ -72,7 +73,13 @@ class PartSearchPermissionTest {
                         "permission(214L, \"MENU\", \"market:part-search:view\"",
                         "\"/part-search\"",
                         "\"PartSearchManage\"",
-                        "Map.entry(\"market:part-search:view\", Set.of(\"MARKET_USER\", \"MARKET_MANAGER\", \"READONLY\"))");
+                        "Map.entry(\"market:part-search:view\", Set.of(\"SUPER_ADMIN\", \"MARKET_USER\", \"MARKET_MANAGER\", \"READONLY\"))");
+        assertThat(read(ADMIN_GRANT_MIGRATION))
+                .contains(
+                        "market:part-search:view",
+                        "SUPER_ADMIN",
+                        "ON CONFLICT (role_id, permission_id) DO NOTHING")
+                .doesNotContain("V1__qpo_baseline_schema", "V2__qpo_baseline_seed_data");
         assertThat(read(SYSTEM_ROLE_SERVICE))
                 .contains("permissionCode.startsWith(\"market:part-search:\")");
     }

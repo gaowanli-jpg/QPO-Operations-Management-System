@@ -18,7 +18,7 @@ describe('sales order management regression coverage', () => {
     expect(routerSource).toContain("{ path: '/history-orders', redirect: '/sales-orders' }")
     expect(appVue).toContain("'/orders': { title: '询价订单', permission: 'market:order:view'")
     expect(appVue).toContain("'/sales-orders': { title: '销售订单', permission: 'market:sales-order:view'")
-    expect(appVue).toContain("{ key: 'orders', title: '订单', paths: ['/orders', '/sales-orders', '/delivered-items', '/production-items', '/locked-items'] }")
+    expect(appVue).toContain("{ key: 'orders', title: '订单', paths: ['/orders', '/sales-orders', '/part-search', '/delivered-items', '/production-items', '/locked-items'] }")
     expect(appVue).not.toContain("title: '订单管理'")
     expect(appVue).not.toContain("title: '历史订单'")
     expect(appVue).not.toContain("'/sales-orders': { title: '销售订单', permission: 'market:history-order:view'")

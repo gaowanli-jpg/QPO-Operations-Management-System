@@ -167,13 +167,13 @@ describe('QPO workflow page polish', () => {
     const typeIndex = tableTemplate.indexOf('label="类型"')
     const drawingIndex = tableTemplate.indexOf('label="图纸"')
     const materialIndex = tableTemplate.indexOf('prop="engineeringMaterialName" label="材料"')
-    const descriptionIndex = tableTemplate.indexOf('prop="description" label="物料描述"')
+    const materialNameIndex = tableTemplate.indexOf('prop="materialName" label="材料名称"')
     const surfaceIndex = tableTemplate.indexOf('prop="surfaceTreatment" label="表面处理"')
 
     expect(versionIndex).toBeLessThan(typeIndex)
     expect(typeIndex).toBeLessThan(drawingIndex)
-    expect(materialIndex).toBeLessThan(descriptionIndex)
-    expect(descriptionIndex).toBeLessThan(surfaceIndex)
+    expect(materialIndex).toBeLessThan(materialNameIndex)
+    expect(materialNameIndex).toBeLessThan(surfaceIndex)
   })
 
   test('keeps batch and export actions visually quiet', () => {

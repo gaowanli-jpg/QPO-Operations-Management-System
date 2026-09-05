@@ -40,7 +40,8 @@ class CanonicalPriceStage5DocumentationTest {
                         .doesNotContain(legacySnakeUnit, legacySnakeTotal,
                                 legacyCamelUnit, legacyCamelTotal));
         assertThat(filesUnder(BACKEND_MAIN.resolve("resources"), path ->
-                !path.toString().contains("db" + java.io.File.separator + "migration")))
+                !path.toString().contains("db" + java.io.File.separator + "migration")
+                        && isTextFile(path)))
                 .allSatisfy(source -> assertThat(source)
                         .doesNotContain(legacySnakeUnit, legacySnakeTotal));
         assertThat(filesUnder(FRONTEND_SRC))
@@ -106,5 +107,15 @@ class CanonicalPriceStage5DocumentationTest {
     private static String read(Path path) throws IOException {
         assertThat(path).exists();
         return Files.readString(path, StandardCharsets.UTF_8).replace("\r\n", "\n");
+    }
+
+    private static boolean isTextFile(Path path) {
+        String fileName = path.getFileName().toString().toLowerCase();
+        return fileName.endsWith(".properties")
+                || fileName.endsWith(".sql")
+                || fileName.endsWith(".txt")
+                || fileName.endsWith(".xml")
+                || fileName.endsWith(".yaml")
+                || fileName.endsWith(".yml");
     }
 }

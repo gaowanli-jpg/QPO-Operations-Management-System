@@ -24,6 +24,7 @@ const protectedRoutePermissions = {
   '/material-process': 'engineer:dict:view',
   '/orders': 'market:order:view',
   '/sales-orders': 'market:sales-order:view',
+  '/part-search': 'market:part-search:view',
   '/delivered-items': 'market:delivered-item:view',
   '/production-items': 'market:production-item:view',
   '/locked-items': 'market:locked-item:view',

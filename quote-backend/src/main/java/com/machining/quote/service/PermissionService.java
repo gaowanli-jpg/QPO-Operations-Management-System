@@ -329,7 +329,7 @@ public class PermissionService {
             Map.entry("market:sales-order:discard", Set.of("MARKET_MANAGER")),
             Map.entry("market:sales-order:restore", Set.of("MARKET_MANAGER")),
             Map.entry("market:sales-order:production-task-notice-export", Set.of("MARKET_USER", "MARKET_MANAGER")),
-            Map.entry("market:part-search:view", Set.of("MARKET_USER", "MARKET_MANAGER", "READONLY")),
+            Map.entry("market:part-search:view", Set.of("SUPER_ADMIN", "MARKET_USER", "MARKET_MANAGER", "READONLY")),
             Map.entry("market:order:rollback-quoted", Set.of("MARKET_MANAGER")),
             Map.entry("market:order:rollback-priced", Set.of("MARKET_MANAGER")),
             Map.entry("market:order:discard", Set.of("MARKET_MANAGER")),
