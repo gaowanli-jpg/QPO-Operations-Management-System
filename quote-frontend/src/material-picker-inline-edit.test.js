@@ -43,8 +43,9 @@ describe('material picker inline density and price editing', () => {
     expect(materialBlock.indexOf('label="具体密度"')).toBeGreaterThan(materialBlock.indexOf('label="材料名称"'))
     expect(materialBlock.indexOf('label="保存"')).toBeGreaterThan(materialBlock.indexOf('v-for="definition in MATERIAL_PRICE_SPEC_DEFINITIONS"'))
     expect(materialBlock.indexOf('prop="materialTypeName" label="材料类型"')).toBeGreaterThan(materialBlock.indexOf('label="保存"'))
-    expect(materialBlock.indexOf('prop="materialCategory" label="材质分类"')).toBeGreaterThan(materialBlock.indexOf('prop="materialTypeName" label="材料类型"'))
-    expect(materialBlock.indexOf('prop="remarks" label="备注"')).toBeGreaterThan(materialBlock.indexOf('prop="materialCategory" label="材质分类"'))
+    expect(materialBlock.indexOf('prop="categoryName" label="U9类别"')).toBeGreaterThan(materialBlock.indexOf('prop="materialTypeName" label="材料类型"'))
+    expect(materialBlock.indexOf('prop="remarks" label="备注"')).toBeGreaterThan(materialBlock.indexOf('prop="categoryName" label="U9类别"'))
+    expect(materialBlock).not.toContain('prop="materialCategory" label="材质分类"')
 
     expect(picker).toContain('class-name="material-edit-cell"')
     expect(picker).toContain('.option-picker-dialog :deep(.material-edit-cell .cell)')

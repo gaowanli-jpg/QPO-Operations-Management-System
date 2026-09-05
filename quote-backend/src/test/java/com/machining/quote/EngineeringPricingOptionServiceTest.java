@@ -46,6 +46,7 @@ class EngineeringPricingOptionServiceTest {
                 mock(DictProcessDetailMapper.class), mock(DictExtraFeeItemMapper.class));
         DictMaterial material = material(10L, "MAT-000010", "SUS304", 1L);
         material.setMaterialCategory("stainless");
+        material.setCategoryName("U9 aluminum");
         material.setDensity(7.93);
         material.setMesDensityRaw("7.92");
         material.setRemarks("raw remark");
@@ -74,6 +75,7 @@ class EngineeringPricingOptionServiceTest {
             assertThat(row.getMaterialTypeCode()).isEqualTo("RAW");
             assertThat(row.getMaterialTypeName()).isEqualTo("Raw material");
             assertThat(row.getMaterialCategory()).isEqualTo("stainless");
+            assertThat(row.getCategoryName()).isEqualTo("U9 aluminum");
             assertThat(row.getDensity()).isEqualTo(7.93);
             assertThat(row.getMesDensityRaw()).isEqualTo("7.92");
             assertThat(row.getPriceSpecs()).hasSize(3);
@@ -88,9 +90,57 @@ class EngineeringPricingOptionServiceTest {
         verify(materialMapper).selectCount(countCaptor.capture());
         verify(materialMapper).selectList(listCaptor.capture());
         assertThat(sql(countCaptor.getValue()))
-                .contains("enabled", "material_code", "material_name", "material_category", "remarks", "dict_material_type");
+                .contains("enabled", "material_code", "material_name", "category_name", "remarks", "dict_material_type")
+                .doesNotContain("material_category like");
         assertThat(sql(listCaptor.getValue()))
                 .contains("order by", "material_type_id", "sort_no", "id", "limit 20 offset 20");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void pageMaterialOptionsCanFilterByExactU9CategoryName() {
+        DictMaterialMapper materialMapper = mock(DictMaterialMapper.class);
+        EngineeringPricingOptionService service = service(materialMapper, mock(DictMaterialPriceSpecMapper.class), mock(DictMaterialTypeMapper.class),
+                mock(DictProcessDetailMapper.class), mock(DictExtraFeeItemMapper.class));
+        when(materialMapper.selectCount(any(QueryWrapper.class))).thenReturn(0L);
+
+        PricingOptionPageReq req = new PricingOptionPageReq();
+        req.setCategoryName(" U9原材料 ");
+
+        PageResult<PricingMaterialOptionDTO> page = service.pageMaterialOptions(req);
+
+        assertThat(page.getRecords()).isEmpty();
+        ArgumentCaptor<QueryWrapper<DictMaterial>> countCaptor = ArgumentCaptor.forClass(QueryWrapper.class);
+        verify(materialMapper).selectCount(countCaptor.capture());
+        assertThat(sql(countCaptor.getValue()))
+                .contains("enabled", "category_name =");
+        assertThat(countCaptor.getValue().getParamNameValuePairs())
+                .containsValue("U9原材料");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void listMaterialU9CategoryNamesUsesDistinctIndexedMaterialColumnWithoutLoadingMaterialRows() {
+        DictMaterialMapper materialMapper = mock(DictMaterialMapper.class);
+        EngineeringPricingOptionService service = service(materialMapper, mock(DictMaterialPriceSpecMapper.class), mock(DictMaterialTypeMapper.class),
+                mock(DictProcessDetailMapper.class), mock(DictExtraFeeItemMapper.class));
+        when(materialMapper.selectObjs(any(QueryWrapper.class))).thenReturn(List.of("U9成品", "U9原材料"));
+
+        PricingOptionPageReq req = new PricingOptionPageReq();
+        req.setMaterialTypeCodes("product");
+
+        assertThat(service.listMaterialU9CategoryNames(req)).containsExactly("U9成品", "U9原材料");
+
+        ArgumentCaptor<QueryWrapper<DictMaterial>> queryCaptor = ArgumentCaptor.forClass(QueryWrapper.class);
+        verify(materialMapper).selectObjs(queryCaptor.capture());
+        assertThat(queryCaptor.getValue().getSqlSelect().toLowerCase())
+                .contains("distinct category_name");
+        assertThat(sql(queryCaptor.getValue()))
+                .contains("enabled", "category_name is not null", "trim(category_name) <> ''")
+                .contains("upper(type_code) in ('product')")
+                .contains("order by category_name asc")
+                .doesNotContain("select *");
+        verify(materialMapper, org.mockito.Mockito.never()).selectList(any(QueryWrapper.class));
     }
 
     @Test

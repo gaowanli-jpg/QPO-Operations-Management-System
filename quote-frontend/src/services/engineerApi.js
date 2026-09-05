@@ -20,6 +20,11 @@ export const listAssemblyChildCandidates = (rfqId, params = {}) => request(
 
 export const pagePricingMaterialOptions = (params = {}) => request('/api/engineer/pricing/options/materials', { params })
 
+export const listPricingMaterialU9CategoryNames = (params = {}) => request(
+  '/api/engineer/pricing/options/material-u9-category-names',
+  { params }
+)
+
 export const pagePricingProcessOptions = (params = {}) => request('/api/engineer/pricing/options/processes', { params })
 
 export const listPricingProcessArrangementTree = () => request('/api/engineer/pricing/options/process-arrangement/tree')

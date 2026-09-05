@@ -9,6 +9,7 @@ public class PricingOptionPageReq {
     private Integer pageSize;
     private String materialCodes;
     private String materialTypeCodes;
+    private String categoryName;
     private String processDetailIds;
     private String feeItemIds;
     private String sourceType;

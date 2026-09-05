@@ -66,15 +66,34 @@
             :placeholder="searchPlaceholder"
             class="keyword-input"
           />
-          <el-radio-group v-if="type === 'material'" v-model="materialTypeFilter" size="small" class="material-type-filter">
-            <el-radio-button
-              v-for="option in MATERIAL_TYPE_FILTER_OPTIONS"
-              :key="option.label"
-              :label="option.value"
+          <div v-if="type === 'material'" class="material-filter-panel">
+            <el-radio-group v-model="materialTypeFilter" size="small" class="material-type-filter">
+              <el-radio-button
+                v-for="option in MATERIAL_TYPE_FILTER_OPTIONS"
+                :key="option.label"
+                :label="option.value"
+              >
+                {{ option.label }}
+              </el-radio-button>
+            </el-radio-group>
+            <el-select
+              v-model="materialCategoryNameFilter"
+              filterable
+              clearable
+              size="small"
+              class="material-category-filter"
+              placeholder="全部U9类别"
+              :loading="materialCategoryNameLoading"
             >
-              {{ option.label }}
-            </el-radio-button>
-          </el-radio-group>
+              <el-option label="全部U9类别" value="" />
+              <el-option
+                v-for="option in materialCategoryNameOptions"
+                :key="option"
+                :label="option"
+                :value="option"
+              />
+            </el-select>
+          </div>
           <el-radio-group v-if="type === 'process'" v-model="processSourceTypeFilter" size="small" class="process-source-type-filter">
             <el-radio-button label="">全部</el-radio-button>
             <el-radio-button label="process">工时工艺</el-radio-button>
@@ -189,8 +208,8 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column prop="materialCategory" label="材质分类" width="120" show-overflow-tooltip>
-          <template #default="{ row }">{{ row.materialCategory || '-' }}</template>
+        <el-table-column prop="categoryName" label="U9类别" width="120" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.categoryName || '-' }}</template>
         </el-table-column>
         <el-table-column prop="remarks" label="备注" min-width="180" show-overflow-tooltip>
           <template #default="{ row }">{{ row.remarks || '-' }}</template>
@@ -357,6 +376,10 @@ const props = defineProps({
     type: Function,
     default: null
   },
+  materialU9CategoryLoader: {
+    type: Function,
+    default: null
+  },
   processArrangementTreeLoader: {
     type: Function,
     default: null
@@ -416,6 +439,10 @@ const selectedProcessArrangementKey = ref('')
 const selectedProcessArrangementNode = ref(null)
 const processArrangementExpandedKeys = ref([])
 const materialTypeFilter = ref('')
+const materialCategoryNameFilter = ref('')
+const materialCategoryNameOptions = ref([])
+const materialCategoryNameLoading = ref(false)
+const materialCategoryNameRequestSeq = ref(0)
 const processSourceTypeFilter = ref('')
 
 const processArrangementTreeProps = { children: 'children', label: 'label' }
@@ -428,7 +455,7 @@ const dialogWidth = computed(() => (
 
 const searchPlaceholder = computed(() => (
   props.type === 'material'
-    ? '搜索材料编码、名称、材料类型、材质分类、备注'
+    ? '搜索材料编码、名称、材料类型、U9类别、备注'
     : '搜索工艺编码、具体工艺、非工时费用编码/名称'
 ))
 
@@ -444,7 +471,7 @@ const labelOf = (item) => {
     const code = item.materialCode || '-'
     const name = item.materialName || '-'
     const typeName = item.materialTypeName || '-'
-    const category = item.materialCategory || '-'
+    const category = item.categoryName || '-'
     const specName = item.priceSpecName ? ` / ${item.priceSpecName}` : ''
     return item.remarks
       ? `${code} / ${name} / ${typeName} / ${category}${specName} ${item.remarks}`
@@ -531,6 +558,10 @@ const resetPicker = () => {
   selectedProcessArrangementNode.value = null
   processArrangementExpandedKeys.value = []
   materialTypeFilter.value = ''
+  materialCategoryNameFilter.value = ''
+  materialCategoryNameOptions.value = []
+  materialCategoryNameLoading.value = false
+  materialCategoryNameRequestSeq.value += 1
   processSourceTypeFilter.value = ''
 }
 
@@ -638,6 +669,40 @@ const loadProcessArrangementTree = async ({ revealNodeId = null } = {}) => {
   }
 }
 
+const loadMaterialCategoryNameOptions = async () => {
+  if (props.type !== 'material' || typeof props.materialU9CategoryLoader !== 'function') {
+    materialCategoryNameOptions.value = []
+    return
+  }
+  const requestSeq = materialCategoryNameRequestSeq.value + 1
+  materialCategoryNameRequestSeq.value = requestSeq
+  materialCategoryNameLoading.value = true
+  try {
+    const params = {}
+    if (materialTypeFilter.value) {
+      params.materialTypeCodes = materialTypeFilter.value
+    }
+    const response = await props.materialU9CategoryLoader(params)
+    if (requestSeq !== materialCategoryNameRequestSeq.value) return
+    const rawOptions = response?.data ?? response ?? []
+    const options = Array.isArray(rawOptions) ? rawOptions : []
+    materialCategoryNameOptions.value = Array.from(new Set(
+      options
+        .map(option => String(option ?? '').trim())
+        .filter(Boolean)
+    ))
+  } catch (error) {
+    console.error(error)
+    if (requestSeq === materialCategoryNameRequestSeq.value) {
+      materialCategoryNameOptions.value = []
+    }
+  } finally {
+    if (requestSeq === materialCategoryNameRequestSeq.value) {
+      materialCategoryNameLoading.value = false
+    }
+  }
+}
+
 const formatNumber = (value) => {
   const numericValue = Number(value)
   return Number.isFinite(numericValue) ? numericValue.toFixed(2) : '-'
@@ -684,6 +749,9 @@ const handleOpened = () => {
   if (props.type === 'process') {
     loadProcessArrangementTree()
   }
+  if (props.type === 'material') {
+    loadMaterialCategoryNameOptions()
+  }
   loadRemotePage(1)
 }
 
@@ -718,6 +786,9 @@ const loadRemotePage = async (nextPage = page.value) => {
   }
   if (props.type === 'material' && materialTypeFilter.value) {
     params.materialTypeCodes = materialTypeFilter.value
+  }
+  if (props.type === 'material' && materialCategoryNameFilter.value) {
+    params.categoryName = materialCategoryNameFilter.value
   }
   if (props.type === 'process') {
     const pickerFilter = processPickerFilter.value
@@ -1007,6 +1078,12 @@ watch(() => props.selectedKey, syncSelectedKey)
 watch(keyword, scheduleRemoteSearch)
 watch(materialTypeFilter, () => {
   if (visible.value && props.type === 'material') {
+    loadMaterialCategoryNameOptions()
+    loadRemotePage(1)
+  }
+})
+watch(materialCategoryNameFilter, () => {
+  if (visible.value && props.type === 'material') {
     loadRemotePage(1)
   }
 })
@@ -1120,6 +1197,18 @@ onBeforeUnmount(clearRemoteSearchTimer)
 .material-type-filter,
 .process-source-type-filter {
   flex: none;
+}
+
+.material-filter-panel {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.material-category-filter {
+  width: 210px;
 }
 
 .process-picker-context {

@@ -22,6 +22,8 @@ class MesMasterDataMigrationTest {
             "src", "main", "resources", "db", "migration", "V25__mes_master_data_async_schedule.sql");
     private static final Path U9_CATEGORY_NAME_MIGRATION = Path.of(
             "src", "main", "resources", "db", "migration", "V40__material_u9_category_name.sql");
+    private static final Path U9_CATEGORY_NAME_INDEX_MIGRATION = Path.of(
+            "src", "main", "resources", "db", "migration", "V42__material_u9_category_name_index.sql");
     private static final Path PROCESS_CATEGORY_ENTITY = Path.of(
             "src", "main", "java", "com", "machining", "quote", "entity", "DictProcessCategory.java");
 
@@ -93,6 +95,19 @@ class MesMasterDataMigrationTest {
                 .doesNotContain("DROP TABLE")
                 .doesNotContain("DROP COLUMN IF EXISTS material_category")
                 .doesNotContain("RENAME COLUMN material_category");
+    }
+
+    @Test
+    void appendOnlyMigrationIndexesMaterialU9CategoryNameForPickerFiltering() throws IOException {
+        String migration = read(U9_CATEGORY_NAME_INDEX_MIGRATION);
+
+        assertThat(migration)
+                .contains("CREATE INDEX IF NOT EXISTS idx_dict_material_u9_category_enabled")
+                .contains("ON dict_material (enabled, category_name, material_type_id, sort_no, id)")
+                .contains("WHERE category_name IS NOT NULL")
+                .doesNotContain("DROP TABLE")
+                .doesNotContain("DROP COLUMN")
+                .doesNotContain("ALTER TABLE dict_material ADD COLUMN");
     }
 
     @Test

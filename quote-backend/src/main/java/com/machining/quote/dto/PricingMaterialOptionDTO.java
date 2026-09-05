@@ -13,6 +13,7 @@ public class PricingMaterialOptionDTO {
     private String materialTypeCode;
     private String materialTypeName;
     private String materialCategory;
+    private String categoryName;
     private Double density;
     private String mesDensityRaw;
     private List<MaterialPriceSpecDTO> priceSpecs;

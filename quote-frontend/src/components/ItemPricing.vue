@@ -669,6 +669,7 @@
       title="选择材料"
       type="material"
       :remote-loader="pagePricingMaterialOptions"
+      :material-u9-category-loader="listPricingMaterialU9CategoryNames"
       :page-size-options="[10, 20, 50, 100]"
       :default-page-size="10"
       :selected-key="matForm.materialCode"
@@ -730,6 +731,7 @@ import {
   listAssemblyChildCandidates,
   listAssemblyRelations,
   listPricingItems,
+  listPricingMaterialU9CategoryNames,
   listPricingProcessArrangementTree,
   pagePricingMaterialOptions,
   pagePricingProcessOptions,

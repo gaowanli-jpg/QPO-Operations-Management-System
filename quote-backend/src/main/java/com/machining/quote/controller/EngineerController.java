@@ -136,6 +136,12 @@ public class EngineerController {
         return pricingOptionService.pageMaterialOptions(req);
     }
 
+    @GetMapping("/pricing/options/material-u9-category-names")
+    @RequirePermission("engineer:pricing:view")
+    public List<String> listPricingMaterialU9CategoryNames(@ModelAttribute PricingOptionPageReq req) {
+        return pricingOptionService.listMaterialU9CategoryNames(req);
+    }
+
     @GetMapping("/pricing/options/processes")
     @RequirePermission("engineer:pricing:view")
     public PageResult<PricingProcessOptionDTO> pagePricingProcessOptions(@ModelAttribute PricingOptionPageReq req) {

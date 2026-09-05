@@ -51,6 +51,14 @@ class EngineerPricingOptionControllerTest {
     }
 
     @Test
+    void controllerExposesPricingMaterialU9CategoryNamesWithPricingViewPermission() throws Exception {
+        Method method = EngineerController.class.getDeclaredMethod("listPricingMaterialU9CategoryNames", PricingOptionPageReq.class);
+
+        assertThat(method.getAnnotation(GetMapping.class).value()).containsExactly("/pricing/options/material-u9-category-names");
+        assertThat(method.getAnnotation(RequirePermission.class).value()).containsExactly("engineer:pricing:view");
+    }
+
+    @Test
     void controllerDelegatesMaterialAndProcessOptionQueriesToReadOnlyService() {
         EngineerController controller = new EngineerController();
         EngineeringPricingOptionService service = mock(EngineeringPricingOptionService.class);
@@ -58,13 +66,17 @@ class EngineerPricingOptionControllerTest {
         PricingOptionPageReq req = new PricingOptionPageReq();
         PageResult<PricingMaterialOptionDTO> materialPage = PageResult.of(List.of(), 0, 1, 20);
         PageResult<PricingProcessOptionDTO> processPage = PageResult.of(List.of(), 0, 1, 20);
+        List<String> categoryNames = List.of("U9原材料", "U9成品");
         when(service.pageMaterialOptions(req)).thenReturn(materialPage);
         when(service.pageProcessOptions(req)).thenReturn(processPage);
+        when(service.listMaterialU9CategoryNames(req)).thenReturn(categoryNames);
 
         assertThat(controller.pagePricingMaterialOptions(req)).isSameAs(materialPage);
         assertThat(controller.pagePricingProcessOptions(req)).isSameAs(processPage);
+        assertThat(controller.listPricingMaterialU9CategoryNames(req)).isSameAs(categoryNames);
         verify(service).pageMaterialOptions(req);
         verify(service).pageProcessOptions(req);
+        verify(service).listMaterialU9CategoryNames(req);
     }
 
     @Test

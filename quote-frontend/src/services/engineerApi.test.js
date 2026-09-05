@@ -75,11 +75,19 @@ describe('engineerApi', () => {
   })
 
   test('pagePricingMaterialOptions forwards remote material picker params', async () => {
-    const params = { keyword: '45#', page: 2, pageSize: 50 }
+    const params = { keyword: '45#', page: 2, pageSize: 50, categoryName: 'U9原材料' }
 
     await engineerApi.pagePricingMaterialOptions(params)
 
     expect(request).toHaveBeenCalledWith('/api/engineer/pricing/options/materials', { params })
+  })
+
+  test('listPricingMaterialU9CategoryNames loads U9 categories for material picker filters', async () => {
+    const params = { materialTypeCodes: 'MATERIAL,RAW_MATERIAL' }
+
+    await engineerApi.listPricingMaterialU9CategoryNames(params)
+
+    expect(request).toHaveBeenCalledWith('/api/engineer/pricing/options/material-u9-category-names', { params })
   })
 
   test('pagePricingProcessOptions forwards remote process picker params', async () => {

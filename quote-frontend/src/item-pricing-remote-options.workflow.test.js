@@ -11,9 +11,11 @@ describe('item pricing remote material and process options', () => {
     const source = readSource('components', 'ItemPricing.vue')
 
     expect(source).toContain('pagePricingMaterialOptions')
+    expect(source).toContain('listPricingMaterialU9CategoryNames')
     expect(source).toContain('pagePricingProcessOptions')
     expect(source).toContain('listPricingProcessArrangementTree')
     expect(source).toContain(':remote-loader="pagePricingMaterialOptions"')
+    expect(source).toContain(':material-u9-category-loader="listPricingMaterialU9CategoryNames"')
     expect(source).toContain(':remote-loader="pagePricingProcessOptions"')
     expect(source).toContain(':process-arrangement-tree-loader="listPricingProcessArrangementTree"')
     expect(source).toContain(':page-size-options="[10, 20, 50, 100]"')

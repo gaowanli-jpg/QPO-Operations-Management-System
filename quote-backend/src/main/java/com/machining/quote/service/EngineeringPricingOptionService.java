@@ -62,16 +62,36 @@ public class EngineeringPricingOptionService {
         int safePageSize = normalizePageSize(safeReq.getPageSize());
         List<String> materialCodes = parseMaterialCodes(safeReq.getMaterialCodes());
         List<String> materialTypeCodes = parseMaterialTypeCodes(safeReq.getMaterialTypeCodes());
-        QueryWrapper<DictMaterial> countQuery = materialQuery(safeReq.getKeyword(), materialCodes, materialTypeCodes);
+        String categoryName = trimToNull(safeReq.getCategoryName());
+        QueryWrapper<DictMaterial> countQuery = materialQuery(safeReq.getKeyword(), materialCodes, materialTypeCodes, categoryName);
         Long total = materialMapper.selectCount(countQuery);
         if (total == null || total == 0) {
             return PageResult.of(List.of(), 0, safePage, safePageSize);
         }
-        QueryWrapper<DictMaterial> pageQuery = materialQuery(safeReq.getKeyword(), materialCodes, materialTypeCodes);
+        QueryWrapper<DictMaterial> pageQuery = materialQuery(safeReq.getKeyword(), materialCodes, materialTypeCodes, categoryName);
         pageQuery.last(materialUsageOrderBy() + " " + limitOffset(safePage, safePageSize));
         List<PricingMaterialOptionDTO> records = toMaterialOptions(materialMapper.selectList(pageQuery));
         applyMaterialUsageCounts(records);
         return PageResult.of(records, total, safePage, safePageSize);
+    }
+
+    public List<String> listMaterialU9CategoryNames(PricingOptionPageReq req) {
+        PricingOptionPageReq safeReq = req == null ? new PricingOptionPageReq() : req;
+        List<String> materialTypeCodes = parseMaterialTypeCodes(safeReq.getMaterialTypeCodes());
+        QueryWrapper<DictMaterial> query = new QueryWrapper<>();
+        query.select("DISTINCT category_name")
+                .eq("enabled", true)
+                .isNotNull("category_name")
+                .apply("TRIM(category_name) <> ''");
+        applyMaterialTypeFilter(query, materialTypeCodes);
+        query.orderByAsc("category_name");
+        return materialMapper.selectObjs(query).stream()
+                .filter(Objects::nonNull)
+                .map(Object::toString)
+                .map(String::trim)
+                .filter(this::hasText)
+                .distinct()
+                .toList();
     }
 
     public PageResult<PricingProcessOptionDTO> pageProcessOptions(PricingOptionPageReq req) {
@@ -134,14 +154,16 @@ public class EngineeringPricingOptionService {
         return extraFeeItemMapper.selectList(query);
     }
 
-    private QueryWrapper<DictMaterial> materialQuery(String keyword, List<String> materialCodes, List<String> materialTypeCodes) {
+    private QueryWrapper<DictMaterial> materialQuery(String keyword, List<String> materialCodes,
+                                                     List<String> materialTypeCodes, String categoryName) {
         QueryWrapper<DictMaterial> query = new QueryWrapper<>();
         query.eq("enabled", true);
         if (materialCodes != null && !materialCodes.isEmpty()) {
             query.in("UPPER(material_code)", materialCodes);
         }
-        if (materialTypeCodes != null && !materialTypeCodes.isEmpty()) {
-            query.inSql("material_type_id", "SELECT id FROM dict_material_type WHERE UPPER(type_code) IN (" + quotedSqlList(materialTypeCodes) + ")");
+        applyMaterialTypeFilter(query, materialTypeCodes);
+        if (hasText(categoryName)) {
+            query.eq("category_name", categoryName.trim());
         }
         if (!hasText(keyword)) {
             return query;
@@ -152,12 +174,18 @@ public class EngineeringPricingOptionService {
                 .or()
                 .apply("LOWER(material_name) LIKE {0}", pattern)
                 .or()
-                .apply("LOWER(material_category) LIKE {0}", pattern)
+                .apply("LOWER(category_name) LIKE {0}", pattern)
                 .or()
                 .apply("LOWER(remarks) LIKE {0}", pattern)
                 .or()
                 .apply("EXISTS (SELECT 1 FROM dict_material_type mt WHERE mt.id = dict_material.material_type_id AND (LOWER(mt.type_code) LIKE {0} OR LOWER(mt.type_name) LIKE {0}))", pattern));
         return query;
+    }
+
+    private void applyMaterialTypeFilter(QueryWrapper<DictMaterial> query, List<String> materialTypeCodes) {
+        if (materialTypeCodes != null && !materialTypeCodes.isEmpty()) {
+            query.inSql("material_type_id", "SELECT id FROM dict_material_type WHERE UPPER(type_code) IN (" + quotedSqlList(materialTypeCodes) + ")");
+        }
     }
 
     private QueryWrapper<DictProcessDetail> processDetailQuery(String keyword, List<Long> processDetailIds) {
@@ -313,6 +341,7 @@ public class EngineeringPricingOptionService {
         dto.setMaterialTypeCode(type == null ? null : type.getTypeCode());
         dto.setMaterialTypeName(type == null ? null : type.getTypeName());
         dto.setMaterialCategory(material.getMaterialCategory());
+        dto.setCategoryName(material.getCategoryName());
         dto.setDensity(material.getDensity());
         dto.setMesDensityRaw(material.getMesDensityRaw());
         dto.setPriceSpecs(MaterialPriceSpecSupport.normalizeDtos(priceSpecs));
@@ -415,6 +444,13 @@ public class EngineeringPricingOptionService {
 
     private String pattern(String keyword) {
         return "%" + keyword.trim().toLowerCase(Locale.ROOT) + "%";
+    }
+
+    private String trimToNull(String value) {
+        if (!hasText(value)) {
+            return null;
+        }
+        return value.trim();
     }
 
     private String normalizedKey(String value) {

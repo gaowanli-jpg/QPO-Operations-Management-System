@@ -258,6 +258,7 @@
       title="选择默认材质"
       type="material"
       :remote-loader="pagePricingMaterialOptions"
+      :material-u9-category-loader="listPricingMaterialU9CategoryNames"
       :page-size-options="[10, 20, 50, 100]"
       :default-page-size="10"
       :selected-key="config.materialCode"
@@ -292,7 +293,7 @@ import { DocumentChecked } from '@element-plus/icons-vue'
 import { useRouter, useRoute } from 'vue-router'
 import EngineeringOptionPickerDialog from './EngineeringOptionPickerDialog.vue'
 import OrderPickerDialog from './OrderPickerDialog.vue'
-import { getRepeatAnalysis, getSetupSummary, listPricingProcessArrangementTree, pagePricingMaterialOptions, pagePricingProcessOptions, saveOrderConfig } from '../services/engineerApi'
+import { getRepeatAnalysis, getSetupSummary, listPricingMaterialU9CategoryNames, listPricingProcessArrangementTree, pagePricingMaterialOptions, pagePricingProcessOptions, saveOrderConfig } from '../services/engineerApi'
 import {
   defaultBlankProcessRouteList,
   defaultGlobalConfig,

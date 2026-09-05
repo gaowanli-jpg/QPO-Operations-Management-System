@@ -70,6 +70,33 @@ describe('engineering option picker remote paging mode', () => {
     expect(source).toContain('watch(materialTypeFilter, () => {')
   })
 
+  test('material picker loads U9 category names remotely and combines the filter with paging', () => {
+    const source = readSource('components', 'EngineeringOptionPickerDialog.vue')
+
+    expect(source).toContain('materialU9CategoryLoader: {')
+    expect(source).toContain('const materialCategoryNameFilter = ref')
+    expect(source).toContain('const materialCategoryNameOptions = ref([])')
+    expect(source).toContain('v-model="materialCategoryNameFilter"')
+    expect(source).toContain('placeholder="全部U9类别"')
+    expect(source).toContain('loadMaterialCategoryNameOptions')
+    expect(source).toContain('params.categoryName = materialCategoryNameFilter.value')
+    expect(source).toContain('watch(materialCategoryNameFilter, () => {')
+    expect(source).not.toContain('new Set(remoteRecords.value.map')
+  })
+
+  test('material picker displays U9 category instead of legacy material category in the table', () => {
+    const source = readSource('components', 'EngineeringOptionPickerDialog.vue')
+    const materialBlock = source.slice(
+      source.indexOf('<template v-if="type === \'material\'">'),
+      source.indexOf('<template v-else>')
+    )
+
+    expect(materialBlock).toContain('prop="categoryName" label="U9类别"')
+    expect(materialBlock).not.toContain('prop="materialCategory" label="材质分类"')
+    expect(source).toContain('搜索材料编码、名称、材料类型、U9类别、备注')
+    expect(source).toContain('item.categoryName')
+  })
+
   test('debounces keyword search and ignores stale remote responses', () => {
     const source = readSource('components', 'EngineeringOptionPickerDialog.vue')
 
