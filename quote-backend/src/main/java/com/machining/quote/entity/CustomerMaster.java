@@ -16,6 +16,7 @@ public class CustomerMaster {
     private String customerCode;
     private String customerShortName;
     private String customerName;
+    private String supplierCode;
     private String u9OrgCode;
     private String u9CustomerId;
     private Boolean enabled;

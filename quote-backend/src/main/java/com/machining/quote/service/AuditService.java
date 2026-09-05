@@ -202,6 +202,7 @@ public class AuditService {
         if (startsWith(action, "SYSTEM_U9_")) return "SYSTEM";
         if ("U9_CUSTOMER_SYNC".equalsIgnoreCase(action)) return "SYSTEM";
         if ("U9_CUSTOMER_SYNC_SCHEDULE_UPDATE".equalsIgnoreCase(action)) return "SYSTEM";
+        if ("CUSTOMER_SUPPLIER_CODE_UPDATE".equalsIgnoreCase(action)) return "SYSTEM";
         if ("U9_SYNC_OPTIONS_REFRESH".equalsIgnoreCase(action)) return "MARKET";
         if ("QUOTE_REFRESH_TASK_SUBMIT".equalsIgnoreCase(action)) return "ENGINEER";
         if ("RFQ_IMPORT".equalsIgnoreCase(action)) return "MARKET";
@@ -280,6 +281,7 @@ public class AuditService {
             case "CUSTOMER_MASTER_DELETE" -> "删除客户资料";
             case "U9_CUSTOMER_SYNC" -> "同步 U9 客户主数据";
             case "U9_CUSTOMER_SYNC_SCHEDULE_UPDATE" -> "更新 U9 客户定时同步策略";
+            case "CUSTOMER_SUPPLIER_CODE_UPDATE" -> "维护客户供应商代码";
             case "U9_SYNC_OPTIONS_REFRESH" -> "刷新 U9 同步页选项缓存";
             case "SYSTEM_STORAGE_CONFIG_CREATE" -> "新增文件存储配置";
             case "SYSTEM_STORAGE_CONFIG_UPDATE" -> "编辑文件存储配置";

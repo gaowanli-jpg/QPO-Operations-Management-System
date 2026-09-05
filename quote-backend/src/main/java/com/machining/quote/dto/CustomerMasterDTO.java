@@ -12,6 +12,7 @@ public class CustomerMasterDTO {
     private String customerCode;
     private String customerShortName;
     private String customerName;
+    private String supplierCode;
     private Boolean enabled;
     private LocalDateTime lastSyncedAt;
     private LocalDateTime createdAt;

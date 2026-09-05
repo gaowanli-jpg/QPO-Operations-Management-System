@@ -1,20 +1,29 @@
 package com.machining.quote.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.machining.quote.config.AuthContext;
 import com.machining.quote.dto.CustomerMasterDTO;
 import com.machining.quote.dto.CustomerOptionDTO;
+import com.machining.quote.dto.CustomerSupplierCodeUpdateReq;
 import com.machining.quote.dto.PageResult;
 import com.machining.quote.entity.CustomerMaster;
 import com.machining.quote.mapper.CustomerMasterMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 
 @Service
 public class CustomerMasterService {
     @Autowired
     private CustomerMasterMapper customerMapper;
+    @Autowired
+    private AuditService auditService;
     @Autowired(required = false)
     private DataScopeService dataScopeService;
 
@@ -92,6 +101,40 @@ public class CustomerMasterService {
                 .toList();
     }
 
+    @Transactional
+    public CustomerMasterDTO updateSupplierCode(Long id, CustomerSupplierCodeUpdateReq req) {
+        if (id == null || id <= 0) {
+            throw new IllegalArgumentException("客户ID不能为空");
+        }
+        String supplierCode = normalizeSupplierCode(req == null ? null : req.getSupplierCode());
+        CustomerMaster customer = customerMapper.selectById(id);
+        if (customer == null) {
+            throw new IllegalArgumentException("客户不存在");
+        }
+        String beforeSupplierCode = customer.getSupplierCode();
+        if (Objects.equals(beforeSupplierCode, supplierCode)) {
+            return toDto(customer);
+        }
+
+        customer.setSupplierCode(supplierCode);
+        customer.setUpdatedBy(currentUserId());
+        customer.setUpdatedAt(LocalDateTime.now());
+        customerMapper.updateById(customer);
+
+        auditService.record(
+                "CUSTOMER_SUPPLIER_CODE_UPDATE",
+                "customer_master",
+                customer.getId(),
+                supplierAuditSummary(customer, beforeSupplierCode),
+                supplierAuditSummary(customer, supplierCode),
+                "SYSTEM",
+                "SUCCESS",
+                "维护客户供应商代码",
+                null
+        );
+        return toDto(customer);
+    }
+
     private void applyKeyword(QueryWrapper<CustomerMaster> query, String field, String keyword) {
         if (!hasText(keyword)) {
             return;
@@ -101,13 +144,38 @@ public class CustomerMasterService {
             case "code" -> query.like("customer_code", value);
             case "shortname" -> query.like("customer_short_name", value);
             case "name" -> query.like("customer_name", value);
+            case "suppliercode" -> query.like("supplier_code", value);
             default -> query.and(wrapper -> wrapper
                     .like("customer_code", value)
                     .or()
                     .like("customer_short_name", value)
                     .or()
-                    .like("customer_name", value));
+                    .like("customer_name", value)
+                    .or()
+                    .like("supplier_code", value));
         }
+    }
+
+    private String normalizeSupplierCode(String value) {
+        String trimmed = trimToNull(value);
+        if (trimmed != null && trimmed.length() > 64) {
+            throw new IllegalArgumentException("供应商代码不能超过64个字符");
+        }
+        return trimmed;
+    }
+
+    private Map<String, Object> supplierAuditSummary(CustomerMaster customer, String supplierCode) {
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("customerId", customer.getId());
+        summary.put("customerCode", customer.getCustomerCode());
+        summary.put("customerName", customer.getCustomerName());
+        summary.put("supplierCode", supplierCode);
+        return summary;
+    }
+
+    private Long currentUserId() {
+        AuthContext.SessionUser user = AuthContext.get();
+        return user == null || user.id() == null ? null : user.id().longValue();
     }
 
     private String normalizeField(String field) {
@@ -122,6 +190,7 @@ public class CustomerMasterService {
         dto.setCustomerCode(customer.getCustomerCode());
         dto.setCustomerShortName(customer.getCustomerShortName());
         dto.setCustomerName(customer.getCustomerName());
+        dto.setSupplierCode(customer.getSupplierCode());
         dto.setEnabled(customer.getEnabled());
         dto.setLastSyncedAt(customer.getLastSyncedAt());
         dto.setCreatedAt(customer.getCreatedAt());
@@ -151,5 +220,13 @@ public class CustomerMasterService {
 
     private boolean hasText(String value) {
         return value != null && !value.trim().isEmpty();
+    }
+
+    private String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 }

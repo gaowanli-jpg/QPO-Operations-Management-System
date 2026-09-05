@@ -8,6 +8,11 @@ export const syncCustomers = () => request('/api/system/customers/sync', {
   method: 'POST'
 })
 
+export const updateCustomerSupplierCode = (id, payload) => request(`/api/system/customers/${id}/supplier-code`, {
+  method: 'PUT',
+  data: payload
+})
+
 export const getCustomerSyncSchedule = () => request('/api/system/customers/sync-schedule')
 
 export const saveCustomerSyncSchedule = (payload) => request('/api/system/customers/sync-schedule', {

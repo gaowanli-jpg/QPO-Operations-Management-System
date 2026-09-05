@@ -102,7 +102,7 @@ describe('QPO permission stage 4 menu and button permissions', () => {
       ['UserManage', ['system:user:create', 'system:user:update', 'system:user:disable', 'system:user:reset-password', 'system:user:delete']],
       ['SystemRoleManage', ['system:role:create', 'system:role:update', 'system:role:delete', 'system:role:assign-permission', 'system:role:assign-data-scope']],
       ['SystemOrgManage', ['system:dept:manage', 'system:post:manage']],
-      ['CustomerManage', ['system:customer:sync']],
+      ['CustomerManage', ['system:customer:sync', 'system:customer:supplier-code-update']],
       ['AuditLogManage', ['system:audit:export', 'system:audit:retention']],
       ['SystemConfigManage', [
         'system:config:storage:update',

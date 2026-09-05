@@ -3,7 +3,7 @@
     <header class="erp-page-header customer-page-header">
       <div>
         <h1 class="erp-page-title">客户资料</h1>
-        <p class="erp-page-description">来自 U9 的只读客户主数据，供 QPO 全系统客户选择和数据权限使用。</p>
+        <p class="erp-page-description">来自 U9 的客户主数据；供应商代码为 QPO 本地维护字段。</p>
       </div>
       <div class="erp-page-actions customer-page-actions">
         <el-button
@@ -33,12 +33,13 @@
           <el-option label="客户编码" value="code" />
           <el-option label="客户简称" value="shortName" />
           <el-option label="客户名称" value="name" />
+          <el-option label="供应商代码" value="supplierCode" />
         </el-select>
         <el-input
           v-model.trim="filters.keyword"
           clearable
           class="customer-keyword-input"
-          placeholder="输入客户编码、简称或名称"
+          placeholder="输入客户编码、简称、名称或供应商代码"
           @keyup.enter="searchCustomers"
         />
       </div>
@@ -77,6 +78,35 @@
           <el-table-column prop="customerCode" label="客户编码" min-width="150" show-overflow-tooltip />
           <el-table-column prop="customerShortName" label="客户简称" min-width="170" show-overflow-tooltip />
           <el-table-column prop="customerName" label="客户名称" min-width="260" show-overflow-tooltip />
+          <el-table-column label="供应商代码" min-width="240">
+            <template #default="{ row }">
+              <div v-if="isSupplierCodeEditing(row)" class="customer-supplier-edit">
+                <el-input
+                  v-model="supplierEdit.value"
+                  size="small"
+                  clearable
+                  maxlength="64"
+                  show-word-limit
+                  placeholder="可为空"
+                  :disabled="supplierEdit.saving"
+                  @keyup.enter="saveSupplierCode(row)"
+                />
+                <el-button size="small" type="primary" :loading="supplierEdit.saving" @click="saveSupplierCode(row)">保存</el-button>
+                <el-button size="small" :disabled="supplierEdit.saving" @click="cancelSupplierCodeEdit">取消</el-button>
+              </div>
+              <div v-else class="customer-supplier-cell">
+                <span class="customer-supplier-value">{{ row.supplierCode || '-' }}</span>
+                <el-button
+                  v-permission="'system:customer:supplier-code-update'"
+                  link
+                  type="primary"
+                  size="small"
+                  :disabled="loading || syncLoading || scheduleLoading"
+                  @click="startSupplierCodeEdit(row)"
+                >编辑</el-button>
+              </div>
+            </template>
+          </el-table-column>
           <el-table-column label="有效状态" width="110">
             <template #default="{ row }">
               <el-tag :type="row.enabled === false ? 'info' : 'success'">
@@ -170,7 +200,13 @@
 <script setup>
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { getCustomerSyncSchedule, listCustomers, saveCustomerSyncSchedule, syncCustomers } from '../services/customerApi'
+import {
+  getCustomerSyncSchedule,
+  listCustomers,
+  saveCustomerSyncSchedule,
+  syncCustomers,
+  updateCustomerSupplierCode
+} from '../services/customerApi'
 
 const customers = ref([])
 const loading = ref(false)
@@ -179,6 +215,12 @@ const syncResult = ref(null)
 const scheduleDialogVisible = ref(false)
 const scheduleLoading = ref(false)
 const scheduleSaving = ref(false)
+
+const supplierEdit = reactive({
+  customerId: null,
+  value: '',
+  saving: false
+})
 
 const filters = reactive({
   field: 'all',
@@ -219,6 +261,9 @@ const loadCustomers = async () => {
     pagination.total = response?.total || 0
     pagination.page = response?.page || pagination.page
     pagination.pageSize = response?.pageSize || pagination.pageSize
+    if (supplierEdit.customerId && !customers.value.some(customer => customer.id === supplierEdit.customerId)) {
+      cancelSupplierCodeEdit()
+    }
   } catch (error) {
     customers.value = []
     ElMessage.error(requestErrorMessage(error, '客户资料加载失败'))
@@ -241,6 +286,38 @@ const resetFilters = () => {
 const handlePageSizeChange = () => {
   pagination.page = 1
   loadCustomers()
+}
+
+const isSupplierCodeEditing = (row) => supplierEdit.customerId === row.id
+
+const startSupplierCodeEdit = (row) => {
+  supplierEdit.customerId = row.id
+  supplierEdit.value = row.supplierCode || ''
+}
+
+const cancelSupplierCodeEdit = () => {
+  supplierEdit.customerId = null
+  supplierEdit.value = ''
+  supplierEdit.saving = false
+}
+
+const saveSupplierCode = async (row) => {
+  if (!row?.id || supplierEdit.saving) return
+  supplierEdit.saving = true
+  try {
+    const response = await updateCustomerSupplierCode(row.id, { supplierCode: supplierEdit.value })
+    const nextSupplierCode = response?.supplierCode || ''
+    row.supplierCode = nextSupplierCode
+    const index = customers.value.findIndex(customer => customer.id === row.id)
+    if (index >= 0) {
+      customers.value[index] = { ...customers.value[index], supplierCode: nextSupplierCode }
+    }
+    ElMessage.success('供应商代码已保存')
+    cancelSupplierCodeEdit()
+  } catch (error) {
+    ElMessage.error(requestErrorMessage(error, '供应商代码保存失败'))
+    supplierEdit.saving = false
+  }
 }
 
 const syncU9Customers = async () => {
@@ -390,6 +467,26 @@ onMounted(loadCustomers)
 .customer-source-text {
   color: var(--erp-text-secondary);
   font-size: var(--erp-font-size-sm);
+}
+
+.customer-supplier-cell,
+.customer-supplier-edit {
+  display: flex;
+  align-items: center;
+  gap: var(--erp-space-2);
+}
+
+.customer-supplier-value {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.customer-supplier-edit .el-input {
+  min-width: 120px;
+  flex: 1;
 }
 
 @media (max-width: 760px) {

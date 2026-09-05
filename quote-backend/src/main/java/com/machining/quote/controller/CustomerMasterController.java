@@ -4,6 +4,7 @@ import com.machining.quote.config.AuthContext;
 import com.machining.quote.config.RequirePermission;
 import com.machining.quote.dto.CustomerMasterDTO;
 import com.machining.quote.dto.CustomerOptionDTO;
+import com.machining.quote.dto.CustomerSupplierCodeUpdateReq;
 import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.U9CustomerSyncScheduleConfigDTO;
 import com.machining.quote.dto.U9CustomerSyncScheduleConfigReq;
@@ -13,6 +14,7 @@ import com.machining.quote.service.u9.U9CustomerSyncScheduleConfigService;
 import com.machining.quote.service.u9.U9MasterDataSyncService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -52,6 +54,14 @@ public class CustomerMasterController {
             @RequestParam(value = "field", required = false) String field,
             @RequestParam(value = "keyword", required = false) String keyword) {
         return customerMasterService.listOptions(field, keyword);
+    }
+
+    @PutMapping("/{id}/supplier-code")
+    @RequirePermission("system:customer:supplier-code-update")
+    public CustomerMasterDTO updateSupplierCode(
+            @PathVariable("id") Long id,
+            @RequestBody CustomerSupplierCodeUpdateReq req) {
+        return customerMasterService.updateSupplierCode(id, req);
     }
 
     @PostMapping("/sync")

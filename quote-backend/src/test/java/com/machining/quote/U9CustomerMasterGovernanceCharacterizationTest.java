@@ -77,7 +77,8 @@ class U9CustomerMasterGovernanceCharacterizationTest {
 
         assertThat(permissionAdminDoc)
                 .contains(
-                        "客户资料只能查看和同步 U9 客户缓存",
+                        "客户资料读取和同步 U9 客户缓存",
+                        "仅允许通过 `system:customer:supplier-code-update` 维护 QPO 本地字段 `supplierCode`",
                         "不要寻找或新建销售部门/销售员管理菜单",
                         "刷新 U9 选项缓存、保存 Seller / SaleDepartment、同步和核对均复用 `market:u9-sync:submit`",
                         "后端权限和客户编码数据范围是最终边界");

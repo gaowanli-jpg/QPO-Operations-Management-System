@@ -24,9 +24,10 @@ class CustomerMasterStage5DocumentationTest {
         assertThat(permissionDoc)
                 .contains(
                         "客户资料阶段 4 U9 只读收口",
-                        "客户资料只读展示 U9 客户缓存",
+                        "仅允许维护 QPO 本地字段 `supplierCode`",
                         "`system:customer:view` 控制 `/customers` 入口和客户资料分页查询",
                         "`system:customer:sync` 控制手动同步 U9 客户缓存",
+                        "`system:customer:supplier-code-update` 控制供应商代码行内保存",
                         "system:customer:create/update/delete` 已下线",
                         "不新增 `common:customer:*` 权限"
                 )
@@ -44,6 +45,7 @@ class CustomerMasterStage5DocumentationTest {
                         "客户资料阶段 4 U9 只读收口",
                         "普通客户资料分页查询不写操作日志",
                         "客户选项查询不写操作日志",
+                        "维护客户供应商代码写入 `CUSTOMER_SUPPLIER_CODE_UPDATE`",
                         "手动同步 U9 客户写入 `U9_CUSTOMER_SYNC`",
                         "u9_master_data_sync_run",
                         "不记录完整 U9 请求、响应、token、Authorization、Cookie、client secret 或 Data.Headers"

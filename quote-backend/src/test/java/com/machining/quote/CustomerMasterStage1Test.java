@@ -54,8 +54,10 @@ class CustomerMasterStage1Test {
         assertThat(source)
                 .contains("\"system:customer:view\"")
                 .contains("\"system:customer:sync\"")
+                .contains("\"system:customer:supplier-code-update\"")
                 .contains("\"CustomerManage\"")
                 .contains("Map.entry(\"system:customer:view\"")
+                .contains("Map.entry(\"system:customer:supplier-code-update\", Set.of(\"MARKET_MANAGER\"))")
                 .contains("Map.entry(\"system:customer:sync\", Set.of())")
                 .doesNotContain("Map.entry(\"system:customer:create\"")
                 .doesNotContain("Map.entry(\"system:customer:update\"")
@@ -66,6 +68,8 @@ class CustomerMasterStage1Test {
     void auditLabelsAndDocsCoverU9CustomerSyncGovernance() throws IOException {
         assertThat(AuditService.labelForAction("U9_CUSTOMER_SYNC")).isEqualTo("同步 U9 客户主数据");
         assertThat(AuditService.inferModule("U9_CUSTOMER_SYNC")).isEqualTo("SYSTEM");
+        assertThat(AuditService.labelForAction("CUSTOMER_SUPPLIER_CODE_UPDATE")).isEqualTo("维护客户供应商代码");
+        assertThat(AuditService.inferModule("CUSTOMER_SUPPLIER_CODE_UPDATE")).isEqualTo("SYSTEM");
 
         String permissionDoc = read(PERMISSION_DOC);
         String logDoc = read(LOG_DOC);
@@ -73,10 +77,12 @@ class CustomerMasterStage1Test {
         assertThat(permissionDoc)
                 .contains("`system:customer:view`")
                 .contains("`system:customer:sync`")
+                .contains("`system:customer:supplier-code-update`")
                 .contains("system:customer:create/update/delete` 已下线")
-                .doesNotContain("控制客户资料写操作");
+                .contains("仅允许维护 QPO 本地字段 `supplierCode`");
         assertThat(logDoc)
                 .contains("U9_CUSTOMER_SYNC")
+                .contains("CUSTOMER_SUPPLIER_CODE_UPDATE")
                 .contains("u9_master_data_sync_run")
                 .contains("普通客户资料分页查询不写操作日志")
                 .doesNotContain("CUSTOMER_MASTER_CREATE`、`CUSTOMER_MASTER_UPDATE`、`CUSTOMER_MASTER_DELETE`");

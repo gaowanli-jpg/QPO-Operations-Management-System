@@ -5,6 +5,7 @@ import com.machining.quote.config.AuthContext;
 import com.machining.quote.controller.CustomerMasterController;
 import com.machining.quote.dto.CustomerMasterDTO;
 import com.machining.quote.dto.CustomerOptionDTO;
+import com.machining.quote.dto.CustomerSupplierCodeUpdateReq;
 import com.machining.quote.dto.PageResult;
 import com.machining.quote.entity.CustomerMaster;
 import com.machining.quote.mapper.CustomerMasterMapper;
@@ -24,6 +25,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -35,7 +37,7 @@ import static org.mockito.Mockito.when;
 
 class CustomerMasterBackendStage2Test {
     @Test
-    void controllerExposesReadOnlyCustomerMasterAndManualU9SyncOnly() throws Exception {
+    void controllerExposesU9CustomerCacheAndSupplierCodeOnlyMutation() throws Exception {
         assertThat(CustomerMasterController.class).isNotNull();
         String source = Files.readString(
                 Path.of("src/main/java/com/machining/quote/controller/CustomerMasterController.java"),
@@ -44,6 +46,8 @@ class CustomerMasterBackendStage2Test {
         assertThat(source)
                 .contains("@RequestMapping(\"/api/system/customers\")")
                 .contains("@RequirePermission(\"system:customer:view\")")
+                .contains("@PutMapping(\"/{id}/supplier-code\")")
+                .contains("@RequirePermission(\"system:customer:supplier-code-update\")")
                 .contains("@PostMapping(\"/sync\")")
                 .contains("@GetMapping(\"/sync-schedule\")")
                 .contains("@PutMapping(\"/sync-schedule\")")
@@ -53,9 +57,19 @@ class CustomerMasterBackendStage2Test {
                 .doesNotContain("@DeleteMapping")
                 .doesNotContain("CustomerMasterSaveReq")
                 .doesNotContain("system:customer:create")
-                .doesNotContain("system:customer:update")
                 .doesNotContain("system:customer:delete")
                 .doesNotContain("common:customer");
+    }
+
+    @Test
+    void supplierCodeEndpointUsesDedicatedPermission() throws Exception {
+        Method method = CustomerMasterController.class.getMethod(
+                "updateSupplierCode",
+                Long.class,
+                CustomerSupplierCodeUpdateReq.class);
+
+        assertThat(method.getAnnotation(com.machining.quote.config.RequirePermission.class).value())
+                .containsExactly("system:customer:supplier-code-update");
     }
 
     @Test
@@ -66,8 +80,8 @@ class CustomerMasterBackendStage2Test {
 
         when(mapper.selectCount(any(QueryWrapper.class))).thenReturn(2L);
         when(mapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(
-                customer(1L, "GSS1", "GSS1", "Grand Silicon Semiconductor", true, syncedAt),
-                customer(2L, "C002", "Beta", "Beta Technology", false, syncedAt.minusHours(1))
+                customer(1L, "GSS1", "GSS1", "Grand Silicon Semiconductor", true, syncedAt, "SUP-GSS"),
+                customer(2L, "C002", "Beta", "Beta Technology", false, syncedAt.minusHours(1), null)
         ));
 
         PageResult<CustomerMasterDTO> page = service.pageCustomers("all", "gss", 1, 20);
@@ -79,6 +93,7 @@ class CustomerMasterBackendStage2Test {
             assertThat(dto.getCustomerName()).isEqualTo("Grand Silicon Semiconductor");
             assertThat(dto.getU9OrgCode()).isEqualTo("101");
             assertThat(dto.getU9CustomerId()).isEqualTo("U9-GSS1");
+            assertThat(dto.getSupplierCode()).isEqualTo("SUP-GSS");
             assertThat(dto.getLastSyncedAt()).isEqualTo(syncedAt);
         });
         assertThat(options).extracting(CustomerOptionDTO::getCustomerName)
@@ -86,12 +101,12 @@ class CustomerMasterBackendStage2Test {
     }
 
     @Test
-    void serviceNoLongerContainsLocalCustomerMutationBusiness() throws Exception {
+    void serviceNoLongerContainsFullLocalCustomerMutationBusiness() throws Exception {
         String source = source("service/CustomerMasterService.java");
 
         assertThat(source)
+                .contains("updateSupplierCode(")
                 .doesNotContain("CustomerMasterSaveReq")
-                .doesNotContain("AuditService")
                 .doesNotContain("saveCustomer(")
                 .doesNotContain("deleteCustomer(")
                 .doesNotContain("customerMapper.insert")
@@ -99,6 +114,63 @@ class CustomerMasterBackendStage2Test {
                 .doesNotContain("CUSTOMER_MASTER_CREATE")
                 .doesNotContain("CUSTOMER_MASTER_UPDATE")
                 .doesNotContain("CUSTOMER_MASTER_DELETE");
+    }
+
+    @Test
+    void serviceUpdatesOptionalSupplierCodeAndAuditsSafeSummary() {
+        CustomerMasterMapper mapper = mock(CustomerMasterMapper.class);
+        AuditService auditService = mock(AuditService.class);
+        CustomerMasterService service = service(mapper);
+        ReflectionTestUtils.setField(service, "auditService", auditService);
+        LocalDateTime syncedAt = LocalDateTime.of(2026, 8, 11, 16, 30);
+        CustomerMaster existing = customer(1L, "GSS1", "GSS1", "Grand Silicon Semiconductor", true, syncedAt, "OLD-SUP");
+
+        when(mapper.selectById(1L)).thenReturn(existing);
+        when(mapper.updateById(any(CustomerMaster.class))).thenReturn(1);
+
+        CustomerSupplierCodeUpdateReq req = new CustomerSupplierCodeUpdateReq();
+        req.setSupplierCode("  SUP-GSS-001  ");
+        CustomerMasterDTO dto = service.updateSupplierCode(1L, req);
+
+        assertThat(dto.getSupplierCode()).isEqualTo("SUP-GSS-001");
+        ArgumentCaptor<CustomerMaster> updateCaptor = ArgumentCaptor.forClass(CustomerMaster.class);
+        verify(mapper).updateById(updateCaptor.capture());
+        assertThat(updateCaptor.getValue().getSupplierCode()).isEqualTo("SUP-GSS-001");
+        ArgumentCaptor<Object> beforeCaptor = ArgumentCaptor.forClass(Object.class);
+        ArgumentCaptor<Object> afterCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(auditService).record(
+                eq("CUSTOMER_SUPPLIER_CODE_UPDATE"),
+                eq("customer_master"),
+                eq(1L),
+                beforeCaptor.capture(),
+                afterCaptor.capture(),
+                eq("SYSTEM"),
+                eq("SUCCESS"),
+                anyString(),
+                isNull()
+        );
+        assertThat(String.valueOf(beforeCaptor.getValue())).contains("customerCode=GSS1", "supplierCode=OLD-SUP");
+        assertThat(String.valueOf(afterCaptor.getValue())).contains("customerCode=GSS1", "supplierCode=SUP-GSS-001");
+    }
+
+    @Test
+    void serviceClearsBlankSupplierCodeAndRejectsTooLongCode() {
+        CustomerMasterMapper mapper = mock(CustomerMasterMapper.class);
+        CustomerMasterService service = service(mapper);
+        ReflectionTestUtils.setField(service, "auditService", mock(AuditService.class));
+        CustomerMaster existing = customer(1L, "GSS1", "GSS1", "Grand Silicon Semiconductor", true, LocalDateTime.now(), "OLD-SUP");
+        when(mapper.selectById(1L)).thenReturn(existing);
+        when(mapper.updateById(any(CustomerMaster.class))).thenReturn(1);
+
+        CustomerSupplierCodeUpdateReq clearReq = new CustomerSupplierCodeUpdateReq();
+        clearReq.setSupplierCode("   ");
+        assertThat(service.updateSupplierCode(1L, clearReq).getSupplierCode()).isNull();
+
+        CustomerSupplierCodeUpdateReq longReq = new CustomerSupplierCodeUpdateReq();
+        longReq.setSupplierCode("S".repeat(65));
+        assertThatThrownBy(() -> service.updateSupplierCode(1L, longReq))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("供应商代码不能超过64个字符");
     }
 
     @Test
@@ -163,6 +235,10 @@ class CustomerMasterBackendStage2Test {
     }
 
     private CustomerMaster customer(Long id, String code, String shortName, String name, boolean enabled, LocalDateTime syncedAt) {
+        return customer(id, code, shortName, name, enabled, syncedAt, null);
+    }
+
+    private CustomerMaster customer(Long id, String code, String shortName, String name, boolean enabled, LocalDateTime syncedAt, String supplierCode) {
         CustomerMaster customer = new CustomerMaster();
         customer.setId(id);
         customer.setU9OrgCode("101");
@@ -170,6 +246,7 @@ class CustomerMasterBackendStage2Test {
         customer.setCustomerCode(code);
         customer.setCustomerShortName(shortName);
         customer.setCustomerName(name);
+        customer.setSupplierCode(supplierCode);
         customer.setEnabled(enabled);
         customer.setLastSyncedAt(syncedAt);
         customer.setUpdatedAt(syncedAt);

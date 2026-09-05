@@ -184,6 +184,7 @@ class PermissionCatalogCharacterizationTest {
                 "system:dept:manage",
                 "system:post:manage",
                 "system:customer:sync",
+                "system:customer:supplier-code-update",
                 "system:audit:export",
                 "system:audit:retention"
         );
@@ -312,7 +313,8 @@ class PermissionCatalogCharacterizationTest {
                         "Map.entry(\"market:production-item:mes-production-submit\", Set.of(\"MARKET_USER\", \"MARKET_MANAGER\"))",
                         "Map.entry(\"market:delivery-document:view\", Set.of(\"MARKET_USER\", \"MARKET_MANAGER\", \"READONLY\"))",
                         "Map.entry(\"market:delivery-document:export\", Set.of(\"MARKET_USER\", \"MARKET_MANAGER\"))",
-                        "Map.entry(\"engineer:pricing:export-sheet\", Set.of(\"ENGINEER_USER\", \"ENGINEER_MANAGER\"))"
+                        "Map.entry(\"engineer:pricing:export-sheet\", Set.of(\"ENGINEER_USER\", \"ENGINEER_MANAGER\"))",
+                        "Map.entry(\"system:customer:supplier-code-update\", Set.of(\"MARKET_MANAGER\"))"
                 )
                 .doesNotContain(
                         "Map.entry(\"market:delivery-document:export\", Set.of(\"MARKET_USER\", \"MARKET_MANAGER\", \"READONLY\"))",

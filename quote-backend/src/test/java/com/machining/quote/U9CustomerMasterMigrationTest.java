@@ -79,6 +79,7 @@ class U9CustomerMasterMigrationTest {
     void customerMasterEntityExposesU9CacheFields() throws Exception {
         assertField(CustomerMaster.class, "u9OrgCode", String.class);
         assertField(CustomerMaster.class, "u9CustomerId", String.class);
+        assertField(CustomerMaster.class, "supplierCode", String.class);
         assertField(CustomerMaster.class, "lastSyncedAt", LocalDateTime.class);
         assertField(CustomerMaster.class, "sourceHash", String.class);
     }
@@ -106,6 +107,7 @@ class U9CustomerMasterMigrationTest {
                 assertThat(tableExists(connection, schema, "u9_customer_sync_schedule_config")).isTrue();
                 assertThat(columnExists(connection, schema, "customer_master", "u9_org_code")).isTrue();
                 assertThat(columnExists(connection, schema, "customer_master", "u9_customer_id")).isTrue();
+                assertThat(columnExists(connection, schema, "customer_master", "supplier_code")).isTrue();
                 assertThat(columnExists(connection, schema, "system_role_data_scope_customer", "customer_code")).isTrue();
                 assertThat(columnExists(connection, schema, "system_role_data_scope_customer", "customer_name_snapshot")).isTrue();
                 assertThat(indexExists(connection, schema, "uk_system_role_data_scope_customer_code")).isTrue();

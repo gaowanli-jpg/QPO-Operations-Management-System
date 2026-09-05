@@ -213,6 +213,41 @@ class U9CustomerMasterSyncServiceTest {
     }
 
     @Test
+    void customerSyncPreservesLocalSupplierCodeWhenUpdatingU9CacheFields() {
+        U9CommonEntityClient commonEntityClient = mock(U9CommonEntityClient.class);
+        CustomerMasterMapper customerMapper = mock(CustomerMasterMapper.class);
+        U9MasterDataSyncRunMapper runMapper = mock(U9MasterDataSyncRunMapper.class);
+        U9MasterDataSyncService service = service(commonEntityClient, customerMapper, runMapper);
+        CustomerMaster existing = customer(1L, "GSS1", "Old Short", "Old Name", true, "old-hash");
+        existing.setSupplierCode("SUP-GSS-LOCAL");
+
+        when(commonEntityClient.query(any())).thenReturn(List.of(row(Map.of(
+                "ID", "U9-GSS1",
+                "Code", "GSS1",
+                "Name", "Grand Silicon Semiconductor",
+                "ShortName", "GSS1",
+                "Org.Code", ORG_101,
+                "Org.Name", "QPO Org 101",
+                "Effective.IsEffective", true
+        ))));
+        when(customerMapper.selectList(any())).thenReturn(List.of(existing));
+        when(customerMapper.updateById(any(CustomerMaster.class))).thenReturn(1);
+        when(runMapper.insert(any(U9MasterDataSyncRun.class))).thenAnswer(invocation -> {
+            U9MasterDataSyncRun run = invocation.getArgument(0);
+            run.setId(9007L);
+            return 1;
+        });
+        when(runMapper.updateById(any(U9MasterDataSyncRun.class))).thenReturn(1);
+
+        U9MasterDataSyncService.SyncResult result = service.syncCustomersManual(88L);
+
+        assertThat(result.success()).isTrue();
+        ArgumentCaptor<CustomerMaster> updateCaptor = ArgumentCaptor.forClass(CustomerMaster.class);
+        verify(customerMapper).updateById(updateCaptor.capture());
+        assertThat(updateCaptor.getValue().getSupplierCode()).isEqualTo("SUP-GSS-LOCAL");
+    }
+
+    @Test
     void customerSyncSupportsManualScheduledAndDelayedStartupTriggers() throws Exception {
         assertThat(U9MasterDataSyncService.class.getMethod("syncCustomersManual", Long.class)).isNotNull();
 

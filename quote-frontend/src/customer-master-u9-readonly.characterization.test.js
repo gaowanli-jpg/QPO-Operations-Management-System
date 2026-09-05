@@ -16,6 +16,8 @@ describe('QPO customer master U9 read-only characterization', () => {
     expect(customerManage).toContain('erp-page customer-manage-page')
     expect(customerManage).toContain('erp-toolbar')
     expect(customerManage).toContain('来自 U9')
+    expect(customerManage).toContain('供应商代码')
+    expect(customerManage).toContain('system:customer:supplier-code-update')
     expect(customerManage).toContain('最近同步时间')
     expect(customerManage).toContain('syncU9Customers')
     expect(customerManage).not.toContain('openCreate')
