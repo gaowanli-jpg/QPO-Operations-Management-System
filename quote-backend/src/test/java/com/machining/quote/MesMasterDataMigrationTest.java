@@ -20,6 +20,8 @@ class MesMasterDataMigrationTest {
             "src", "main", "resources", "db", "migration", "V24__mes_master_data_sync_deleted_count.sql");
     private static final Path ASYNC_SCHEDULE_MIGRATION = Path.of(
             "src", "main", "resources", "db", "migration", "V25__mes_master_data_async_schedule.sql");
+    private static final Path U9_CATEGORY_NAME_MIGRATION = Path.of(
+            "src", "main", "resources", "db", "migration", "V40__material_u9_category_name.sql");
     private static final Path PROCESS_CATEGORY_ENTITY = Path.of(
             "src", "main", "java", "com", "machining", "quote", "entity", "DictProcessCategory.java");
 
@@ -80,6 +82,17 @@ class MesMasterDataMigrationTest {
                 .contains("02:00:00")
                 .doesNotContain("DROP TABLE")
                 .doesNotContain("CREATE TABLE mes_master_data_sync_run");
+    }
+
+    @Test
+    void appendOnlyMigrationAddsMaterialU9CategoryName() throws IOException {
+        String migration = read(U9_CATEGORY_NAME_MIGRATION);
+
+        assertThat(migration)
+                .contains("ALTER TABLE dict_material ADD COLUMN IF NOT EXISTS category_name VARCHAR(120)")
+                .doesNotContain("DROP TABLE")
+                .doesNotContain("DROP COLUMN IF EXISTS material_category")
+                .doesNotContain("RENAME COLUMN material_category");
     }
 
     @Test

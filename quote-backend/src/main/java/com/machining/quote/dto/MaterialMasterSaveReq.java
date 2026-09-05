@@ -10,6 +10,7 @@ public class MaterialMasterSaveReq {
     private String materialName;
     private Long materialTypeId;
     private String materialCategory;
+    private String categoryName;
     private Double density;
     private List<MaterialPriceSpecDTO> priceSpecs;
     private String remarks;

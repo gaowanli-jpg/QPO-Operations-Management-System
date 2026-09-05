@@ -14,6 +14,7 @@ public class MaterialMasterDTO {
     private String materialTypeCode;
     private String materialTypeName;
     private String materialCategory;
+    private String categoryName;
     private Double density;
     private List<MaterialPriceSpecDTO> priceSpecs;
     private String remarks;

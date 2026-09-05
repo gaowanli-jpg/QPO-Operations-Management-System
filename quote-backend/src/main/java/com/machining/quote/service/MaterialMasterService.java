@@ -123,7 +123,7 @@ public class MaterialMasterService {
                 .or()
                 .apply("LOWER(material_name) LIKE {0}", pattern)
                 .or()
-                .apply("LOWER(material_category) LIKE {0}", pattern)
+                .apply("LOWER(category_name) LIKE {0}", pattern)
                 .or()
                 .apply("LOWER(remarks) LIKE {0}", pattern)
                 .or()
@@ -288,6 +288,7 @@ public class MaterialMasterService {
         }
         entity.setMaterialTypeId(req.getMaterialTypeId());
         entity.setMaterialCategory(limit(optional(req.getMaterialCategory()), "材质分类", 80));
+        entity.setCategoryName(before == null ? limit(optional(req.getCategoryName()), "U9类别", 120) : before.getCategoryName());
         entity.setDensity(nonNegative(req.getDensity(), "默认密度"));
         entity.setRemarks(optional(req.getRemarks()));
         copyMesSourceFields(entity, before);
@@ -322,6 +323,7 @@ public class MaterialMasterService {
         target.setMesStandard(before.getMesStandard());
         target.setMesWeight(before.getMesWeight());
         target.setMesDensityRaw(before.getMesDensityRaw());
+        target.setCategoryName(before.getCategoryName());
         target.setMesSyncedAt(before.getMesSyncedAt());
     }
 
@@ -417,6 +419,7 @@ public class MaterialMasterService {
         dto.setMaterialTypeCode(type == null ? null : type.getTypeCode());
         dto.setMaterialTypeName(type == null ? null : type.getTypeName());
         dto.setMaterialCategory(material.getMaterialCategory());
+        dto.setCategoryName(material.getCategoryName());
         dto.setDensity(material.getDensity());
         dto.setPriceSpecs(MaterialPriceSpecSupport.normalizeDtos(priceSpecs));
         dto.setRemarks(material.getRemarks());
@@ -469,6 +472,7 @@ public class MaterialMasterService {
         summary.put("materialTypeCode", type == null ? null : type.getTypeCode());
         summary.put("materialTypeName", type == null ? null : type.getTypeName());
         summary.put("materialCategory", material.getMaterialCategory());
+        summary.put("categoryName", material.getCategoryName());
         summary.put("enabled", material.getEnabled());
         if (changedSpecCodes != null && !changedSpecCodes.isEmpty()) {
             summary.put("changedSpecCodes", changedSpecCodes);
@@ -505,6 +509,7 @@ public class MaterialMasterService {
         target.setMaterialName(source.getMaterialName());
         target.setMaterialTypeId(source.getMaterialTypeId());
         target.setMaterialCategory(source.getMaterialCategory());
+        target.setCategoryName(source.getCategoryName());
         target.setDensity(source.getDensity());
         target.setRemarks(source.getRemarks());
         target.setSourceType(source.getSourceType());

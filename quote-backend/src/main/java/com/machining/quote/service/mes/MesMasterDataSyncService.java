@@ -531,6 +531,7 @@ public class MesMasterDataSyncService {
                     materialTypeCode,
                     materialTypeName(materialTypeCode, row.getMaterialType()),
                     firstNonBlank(row.getAttribute(), row.getCategoryId()),
+                    trimToNull(row.getCategoryName()),
                     toDouble(densityKgPerCubicMeter),
                     decimalText(densityKgPerCubicMeter),
                     trimToNull(row.getStandard()),
@@ -734,6 +735,7 @@ public class MesMasterDataSyncService {
         material.setMaterialName(source.name());
         material.setMaterialTypeId(materialTypeId);
         material.setMaterialCategory(source.materialCategory());
+        material.setCategoryName(source.categoryName());
         material.setSourceType(SOURCE_MES);
         material.setMesExternalId(source.mesExternalId());
         material.setMesMaterialType(source.materialTypeCode());
@@ -984,6 +986,7 @@ public class MesMasterDataSyncService {
             String materialTypeCode,
             String materialTypeName,
             String materialCategory,
+            String categoryName,
             Double density,
             String densityRaw,
             String standard,

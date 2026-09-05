@@ -252,6 +252,7 @@ export const useDictionaryStore = defineStore('dictionary', {
           materialTypeCode: 'RAW_MATERIAL',
           materialTypeName: '原材料',
           materialCategory: '钢铁',
+          categoryName: '',
           density: 7850,
           priceSpecs: normalizePriceSpecs([{ specCode: 'SPEC_1', unifiedPrice: 7.1, barPrice: 10, tubePrice: 10 }]),
           enabled: true,

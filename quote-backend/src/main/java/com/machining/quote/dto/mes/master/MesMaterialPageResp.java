@@ -93,6 +93,7 @@ public class MesMaterialPageResp {
         private BigDecimal density;
         private String status;
         private String categoryId;
+        private String categoryName;
         private String unitId;
         private String attribute;
         private String version;

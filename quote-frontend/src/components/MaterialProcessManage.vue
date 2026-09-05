@@ -27,7 +27,7 @@
         <el-tabs v-model="activeTab">
           <el-tab-pane label="材料费用" name="materials">
             <div class="material-filter-bar">
-              <el-input v-model="materialKeyword" clearable placeholder="搜索材料编码、名称、材料类型或材质分类" />
+              <el-input v-model="materialKeyword" clearable placeholder="搜索材料编码、名称、材料类型或U9类别" />
             </div>
             <el-table :data="materials" border stripe height="520" v-loading="loading">
               <el-table-column prop="materialCode" label="材料编码" width="150" fixed show-overflow-tooltip />
@@ -40,7 +40,7 @@
                   </div>
                 </template>
               </el-table-column>
-              <el-table-column prop="materialCategory" label="材质分类" width="120" show-overflow-tooltip />
+              <el-table-column prop="categoryName" label="U9类别" width="120" show-overflow-tooltip />
               <el-table-column label="来源" width="110" align="center">
                 <template #default="scope">
                   <el-tag :type="scope.row.sourceType === 'MES' ? 'success' : 'info'" size="small">{{ sourceTypeText(scope.row.sourceType) }}</el-tag>
@@ -963,6 +963,7 @@ function createEmptyMaterial() {
     materialName: '',
     materialTypeId: null,
     materialCategory: '',
+    categoryName: '',
     remarks: '',
     enabled: true,
     sortNo: 0,

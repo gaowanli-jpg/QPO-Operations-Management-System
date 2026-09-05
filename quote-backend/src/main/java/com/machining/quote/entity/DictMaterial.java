@@ -17,6 +17,7 @@ public class DictMaterial {
     private String materialName;
     private Long materialTypeId;
     private String materialCategory;
+    private String categoryName;
     private Double density;
     private String remarks;
     private String sourceType;

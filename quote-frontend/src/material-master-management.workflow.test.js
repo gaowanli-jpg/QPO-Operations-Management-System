@@ -31,6 +31,7 @@ describe('material master management workflow refactor', () => {
     expect(dictionaryStore).toContain('materialTypeCode:')
     expect(dictionaryStore).toContain('materialTypeName:')
     expect(dictionaryStore).toContain('materialCategory:')
+    expect(dictionaryStore).toContain('categoryName:')
   })
 
   test('material process page keeps material type tab read-only for MES ownership', () => {
@@ -42,12 +43,12 @@ describe('material master management workflow refactor', () => {
     expect(materialProcess).not.toContain('@click="deleteMaterialType')
   })
 
-  test('material table and dialog use material code, business type, category, state and sort order', () => {
+  test('material table shows U9 category while dialog keeps the independent material category', () => {
     for (const fragment of [
       'prop="materialCode" label="材料编码"',
       'prop="materialName" label="材料名称"',
       'label="材料类型"',
-      'prop="materialCategory" label="材质分类"',
+      'prop="categoryName" label="U9类别"',
       'prop="sortNo" label="排序"',
       'label="状态"',
       'v-model="materialForm.materialCode" disabled',
@@ -58,6 +59,7 @@ describe('material master management workflow refactor', () => {
     ]) {
       expect(materialProcess).toContain(fragment)
     }
+    expect(materialProcess).not.toContain('prop="materialCategory" label="材质分类"')
     expect(materialProcess).not.toContain('v-model="materialForm.plateDensity"')
     expect(materialProcess).not.toContain('v-model="materialForm.barDensity"')
     expect(materialProcess).not.toContain('v-model="materialForm.tubeDensity"')
@@ -70,8 +72,9 @@ describe('material master management workflow refactor', () => {
     expect(materialProcess).not.toContain('v-model="materialForm.materialType"')
   })
 
-  test('material list can search code, name, type and category with responsive layout', () => {
+  test('material list can search code, name, type and U9 category with responsive layout', () => {
     expect(materialProcess).toContain('materialKeyword')
+    expect(materialProcess).toContain('搜索材料编码、名称、材料类型或U9类别')
     expect(materialProcess).toContain('loadMaterialPage')
     expect(materialProcess).toContain(':data="materials"')
     expect(materialProcess).toContain('materialPagination')
@@ -80,7 +83,7 @@ describe('material master management workflow refactor', () => {
     expect(materialProcess).toContain('materialCode')
     expect(materialProcess).toContain('materialTypeCode')
     expect(materialProcess).toContain('materialTypeName')
-    expect(materialProcess).toContain('materialCategory')
+    expect(materialProcess).toContain('categoryName')
     expect(materialProcess).toContain('material-filter-bar')
     expect(materialProcess).toContain('resetMaterialPage')
     expect(materialProcess).not.toContain('paginateRows(filteredMaterials')

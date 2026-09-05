@@ -274,6 +274,37 @@ class MesMaterialMasterSyncServiceTest {
     }
 
     @Test
+    void syncMaterialsPersistsU9CategoryNameBesideMaterialCategory() {
+        MesMasterDataClient client = mock(MesMasterDataClient.class);
+        DictMaterialMapper materialMapper = mock(DictMaterialMapper.class);
+        DictMaterialTypeMapper materialTypeMapper = mock(DictMaterialTypeMapper.class);
+        MesMasterDataSyncRunMapper syncRunMapper = mock(MesMasterDataSyncRunMapper.class);
+        MesMasterDataSyncService service = service(client, materialMapper, materialTypeMapper, syncRunMapper, mock(AuditService.class));
+        MesMaterialPageResp.Row row = row("mes-u9", "MAT-U9-CATEGORY", "MES U9分类材料", "MATERIAL", null, null,
+                null, null, "1.00", "7.85", "ENABLE");
+        row.setAttribute("工程材质分类");
+        row.setCategoryName("U9金属材料");
+        when(client.pageMaterials(1, 200)).thenReturn(page(1, row));
+        when(materialTypeMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(materialType(510L, "MATERIAL", "原材料")));
+        when(materialMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of());
+        doAnswer(invocation -> {
+            MesMasterDataSyncRun run = invocation.getArgument(0);
+            run.setId(921L);
+            return 1;
+        }).when(syncRunMapper).insert(any(MesMasterDataSyncRun.class));
+
+        MesMasterDataSyncService.SyncResult result = service.syncMaterialsManual(18L);
+
+        assertThat(result.success()).isTrue();
+        ArgumentCaptor<DictMaterial> materialCaptor = ArgumentCaptor.forClass(DictMaterial.class);
+        verify(materialMapper).insert(materialCaptor.capture());
+        assertThat(materialCaptor.getValue()).satisfies(material -> {
+            assertThat(material.getMaterialCategory()).isEqualTo("工程材质分类");
+            assertThat(material.getCategoryName()).isEqualTo("U9金属材料");
+        });
+    }
+
+    @Test
     void syncMaterialsCreatesUnknownTypeFromMesValue() {
         MesMasterDataClient client = mock(MesMasterDataClient.class);
         DictMaterialMapper materialMapper = mock(DictMaterialMapper.class);

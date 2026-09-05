@@ -18,6 +18,7 @@ import com.machining.quote.mapper.DictMaterialTypeMapper;
 import com.machining.quote.service.AuditService;
 import com.machining.quote.service.MaterialMasterService;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -27,6 +28,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import java.lang.reflect.Method;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -63,6 +65,7 @@ class MaterialMasterBackendServiceTest {
         material.setMesStandard("GB/T 1220");
         material.setMesWeight("12.34");
         material.setMesDensityRaw("7.93");
+        material.setCategoryName("U9金属材料");
         material.setDensity(7.85);
         material.setMesSyncedAt(syncedAt);
         DictMaterialType type = materialType(1L, "RAW_MATERIAL", "原材料", true);
@@ -81,6 +84,7 @@ class MaterialMasterBackendServiceTest {
         assertThat(row.getMaterialTypeCode()).isEqualTo("RAW_MATERIAL");
         assertThat(row.getMaterialTypeName()).isEqualTo("原材料");
         assertThat(row.getMaterialCategory()).isEqualTo("不锈钢");
+        assertThat(row.getCategoryName()).isEqualTo("U9金属材料");
         assertThat(row.getSourceType()).isEqualTo("MES");
         assertThat(row.getMesExternalId()).isEqualTo("mes-mat-10");
         assertThat(row.getMesMaterialType()).isEqualTo("MATERIAL");
@@ -126,6 +130,13 @@ class MaterialMasterBackendServiceTest {
                 "pageMaterials", Boolean.class, String.class, Integer.class, Integer.class);
         PageResult<MaterialMasterDTO> page = (PageResult<MaterialMasterDTO>) pageMaterials.invoke(
                 service, true, "raw", 2, 20);
+
+        ArgumentCaptor<QueryWrapper<DictMaterial>> countQueryCaptor = ArgumentCaptor.forClass(QueryWrapper.class);
+        verify(materialMapper).selectCount(countQueryCaptor.capture());
+        String keywordSql = countQueryCaptor.getValue().getCustomSqlSegment().toLowerCase(Locale.ROOT);
+        assertThat(keywordSql)
+                .contains("category_name")
+                .doesNotContain("material_category");
 
         assertThat(page.getTotal()).isEqualTo(25);
         assertThat(page.getPage()).isEqualTo(2);
