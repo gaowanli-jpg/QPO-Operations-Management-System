@@ -171,7 +171,9 @@ class QuoteOptimizedExportCustomerWeightTest {
             assertThat(text(sheet, 8, 5)).isEqualTo("阳极");
             assertThat(text(sheet, 8, 9)).isEqualTo("1");
             assertThat(text(sheet, 8, 10)).isEqualTo("30");
-            int lastHeaderCol = sheet.getRow(7).getLastCellNum() - 1;
+            int lastHeaderCol = headerColumn(sheet, 7, "备注");
+            assertNoHeaderCellsAfter(sheet, 6, lastHeaderCol);
+            assertNoHeaderCellsAfter(sheet, 7, lastHeaderCol);
             assertHeaderStyleMatches(sheet, 6, 0, lastHeaderCol);
             assertHeaderStyleMatches(sheet, 7, 0, lastHeaderCol);
         }
@@ -214,10 +216,48 @@ class QuoteOptimizedExportCustomerWeightTest {
             assertThat(text(sheet, 7, 5)).isEqualTo("材料编码");
             assertThat(text(sheet, 7, 12)).isEqualTo("含税单价");
             assertThat(text(sheet, 7, 15)).isEqualTo("备注");
+            int lastHeaderCol = headerColumn(sheet, 7, "备注");
+            assertNoHeaderCellsAfter(sheet, 6, lastHeaderCol);
+            assertNoHeaderCellsAfter(sheet, 7, lastHeaderCol);
             assertThat(sheetText(sheet)).doesNotContain("模板旧工艺");
             assertThat(text(sheet, 8, 1)).isEqualTo("P-OPT-001");
             assertThat(text(sheet, 8, 5)).isEmpty();
             assertThat(text(sheet, 8, 12)).isEqualTo("54.692");
+        }
+    }
+
+    @Test
+    void customerTemplateDetailKeepsCustomerWeightFeeColumnsSameWidthAsOtherPercentageFees() throws Exception {
+        ItemQuoteVersion item = quotedNormalItem();
+        QuoteTemplateExportService service = new QuoteTemplateExportService();
+        OrderRfqMapper orderRfqMapper = mock(OrderRfqMapper.class);
+        ItemQuoteVersionMapper itemMapper = mock(ItemQuoteVersionMapper.class);
+        QuoteProcessService quoteProcessService = mock(QuoteProcessService.class);
+        QuoteTemplateService quoteTemplateService = mock(QuoteTemplateService.class);
+
+        when(orderRfqMapper.selectById(RFQ_ID)).thenReturn(order());
+        when(itemMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(item));
+        when(quoteTemplateService.openTemplateWorkbook()).thenReturn(nonCanonicalMiddleTemplateWorkbook());
+        when(quoteTemplateService.templateLayout()).thenReturn(new QuoteTemplateService.TemplateLayout(8, 6, 7, 8));
+
+        ReflectionTestUtils.setField(service, "orderRfqMapper", orderRfqMapper);
+        ReflectionTestUtils.setField(service, "itemMapper", itemMapper);
+        ReflectionTestUtils.setField(service, "quoteProcessService", quoteProcessService);
+        ReflectionTestUtils.setField(service, "quoteTemplateService", quoteTemplateService);
+        ReflectionTestUtils.setField(service, "leadTimeService", new LeadTimeService());
+
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        service.exportTemplateQuoteDetail(RFQ_ID, response);
+
+        try (Workbook workbook = workbook(response)) {
+            Sheet sheet = workbook.getSheetAt(0);
+            int customerWeightRateCol = headerColumn(sheet, 7, "客户权重费率(%)");
+            int customerWeightAmountCol = headerColumn(sheet, 7, "客户权重金额");
+            int transportRateCol = headerColumn(sheet, 7, "运输费率(%)");
+            int transportAmountCol = headerColumn(sheet, 7, "运输金额");
+
+            assertThat(sheet.getColumnWidth(customerWeightRateCol)).isEqualTo(sheet.getColumnWidth(transportRateCol));
+            assertThat(sheet.getColumnWidth(customerWeightAmountCol)).isEqualTo(sheet.getColumnWidth(transportAmountCol));
         }
     }
 
@@ -348,6 +388,17 @@ class QuoteOptimizedExportCustomerWeightTest {
             headerCell.setCellStyle(headerStyle);
             sheet.setColumnWidth(col, 12 * 256);
         }
+        for (int col = headers.size(); col < 32; col++) {
+            Cell groupCell = groupRow.createCell(col);
+            groupCell.setCellStyle(headerStyle);
+            Cell headerCell = headerRow.createCell(col);
+            headerCell.setCellStyle(headerStyle);
+            sheet.setColumnWidth(col, 12 * 256);
+        }
+        sheet.setColumnWidth(15, 22 * 256);
+        sheet.setColumnWidth(16, 22 * 256);
+        sheet.setColumnWidth(17, 12 * 256);
+        sheet.setColumnWidth(18, 12 * 256);
         groupRow.getCell(0).setCellValue("模板旧基础信息");
         groupRow.getCell(2).setCellValue("模板旧工艺");
         groupRow.getCell(3).setCellValue("模板旧百分比费用");
@@ -380,6 +431,11 @@ class QuoteOptimizedExportCustomerWeightTest {
             assertThat(actualFont.getBold()).as("row %s col %s bold", rowIndex, col)
                     .isEqualTo(expectedFont.getBold());
         }
+    }
+
+    private void assertNoHeaderCellsAfter(Sheet sheet, int rowIndex, int lastCol) {
+        Row row = sheet.getRow(rowIndex);
+        assertThat(row.getLastCellNum()).as("row %s last cell", rowIndex).isEqualTo((short) (lastCol + 1));
     }
 
     private Workbook workbook(MockHttpServletResponse response) throws Exception {

@@ -151,6 +151,8 @@ public class QuoteTemplateExportService {
         writeHeaders(headerRow, SIMPLE_HEADERS.size() - 4, SIMPLE_HEADERS.subList(SIMPLE_HEADERS.size() - 4, SIMPLE_HEADERS.size()));
         applyRowStyle(groupRow, 0, SIMPLE_HEADERS.size() - 1, groupHeaderStyle);
         applyRowStyle(headerRow, 0, SIMPLE_HEADERS.size() - 1, headerStyle);
+        removeTrailingCells(groupRow, SIMPLE_HEADERS.size(), maxCol);
+        removeTrailingCells(headerRow, SIMPLE_HEADERS.size(), maxCol);
         return new TemplateColumns(headerMap(sheet, layout), -1, 0, List.of(), PROCESS_BLOCK_WIDTH, -1, 0, List.of());
     }
 
@@ -185,6 +187,8 @@ public class QuoteTemplateExportService {
 
         applyRowStyle(groupRow, 0, requiredColumnCount - 1, groupHeaderStyle);
         applyRowStyle(headerRow, 0, requiredColumnCount - 1, headerStyle);
+        removeTrailingCells(groupRow, requiredColumnCount, maxCol);
+        removeTrailingCells(headerRow, requiredColumnCount, maxCol);
         return new TemplateColumns(headerMap(sheet, layout), processStartCol, processSlots, processNames, PROCESS_BLOCK_WIDTH,
                 feeStartCol, feeSlots, feeNames);
     }
@@ -208,6 +212,18 @@ public class QuoteTemplateExportService {
         }
         for (int col = startCol; col <= endCol; col++) {
             getOrCreateCell(row, col).setCellStyle(style);
+        }
+    }
+
+    private void removeTrailingCells(Row row, int startCol, int endCol) {
+        if (row == null || endCol < startCol) {
+            return;
+        }
+        for (int col = endCol; col >= startCol; col--) {
+            Cell cell = row.getCell(col);
+            if (cell != null) {
+                row.removeCell(cell);
+            }
         }
     }
 
@@ -378,6 +394,28 @@ public class QuoteTemplateExportService {
                 setCell(headerRow, startCol + 1, feeName.isEmpty() ? "" : feeName + "金额");
             }
         }
+        normalizeFeeColumnWidths(sheet, feeStartCol, feeSlots, feeNames);
+    }
+
+    private void normalizeFeeColumnWidths(Sheet sheet, int feeStartCol, int feeSlots, List<String> feeNames) {
+        int sampleSlot = representativeFeeWidthSlot(feeSlots, feeNames);
+        int rateWidth = sheet.getColumnWidth(feeStartCol + sampleSlot * FEE_BLOCK_WIDTH);
+        int amountWidth = sheet.getColumnWidth(feeStartCol + sampleSlot * FEE_BLOCK_WIDTH + 1);
+        for (int i = 0; i < feeSlots; i++) {
+            int startCol = feeStartCol + i * FEE_BLOCK_WIDTH;
+            sheet.setColumnWidth(startCol, rateWidth);
+            sheet.setColumnWidth(startCol + 1, amountWidth);
+        }
+    }
+
+    private int representativeFeeWidthSlot(int feeSlots, List<String> feeNames) {
+        for (int i = 0; i < feeSlots; i++) {
+            String feeName = i < feeNames.size() ? feeNames.get(i) : "";
+            if (!"客户权重".equals(safe(feeName).trim())) {
+                return i;
+            }
+        }
+        return 0;
     }
 
     private void writeGroupHeader(Sheet sheet, int startCol, int width, String title, QuoteTemplateService.TemplateLayout layout) {
