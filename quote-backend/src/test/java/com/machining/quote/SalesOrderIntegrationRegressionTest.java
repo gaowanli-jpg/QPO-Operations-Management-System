@@ -107,6 +107,8 @@ class SalesOrderIntegrationRegressionTest {
         SalesOrderSyncOrderDTO firstOrder = resp.getData().getRecords().get(0);
         SalesOrderSyncItemDTO firstItem = firstOrder.getItems().get(0);
         assertThat(firstOrder.getSaleOrderNo()).isEqualTo("SO-20260814-001");
+        assertThat(firstOrder.getCustomerCode()).isEqualTo("C02058");
+        assertThat(firstOrder.getSupplierCode()).isEqualTo("SUP-C02058");
         assertThat(firstOrder.getOrderType()).isEqualTo("正式订单");
         assertThat(firstItem.getSaleOrderItemNo()).isEqualTo("10");
         assertThat(firstItem.getMaterialNo()).isEqualTo("MAT-001");
@@ -115,12 +117,31 @@ class SalesOrderIntegrationRegressionTest {
         assertThat(firstItem.getSurfaceTreatment()).isEqualTo("Anodized");
         assertThat(firstItem.getRemark()).isEqualTo("MES remark");
         assertThat(objectMapper.writeValueAsString(firstOrder))
+                .contains("\"customerCode\":\"C02058\"", "\"supplierCode\":\"SUP-C02058\"")
                 .doesNotContain("customerName", "documentNo", "partNo", "version", "qty", "materialName", "remainingQty");
         assertThat(objectMapper.writeValueAsString(firstItem)).doesNotContain("orderType");
 
         JsonNode cursor = decodeCursor(resp.getData().getNextCursor());
         assertThat(cursor.get("changedAt").asText()).isEqualTo("2026-08-14T09:05:00");
         assertThat(cursor.get("salesOrderId").asLong()).isEqualTo(2L);
+    }
+
+    @Test
+    void responseKeepsSupplierCodeFieldWhenCustomerHasNoSupplierCode() throws Exception {
+        SalesOrderIntegrationMapper mapper = mock(SalesOrderIntegrationMapper.class);
+        SalesOrderIntegrationSyncService service = service(mapper);
+        SalesOrderSyncQueryReq req = req(100);
+        SalesOrderSyncOrderRow order = order(1L, "SO-20260814-001", LocalDateTime.of(2026, 8, 14, 9, 0));
+        order.setSupplierCode(null);
+        when(mapper.selectOrderPage(eq(req), eq(null), eq(null), eq(101))).thenReturn(List.of(order));
+        when(mapper.selectItemsByOrderIds(eq(List.of(1L)), eq(req))).thenReturn(List.of(
+                item(1L, "SO-20260814-001", 10, "P-001", "A", "MAT-001")
+        ));
+
+        SalesOrderSyncResp resp = service.query(req);
+
+        String json = objectMapper.writeValueAsString(resp.getData().getRecords().get(0));
+        assertThat(json).contains("\"customerCode\":\"C02058\"", "\"supplierCode\":null");
     }
 
     @Test
@@ -241,6 +262,8 @@ class SalesOrderIntegrationRegressionTest {
         row.setSalesOrderId(id);
         row.setSaleOrderNo(saleOrderNo);
         row.setInternalProjectNo("IP-001");
+        row.setCustomerCode("C02058");
+        row.setSupplierCode("SUP-C02058");
         row.setOrderType("正式订单");
         row.setStatus("APPROVED");
         row.setCreatedAt(LocalDateTime.of(2026, 8, 14, 8, 0));

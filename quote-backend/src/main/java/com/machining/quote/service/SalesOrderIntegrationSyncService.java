@@ -98,6 +98,8 @@ public class SalesOrderIntegrationSyncService {
         record.setChangedAt(order.getChangedAt());
         record.setStatus(order.getStatus());
         record.setOrderType(order.getOrderType());
+        record.setCustomerCode(order.getCustomerCode());
+        record.setSupplierCode(order.getSupplierCode());
         record.setItems(items.stream()
                 .map(this::toItemRecord)
                 .toList());

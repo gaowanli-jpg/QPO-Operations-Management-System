@@ -41,7 +41,7 @@ Authorization: Bearer {QPO_OPEN_API_TOKEN}
 
 ## 4. 响应结构
 
-响应字段集合固定；字段没有业务值时仍返回字段，值为 `null`，不会省略字段。典型场景包括 `status`、`orderType`、明细级 `internalProjectNo`、`customerOrderNo`、`customerProjectNo`、`materialNo`、`description`、`surfaceTreatment`、`remark` 和 `nextCursor`。
+响应字段集合固定；字段没有业务值时仍返回字段，值为 `null`，不会省略字段。典型场景包括 `status`、`orderType`、`customerCode`、`supplierCode`、明细级 `internalProjectNo`、`customerOrderNo`、`customerProjectNo`、`materialNo`、`description`、`surfaceTreatment`、`remark` 和 `nextCursor`。
 
 ### 4.1 成功响应
 
@@ -58,6 +58,8 @@ Authorization: Bearer {QPO_OPEN_API_TOKEN}
         "changedAt": "2026-08-17T10:30:00",
         "status": "APPROVED",
         "orderType": "正式订单",
+        "customerCode": "C02058",
+        "supplierCode": "SUP-C02058",
         "items": [
           {
             "saleOrderItemNo": "10",
@@ -107,6 +109,8 @@ Authorization: Bearer {QPO_OPEN_API_TOKEN}
 | `changedAt` | datetime | 是 | 订单头或任意明细最后变更时间，用于增量同步水位。 |
 | `status` | string | 否 | 销售订单状态，仅用于展示和查询，不限制 MES 创建生产需求。 |
 | `orderType` | string | 否 | 销售订单类型，例如备货订单、正式订单、预测订单。 |
+| `customerCode` | string | 否 | 客户编码，来自 QPO 销售订单客户编码。 |
+| `supplierCode` | string | 否 | 供应商代码，来自 QPO 客户资料本地维护字段；未维护时返回 `null`。 |
 | `items` | array | 是 | 当前订单命中的有效明细集合。 |
 
 ### 5.2 明细字段
@@ -234,6 +238,6 @@ HTTP/1.1 400 Bad Request
 
 - 价格、成本、费用字段。
 - 图纸 URL、工艺路线、材料 JSON、费用 JSON。
-- 客户详细字段。
+- 客户详细字段，但订单级 `customerCode` 和 `supplierCode` 作为 MES 对接业务字段返回。
 - QPO 内部 ID、治理字段、U9 内部追踪字段。
 - 明细图号、版本、原始销售数量 `qty`。

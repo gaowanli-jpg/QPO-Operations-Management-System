@@ -28,7 +28,6 @@ import static org.mockito.Mockito.when;
 class SalesOrderIntegrationContractTest {
     private static final List<String> FORBIDDEN_RESPONSE_FIELDS = List.of(
             "documentNo",
-            "customerCode",
             "customerName",
             "customerShortName",
             "salesOrderDate",
@@ -79,7 +78,15 @@ class SalesOrderIntegrationContractTest {
     @Test
     void responseDtosExposeOnlyMesDemandContractFields() {
         assertThat(declaredFieldNames(SalesOrderSyncOrderDTO.class))
-                .containsExactlyInAnyOrder("saleOrderNo", "createdAt", "changedAt", "status", "orderType", "items");
+                .containsExactlyInAnyOrder(
+                        "saleOrderNo",
+                        "createdAt",
+                        "changedAt",
+                        "status",
+                        "orderType",
+                        "customerCode",
+                        "supplierCode",
+                        "items");
         assertThat(declaredFieldNames(SalesOrderSyncItemDTO.class))
                 .containsExactlyInAnyOrder(
                         "saleOrderItemNo",
@@ -116,6 +123,8 @@ class SalesOrderIntegrationContractTest {
         SalesOrderSyncOrderDTO order = resp.getData().getRecords().get(0);
         assertThat(order.getSaleOrderNo()).isEqualTo("SO-20260814-001");
         assertThat(order.getOrderType()).isEqualTo("FORMAL");
+        assertThat(order.getCustomerCode()).isEqualTo("C02058");
+        assertThat(order.getSupplierCode()).isEqualTo("SUP-C02058");
         assertThat(order.getCreatedAt()).isEqualTo(LocalDateTime.of(2026, 8, 14, 9, 0));
         assertThat(order.getChangedAt()).isEqualTo(changedAt);
 
@@ -143,7 +152,15 @@ class SalesOrderIntegrationContractTest {
         String json = objectMapper.writeValueAsString(resp);
         assertThat(json).doesNotContain(FORBIDDEN_RESPONSE_FIELDS.toArray(String[]::new));
         assertThat(fieldNames(objectMapper.valueToTree(order)))
-                .containsExactlyInAnyOrder("saleOrderNo", "createdAt", "changedAt", "status", "orderType", "items");
+                .containsExactlyInAnyOrder(
+                        "saleOrderNo",
+                        "createdAt",
+                        "changedAt",
+                        "status",
+                        "orderType",
+                        "customerCode",
+                        "supplierCode",
+                        "items");
         assertThat(fieldNames(objectMapper.valueToTree(firstItem)))
                 .containsExactlyInAnyOrder(
                         "saleOrderItemNo",
@@ -173,6 +190,8 @@ class SalesOrderIntegrationContractTest {
                 .contains("saleOrderNo")
                 .contains("saleOrderItemNo")
                 .contains("orderType")
+                .contains("customerCode")
+                .contains("supplierCode")
                 .contains("releasedQty")
                 .contains("remark")
                 .contains("internalProjectNo")
@@ -224,6 +243,7 @@ class SalesOrderIntegrationContractTest {
         SalesOrderSyncQueryReq req = req(100);
         SalesOrderSyncOrderRow order = order(1L, "SO-20260814-001", null, LocalDateTime.of(2026, 8, 14, 10, 30));
         order.setStatus(null);
+        order.setSupplierCode(null);
         when(mapper.selectOrderPage(eq(req), eq(null), eq(null), eq(101)))
                 .thenReturn(List.of(order));
         SalesOrderSyncItemRow item = item(1L, "SO-20260814-001", 10, "P-001", "A", null, null);
@@ -241,6 +261,8 @@ class SalesOrderIntegrationContractTest {
         assertThat(json)
                 .contains("\"status\":null")
                 .contains("\"orderType\":null")
+                .contains("\"customerCode\":\"C02058\"")
+                .contains("\"supplierCode\":null")
                 .contains("\"materialNo\":null")
                 .contains("\"description\":null")
                 .contains("\"surfaceTreatment\":null")
@@ -274,6 +296,8 @@ class SalesOrderIntegrationContractTest {
         row.setSaleOrderNo(saleOrderNo);
         row.setInternalProjectNo("IP-001");
         row.setOrderType(orderType);
+        row.setCustomerCode("C02058");
+        row.setSupplierCode("SUP-C02058");
         row.setStatus("APPROVED");
         row.setCreatedAt(LocalDateTime.of(2026, 8, 14, 9, 0));
         row.setChangedAt(changedAt);

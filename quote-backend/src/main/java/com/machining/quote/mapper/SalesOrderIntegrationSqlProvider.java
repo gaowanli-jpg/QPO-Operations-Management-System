@@ -46,11 +46,15 @@ public class SalesOrderIntegrationSqlProvider {
                   so.document_no AS sale_order_no,
                   so.internal_project_no,
                   so.order_type,
+                  so.customer_code AS customer_code,
+                  cm.supplier_code AS supplier_code,
                   so.status,
                   so.created_at,
                   oc.changed_at
                 FROM order_changed oc
                 JOIN sales_order_header so ON so.id = oc.id
+                LEFT JOIN customer_master cm ON cm.id = so.customer_id
+                  OR (so.customer_id IS NULL AND cm.customer_code = so.customer_code)
                 WHERE 1 = 1
                   <if test='req.updatedFrom != null'>
                   AND oc.changed_at >= #{req.updatedFrom}
