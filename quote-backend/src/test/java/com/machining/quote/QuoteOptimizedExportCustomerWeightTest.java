@@ -12,7 +12,11 @@ import com.machining.quote.service.QuoteProcessService;
 import com.machining.quote.service.QuoteTemplateExportService;
 import com.machining.quote.service.QuoteTemplateService;
 import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.DataFormatter;
+import org.apache.poi.ss.usermodel.FillPatternType;
+import org.apache.poi.ss.usermodel.Font;
+import org.apache.poi.ss.usermodel.IndexedColors;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
@@ -167,6 +171,9 @@ class QuoteOptimizedExportCustomerWeightTest {
             assertThat(text(sheet, 8, 5)).isEqualTo("阳极");
             assertThat(text(sheet, 8, 9)).isEqualTo("1");
             assertThat(text(sheet, 8, 10)).isEqualTo("30");
+            int lastHeaderCol = sheet.getRow(7).getLastCellNum() - 1;
+            assertHeaderStyleMatches(sheet, 6, 0, lastHeaderCol);
+            assertHeaderStyleMatches(sheet, 7, 0, lastHeaderCol);
         }
     }
 
@@ -327,13 +334,18 @@ class QuoteOptimizedExportCustomerWeightTest {
 
         Row groupRow = sheet.createRow(6);
         Row headerRow = sheet.createRow(7);
+        CellStyle headerStyle = headerStyle(workbook);
         List<String> headers = List.of(
                 "模板旧序号", "模板旧图号", "模板旧列", "客户权重费率(%)", "客户权重金额",
                 "含税单价", "含税总价", "交货周期", "备注"
         );
         for (int col = 0; col < headers.size(); col++) {
-            groupRow.createCell(col).setCellValue("");
-            headerRow.createCell(col).setCellValue(headers.get(col));
+            Cell groupCell = groupRow.createCell(col);
+            groupCell.setCellValue("");
+            groupCell.setCellStyle(headerStyle);
+            Cell headerCell = headerRow.createCell(col);
+            headerCell.setCellValue(headers.get(col));
+            headerCell.setCellStyle(headerStyle);
             sheet.setColumnWidth(col, 12 * 256);
         }
         groupRow.getCell(0).setCellValue("模板旧基础信息");
@@ -343,6 +355,31 @@ class QuoteOptimizedExportCustomerWeightTest {
         sheet.createRow(8).createCell(0).setCellValue(1);
         sheet.createRow(9).createCell(0).setCellValue("QUOTATION VALIDITY");
         return workbook;
+    }
+
+    private CellStyle headerStyle(Workbook workbook) {
+        CellStyle style = workbook.createCellStyle();
+        style.setFillForegroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
+        style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        Font font = workbook.createFont();
+        font.setBold(true);
+        style.setFont(font);
+        return style;
+    }
+
+    private void assertHeaderStyleMatches(Sheet sheet, int rowIndex, int sampleCol, int lastCol) {
+        CellStyle expected = sheet.getRow(rowIndex).getCell(sampleCol).getCellStyle();
+        Font expectedFont = sheet.getWorkbook().getFontAt(expected.getFontIndexAsInt());
+        for (int col = sampleCol; col <= lastCol; col++) {
+            CellStyle actual = sheet.getRow(rowIndex).getCell(col).getCellStyle();
+            Font actualFont = sheet.getWorkbook().getFontAt(actual.getFontIndexAsInt());
+            assertThat(actual.getFillPattern()).as("row %s col %s fill pattern", rowIndex, col)
+                    .isEqualTo(expected.getFillPattern());
+            assertThat(actual.getFillForegroundColor()).as("row %s col %s fill", rowIndex, col)
+                    .isEqualTo(expected.getFillForegroundColor());
+            assertThat(actualFont.getBold()).as("row %s col %s bold", rowIndex, col)
+                    .isEqualTo(expectedFont.getBold());
+        }
     }
 
     private Workbook workbook(MockHttpServletResponse response) throws Exception {

@@ -10,6 +10,7 @@ import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
 import jakarta.servlet.http.HttpServletResponse;
 import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.DataFormatter;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
@@ -139,6 +140,8 @@ public class QuoteTemplateExportService {
         int maxCol = Math.max(maxColumn(sheet), SIMPLE_HEADERS.size() - 1);
         Row groupRow = getOrCreateRow(sheet, layout.groupRowIndex());
         Row headerRow = getOrCreateRow(sheet, layout.headerRowIndex());
+        CellStyle groupHeaderStyle = firstNonDefaultCellStyle(groupRow, maxCol);
+        CellStyle headerStyle = firstNonDefaultCellStyle(headerRow, maxCol);
         clearCells(groupRow, 0, maxCol + 1);
         clearCells(headerRow, 0, maxCol + 1);
 
@@ -146,6 +149,8 @@ public class QuoteTemplateExportService {
         writeHeaders(headerRow, 0, SIMPLE_HEADERS.subList(0, SIMPLE_HEADERS.size() - 4));
         writeGroupHeader(sheet, SIMPLE_HEADERS.size() - 4, 4, "合计", layout);
         writeHeaders(headerRow, SIMPLE_HEADERS.size() - 4, SIMPLE_HEADERS.subList(SIMPLE_HEADERS.size() - 4, SIMPLE_HEADERS.size()));
+        applyRowStyle(groupRow, 0, SIMPLE_HEADERS.size() - 1, groupHeaderStyle);
+        applyRowStyle(headerRow, 0, SIMPLE_HEADERS.size() - 1, headerStyle);
         return new TemplateColumns(headerMap(sheet, layout), -1, 0, List.of(), PROCESS_BLOCK_WIDTH, -1, 0, List.of());
     }
 
@@ -164,6 +169,8 @@ public class QuoteTemplateExportService {
         int maxCol = Math.max(maxColumn(sheet), requiredColumnCount - 1);
         Row groupRow = getOrCreateRow(sheet, layout.groupRowIndex());
         Row headerRow = getOrCreateRow(sheet, layout.headerRowIndex());
+        CellStyle groupHeaderStyle = firstNonDefaultCellStyle(groupRow, maxCol);
+        CellStyle headerStyle = firstNonDefaultCellStyle(headerRow, maxCol);
         clearCells(groupRow, 0, maxCol + 1);
         clearCells(headerRow, 0, maxCol + 1);
 
@@ -176,8 +183,32 @@ public class QuoteTemplateExportService {
         writeGroupHeader(sheet, totalStartCol, DETAIL_TOTAL_HEADERS.size(), "合计", layout);
         writeHeaders(headerRow, totalStartCol, DETAIL_TOTAL_HEADERS);
 
+        applyRowStyle(groupRow, 0, requiredColumnCount - 1, groupHeaderStyle);
+        applyRowStyle(headerRow, 0, requiredColumnCount - 1, headerStyle);
         return new TemplateColumns(headerMap(sheet, layout), processStartCol, processSlots, processNames, PROCESS_BLOCK_WIDTH,
                 feeStartCol, feeSlots, feeNames);
+    }
+
+    private CellStyle firstNonDefaultCellStyle(Row row, int maxCol) {
+        if (row == null) {
+            return null;
+        }
+        for (int col = 0; col <= maxCol; col++) {
+            Cell cell = row.getCell(col);
+            if (cell != null && cell.getCellStyle() != null && cell.getCellStyle().getIndex() != 0) {
+                return cell.getCellStyle();
+            }
+        }
+        return null;
+    }
+
+    private void applyRowStyle(Row row, int startCol, int endCol, CellStyle style) {
+        if (row == null || style == null || endCol < startCol) {
+            return;
+        }
+        for (int col = startCol; col <= endCol; col++) {
+            getOrCreateCell(row, col).setCellStyle(style);
+        }
     }
 
     private void writeHeaders(Row headerRow, int startCol, List<String> headers) {
