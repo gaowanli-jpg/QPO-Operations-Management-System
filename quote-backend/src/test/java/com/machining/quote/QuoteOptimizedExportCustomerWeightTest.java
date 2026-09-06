@@ -68,6 +68,8 @@ class QuoteOptimizedExportCustomerWeightTest {
             assertThat(text(optimizedSheet, 2, processStartCol)).isEqualTo("工时");
             assertThat(number(optimizedSheet, 2, processStartCol + 1)).isEqualTo(1.4);
             assertThat(number(optimizedSheet, 2, processStartCol + 3)).isEqualTo(14.0);
+            assertThat(text(normalSheet, 2, 4)).isEqualTo("Selected material");
+            assertThat(text(optimizedSheet, 2, 4)).isEqualTo("Selected material");
             assertThat(number(optimizedSheet, 2, headerColumn(optimizedSheet, 1, "基础成本"))).isEqualTo(44.0);
             assertThat(number(optimizedSheet, 2, headerColumn(optimizedSheet, 1, "百分比费用合计"))).isCloseTo(10.692, offset(0.000001));
             assertThat(number(optimizedSheet, 2, headerColumn(optimizedSheet, 1, "含税单价"))).isCloseTo(54.692, offset(0.000001));
@@ -106,6 +108,7 @@ class QuoteOptimizedExportCustomerWeightTest {
 
             int processStartCol = groupHeaderColumn(sheet, 6, "下料");
             assertThat(text(sheet, 8, processStartCol)).isEqualTo("工时");
+            assertThat(text(sheet, 8, 4)).isEqualTo("Selected material");
             assertThat(number(sheet, 8, processStartCol + 1)).isEqualTo(1.4);
             assertThat(number(sheet, 8, processStartCol + 3)).isEqualTo(14.0);
             assertThat(number(sheet, 8, headerColumn(sheet, 7, "基础成本"))).isEqualTo(44.0);
@@ -168,6 +171,7 @@ class QuoteOptimizedExportCustomerWeightTest {
                     .doesNotContain("材料类型")
                     .doesNotContain("材质分类");
             assertThat(text(sheet, 8, 1)).isEqualTo("P-OPT-001");
+            assertThat(text(sheet, 8, 4)).isEqualTo("Selected material");
             assertThat(text(sheet, 8, 5)).isEqualTo("阳极");
             assertThat(text(sheet, 8, 9)).isEqualTo("1");
             assertThat(text(sheet, 8, 10)).isEqualTo("30");
@@ -209,20 +213,25 @@ class QuoteOptimizedExportCustomerWeightTest {
             assertThat(text(sheet, 9, 0)).isEqualTo("QUOTATION VALIDITY");
 
             assertThat(text(sheet, 6, 0)).isEqualTo("基础信息");
-            assertThat(text(sheet, 6, 12)).isEqualTo("合计");
+            assertThat(text(sheet, 6, 9)).isEqualTo("合计");
             assertThat(text(sheet, 7, 0)).isEqualTo("序号");
             assertThat(text(sheet, 7, 1)).isEqualTo("图号");
             assertThat(text(sheet, 7, 2)).isEqualTo("物料描述");
-            assertThat(text(sheet, 7, 5)).isEqualTo("材料编码");
-            assertThat(text(sheet, 7, 12)).isEqualTo("含税单价");
-            assertThat(text(sheet, 7, 15)).isEqualTo("备注");
+            assertThat(text(sheet, 7, 5)).isEqualTo("表面处理");
+            assertThat(text(sheet, 7, 9)).isEqualTo("含税单价");
+            assertThat(text(sheet, 7, 12)).isEqualTo("备注");
             int lastHeaderCol = headerColumn(sheet, 7, "备注");
             assertNoHeaderCellsAfter(sheet, 6, lastHeaderCol);
             assertNoHeaderCellsAfter(sheet, 7, lastHeaderCol);
-            assertThat(sheetText(sheet)).doesNotContain("模板旧工艺");
+            assertThat(sheetText(sheet))
+                    .doesNotContain("模板旧工艺")
+                    .doesNotContain("材料编码")
+                    .doesNotContain("材料类型")
+                    .doesNotContain("材质分类");
             assertThat(text(sheet, 8, 1)).isEqualTo("P-OPT-001");
-            assertThat(text(sheet, 8, 5)).isEmpty();
-            assertThat(text(sheet, 8, 12)).isEqualTo("54.692");
+            assertThat(text(sheet, 8, 4)).isEqualTo("Selected material");
+            assertThat(text(sheet, 8, 5)).isEqualTo(item.getSurfaceTreatment());
+            assertThat(text(sheet, 8, 9)).isEqualTo("54.692");
         }
     }
 
@@ -287,6 +296,7 @@ class QuoteOptimizedExportCustomerWeightTest {
         item.setUnit("件");
         item.setDrawingUrl("/uploads/P-OPT-001.pdf");
         item.setMaterialName("材料名称");
+        item.setEngineeringMaterialName("Selected material");
         item.setSurfaceTreatment("阳极");
         item.setQuoteLeadTime("2026-09-30");
         item.setStatus(QuoteStatusWorkflow.QUOTED);

@@ -4,6 +4,7 @@ import com.machining.quote.dto.ProcessSheetDTO;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.service.ExcelExportService;
 import com.machining.quote.service.LeadTimeService;
+import com.machining.quote.util.MaterialDataResolver;
 import org.apache.poi.ss.usermodel.DataFormatter;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
@@ -102,9 +103,6 @@ class ExcelExportServiceProcessSheetTests {
                 List.of("基础信息", "物料描述"),
                 List.of("基础信息", "图纸状态"),
                 List.of("基础信息", "材料名称"),
-                List.of("基础信息", "材料编码"),
-                List.of("基础信息", "材料类型"),
-                List.of("基础信息", "材质分类"),
                 List.of("基础信息", "表面处理"),
                 List.of("基础信息", "版本"),
                 List.of("基础信息", "数量"),
@@ -120,6 +118,7 @@ class ExcelExportServiceProcessSheetTests {
         item.setDescription("测试件");
         item.setDrawingUrl("/drawings/P-100.pdf");
         item.setMaterialName("45#");
+        item.setEngineeringMaterialName("Selected 45#");
         item.setEngineeringMaterialCode("MAT-45");
         item.setEngineeringMaterialTypeName("原材料");
         item.setEngineeringMaterialCategory("钢铁");
@@ -139,10 +138,7 @@ class ExcelExportServiceProcessSheetTests {
                 "P-100",
                 "测试件",
                 "有图",
-                "45#",
-                "MAT-45",
-                "原材料",
-                "钢铁",
+                "Selected 45#",
                 "阳极",
                 "A",
                 2,
@@ -191,7 +187,7 @@ class ExcelExportServiceProcessSheetTests {
                 "P-100",
                 "Part name",
                 "\u6709\u56fe",
-                "Material name",
+                "Engineering material",
                 "Anodized",
                 "A",
                 2,
@@ -209,7 +205,7 @@ class ExcelExportServiceProcessSheetTests {
                 "P-100",
                 "Part name",
                 "\u65e0\u56fe",
-                "Material name",
+                "Engineering material",
                 "Anodized",
                 "A",
                 2,
@@ -219,12 +215,22 @@ class ExcelExportServiceProcessSheetTests {
         );
     }
 
+    @Test
+    void materialNameResolverFallsBackToImportedMaterialNameWhenEngineeringMaterialIsMissing() {
+        ItemQuoteVersion item = new ItemQuoteVersion();
+        item.setMaterialName("Imported material");
+        item.setMaterialData(Map.of("weight", 1.0, "cost", 20.0));
+
+        assertThat(MaterialDataResolver.engineeringMaterialName(item)).isEqualTo("Imported material");
+    }
+
     private ItemQuoteVersion detailedQuoteItem() {
         ItemQuoteVersion item = new ItemQuoteVersion();
         item.setPartNo("P-100");
         item.setDescription("Part name");
         item.setDrawingUrl("/drawings/P-100.pdf");
         item.setMaterialName("Material name");
+        item.setEngineeringMaterialName("Engineering material");
         item.setEngineeringMaterialCode("MAT-45");
         item.setEngineeringMaterialTypeName("Raw");
         item.setEngineeringMaterialCategory("Steel");

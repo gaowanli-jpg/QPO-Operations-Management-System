@@ -76,6 +76,7 @@ class QuoteTemplateExportServiceTests {
             assertThat(text(sheet, 2, 0)).isEqualTo("询价日：");
             assertThat(rowContains(sheet, 2, "RFQ No.")).isTrue();
             assertThat(text(sheet, DETAIL_START_ROW_INDEX, 1)).isEqualTo("'=P-001");
+            assertThat(text(sheet, DETAIL_START_ROW_INDEX, 4)).isEqualTo("\u5de5\u7a0b45#");
             assertThat(text(sheet, DETAIL_START_ROW_INDEX + 11, 0)).isEqualTo("QUOTATION VALIDITY");
             assertThat(rowContains(sheet, 6, "第1道工艺")).isFalse();
             assertThat(rowContains(sheet, 6, "装配")).isTrue();
@@ -97,9 +98,9 @@ class QuoteTemplateExportServiceTests {
             assertThat(text(sheet, 0, 0)).isEqualTo("客户报价单模板");
             assertThat(text(sheet, 2, 0)).isEqualTo("询价日：");
             assertThat(rowContains(sheet, 2, "RFQ No.")).isTrue();
-            assertThat(hasMergedRegion(sheet, 0, 0, 0, 15)).isTrue();
+            assertThat(hasMergedRegion(sheet, 0, 0, 0, 12)).isTrue();
             assertThat(text(sheet, DETAIL_START_ROW_INDEX + 11, 0)).isEqualTo("QUOTATION VALIDITY");
-            assertThat(hasMergedRegion(sheet, DETAIL_START_ROW_INDEX + 11, DETAIL_START_ROW_INDEX + 11, 0, 15)).isTrue();
+            assertThat(hasMergedRegion(sheet, DETAIL_START_ROW_INDEX + 11, DETAIL_START_ROW_INDEX + 11, 0, 12)).isTrue();
 
             Row headerRow = sheet.getRow(HEADER_ROW_INDEX);
             List<String> headers = new ArrayList<>();
@@ -107,15 +108,15 @@ class QuoteTemplateExportServiceTests {
                 headers.add(text(sheet, HEADER_ROW_INDEX, col));
             }
             assertThat(headers).containsExactly(
-                    "序号", "图号", "物料描述", "图纸状态", "材料名称", "材料编码", "材料类型", "材质分类", "表面处理", "版本", "数量", "单位",
+                    "序号", "图号", "物料描述", "图纸状态", "材料名称", "表面处理", "版本", "数量", "单位",
                     "含税单价", "含税总价", "交货周期", "备注"
             );
             assertThat(headers).doesNotContain("重量(KG)", "材料费", "基础成本", "百分比费用合计");
+            assertThat(headers).doesNotContain("材料编码", "材料类型", "材质分类");
             assertThat(text(sheet, DETAIL_START_ROW_INDEX, 1)).isEqualTo("'=P-001");
-            assertThat(text(sheet, DETAIL_START_ROW_INDEX, 5)).isEqualTo("MAT-45");
-            assertThat(text(sheet, DETAIL_START_ROW_INDEX, 6)).isEqualTo("原材料");
-            assertThat(text(sheet, DETAIL_START_ROW_INDEX, 7)).isEqualTo("钢铁");
-            assertThat(text(sheet, DETAIL_START_ROW_INDEX, 14)).isEqualTo("2026-04-01");
+            assertThat(text(sheet, DETAIL_START_ROW_INDEX, 4)).isEqualTo("\u5de5\u7a0b45#");
+            assertThat(text(sheet, DETAIL_START_ROW_INDEX, 5)).isEqualTo("阳极");
+            assertThat(text(sheet, DETAIL_START_ROW_INDEX, 11)).isEqualTo("2026-04-01");
         }
     }
 
@@ -318,6 +319,7 @@ class QuoteTemplateExportServiceTests {
             item.setUnit("件");
             item.setDrawingUrl("/uploads/test/P-" + i + ".pdf");
             item.setMaterialName("45#钢");
+            item.setEngineeringMaterialName("\u5de5\u7a0b45#");
             item.setEngineeringMaterialCode("MAT-45");
             item.setEngineeringMaterialTypeName("原材料");
             item.setEngineeringMaterialCategory("钢铁");

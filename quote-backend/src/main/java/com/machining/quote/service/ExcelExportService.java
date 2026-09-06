@@ -13,6 +13,7 @@ import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
+import com.machining.quote.util.MaterialDataResolver;
 import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -355,7 +356,7 @@ public class ExcelExportService {
 
     private List<List<String>> buildSimpleQuoteHead() {
         List<List<String>> head = new ArrayList<>();
-        for (String title : List.of("序号", "图号", "物料描述", "图纸状态", "材料名称", "材料编码", "材料类型", "材质分类", "表面处理", "版本", "数量", "单位")) {
+        for (String title : List.of("序号", "图号", "物料描述", "图纸状态", "材料名称", "表面处理", "版本", "数量", "单位")) {
             head.add(List.of("基础信息", title));
         }
         for (String title : List.of("含税单价", "含税总价", "交货周期", "备注")) {
@@ -370,10 +371,7 @@ public class ExcelExportService {
         row.add(safe(item.getPartNo()));
         row.add(safe(item.getDescription()));
         row.add(resolveDrawingStatus(item));
-        row.add(safe(item.getMaterialName()));
-        row.add(safe(item.getEngineeringMaterialCode()));
-        row.add(safe(item.getEngineeringMaterialTypeName()));
-        row.add(safe(item.getEngineeringMaterialCategory()));
+        row.add(safe(MaterialDataResolver.engineeringMaterialName(item)));
         row.add(safe(item.getSurfaceTreatment()));
         row.add(safe(item.getVersion()));
         row.add(safeInt(item.getQty()));
@@ -456,7 +454,7 @@ public class ExcelExportService {
         row.add(safe(item.getPartNo()));
         row.add(safe(item.getDescription()));
         row.add(resolveDrawingStatus(item));
-        row.add(safe(item.getMaterialName()));
+        row.add(safe(MaterialDataResolver.engineeringMaterialName(item)));
         row.add(safe(item.getSurfaceTreatment()));
         row.add(safe(item.getVersion()));
         row.add(safeInt(item.getQty()));
@@ -501,7 +499,7 @@ public class ExcelExportService {
         row.add(safe(item.getPartNo()));
         row.add(safe(item.getDescription()));
         row.add("无图");
-        row.add(safe(item.getMaterialName()));
+        row.add(safe(MaterialDataResolver.engineeringMaterialName(item)));
         row.add(safe(item.getSurfaceTreatment()));
         row.add(safe(item.getVersion()));
         row.add(safeInt(item.getQty()));

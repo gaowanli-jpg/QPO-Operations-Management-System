@@ -24,10 +24,13 @@ public final class MaterialDataResolver {
         if (!savedMaterialName.isEmpty()) {
             return savedMaterialName;
         }
-        if ("ASSEMBLY".equalsIgnoreCase(item.getQuoteMode())) {
-            return "";
+        if (!"ASSEMBLY".equalsIgnoreCase(item.getQuoteMode())) {
+            String materialDataName = stringValue(normalizeMap(item.getMaterialData()).get("name"));
+            if (!materialDataName.isEmpty()) {
+                return materialDataName;
+            }
         }
-        return savedMaterialName.isEmpty() ? stringValue(normalizeMap(item.getMaterialData()).get("name")) : savedMaterialName;
+        return stringValue(item.getMaterialName());
     }
 
     public static String materialNameFromData(ItemQuoteVersion item) {

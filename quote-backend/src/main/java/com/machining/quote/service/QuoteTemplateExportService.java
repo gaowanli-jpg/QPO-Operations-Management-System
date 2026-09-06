@@ -8,6 +8,7 @@ import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
+import com.machining.quote.util.MaterialDataResolver;
 import jakarta.servlet.http.HttpServletResponse;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
@@ -39,7 +40,7 @@ public class QuoteTemplateExportService {
             "基础成本", "百分比费用合计", "含税单价", "含税总价", "交货周期", "备注"
     );
     private static final List<String> SIMPLE_HEADERS = List.of(
-            "序号", "图号", "物料描述", "图纸状态", "材料名称", "材料编码", "材料类型", "材质分类", "表面处理", "版本", "数量", "单位",
+            "序号", "图号", "物料描述", "图纸状态", "材料名称", "表面处理", "版本", "数量", "单位",
             "含税单价", "含税总价", "交货周期", "备注"
     );
     private static final List<String> PROCESS_HEADERS = QuoteProcessExportSupport.QUOTE_PROCESS_VALUE_HEADERS;
@@ -271,7 +272,7 @@ public class QuoteTemplateExportService {
         setByHeader(row, columns.headers(), "图号", item.getPartNo());
         setByHeader(row, columns.headers(), "物料描述", item.getDescription());
         setByHeader(row, columns.headers(), "图纸状态", resolveDrawingStatus(item));
-        setByHeader(row, columns.headers(), "材料名称", item.getMaterialName());
+        setByHeader(row, columns.headers(), "材料名称", MaterialDataResolver.engineeringMaterialName(item));
         setByHeader(row, columns.headers(), "材料编码", item.getEngineeringMaterialCode());
         setByHeader(row, columns.headers(), "材料类型", item.getEngineeringMaterialTypeName());
         setByHeader(row, columns.headers(), "材质分类", item.getEngineeringMaterialCategory());
