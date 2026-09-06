@@ -82,7 +82,7 @@
             <p class="erp-section-description">主表格展示已同步 U9 销售订单的本地零件行，当前用于本地校正前核对。</p>
           </div>
           <div class="sales-order-change-table-actions">
-            <el-tag type="info">{{ previewLines.length }} 行</el-tag>
+            <el-tag type="info">{{ previewLineTotal }} 行</el-tag>
             <el-tag v-if="dirtyItemCount > 0" class="item-edit-dirty-tag" type="warning">
               已修改 {{ dirtyItemCount }} 行
             </el-tag>
@@ -259,6 +259,19 @@
             </template>
           </el-table-column>
         </el-table>
+        <div v-if="previewLineTotal" class="erp-pagination sales-order-change-pagination">
+          <el-pagination
+            :current-page="itemPagination.page"
+            :page-size="itemPagination.pageSize"
+            :page-sizes="CLIENT_PAGE_SIZES"
+            :pager-count="7"
+            :total="previewLineTotal"
+            layout="total, sizes, prev, pager, next, jumper"
+            background
+            @current-change="handleItemPageChange"
+            @size-change="handleItemPageSizeChange"
+          />
+        </div>
       </main>
     </section>
 
@@ -326,6 +339,7 @@ import { useAuthStore } from '../stores/authStore'
 import OrderPickerDialog from './OrderPickerDialog.vue'
 import SalesOrderChangeDataReplacementDialog from './sales-order-change/SalesOrderChangeDataReplacementDialog.vue'
 import { previewSalesOrderChange, saveSalesOrderChangeItems } from '../services/salesOrderChangeApi'
+import { CLIENT_PAGE_SIZES, DEFAULT_CLIENT_PAGE_SIZE } from '../utils/clientPagination'
 
 const SALES_ORDER_CHANGE_VIEW_PERMISSION = 'change:sales-order:view'
 const SALES_ORDER_CHANGE_ORDER_SELECT_PERMISSION = 'change:sales-order:order-select'
@@ -354,13 +368,15 @@ const preview = ref(null)
 const itemDrafts = reactive({})
 const savedItemDrafts = reactive({})
 const dirtyItemIds = ref(new Set())
+const itemPagination = reactive({ page: 1, pageSize: DEFAULT_CLIENT_PAGE_SIZE })
 const itemEditSaving = ref(false)
 const reasonDialogVisible = ref(false)
 const changeReason = ref('')
 const itemDataReplacementVisible = ref(false)
 const itemDataReplacementBusy = ref(false)
 
-const previewLines = computed(() => preview.value?.lines || [])
+const previewLineTotal = computed(() => Number(preview.value?.total ?? preview.value?.itemCount ?? 0))
+const previewLines = computed(() => preview.value?.records || preview.value?.lines || [])
 const hasChangeUpdatePermission = computed(() => authStore.hasPermission(SALES_ORDER_CHANGE_UPDATE_PERMISSION))
 const dirtyItemCount = computed(() => dirtyItemIds.value.size)
 const changeEditable = computed(() => preview.value?.changeEditable !== false)
@@ -397,6 +413,7 @@ const handleOrderSelected = async (order) => {
   selectedOrderSummary.value = order
   selectedOrderId.value = resolveSalesOrderId(order)
   preview.value = null
+  itemPagination.page = 1
   resetItemDrafts()
   if (!selectedOrderId.value) {
     ElMessage.error('未识别销售订单 ID')
@@ -417,7 +434,10 @@ const loadPreview = async () => {
   if (!selectedOrderId.value || previewLoading.value) return
   previewLoading.value = true
   try {
-    applyPreviewData(await previewSalesOrderChange(selectedOrderId.value))
+    applyPreviewData(await previewSalesOrderChange(selectedOrderId.value, {
+      page: itemPagination.page,
+      pageSize: itemPagination.pageSize
+    }))
   } catch (error) {
     ElMessage.error(requestErrorMessage(error, '销售变更预览加载失败'))
   } finally {
@@ -432,6 +452,7 @@ watch(
     selectedOrderId.value = value
     selectedOrderSummary.value = null
     preview.value = null
+    itemPagination.page = 1
     resetItemDrafts()
     await loadPreview()
   },
@@ -474,7 +495,7 @@ const resetItemDrafts = () => {
 const hydrateItemDrafts = (source = {}) => {
   clearReactiveObject(itemDrafts)
   clearReactiveObject(savedItemDrafts)
-  ;(source.lines || []).forEach(line => {
+  ;(source.records || source.lines || []).forEach(line => {
     if (!line?.salesOrderItemId) return
     const key = String(line.salesOrderItemId)
     const draft = normalizeItemDraft(line)
@@ -488,6 +509,32 @@ const applyPreviewData = (data = {}) => {
   preview.value = data
   hydrateItemDrafts(data)
 }
+
+const ensureCanChangeItemPage = () => {
+  if (dirtyItemCount.value > 0) {
+    ElMessage.warning('请先保存零件行修改后再翻页')
+    return false
+  }
+  return true
+}
+
+const handleItemPageChange = async (nextPage) => {
+  if (nextPage === itemPagination.page) return
+  if (!ensureCanChangeItemPage()) return
+  itemPagination.page = nextPage
+  await loadPreview()
+}
+
+const handleItemPageSizeChange = async (nextPageSize) => {
+  if (nextPageSize === itemPagination.pageSize) return
+  if (!ensureCanChangeItemPage()) return
+  itemPagination.pageSize = nextPageSize
+  itemPagination.page = 1
+  await loadPreview()
+}
+
+const previewMatchesItemPagination = (source) => Number(source?.page) === itemPagination.page &&
+  Number(source?.pageSize) === itemPagination.pageSize
 
 const comparableItemValue = (field, value) => {
   if (NULLABLE_ITEM_EDITABLE_FIELDS.includes(field)) {
@@ -584,10 +631,10 @@ const handleConfirmSaveItemEdits = async () => {
       reason: changeReason.value.trim(),
       items
     })
-    if (response?.preview) {
+    if (response?.preview && previewMatchesItemPagination(response.preview)) {
       applyPreviewData(response.preview)
     } else {
-      applyPreviewData(await previewSalesOrderChange(selectedOrderId.value))
+      await loadPreview()
     }
     dirtyItemIds.value = new Set()
     reasonDialogVisible.value = false
@@ -602,10 +649,10 @@ const handleConfirmSaveItemEdits = async () => {
 
 const handleItemDataReplacementConfirmed = async (response = {}) => {
   try {
-    if (response?.preview) {
+    if (response?.preview && previewMatchesItemPagination(response.preview)) {
       applyPreviewData(response.preview)
     } else {
-      applyPreviewData(await previewSalesOrderChange(selectedOrderId.value))
+      await loadPreview()
     }
     dirtyItemIds.value = new Set()
     itemDataReplacementVisible.value = false

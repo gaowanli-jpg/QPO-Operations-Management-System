@@ -105,6 +105,28 @@ describe('sales order U9 sync module', () => {
     expect(picker).toContain('SALES_ORDER_SCOPES.includes(props.orderScope)')
   })
 
+  test('uses backend pagination for U9 preview item records', () => {
+    const component = readSource('components', 'SalesOrderU9Sync.vue')
+    const api = readSource('services', 'marketApi.js')
+
+    expect(component).toContain("import { CLIENT_PAGE_SIZES, DEFAULT_CLIENT_PAGE_SIZE } from '../utils/clientPagination'")
+    expect(component).toContain('const itemPagination = reactive({ page: 1, pageSize: DEFAULT_CLIENT_PAGE_SIZE })')
+    expect(component).toContain('const previewLineTotal = computed(() => Number(previewData.value?.total ?? previewData.value?.itemCount ?? 0))')
+    expect(component).toContain('const previewLines = computed(() => previewData.value?.records || previewData.value?.lines || [])')
+    expect(component).toContain('class="erp-pagination sales-order-u9-sync-pagination"')
+    expect(component).toContain(':current-page="itemPagination.page"')
+    expect(component).toContain(':page-size="itemPagination.pageSize"')
+    expect(component).toContain(':page-sizes="CLIENT_PAGE_SIZES"')
+    expect(component).toContain('@current-change="handleItemPageChange"')
+    expect(component).toContain('@size-change="handleItemPageSizeChange"')
+    expect(component).toContain('previewSalesOrderU9Sync(selectedOrderId.value, {')
+    expect(component).toContain('page: itemPagination.page')
+    expect(component).toContain('pageSize: itemPagination.pageSize')
+    expect(component).toContain('请先保存零件行修改后再翻页')
+    expect(api).toContain('previewSalesOrderU9Sync = (salesOrderId, params = {})')
+    expect(api).toContain('request(`/api/market/u9-sync/orders/${salesOrderId}/preview`, { params })')
+  })
+
   test('loads the sales order supplied by the release-result route query', () => {
     const component = readSource('components', 'SalesOrderU9Sync.vue')
 

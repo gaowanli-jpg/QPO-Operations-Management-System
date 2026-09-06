@@ -30,5 +30,9 @@ public class SalesOrderChangePreviewResp {
     private Boolean changeEditable;
     private String changeBlockedReason;
     private Integer itemCount;
+    private Long total;
+    private Integer page;
+    private Integer pageSize;
+    private List<SalesOrderU9SyncPreviewLine> records = new ArrayList<>();
     private List<SalesOrderU9SyncPreviewLine> lines = new ArrayList<>();
 }

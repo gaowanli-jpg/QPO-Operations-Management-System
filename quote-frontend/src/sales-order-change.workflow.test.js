@@ -88,6 +88,28 @@ describe('sales order change module stage 1', () => {
     expect(picker).toContain("'sales-order-change': '销售订单'")
   })
 
+  test('uses backend pagination for sales order change preview item records', () => {
+    const component = readSource('components', 'SalesOrderChangeManage.vue')
+    const api = readSource('services', 'salesOrderChangeApi.js')
+
+    expect(component).toContain("import { CLIENT_PAGE_SIZES, DEFAULT_CLIENT_PAGE_SIZE } from '../utils/clientPagination'")
+    expect(component).toContain('const itemPagination = reactive({ page: 1, pageSize: DEFAULT_CLIENT_PAGE_SIZE })')
+    expect(component).toContain('const previewLineTotal = computed(() => Number(preview.value?.total ?? preview.value?.itemCount ?? 0))')
+    expect(component).toContain('const previewLines = computed(() => preview.value?.records || preview.value?.lines || [])')
+    expect(component).toContain('class="erp-pagination sales-order-change-pagination"')
+    expect(component).toContain(':current-page="itemPagination.page"')
+    expect(component).toContain(':page-size="itemPagination.pageSize"')
+    expect(component).toContain(':page-sizes="CLIENT_PAGE_SIZES"')
+    expect(component).toContain('@current-change="handleItemPageChange"')
+    expect(component).toContain('@size-change="handleItemPageSizeChange"')
+    expect(component).toContain('previewSalesOrderChange(selectedOrderId.value, {')
+    expect(component).toContain('page: itemPagination.page')
+    expect(component).toContain('pageSize: itemPagination.pageSize')
+    expect(component).toContain('请先保存零件行修改后再翻页')
+    expect(api).toContain('previewSalesOrderChange = (salesOrderId, params = {})')
+    expect(api).toContain('request(`/api/change/sales-orders/${salesOrderId}/preview`, { params })')
+  })
+
   test('supports stage 6 line editing with required change reason', () => {
     const component = readSource('components', 'SalesOrderChangeManage.vue')
 

@@ -38,6 +38,7 @@ public class SystemRoleService {
             new PermissionGroup("market", "市场", 100),
             new PermissionGroup("orders", "订单", 200),
             new PermissionGroup("engineer", "工程", 300),
+            new PermissionGroup("change", "变更", 700),
             new PermissionGroup("system", "系统", 800)
     );
 
@@ -532,6 +533,9 @@ public class SystemRoleService {
         }
         if (permissionCode.startsWith("engineer:")) {
             return "engineer";
+        }
+        if (permissionCode.startsWith("change:")) {
+            return "change";
         }
         if (permissionCode.startsWith("system:")) {
             return "system";

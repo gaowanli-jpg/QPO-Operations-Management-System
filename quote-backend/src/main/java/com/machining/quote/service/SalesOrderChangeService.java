@@ -66,9 +66,16 @@ public class SalesOrderChangeService {
     }
 
     public SalesOrderChangePreviewResp preview(Long salesOrderId) {
+        return preview(salesOrderId, DEFAULT_PAGE, DEFAULT_PAGE_SIZE);
+    }
+
+    public SalesOrderChangePreviewResp preview(Long salesOrderId, Integer page, Integer pageSize) {
+        int safePage = normalizePage(page);
+        int safePageSize = normalizePageSize(pageSize);
         SalesOrderHeader header = requireSalesOrder(salesOrderId);
         assertSynced(header);
-        List<SalesOrderItem> items = loadItems(header.getId());
+        long total = countItems(header.getId());
+        List<SalesOrderItem> items = loadPagedItems(header.getId(), safePage, safePageSize);
 
         SalesOrderChangePreviewResp resp = new SalesOrderChangePreviewResp();
         resp.setSalesOrderId(header.getId());
@@ -92,8 +99,13 @@ public class SalesOrderChangeService {
         resp.setU9SyncMessage(header.getU9SyncMessage());
         resp.setChangeEditable(true);
         resp.setChangeBlockedReason(null);
-        resp.setItemCount(items.size());
-        resp.setLines(items.stream().map(item -> toPreviewLine(header, item)).toList());
+        resp.setItemCount(total > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) total);
+        resp.setTotal(total);
+        resp.setPage(safePage);
+        resp.setPageSize(safePageSize);
+        List<SalesOrderU9SyncPreviewLine> records = items.stream().map(item -> toPreviewLine(header, item)).toList();
+        resp.setRecords(records);
+        resp.setLines(records);
         return resp;
     }
 
@@ -212,6 +224,22 @@ public class SalesOrderChangeService {
         query.eq("sales_order_id", salesOrderId)
                 .orderByAsc("line_no")
                 .orderByAsc("id");
+        return safeList(itemMapper.selectList(query));
+    }
+
+    private long countItems(Long salesOrderId) {
+        QueryWrapper<SalesOrderItem> query = new QueryWrapper<>();
+        query.eq("sales_order_id", salesOrderId);
+        Long total = itemMapper.selectCount(query);
+        return total == null ? 0L : total;
+    }
+
+    private List<SalesOrderItem> loadPagedItems(Long salesOrderId, int page, int pageSize) {
+        QueryWrapper<SalesOrderItem> query = new QueryWrapper<>();
+        query.eq("sales_order_id", salesOrderId)
+                .orderByAsc("line_no")
+                .orderByAsc("id")
+                .last("LIMIT " + pageSize + " OFFSET " + ((page - 1L) * pageSize));
         return safeList(itemMapper.selectList(query));
     }
 

@@ -102,8 +102,11 @@ public class SalesOrderU9SyncController {
 
     @GetMapping("/orders/{salesOrderId}/preview")
     @RequirePermission("market:u9-sync:view")
-    public SalesOrderU9SyncPreviewResp preview(@PathVariable Long salesOrderId) {
-        return salesOrderU9SyncService.previewSalesOrder(salesOrderId);
+    public SalesOrderU9SyncPreviewResp preview(
+            @PathVariable Long salesOrderId,
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
+        return salesOrderU9SyncService.previewSalesOrder(salesOrderId, page, pageSize);
     }
 
     @PutMapping("/orders/{salesOrderId}/assignment")

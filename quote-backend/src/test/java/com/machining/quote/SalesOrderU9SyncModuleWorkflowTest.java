@@ -220,6 +220,36 @@ class SalesOrderU9SyncModuleWorkflowTest {
     }
 
     @Test
+    void previewReturnsBackendPagedItemRecordsWhileKeepingWholeOrderValidation() {
+        Fixture fixture = fixture();
+        SalesOrderHeader header = header(9001L, "SOQPO-001", QuoteStatusWorkflow.RELEASED, "未同步");
+        SalesOrderItem first = item(5001L, header.getId(), "P-001", "MAT-001", "已确认");
+        SalesOrderItem second = item(5002L, header.getId(), "P-002", "MAT-002", "已确认");
+        SalesOrderItem third = item(5003L, header.getId(), "P-003", "MAT-003", "已确认");
+
+        when(fixture.headerMapper.selectById(header.getId())).thenReturn(header);
+        when(fixture.itemMapper.selectList(any())).thenReturn(
+                List.of(first, second, third),
+                List.of(second)
+        );
+        when(fixture.itemMapper.selectCount(any())).thenReturn(3L);
+
+        SalesOrderU9SyncPreviewResp resp = fixture.service.previewSalesOrder(header.getId(), 2, 1);
+
+        assertThat(resp.getItemCount()).isEqualTo(3);
+        assertThat(resp.getTotal()).isEqualTo(3);
+        assertThat(resp.getPage()).isEqualTo(2);
+        assertThat(resp.getPageSize()).isEqualTo(1);
+        assertThat(resp.getRecords()).singleElement()
+                .extracting(SalesOrderU9SyncPreviewLine::getSalesOrderItemId)
+                .isEqualTo(second.getId());
+        assertThat(resp.getLines()).extracting(SalesOrderU9SyncPreviewLine::getSalesOrderItemId)
+                .containsExactly(second.getId());
+        assertThat(resp.getSyncReady()).isTrue();
+        assertThat(resp.getRequestFingerprint()).hasSize(64);
+    }
+
+    @Test
     void previewAllowsRowsWithOnlyUntaxedPriceBeforeU9Sync() {
         Fixture fixture = fixture();
         SalesOrderHeader header = header(9001L, "SOQPO-001", QuoteStatusWorkflow.RELEASED, "未同步");

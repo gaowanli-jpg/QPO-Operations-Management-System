@@ -568,6 +568,19 @@
             </template>
           </el-table-column>
         </el-table>
+        <div v-if="previewLineTotal" class="erp-pagination sales-order-u9-sync-pagination">
+          <el-pagination
+            :current-page="itemPagination.page"
+            :page-size="itemPagination.pageSize"
+            :page-sizes="CLIENT_PAGE_SIZES"
+            :pager-count="7"
+            :total="previewLineTotal"
+            layout="total, sizes, prev, pager, next, jumper"
+            background
+            @current-change="handleItemPageChange"
+            @size-change="handleItemPageSizeChange"
+          />
+        </div>
       </main>
     </section>
 
@@ -608,6 +621,7 @@ import {
   saveSalesOrderU9Items,
   syncSalesOrderU9
 } from '../services/marketApi'
+import { CLIENT_PAGE_SIZES, DEFAULT_CLIENT_PAGE_SIZE } from '../utils/clientPagination'
 
 const U9_SYNC_SUBMIT_PERMISSION = 'market:u9-sync:submit'
 const U9_SYNC_ORDER_SELECT_PERMISSION = 'market:u9-sync:order-select'
@@ -667,13 +681,15 @@ const savedOrderDate = ref(null)
 const itemDrafts = reactive({})
 const savedItemDrafts = reactive({})
 const dirtyItemIds = ref(new Set())
+const itemPagination = reactive({ page: 1, pageSize: DEFAULT_CLIENT_PAGE_SIZE })
 
 const dateDraftValue = (value) => value ? String(value).slice(0, 10) : null
 
 const selectedOrderLabel = computed(() => selectedOrder.value
   ? `${selectedOrder.value.salesOrderNo || selectedOrder.value.salesOrderId || '-'} / ${selectedOrder.value.customerName || '-'}`
   : '未选择订单')
-const previewLines = computed(() => previewData.value?.lines || [])
+const previewLineTotal = computed(() => Number(previewData.value?.total ?? previewData.value?.itemCount ?? 0))
+const previewLines = computed(() => previewData.value?.records || previewData.value?.lines || [])
 const syncRows = computed(() => syncResult.value?.rows || [])
 const u9SellerOptions = computed(() => u9Options.sellers || [])
 const u9DepartmentOptions = computed(() => u9Options.departments || [])
@@ -847,6 +863,7 @@ const handleOrderSelected = async (order) => {
   selectedOrderId.value = normalized.salesOrderId
   syncResult.value = null
   reconcileResult.value = null
+  itemPagination.page = 1
   resetItemDrafts()
   hydrateAssignment(normalized)
   hydrateOrderDate(normalized)
@@ -928,7 +945,10 @@ const previewSelectedOrder = async ({ silent = false, preserveResult = false } =
   }
   previewLoading.value = true
   try {
-    const response = await previewSalesOrderU9Sync(selectedOrderId.value)
+    const response = await previewSalesOrderU9Sync(selectedOrderId.value, {
+      page: itemPagination.page,
+      pageSize: itemPagination.pageSize
+    })
     applyPreviewData(response || {}, { preserveResult })
     if (!silent) {
       if (response?.syncReady) {
@@ -949,6 +969,32 @@ const previewSelectedOrder = async ({ silent = false, preserveResult = false } =
     previewLoading.value = false
   }
 }
+
+const ensureCanChangeItemPage = () => {
+  if (dirtyItemCount.value > 0) {
+    ElMessage.warning('请先保存零件行修改后再翻页')
+    return false
+  }
+  return true
+}
+
+const handleItemPageChange = async (nextPage) => {
+  if (nextPage === itemPagination.page) return
+  if (!ensureCanChangeItemPage()) return
+  itemPagination.page = nextPage
+  await previewSelectedOrder({ silent: true, preserveResult: true })
+}
+
+const handleItemPageSizeChange = async (nextPageSize) => {
+  if (nextPageSize === itemPagination.pageSize) return
+  if (!ensureCanChangeItemPage()) return
+  itemPagination.pageSize = nextPageSize
+  itemPagination.page = 1
+  await previewSelectedOrder({ silent: true, preserveResult: true })
+}
+
+const previewMatchesItemPagination = (source) => Number(source?.page) === itemPagination.page &&
+  Number(source?.pageSize) === itemPagination.pageSize
 
 const handleSellerChange = (sellerCode) => {
   const seller = sellerByCode(sellerCode)
@@ -995,7 +1041,7 @@ const handleSaveOrderDate = async () => {
   try {
     const payload = { salesOrderDate: orderDateDraft.value }
     const response = await saveSalesOrderU9OrderDate(selectedOrderId.value, payload)
-    if (response?.preview) {
+    if (response?.preview && previewMatchesItemPagination(response.preview)) {
       applyPreviewData(response.preview, { preserveResult: true })
     } else {
       hydrateOrderDate(response || payload)
@@ -1039,7 +1085,7 @@ const resetItemDrafts = () => {
 const hydrateItemDrafts = (source = {}) => {
   clearReactiveObject(itemDrafts)
   clearReactiveObject(savedItemDrafts)
-  ;(source.lines || []).forEach(line => {
+  ;(source.records || source.lines || []).forEach(line => {
     if (!line?.salesOrderItemId) return
     const key = String(line.salesOrderItemId)
     const draft = normalizeItemDraft(line)
@@ -1117,7 +1163,7 @@ const handleSaveItemEdits = async () => {
   itemEditSaving.value = true
   try {
     const response = await saveSalesOrderU9Items(selectedOrderId.value, { items })
-    if (response?.preview) {
+    if (response?.preview && previewMatchesItemPagination(response.preview)) {
       applyPreviewData(response.preview, { preserveResult: true })
     } else {
       await previewSelectedOrder({ silent: true, preserveResult: true })
@@ -1132,7 +1178,7 @@ const handleSaveItemEdits = async () => {
 
 const handleItemDataReplacementConfirmed = async (response = {}) => {
   try {
-    if (response?.preview) {
+    if (response?.preview && previewMatchesItemPagination(response.preview)) {
       applyPreviewData(response.preview, { preserveResult: true })
     } else {
       await previewSelectedOrder({ silent: true, preserveResult: true })

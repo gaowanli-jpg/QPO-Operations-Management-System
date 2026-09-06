@@ -40,5 +40,9 @@ public class SalesOrderU9SyncPreviewResp {
     private Integer itemCount;
     private Integer materialConfirmedItemCount;
     private Integer missingMaterialItemCount;
+    private Long total;
+    private Integer page;
+    private Integer pageSize;
+    private List<SalesOrderU9SyncPreviewLine> records = new ArrayList<>();
     private List<SalesOrderU9SyncPreviewLine> lines = new ArrayList<>();
 }

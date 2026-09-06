@@ -144,7 +144,8 @@ describe('marketApi', () => {
     await marketApi.listSalesOrderU9SyncOrders(params)
     await marketApi.getSalesOrderU9SyncOptions()
     await marketApi.refreshSalesOrderU9SyncOptions()
-    await marketApi.previewSalesOrderU9Sync(101)
+    const previewParams = { page: 2, pageSize: 50 }
+    await marketApi.previewSalesOrderU9Sync(101, previewParams)
     await marketApi.saveSalesOrderU9Assignment(101, { sellerCode: 'C00150', saleDepartmentCode: '200201' })
     await marketApi.saveSalesOrderU9OrderDate(101, { salesOrderDate: '2026-09-08' })
     await marketApi.saveSalesOrderU9Items(101, {
@@ -172,7 +173,7 @@ describe('marketApi', () => {
       method: 'POST',
       data: undefined
     })
-    expect(request).toHaveBeenNthCalledWith(4, '/api/market/u9-sync/orders/101/preview')
+    expect(request).toHaveBeenNthCalledWith(4, '/api/market/u9-sync/orders/101/preview', { params: previewParams })
     expect(request).toHaveBeenNthCalledWith(5, '/api/market/u9-sync/orders/101/assignment', {
       method: 'PUT',
       data: { sellerCode: 'C00150', saleDepartmentCode: '200201' }

@@ -60,8 +60,11 @@ public class SalesOrderChangeController {
 
     @GetMapping("/{salesOrderId}/preview")
     @RequirePermission("change:sales-order:view")
-    public SalesOrderChangePreviewResp preview(@PathVariable Long salesOrderId) {
-        return salesOrderChangeService.preview(salesOrderId);
+    public SalesOrderChangePreviewResp preview(
+            @PathVariable Long salesOrderId,
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
+        return salesOrderChangeService.preview(salesOrderId, page, pageSize);
     }
 
     @PutMapping("/{salesOrderId}/items")

@@ -67,6 +67,8 @@ public class SalesOrderU9SyncService {
     private static final String RESP_FAILED = "FAILED";
     private static final String RESP_PARTIAL = "PARTIAL_SUCCESS";
     private static final String SOURCE_RFQ_RELEASE = "RFQ_RELEASE";
+    private static final int DEFAULT_PAGE = 1;
+    private static final int DEFAULT_PAGE_SIZE = 20;
     private static final int MAX_PAGE_SIZE = 100;
 
     @Autowired
@@ -128,8 +130,16 @@ public class SalesOrderU9SyncService {
     }
 
     public SalesOrderU9SyncPreviewResp previewSalesOrder(Long salesOrderId) {
+        return previewSalesOrder(salesOrderId, DEFAULT_PAGE, DEFAULT_PAGE_SIZE);
+    }
+
+    public SalesOrderU9SyncPreviewResp previewSalesOrder(Long salesOrderId, Integer page, Integer pageSize) {
+        int safePage = normalizePage(page);
+        int safePageSize = normalizePageSize(pageSize);
         SalesOrderHeader header = requireSalesOrder(salesOrderId);
         List<SalesOrderItem> items = loadItems(header.getId());
+        long total = countItems(header.getId());
+        List<SalesOrderItem> pageItems = loadPagedItems(header.getId(), safePage, safePageSize);
         MaterialStats stats = materialStats(items);
         ValidationResult validation = contractValidator.validate(header, items);
         SalesOrderU9SyncPreviewResp resp = new SalesOrderU9SyncPreviewResp();
@@ -160,6 +170,9 @@ public class SalesOrderU9SyncService {
         resp.setItemCount(stats.total());
         resp.setMaterialConfirmedItemCount(stats.confirmed());
         resp.setMissingMaterialItemCount(stats.missingOrUnconfirmed());
+        resp.setTotal(total);
+        resp.setPage(safePage);
+        resp.setPageSize(safePageSize);
         resp.setBlockingErrors(validation.blockingErrors());
         resp.setWarnings(validation.warnings());
         resp.setBlockedReason(validation.firstBlockingError());
@@ -167,7 +180,9 @@ public class SalesOrderU9SyncService {
         if (!validation.hasBlockingErrors()) {
             resp.setRequestFingerprint(requestAssembler.fingerprint(requestAssembler.assemble(header, items)));
         }
-        resp.setLines(items.stream().map(item -> toPreviewLine(header, item)).toList());
+        List<SalesOrderU9SyncPreviewLine> records = pageItems.stream().map(item -> toPreviewLine(header, item)).toList();
+        resp.setRecords(records);
+        resp.setLines(records);
         return resp;
     }
 
@@ -417,7 +432,26 @@ public class SalesOrderU9SyncService {
 
     private List<SalesOrderItem> loadItems(Long salesOrderId) {
         QueryWrapper<SalesOrderItem> query = new QueryWrapper<>();
-        query.eq("sales_order_id", salesOrderId).orderByAsc("id");
+        query.eq("sales_order_id", salesOrderId)
+                .orderByAsc("line_no")
+                .orderByAsc("id");
+        List<SalesOrderItem> items = itemMapper.selectList(query);
+        return items == null ? List.of() : items;
+    }
+
+    private long countItems(Long salesOrderId) {
+        QueryWrapper<SalesOrderItem> query = new QueryWrapper<>();
+        query.eq("sales_order_id", salesOrderId);
+        Long total = itemMapper.selectCount(query);
+        return total == null ? 0L : total;
+    }
+
+    private List<SalesOrderItem> loadPagedItems(Long salesOrderId, int page, int pageSize) {
+        QueryWrapper<SalesOrderItem> query = new QueryWrapper<>();
+        query.eq("sales_order_id", salesOrderId)
+                .orderByAsc("line_no")
+                .orderByAsc("id")
+                .last("LIMIT " + pageSize + " OFFSET " + ((page - 1L) * pageSize));
         List<SalesOrderItem> items = itemMapper.selectList(query);
         return items == null ? List.of() : items;
     }
@@ -881,7 +915,7 @@ public class SalesOrderU9SyncService {
 
     private int normalizePageSize(Integer pageSize) {
         if (pageSize == null || pageSize < 1) {
-            return 20;
+            return DEFAULT_PAGE_SIZE;
         }
         return Math.min(pageSize, MAX_PAGE_SIZE);
     }

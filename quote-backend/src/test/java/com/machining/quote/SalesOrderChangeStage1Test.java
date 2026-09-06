@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.SalesOrderChangeOrderRow;
 import com.machining.quote.dto.SalesOrderChangePreviewResp;
+import com.machining.quote.dto.SalesOrderU9SyncPreviewLine;
 import com.machining.quote.entity.SalesOrderHeader;
 import com.machining.quote.entity.SalesOrderItem;
 import com.machining.quote.mapper.SalesOrderHeaderMapper;
@@ -138,6 +139,34 @@ class SalesOrderChangeStage1Test {
 
         assertThatThrownBy(() -> fixture.service.preview(9002L))
                 .hasMessageContaining("只允许变更已同步 U9 的销售订单");
+    }
+
+    @Test
+    void previewReturnsBackendPagedItemRecordsForSalesOrderChangeTable() {
+        Fixture fixture = fixture();
+        SalesOrderHeader synced = header(9001L, "SO-9001", "已同步");
+        SalesOrderItem first = item(5001L, synced.getId(), "P-001", "MAT-001", "已确认");
+        SalesOrderItem second = item(5002L, synced.getId(), "P-002", "MAT-002", "已确认");
+        SalesOrderItem third = item(5003L, synced.getId(), "P-003", "MAT-003", "已确认");
+
+        when(fixture.headerMapper.selectById(synced.getId())).thenReturn(synced);
+        when(fixture.itemMapper.selectCount(any())).thenReturn(3L);
+        when(fixture.itemMapper.selectList(any())).thenReturn(List.of(second));
+
+        SalesOrderChangePreviewResp preview = fixture.service.preview(synced.getId(), 2, 1);
+
+        assertThat(preview.getItemCount()).isEqualTo(3);
+        assertThat(preview.getTotal()).isEqualTo(3);
+        assertThat(preview.getPage()).isEqualTo(2);
+        assertThat(preview.getPageSize()).isEqualTo(1);
+        assertThat(preview.getRecords()).singleElement().satisfies(line -> {
+            assertThat(line.getSalesOrderItemId()).isEqualTo(second.getId());
+            assertThat(line.getPartNo()).isEqualTo("P-002");
+        });
+        assertThat(preview.getLines()).extracting(SalesOrderU9SyncPreviewLine::getSalesOrderItemId)
+                .containsExactly(second.getId());
+        verify(fixture.headerMapper, never()).updateById(any());
+        verify(fixture.itemMapper, never()).updateById(any());
     }
 
     private Fixture fixture() {
