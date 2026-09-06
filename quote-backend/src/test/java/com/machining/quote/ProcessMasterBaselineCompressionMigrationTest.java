@@ -109,6 +109,12 @@ class ProcessMasterBaselineCompressionMigrationTest {
                 assertDuplicateDocumentNoRejected(connection, schema);
                 assertThat(permissionExists(connection, schema, "market:sales-match:view")).isFalse();
                 assertThat(routePathExists(connection, schema, "/sales-match")).isFalse();
+                assertPermissionParent(connection, schema, "market:order:view", "market:order:update-item");
+                assertPermissionParent(connection, schema, "market:delivered-item:view", "market:delivered-item:discard");
+                assertPermissionParent(connection, schema, "market:delivered-item:view", "market:delivered-item:restore");
+                assertPermissionParent(connection, schema, "market:production-item:view", "market:production-item:discard");
+                assertPermissionParent(connection, schema, "market:production-item:view", "market:production-item:restore");
+                assertPermissionParent(connection, schema, "market:sales-order:view", "market:sales-order:production-task-notice-export");
             } finally {
                 dropTestSchema(connection, schema);
             }
@@ -278,6 +284,22 @@ class ProcessMasterBaselineCompressionMigrationTest {
             try (ResultSet resultSet = statement.executeQuery()) {
                 assertThat(resultSet.next()).isTrue();
                 return resultSet.getBoolean(1);
+            }
+        }
+    }
+
+    private static void assertPermissionParent(Connection connection, String schema, String parentCode, String childCode) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement("""
+                SELECT child.parent_id, parent.id
+                FROM %s.system_permission child
+                JOIN %s.system_permission parent ON parent.permission_code = ?
+                WHERE child.permission_code = ?
+                """.formatted(schema, schema))) {
+            statement.setString(1, parentCode);
+            statement.setString(2, childCode);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                assertThat(resultSet.next()).as("Missing permission parent assertion row for %s -> %s", parentCode, childCode).isTrue();
+                assertThat(resultSet.getLong(1)).as("%s should be attached under %s", childCode, parentCode).isEqualTo(resultSet.getLong(2));
             }
         }
     }
