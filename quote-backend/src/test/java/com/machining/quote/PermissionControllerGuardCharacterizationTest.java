@@ -242,6 +242,15 @@ class PermissionControllerGuardCharacterizationTest {
     }
 
     @Test
+    void extraFeeProcessWriteEndpointsUseProcessManagePermission() throws Exception {
+        String dict = source("DictController.java");
+
+        assertExtraFeeWriteGuard(dict, "@PostMapping(\"/extra-fee-items\")", "createExtraFeeItem");
+        assertExtraFeeWriteGuard(dict, "@PutMapping(\"/extra-fee-items/{id}\")", "updateExtraFeeItem");
+        assertExtraFeeWriteGuard(dict, "@DeleteMapping(\"/extra-fee-items/{id}\")", "deleteExtraFeeItem");
+    }
+
+    @Test
     void interceptorRejectsAuthenticatedUserWhenPermissionIsMissing() throws Exception {
         AuthInterceptor interceptor = interceptor(permissionInfo(false, "market:rfq:view"));
         MockHttpServletRequest request = request();
@@ -342,6 +351,17 @@ class PermissionControllerGuardCharacterizationTest {
         } catch (Exception e) {
             throw new IllegalStateException(e);
         }
+    }
+
+    private void assertExtraFeeWriteGuard(String source, String mapping, String methodName) {
+        int mappingIndex = source.indexOf(mapping);
+        assertThat(mappingIndex).as(mapping + " exists").isGreaterThanOrEqualTo(0);
+        int methodIndex = source.indexOf(methodName, mappingIndex);
+        assertThat(methodIndex).as(methodName + " follows " + mapping).isGreaterThan(mappingIndex);
+        String guardSection = source.substring(mappingIndex, methodIndex);
+        assertThat(guardSection)
+                .contains("@RequirePermission(\"engineer:dict:process-manage\")")
+                .doesNotContain("@RequirePermission(\"engineer:dict:fee-manage\")");
     }
 
     static class SecuredController {

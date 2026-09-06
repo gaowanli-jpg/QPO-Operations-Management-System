@@ -119,6 +119,18 @@ describe('process master management frontend workflow', () => {
     expect(materialProcess).toContain('extraFeeOriginalCode')
   })
 
+  test('extra fee process master write controls use process manage permission', () => {
+    const extraFeePane = sourceBetween(materialProcess, 'name="extraFees"', '</el-tab-pane>')
+    const extraFeeDialog = sourceBetween(materialProcess, 'v-model="extraFeeDialogVisible"', '</el-dialog>')
+
+    expect(materialProcess).toContain(`v-permission="'engineer:dict:process-manage'" v-else-if="activeTab === 'extraFees'"`)
+    expect(extraFeePane).toContain(`v-permission="'engineer:dict:process-manage'" type="primary"`)
+    expect(extraFeePane).toContain(`v-permission="'engineer:dict:process-manage'" type="danger"`)
+    expect(extraFeePane).not.toContain(`v-permission="'engineer:dict:fee-manage'"`)
+    expect(extraFeeDialog).toContain(`v-permission="'engineer:dict:process-manage'" type="primary"`)
+    expect(extraFeeDialog).not.toContain(`v-permission="'engineer:dict:fee-manage'"`)
+  })
+
   test('extra fee process master uses backend pagination like specific process details', () => {
     expect(dictApi).toContain('pageExtraFeeItems')
     expect(dictApi).toContain('/api/dict/extra-fee-items/page')
@@ -139,3 +151,11 @@ describe('process master management frontend workflow', () => {
     expect(materialProcess).toContain('@media (max-width: 900px)')
   })
 })
+
+function sourceBetween(source, startToken, endToken) {
+  const start = source.indexOf(startToken)
+  expect(start).toBeGreaterThanOrEqual(0)
+  const end = source.indexOf(endToken, start)
+  expect(end).toBeGreaterThan(start)
+  return source.slice(start, end)
+}

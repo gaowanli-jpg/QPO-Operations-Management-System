@@ -218,7 +218,7 @@ public class DictController {
     }
 
     @PostMapping("/extra-fee-items")
-    @RequirePermission("engineer:dict:fee-manage")
+    @RequirePermission("engineer:dict:process-manage")
     public Map<String, Object> createExtraFeeItem(@RequestBody DictExtraFeeItem item) {
         normalizeExtraFeeItem(item, null);
         ensureExtraFeeCodeUnique(item.getFeeCode(), null);
@@ -228,7 +228,7 @@ public class DictController {
     }
 
     @PutMapping("/extra-fee-items/{id}")
-    @RequirePermission("engineer:dict:fee-manage")
+    @RequirePermission("engineer:dict:process-manage")
     public Map<String, Object> updateExtraFeeItem(@PathVariable Integer id, @RequestBody DictExtraFeeItem item) {
         DictExtraFeeItem before = extraFeeItemMapper.selectById(id);
         if (before == null) {
@@ -243,7 +243,7 @@ public class DictController {
     }
 
     @DeleteMapping("/extra-fee-items/{id}")
-    @RequirePermission("engineer:dict:fee-manage")
+    @RequirePermission("engineer:dict:process-manage")
     public Map<String, Object> deleteExtraFeeItem(@PathVariable Integer id) {
         DictExtraFeeItem before = extraFeeItemMapper.selectById(id);
         extraFeeItemMapper.deleteById(id);
