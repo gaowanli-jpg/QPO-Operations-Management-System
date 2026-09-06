@@ -1,6 +1,7 @@
 package com.machining.quote.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.machining.quote.config.AuthContext;
 import com.machining.quote.dto.CustomerMasterDTO;
 import com.machining.quote.dto.CustomerOptionDTO;
@@ -116,10 +117,20 @@ public class CustomerMasterService {
             return toDto(customer);
         }
 
+        LocalDateTime now = LocalDateTime.now();
+        Long updatedBy = currentUserId();
         customer.setSupplierCode(supplierCode);
-        customer.setUpdatedBy(currentUserId());
-        customer.setUpdatedAt(LocalDateTime.now());
-        customerMapper.updateById(customer);
+        customer.setUpdatedBy(updatedBy);
+        customer.setUpdatedAt(now);
+
+        UpdateWrapper<CustomerMaster> update = new UpdateWrapper<>();
+        update.eq("id", customer.getId())
+                .set("supplier_code", supplierCode)
+                .set("updated_at", now);
+        if (updatedBy != null) {
+            update.set("updated_by", updatedBy);
+        }
+        customerMapper.update(null, update);
 
         auditService.record(
                 "CUSTOMER_SUPPLIER_CODE_UPDATE",

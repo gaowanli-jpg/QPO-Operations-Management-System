@@ -1,6 +1,7 @@
 package com.machining.quote;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.machining.quote.config.AuthContext;
 import com.machining.quote.controller.CustomerMasterController;
 import com.machining.quote.dto.CustomerMasterDTO;
@@ -126,16 +127,17 @@ class CustomerMasterBackendStage2Test {
         CustomerMaster existing = customer(1L, "GSS1", "GSS1", "Grand Silicon Semiconductor", true, syncedAt, "OLD-SUP");
 
         when(mapper.selectById(1L)).thenReturn(existing);
-        when(mapper.updateById(any(CustomerMaster.class))).thenReturn(1);
+        when(mapper.update(isNull(), any(UpdateWrapper.class))).thenReturn(1);
 
         CustomerSupplierCodeUpdateReq req = new CustomerSupplierCodeUpdateReq();
         req.setSupplierCode("  SUP-GSS-001  ");
         CustomerMasterDTO dto = service.updateSupplierCode(1L, req);
 
         assertThat(dto.getSupplierCode()).isEqualTo("SUP-GSS-001");
-        ArgumentCaptor<CustomerMaster> updateCaptor = ArgumentCaptor.forClass(CustomerMaster.class);
-        verify(mapper).updateById(updateCaptor.capture());
-        assertThat(updateCaptor.getValue().getSupplierCode()).isEqualTo("SUP-GSS-001");
+        @SuppressWarnings({"rawtypes", "unchecked"})
+        ArgumentCaptor<UpdateWrapper> updateWrapperCaptor = ArgumentCaptor.forClass(UpdateWrapper.class);
+        verify(mapper).update(isNull(), updateWrapperCaptor.capture());
+        assertThat(updateWrapperCaptor.getValue().getSqlSet()).contains("supplier_code=");
         ArgumentCaptor<Object> beforeCaptor = ArgumentCaptor.forClass(Object.class);
         ArgumentCaptor<Object> afterCaptor = ArgumentCaptor.forClass(Object.class);
         verify(auditService).record(
@@ -160,11 +162,15 @@ class CustomerMasterBackendStage2Test {
         ReflectionTestUtils.setField(service, "auditService", mock(AuditService.class));
         CustomerMaster existing = customer(1L, "GSS1", "GSS1", "Grand Silicon Semiconductor", true, LocalDateTime.now(), "OLD-SUP");
         when(mapper.selectById(1L)).thenReturn(existing);
-        when(mapper.updateById(any(CustomerMaster.class))).thenReturn(1);
+        when(mapper.update(isNull(), any(UpdateWrapper.class))).thenReturn(1);
 
         CustomerSupplierCodeUpdateReq clearReq = new CustomerSupplierCodeUpdateReq();
         clearReq.setSupplierCode("   ");
         assertThat(service.updateSupplierCode(1L, clearReq).getSupplierCode()).isNull();
+        @SuppressWarnings({"rawtypes", "unchecked"})
+        ArgumentCaptor<UpdateWrapper> updateWrapperCaptor = ArgumentCaptor.forClass(UpdateWrapper.class);
+        verify(mapper).update(isNull(), updateWrapperCaptor.capture());
+        assertThat(updateWrapperCaptor.getValue().getSqlSet()).contains("supplier_code=");
 
         CustomerSupplierCodeUpdateReq longReq = new CustomerSupplierCodeUpdateReq();
         longReq.setSupplierCode("S".repeat(65));
