@@ -28,6 +28,7 @@ public class MaterialMasterDTO {
     private String mesWeight;
     private String mesDensityRaw;
     private LocalDateTime mesSyncedAt;
+    private Boolean commonMaterial;
     private Boolean enabled;
     private Integer sortNo;
     private LocalDateTime createdAt;

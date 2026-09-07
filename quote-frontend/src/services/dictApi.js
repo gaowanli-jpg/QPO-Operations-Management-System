@@ -31,9 +31,27 @@ export const listMaterials = ({ enabledOnly } = {}) => request(
   `/api/dict/materials${buildQuery({ enabledOnly })}`
 )
 
-export const pageMaterials = ({ enabledOnly, keyword, page, pageSize } = {}) => request(
-  `/api/dict/materials/page${buildQuery({ enabledOnly, keyword, page, pageSize })}`
+export const pageMaterials = ({ enabledOnly, keyword, page, pageSize, commonScope, materialTypeCodes, categoryName } = {}) => request(
+  `/api/dict/materials/page${buildQuery({ enabledOnly, keyword, page, pageSize, commonScope, materialTypeCodes, categoryName })}`
 )
+
+export const listMaterialU9CategoryNames = ({ commonScope, materialTypeCodes } = {}) => request(
+  `/api/dict/materials/u9-category-names${buildQuery({ commonScope, materialTypeCodes })}`
+)
+
+export const updateMaterialCommonStatus = (payload) => request('/api/dict/materials/common-status', {
+  method: 'PUT',
+  data: payload
+})
+
+export const previewMaterialCommonImport = (file) => {
+  const formData = new FormData()
+  formData.append('file', file)
+  return request('/api/dict/materials/common-status/import-preview', {
+    method: 'POST',
+    data: formData
+  })
+}
 
 export const saveMaterial = (payload) => {
   const id = payload?.id

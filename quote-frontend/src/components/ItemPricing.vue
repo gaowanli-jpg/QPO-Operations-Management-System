@@ -672,6 +672,7 @@
       :material-u9-category-loader="listPricingMaterialU9CategoryNames"
       :page-size-options="[10, 20, 50, 100]"
       :default-page-size="10"
+      default-material-common-scope="COMMON"
       :selected-key="matForm.materialCode"
       :enable-material-price-edit="true"
       empty-text="暂无材料字典数据"

@@ -14,6 +14,7 @@ public class MaterialMasterSaveReq {
     private Double density;
     private List<MaterialPriceSpecDTO> priceSpecs;
     private String remarks;
+    private Boolean commonMaterial;
     private Boolean enabled;
     private Integer sortNo;
 }

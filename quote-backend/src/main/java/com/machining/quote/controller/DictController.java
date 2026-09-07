@@ -3,6 +3,9 @@ package com.machining.quote.controller;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.machining.quote.config.AuthContext;
 import com.machining.quote.config.RequirePermission;
+import com.machining.quote.dto.MaterialCommonImportPreviewResp;
+import com.machining.quote.dto.MaterialCommonUpdateReq;
+import com.machining.quote.dto.MaterialCommonUpdateResp;
 import com.machining.quote.dto.MaterialMasterDTO;
 import com.machining.quote.dto.MaterialMasterSaveReq;
 import com.machining.quote.dto.MaterialTypeDTO;
@@ -21,6 +24,8 @@ import com.machining.quote.service.PricingMarkupFeeService;
 import com.machining.quote.service.mes.MesMasterDataSyncScheduleConfigService;
 import com.machining.quote.service.mes.MesMasterDataSyncService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -30,6 +35,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -66,7 +72,34 @@ public class DictController {
             @RequestParam(value = "keyword", required = false) String keyword,
             @RequestParam(value = "page", required = false) Integer page,
             @RequestParam(value = "pageSize", required = false) Integer pageSize) {
-        return materialMasterService.pageMaterials(enabledOnly, keyword, page, pageSize);
+        return materialMasterService.pageMaterials(
+                enabledOnly,
+                keyword,
+                page,
+                pageSize,
+                currentRequestParam("commonScope"),
+                currentRequestParam("materialTypeCodes"),
+                currentRequestParam("categoryName"));
+    }
+
+    @GetMapping("/materials/u9-category-names")
+    @RequirePermission("engineer:dict:view")
+    public List<String> listMaterialU9CategoryNames() {
+        return materialMasterService.listMaterialU9CategoryNames(
+                currentRequestParam("commonScope"),
+                currentRequestParam("materialTypeCodes"));
+    }
+
+    @PutMapping("/materials/common-status")
+    @RequirePermission("engineer:dict:material-manage")
+    public MaterialCommonUpdateResp updateMaterialCommonStatus(@RequestBody MaterialCommonUpdateReq req) {
+        return materialMasterService.updateMaterialCommonStatus(req);
+    }
+
+    @PostMapping("/materials/common-status/import-preview")
+    @RequirePermission("engineer:dict:material-manage")
+    public MaterialCommonImportPreviewResp previewCommonMaterialImport(@RequestParam("file") MultipartFile file) {
+        return materialMasterService.previewCommonMaterialImport(file);
     }
 
     @PostMapping("/materials")
@@ -336,6 +369,13 @@ public class DictController {
     private Long currentUserId() {
         AuthContext.SessionUser user = AuthContext.get();
         return user == null || user.id() == null ? null : user.id().longValue();
+    }
+
+    private String currentRequestParam(String name) {
+        if (!(RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes attributes)) {
+            return null;
+        }
+        return attributes.getRequest().getParameter(name);
     }
 
     private Map<String, Object> syncSummary(String syncType, MesMasterDataSyncService.SyncResult result) {

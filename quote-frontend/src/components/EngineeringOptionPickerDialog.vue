@@ -67,6 +67,15 @@
             class="keyword-input"
           />
           <div v-if="type === 'material'" class="material-filter-panel">
+            <el-radio-group v-model="materialCommonScopeFilter" size="small" class="material-common-scope-filter">
+              <el-radio-button
+                v-for="option in MATERIAL_COMMON_SCOPE_OPTIONS"
+                :key="option.value"
+                :label="option.value"
+              >
+                {{ option.label }}
+              </el-radio-button>
+            </el-radio-group>
             <el-radio-group v-model="materialTypeFilter" size="small" class="material-type-filter">
               <el-radio-button
                 v-for="option in MATERIAL_TYPE_FILTER_OPTIONS"
@@ -391,10 +400,20 @@ const props = defineProps({
   defaultPageSize: {
     type: Number,
     default: 10
+  },
+  defaultMaterialCommonScope: {
+    type: String,
+    default: 'COMMON'
   }
 })
 
 const emit = defineEmits(['update:modelValue', 'confirm', 'process-rate-updated', 'material-price-updated'])
+
+const MATERIAL_COMMON_SCOPE_OPTIONS = [
+  { label: '常用', value: 'COMMON' },
+  { label: '全部', value: 'ALL' },
+  { label: '不常用', value: 'UNCOMMON' }
+]
 
 const MATERIAL_TYPE_FILTER_OPTIONS = [
   { label: '全部', value: '' },
@@ -438,6 +457,7 @@ const processArrangementError = ref('')
 const selectedProcessArrangementKey = ref('')
 const selectedProcessArrangementNode = ref(null)
 const processArrangementExpandedKeys = ref([])
+const materialCommonScopeFilter = ref(props.defaultMaterialCommonScope || 'ALL')
 const materialTypeFilter = ref('')
 const materialCategoryNameFilter = ref('')
 const materialCategoryNameOptions = ref([])
@@ -557,6 +577,7 @@ const resetPicker = () => {
   selectedProcessArrangementKey.value = ''
   selectedProcessArrangementNode.value = null
   processArrangementExpandedKeys.value = []
+  materialCommonScopeFilter.value = props.defaultMaterialCommonScope || 'ALL'
   materialTypeFilter.value = ''
   materialCategoryNameFilter.value = ''
   materialCategoryNameOptions.value = []
@@ -679,6 +700,9 @@ const loadMaterialCategoryNameOptions = async () => {
   materialCategoryNameLoading.value = true
   try {
     const params = {}
+    if (materialCommonScopeFilter.value) {
+      params.commonScope = materialCommonScopeFilter.value
+    }
     if (materialTypeFilter.value) {
       params.materialTypeCodes = materialTypeFilter.value
     }
@@ -783,6 +807,9 @@ const loadRemotePage = async (nextPage = page.value) => {
     keyword: keyword.value.trim(),
     page: safePage,
     pageSize: safePageSize
+  }
+  if (props.type === 'material' && materialCommonScopeFilter.value) {
+    params.commonScope = materialCommonScopeFilter.value
   }
   if (props.type === 'material' && materialTypeFilter.value) {
     params.materialTypeCodes = materialTypeFilter.value
@@ -1077,6 +1104,12 @@ const saveInlineProcessRate = async (row) => {
 watch(() => props.selectedKey, syncSelectedKey)
 watch(keyword, scheduleRemoteSearch)
 watch(materialTypeFilter, () => {
+  if (visible.value && props.type === 'material') {
+    loadMaterialCategoryNameOptions()
+    loadRemotePage(1)
+  }
+})
+watch(materialCommonScopeFilter, () => {
   if (visible.value && props.type === 'material') {
     loadMaterialCategoryNameOptions()
     loadRemotePage(1)

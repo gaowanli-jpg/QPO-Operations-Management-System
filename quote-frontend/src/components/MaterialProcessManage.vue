@@ -60,6 +60,11 @@
                   <el-tag :type="materialPriceStatusType(scope.row)" size="small">{{ materialPriceStatusText(scope.row) }}</el-tag>
                 </template>
               </el-table-column>
+              <el-table-column label="常用" width="90" align="center">
+                <template #default="scope">
+                  <el-tag :type="scope.row.commonMaterial ? 'success' : 'info'" size="small">{{ commonMaterialStatusText(scope.row.commonMaterial) }}</el-tag>
+                </template>
+              </el-table-column>
               <el-table-column label="具体密度" width="130" align="right">
                 <template #default="scope">{{ formatDensity(scope.row.density) }}</template>
               </el-table-column>
@@ -120,6 +125,153 @@
               </el-table-column>
               <el-table-column prop="remarks" label="备注" min-width="180" show-overflow-tooltip />
             </el-table>
+          </el-tab-pane>
+
+          <el-tab-pane label="常用材料" name="commonMaterials">
+            <div class="common-material-workbench">
+              <section class="common-material-panel">
+                <div class="common-material-panel-header">
+                  <div>
+                    <strong>常用材料</strong>
+                    <span>零件核价默认优先展示这里的材料。</span>
+                  </div>
+                  <el-button
+                    v-permission="'engineer:dict:material-manage'"
+                    type="danger"
+                    plain
+                    :disabled="!selectedCommonMaterialRows.length"
+                    :loading="isPending(dictActionKeys.markMaterialsUncommon)"
+                    @click="markSelectedMaterialsUncommon"
+                  >移出常用</el-button>
+                </div>
+                <div class="common-material-filter-row">
+                  <el-input v-model="commonMaterialLeftKeyword" clearable placeholder="搜索常用材料编码、名称、材料类型或U9类别" />
+                  <el-select v-model="commonMaterialLeftTypeCodes" clearable filterable placeholder="全部材料类型">
+                    <el-option label="全部材料类型" value="" />
+                    <el-option
+                      v-for="type in materialTypes"
+                      :key="`left-${type.id || type.typeCode}`"
+                      :label="type.typeName || type.typeCode"
+                      :value="type.typeCode"
+                    />
+                  </el-select>
+                  <el-select v-model="commonMaterialLeftCategoryName" clearable filterable placeholder="全部U9类别" :loading="commonMaterialLeftCategoryLoading">
+                    <el-option label="全部U9类别" value="" />
+                    <el-option
+                      v-for="category in commonMaterialLeftCategoryNames"
+                      :key="category"
+                      :label="category"
+                      :value="category"
+                    />
+                  </el-select>
+                </div>
+                <el-table
+                  ref="commonMaterialLeftTableRef"
+                  :data="commonMaterials"
+                  border
+                  stripe
+                  height="470"
+                  row-key="id"
+                  v-loading="loading"
+                  @selection-change="handleCommonMaterialSelection"
+                >
+                  <el-table-column type="selection" width="44" />
+                  <el-table-column prop="materialCode" label="材料编码" width="150" show-overflow-tooltip />
+                  <el-table-column prop="materialName" label="材料名称" min-width="160" show-overflow-tooltip />
+                  <el-table-column prop="materialTypeName" label="材料类型" width="120" show-overflow-tooltip />
+                  <el-table-column prop="categoryName" label="U9类别" width="120" show-overflow-tooltip>
+                    <template #default="{ row }">{{ row.categoryName || '-' }}</template>
+                  </el-table-column>
+                </el-table>
+                <div v-if="commonMaterialLeftPagination.total" class="erp-pagination material-dict-pagination">
+                  <el-pagination
+                    v-model:current-page="commonMaterialLeftPagination.page"
+                    v-model:page-size="commonMaterialLeftPagination.pageSize"
+                    :page-sizes="CLIENT_PAGE_SIZES"
+                    :pager-count="7"
+                    :total="commonMaterialLeftPagination.total"
+                    layout="total, sizes, prev, pager, next, jumper"
+                    background
+                    @size-change="resetCommonMaterialLeftPage"
+                  />
+                </div>
+              </section>
+
+              <section class="common-material-panel">
+                <div class="common-material-panel-header">
+                  <div>
+                    <strong>材料池</strong>
+                    <span>MES 导入材料默认进入这里，可分页搜索后设为常用。</span>
+                  </div>
+                  <div class="common-material-header-actions">
+                    <el-button
+                      v-permission="'engineer:dict:material-manage'"
+                      plain
+                      :loading="isPending(dictActionKeys.previewCommonImport)"
+                      @click="openCommonMaterialImportDialog"
+                    >导入物料号</el-button>
+                    <el-button
+                      v-permission="'engineer:dict:material-manage'"
+                      type="primary"
+                      :disabled="!selectedUncommonMaterialRows.length"
+                      :loading="isPending(dictActionKeys.markMaterialsCommon)"
+                      @click="markSelectedMaterialsCommon"
+                    >设为常用</el-button>
+                  </div>
+                </div>
+                <div class="common-material-filter-row">
+                  <el-input v-model="commonMaterialRightKeyword" clearable placeholder="搜索材料池编码、名称、材料类型或U9类别" />
+                  <el-select v-model="commonMaterialRightTypeCodes" clearable filterable placeholder="全部材料类型">
+                    <el-option label="全部材料类型" value="" />
+                    <el-option
+                      v-for="type in materialTypes"
+                      :key="`right-${type.id || type.typeCode}`"
+                      :label="type.typeName || type.typeCode"
+                      :value="type.typeCode"
+                    />
+                  </el-select>
+                  <el-select v-model="commonMaterialRightCategoryName" clearable filterable placeholder="全部U9类别" :loading="commonMaterialRightCategoryLoading">
+                    <el-option label="全部U9类别" value="" />
+                    <el-option
+                      v-for="category in commonMaterialRightCategoryNames"
+                      :key="category"
+                      :label="category"
+                      :value="category"
+                    />
+                  </el-select>
+                </div>
+                <el-table
+                  ref="commonMaterialRightTableRef"
+                  :data="uncommonMaterials"
+                  border
+                  stripe
+                  height="470"
+                  row-key="id"
+                  v-loading="loading"
+                  @selection-change="handleUncommonMaterialSelection"
+                >
+                  <el-table-column type="selection" width="44" />
+                  <el-table-column prop="materialCode" label="材料编码" width="150" show-overflow-tooltip />
+                  <el-table-column prop="materialName" label="材料名称" min-width="160" show-overflow-tooltip />
+                  <el-table-column prop="materialTypeName" label="材料类型" width="120" show-overflow-tooltip />
+                  <el-table-column prop="categoryName" label="U9类别" width="120" show-overflow-tooltip>
+                    <template #default="{ row }">{{ row.categoryName || '-' }}</template>
+                  </el-table-column>
+                </el-table>
+                <div v-if="commonMaterialRightPagination.total" class="erp-pagination material-dict-pagination">
+                  <el-pagination
+                    v-model:current-page="commonMaterialRightPagination.page"
+                    v-model:page-size="commonMaterialRightPagination.pageSize"
+                    :page-sizes="CLIENT_PAGE_SIZES"
+                    :pager-count="7"
+                    :total="commonMaterialRightPagination.total"
+                    layout="total, sizes, prev, pager, next, jumper"
+                    background
+                    @size-change="resetCommonMaterialRightPage"
+                  />
+                </div>
+              </section>
+            </div>
           </el-tab-pane>
 
           <el-tab-pane label="工艺大类" name="processCategories">
@@ -409,6 +561,59 @@
       </div>
     </section>
 
+    <el-dialog v-model="commonMaterialImportPreviewVisible" title="导入常用材料预览" width="880px" destroy-on-close>
+      <div class="common-material-import-panel">
+        <el-alert
+          type="info"
+          show-icon
+          :closable="false"
+          title="导入表格只需要一列“物料号”。系统会先按物料号匹配材料库，确认后才批量设为常用材料。"
+        />
+        <el-upload
+          action="#"
+          accept=".xlsx,.xls,.csv"
+          :auto-upload="false"
+          :limit="1"
+          :show-file-list="true"
+          :on-change="handleCommonMaterialImportFileChange"
+          :on-remove="clearCommonMaterialImportPreview"
+        >
+          <el-button v-permission="'engineer:dict:material-manage'" :loading="isPending(dictActionKeys.previewCommonImport)">选择导入表格</el-button>
+        </el-upload>
+        <div class="common-material-import-summary">
+          <el-statistic title="上传行数" :value="commonImportPreview.uploadedCount || 0" />
+          <el-statistic title="匹配材料" :value="commonImportPreview.matchedCount || 0" />
+          <el-statistic title="未找到" :value="commonImportPreview.notFoundCount || 0" />
+          <el-statistic title="重复行" :value="commonImportPreview.duplicateCount || 0" />
+        </div>
+        <el-table :data="commonImportPreview.rows" border stripe max-height="360" v-loading="isPending(dictActionKeys.previewCommonImport)">
+          <el-table-column prop="rowNo" label="行号" width="80" align="center" />
+          <el-table-column prop="materialCode" label="物料号" width="160" show-overflow-tooltip />
+          <el-table-column prop="materialName" label="材料名称" min-width="160" show-overflow-tooltip>
+            <template #default="{ row }">{{ row.materialName || '-' }}</template>
+          </el-table-column>
+          <el-table-column label="状态" width="120" align="center">
+            <template #default="{ row }">
+              <el-tag :type="commonImportStatusTagType(row.status)" size="small">{{ commonImportStatusText(row.status) }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="message" label="说明" min-width="220" show-overflow-tooltip />
+        </el-table>
+      </div>
+      <template #footer>
+        <div class="erp-dialog-footer">
+          <el-button @click="commonMaterialImportPreviewVisible = false">取消</el-button>
+          <el-button
+            v-permission="'engineer:dict:material-manage'"
+            type="primary"
+            :disabled="!commonImportPreview.matchedMaterialIds.length"
+            :loading="isPending(dictActionKeys.confirmCommonImport)"
+            @click="confirmCommonMaterialImport"
+          >确认设为常用</el-button>
+        </div>
+      </template>
+    </el-dialog>
+
     <el-dialog v-model="materialDialogVisible" :title="materialForm.id ? '编辑材料' : '新增材料'" width="820px">
       <el-form :model="materialForm" label-width="120px" class="erp-dialog-form process-dialog-grid material-dialog-grid">
         <el-form-item label="材料编码" required>
@@ -675,6 +880,7 @@ import {
   getMesProcessSyncRun,
   getMesProcessSyncSchedule,
   listMaterialTypes,
+  listMaterialU9CategoryNames,
   listProcessArrangementTree,
   listPricingMarkupFees,
   listUnplacedProcessArrangementOptions,
@@ -684,6 +890,7 @@ import {
   pageProcessCategories,
   pageProcessDetails,
   placeProcessArrangementItems,
+  previewMaterialCommonImport,
   removeProcessArrangementItem,
   createPricingMarkupFee,
   saveExtraFeeItem,
@@ -693,6 +900,7 @@ import {
   saveProcessDetail as saveProcessDetailRequest,
   syncMesMaterials as syncMesMaterialsRequest,
   syncMesProcessTypes as syncMesProcessTypesRequest,
+  updateMaterialCommonStatus,
   updateProcessArrangementNode,
   updatePricingMarkupFee
 } from '../services/dictApi'
@@ -724,6 +932,8 @@ const pricingMarkupFeeCategoryOptions = [
 const activeTab = ref('materials')
 const materialTypes = ref([])
 const materials = ref([])
+const commonMaterials = ref([])
+const uncommonMaterials = ref([])
 const processCategories = ref([])
 const processDetails = ref([])
 const processArrangementTree = ref([])
@@ -741,8 +951,20 @@ const arrangementSourceType = ref('')
 const pricingMarkupKeyword = ref('')
 const pricingMarkupScope = ref('NORMAL')
 const pricingMarkupFeeCategory = ref('BASIC_PERCENT')
+const commonMaterialLeftKeyword = ref('')
+const commonMaterialRightKeyword = ref('')
+const commonMaterialLeftTypeCodes = ref('')
+const commonMaterialRightTypeCodes = ref('')
+const commonMaterialLeftCategoryName = ref('')
+const commonMaterialRightCategoryName = ref('')
+const commonMaterialLeftCategoryNames = ref([])
+const commonMaterialRightCategoryNames = ref([])
+const commonMaterialLeftCategoryLoading = ref(false)
+const commonMaterialRightCategoryLoading = ref(false)
 const createPagination = () => reactive({ page: 1, pageSize: DEFAULT_CLIENT_PAGE_SIZE, total: 0 })
 const materialPagination = createPagination()
+const commonMaterialLeftPagination = createPagination()
+const commonMaterialRightPagination = createPagination()
 const processCategoryPagination = createPagination()
 const processDetailPagination = createPagination()
 const extraFeePagination = createPagination()
@@ -754,8 +976,12 @@ const arrangementSourceTypeOptions = [
   { value: 'extra', label: '非工时工艺' }
 ]
 const arrangementOptionTableRef = ref(null)
+const commonMaterialLeftTableRef = ref(null)
+const commonMaterialRightTableRef = ref(null)
 const selectedArrangementNode = ref(null)
 const selectedArrangementOptions = ref([])
+const selectedCommonMaterialRows = ref([])
+const selectedUncommonMaterialRows = ref([])
 const arrangementLoading = ref(false)
 const arrangementNodeDialogVisible = ref(false)
 const arrangementNodeDialogMode = ref('root')
@@ -763,6 +989,8 @@ const arrangementNodeParentName = ref('根层级')
 const arrangementNodeForm = reactive(createEmptyArrangementNode())
 const deleteSummary = reactive({ removedNodeCount: 0, removedItemCount: 0 })
 const resetMaterialPage = () => { materialPagination.page = 1 }
+const resetCommonMaterialLeftPage = () => { commonMaterialLeftPagination.page = 1 }
+const resetCommonMaterialRightPage = () => { commonMaterialRightPagination.page = 1 }
 const resetProcessCategoryPage = () => { processCategoryPagination.page = 1 }
 const resetProcessDetailPage = () => { processDetailPagination.page = 1 }
 const resetExtraFeePage = () => { extraFeePagination.page = 1 }
@@ -779,6 +1007,10 @@ const { isPending, runAction } = usePendingAction()
 
 const dictActionKeys = {
   saveMaterialDialog: 'engineer:dict:material-save-dialog',
+  markMaterialsCommon: 'engineer:dict:common-material-mark-common',
+  markMaterialsUncommon: 'engineer:dict:common-material-mark-uncommon',
+  previewCommonImport: 'engineer:dict:common-material-import-preview',
+  confirmCommonImport: 'engineer:dict:common-material-import-confirm',
   syncMesMaterials: 'engineer:dict:material-sync-mes',
   syncMesProcessTypes: 'engineer:dict:process-sync-mes',
   saveMesSchedule: 'engineer:dict:mes-master-data-schedule-save',
@@ -803,6 +1035,7 @@ const isExtraFeeDeletePending = (row) => isPending(dictActionKeys.deleteExtraFee
 const materialDialogVisible = ref(false)
 const materialSpecDialogVisible = ref(false)
 const materialSpecDialogCode = ref('SPEC_1')
+const commonMaterialImportPreviewVisible = ref(false)
 const processDetailDialogVisible = ref(false)
 const pricingMarkupFeeDialogVisible = ref(false)
 const extraFeeDialogVisible = ref(false)
@@ -818,6 +1051,7 @@ const activeMesSyncRuns = reactive({
 const mesSyncPollingTimers = new Map()
 
 const materialForm = reactive(createEmptyMaterial())
+const commonImportPreview = reactive(createEmptyCommonImportPreview())
 const processDetailForm = reactive(createEmptyProcessDetail())
 const pricingMarkupFeeForm = reactive(createEmptyPricingMarkupFee())
 const extraFeeForm = reactive(createEmptyExtraFee())
@@ -903,12 +1137,25 @@ const formatHourlyRate = (value) => {
   return text === '-' ? '-' : `${text} 元/小时`
 }
 const sourceTypeText = (value) => (value === 'MES' ? 'MES同步' : '本地维护')
+const commonMaterialStatusText = (value) => (value ? '常用' : '不常用')
 const materialPriceStatusText = (row = {}) => (
   hasAnyMaterialSpecPrice(row.priceSpecs)
     ? '单价已维护'
     : '单价未维护'
 )
 const materialPriceStatusType = (row = {}) => (materialPriceStatusText(row) === '单价已维护' ? 'success' : 'danger')
+const commonImportStatusText = (status) => ({
+  MATCHED: '可导入',
+  ALREADY_COMMON: '已是常用',
+  DUPLICATE: '重复行',
+  NOT_FOUND: '未找到'
+}[status] || status || '-')
+const commonImportStatusTagType = (status) => ({
+  MATCHED: 'success',
+  ALREADY_COMMON: 'info',
+  DUPLICATE: 'warning',
+  NOT_FOUND: 'danger'
+}[status] || 'info')
 const formatSpecUnifiedPrice = (row, specCode) => formatMaterialSpecPrice(findPriceSpec(row?.priceSpecs, specCode)?.unifiedPrice)
 const formatSyncTime = (value) => (value ? String(value).replace('T', ' ').slice(0, 19) : '-')
 const materialTypeLabel = (type) => `${type.typeCode || '-'} / ${type.typeName || '-'}`
@@ -966,9 +1213,22 @@ function createEmptyMaterial() {
     categoryName: '',
     remarks: '',
     enabled: true,
+    commonMaterial: false,
     sortNo: 0,
     density: null,
     priceSpecs: normalizePriceSpecs([])
+  }
+}
+
+function createEmptyCommonImportPreview() {
+  return {
+    uploadedCount: 0,
+    matchedCount: 0,
+    alreadyCommonCount: 0,
+    notFoundCount: 0,
+    duplicateCount: 0,
+    matchedMaterialIds: [],
+    rows: []
   }
 }
 
@@ -1140,6 +1400,64 @@ const loadMaterialPage = async () => {
   materials.value = applyPageResult(materialPagination, response)
 }
 
+const loadCommonMaterialLeftPage = async () => {
+  const response = await pageMaterials({
+    enabledOnly: true,
+    commonScope: 'COMMON',
+    materialTypeCodes: commonMaterialLeftTypeCodes.value,
+    categoryName: commonMaterialLeftCategoryName.value,
+    ...pageParams(commonMaterialLeftPagination, commonMaterialLeftKeyword)
+  })
+  commonMaterials.value = applyPageResult(commonMaterialLeftPagination, response)
+}
+
+const loadCommonMaterialRightPage = async () => {
+  const response = await pageMaterials({
+    enabledOnly: true,
+    commonScope: 'UNCOMMON',
+    materialTypeCodes: commonMaterialRightTypeCodes.value,
+    categoryName: commonMaterialRightCategoryName.value,
+    ...pageParams(commonMaterialRightPagination, commonMaterialRightKeyword)
+  })
+  uncommonMaterials.value = applyPageResult(commonMaterialRightPagination, response)
+}
+
+const loadCommonMaterialCategoryNames = async ({ commonScope, materialTypeCodes, target, loadingRef }) => {
+  loadingRef.value = true
+  try {
+    target.value = await listMaterialU9CategoryNames({ commonScope, materialTypeCodes }) || []
+  } catch (error) {
+    console.error(error)
+    target.value = []
+    ElMessage.error('U9类别加载失败，请检查后端服务。')
+  } finally {
+    loadingRef.value = false
+  }
+}
+
+const loadCommonMaterialLeftCategoryNames = () => loadCommonMaterialCategoryNames({
+  commonScope: 'COMMON',
+  materialTypeCodes: commonMaterialLeftTypeCodes.value,
+  target: commonMaterialLeftCategoryNames,
+  loadingRef: commonMaterialLeftCategoryLoading
+})
+
+const loadCommonMaterialRightCategoryNames = () => loadCommonMaterialCategoryNames({
+  commonScope: 'UNCOMMON',
+  materialTypeCodes: commonMaterialRightTypeCodes.value,
+  target: commonMaterialRightCategoryNames,
+  loadingRef: commonMaterialRightCategoryLoading
+})
+
+const loadCommonMaterialPages = async () => {
+  await Promise.all([
+    loadCommonMaterialLeftCategoryNames(),
+    loadCommonMaterialRightCategoryNames(),
+    loadCommonMaterialLeftPage(),
+    loadCommonMaterialRightPage()
+  ])
+}
+
 const loadProcessCategoryPage = async () => {
   const response = await pageProcessCategories({
     ...pageParams(processCategoryPagination, processCategoryKeyword)
@@ -1210,6 +1528,7 @@ const loadAll = async () => loadPageWithLoading(async () => {
   await Promise.all([
     loadLookupDictionaries(),
     loadMaterialPage(),
+    loadCommonMaterialPages(),
     loadProcessCategoryPage(),
     loadProcessDetailPage(),
     loadExtraFeePage(),
@@ -1370,6 +1689,104 @@ const handleArrangementTreeClick = (row) => {
 
 const handleArrangementOptionSelection = (rows) => {
   selectedArrangementOptions.value = rows || []
+}
+
+const handleCommonMaterialSelection = (rows) => {
+  selectedCommonMaterialRows.value = rows || []
+}
+
+const handleUncommonMaterialSelection = (rows) => {
+  selectedUncommonMaterialRows.value = rows || []
+}
+
+const selectedMaterialIds = (rows = []) => Array.from(new Set(
+  rows
+    .map(row => row?.id ?? row?.materialId)
+    .filter(id => id !== undefined && id !== null)
+    .map(id => Number(id))
+    .filter(Number.isFinite)
+))
+
+const clearCommonMaterialSelections = () => {
+  selectedCommonMaterialRows.value = []
+  selectedUncommonMaterialRows.value = []
+  commonMaterialLeftTableRef.value?.clearSelection?.()
+  commonMaterialRightTableRef.value?.clearSelection?.()
+}
+
+const reloadCommonMaterialWorkbench = async () => {
+  invalidateDictionaryCache()
+  await Promise.all([
+    loadMaterialPage(),
+    loadCommonMaterialPages()
+  ])
+}
+
+const updateSelectedMaterialCommonStatus = async (rows, commonMaterial) => {
+  const materialIds = selectedMaterialIds(rows)
+  if (!materialIds.length) return ElMessage.warning('请选择要维护的材料。')
+  const actionKey = commonMaterial ? dictActionKeys.markMaterialsCommon : dictActionKeys.markMaterialsUncommon
+  return runAction(actionKey, async () => {
+    try {
+      const response = await updateMaterialCommonStatus({ materialIds, commonMaterial })
+      clearCommonMaterialSelections()
+      ElMessage.success(`${commonMaterial ? '已设为常用' : '已移出常用'}：匹配 ${response?.matchedCount ?? materialIds.length} 条，更新 ${response?.updatedCount ?? 0} 条。`)
+      await reloadCommonMaterialWorkbench()
+    } catch (error) {
+      console.error(error)
+      ElMessage.error(requestErrorMessage(error, commonMaterial ? '设为常用材料失败。' : '移出常用材料失败。'))
+    }
+  })
+}
+
+const markSelectedMaterialsCommon = () => updateSelectedMaterialCommonStatus(selectedUncommonMaterialRows.value, true)
+
+const markSelectedMaterialsUncommon = () => updateSelectedMaterialCommonStatus(selectedCommonMaterialRows.value, false)
+
+const resetCommonImportPreview = () => {
+  Object.assign(commonImportPreview, createEmptyCommonImportPreview())
+}
+
+const openCommonMaterialImportDialog = () => {
+  resetCommonImportPreview()
+  commonMaterialImportPreviewVisible.value = true
+}
+
+const clearCommonMaterialImportPreview = () => {
+  resetCommonImportPreview()
+}
+
+const handleCommonMaterialImportFileChange = async (uploadFile) => {
+  const rawFile = uploadFile?.raw
+  if (!rawFile) return
+  return runAction(dictActionKeys.previewCommonImport, async () => {
+    try {
+      const response = await previewMaterialCommonImport(rawFile)
+      Object.assign(commonImportPreview, createEmptyCommonImportPreview(), response || {})
+    } catch (error) {
+      console.error(error)
+      resetCommonImportPreview()
+      ElMessage.error(requestErrorMessage(error, '常用材料导入预览失败。'))
+    }
+  })
+}
+
+const confirmCommonMaterialImport = async () => {
+  const materialIds = selectedMaterialIds((commonImportPreview.matchedMaterialIds || []).map(id => ({ id })))
+  if (!materialIds.length) return ElMessage.warning('没有可设为常用的材料。')
+  return runAction(dictActionKeys.confirmCommonImport, async () => {
+    try {
+      const response = await updateMaterialCommonStatus({ materialIds, commonMaterial: true })
+      ElMessage.success(`常用材料导入已确认：匹配 ${response?.matchedCount ?? materialIds.length} 条，更新 ${response?.updatedCount ?? 0} 条。`)
+      commonMaterialImportPreviewVisible.value = false
+      resetCommonImportPreview()
+      clearCommonMaterialSelections()
+      await reloadCommonMaterialWorkbench()
+    } catch (error) {
+      console.error(error)
+      ElMessage.error(requestErrorMessage(error, '常用材料导入确认失败。'))
+    }
+  })
 }
 
 const nextArrangementSortNo = (rows = []) => rows.reduce((max, row) => Math.max(max, Number(row?.sortNo || 0)), 0) + 1
@@ -1731,6 +2148,30 @@ const deleteExtraFee = async (row) => {
 watch(materialKeyword, () => {
   resetPageAndLoad(materialPagination, loadMaterialPage)
 })
+watch(commonMaterialLeftKeyword, () => {
+  resetPageAndLoad(commonMaterialLeftPagination, loadCommonMaterialLeftPage)
+})
+watch(commonMaterialRightKeyword, () => {
+  resetPageAndLoad(commonMaterialRightPagination, loadCommonMaterialRightPage)
+})
+watch(commonMaterialLeftTypeCodes, async () => {
+  const hadCategory = Boolean(commonMaterialLeftCategoryName.value)
+  commonMaterialLeftCategoryName.value = ''
+  await loadCommonMaterialLeftCategoryNames()
+  if (!hadCategory) resetPageAndLoad(commonMaterialLeftPagination, loadCommonMaterialLeftPage)
+})
+watch(commonMaterialRightTypeCodes, async () => {
+  const hadCategory = Boolean(commonMaterialRightCategoryName.value)
+  commonMaterialRightCategoryName.value = ''
+  await loadCommonMaterialRightCategoryNames()
+  if (!hadCategory) resetPageAndLoad(commonMaterialRightPagination, loadCommonMaterialRightPage)
+})
+watch(commonMaterialLeftCategoryName, () => {
+  resetPageAndLoad(commonMaterialLeftPagination, loadCommonMaterialLeftPage)
+})
+watch(commonMaterialRightCategoryName, () => {
+  resetPageAndLoad(commonMaterialRightPagination, loadCommonMaterialRightPage)
+})
 watch(processCategoryKeyword, () => {
   resetPageAndLoad(processCategoryPagination, loadProcessCategoryPage)
 })
@@ -1761,6 +2202,14 @@ watch(
   () => loadPageWithLoading(loadMaterialPage)
 )
 watch(
+  () => [commonMaterialLeftPagination.page, commonMaterialLeftPagination.pageSize],
+  () => loadPageWithLoading(loadCommonMaterialLeftPage)
+)
+watch(
+  () => [commonMaterialRightPagination.page, commonMaterialRightPagination.pageSize],
+  () => loadPageWithLoading(loadCommonMaterialRightPage)
+)
+watch(
   () => [processCategoryPagination.page, processCategoryPagination.pageSize],
   () => loadPageWithLoading(loadProcessCategoryPage)
 )
@@ -1774,6 +2223,7 @@ watch(
 )
 watch(activeTab, (tab) => {
   if (tab === 'materials') loadLatestMesSyncRun('MES_MATERIAL')
+  if (tab === 'commonMaterials') loadPageWithLoading(loadCommonMaterialPages)
   if (tab === 'processCategories') loadLatestMesSyncRun('MES_PROCESS_TYPE')
   if (tab === 'processArrangement') loadProcessArrangement()
 })
@@ -1802,6 +2252,71 @@ onBeforeUnmount(stopAllMesSyncPolling)
 .material-filter-bar .el-input {
   max-width: 360px;
   width: 100%;
+}
+
+.common-material-workbench {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  min-width: 0;
+}
+
+.common-material-panel {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--erp-border-soft);
+  border-radius: 8px;
+  background: var(--erp-surface);
+}
+
+.common-material-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.common-material-panel-header > div:first-child {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.common-material-panel-header strong {
+  color: var(--erp-text);
+  font-size: 14px;
+}
+
+.common-material-panel-header span {
+  color: var(--erp-text-secondary);
+  font-size: 12px;
+}
+
+.common-material-header-actions,
+.common-material-filter-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.common-material-filter-row .el-input {
+  max-width: 360px;
+  width: 100%;
+}
+
+.common-material-import-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.common-material-import-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
 }
 
 .pricing-markup-panel {
@@ -2079,6 +2594,22 @@ onBeforeUnmount(stopAllMesSyncPolling)
 
   .material-filter-bar {
     justify-content: flex-start;
+  }
+
+  .common-material-workbench,
+  .common-material-import-summary {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .common-material-panel-header,
+  .common-material-header-actions,
+  .common-material-filter-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .common-material-filter-row .el-input {
+    max-width: 100%;
   }
 
   .pricing-markup-controls,

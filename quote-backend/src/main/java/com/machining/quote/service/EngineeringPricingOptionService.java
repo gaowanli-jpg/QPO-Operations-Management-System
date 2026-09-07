@@ -42,6 +42,9 @@ public class EngineeringPricingOptionService {
     private static final String OPTION_TYPE_EXTRA_FEE = PricingOptionUsageStatService.OPTION_TYPE_EXTRA_FEE;
     private static final String SOURCE_TYPE_PROCESS = "process";
     private static final String SOURCE_TYPE_EXTRA = "extra";
+    private static final String COMMON_SCOPE_ALL = "ALL";
+    private static final String COMMON_SCOPE_COMMON = "COMMON";
+    private static final String COMMON_SCOPE_UNCOMMON = "UNCOMMON";
 
     @Autowired
     private DictMaterialMapper materialMapper;
@@ -63,12 +66,13 @@ public class EngineeringPricingOptionService {
         List<String> materialCodes = parseMaterialCodes(safeReq.getMaterialCodes());
         List<String> materialTypeCodes = parseMaterialTypeCodes(safeReq.getMaterialTypeCodes());
         String categoryName = trimToNull(safeReq.getCategoryName());
-        QueryWrapper<DictMaterial> countQuery = materialQuery(safeReq.getKeyword(), materialCodes, materialTypeCodes, categoryName);
+        Boolean commonMaterial = commonMaterialFilter(safeReq.getCommonScope());
+        QueryWrapper<DictMaterial> countQuery = materialQuery(safeReq.getKeyword(), materialCodes, materialTypeCodes, categoryName, commonMaterial);
         Long total = materialMapper.selectCount(countQuery);
         if (total == null || total == 0) {
             return PageResult.of(List.of(), 0, safePage, safePageSize);
         }
-        QueryWrapper<DictMaterial> pageQuery = materialQuery(safeReq.getKeyword(), materialCodes, materialTypeCodes, categoryName);
+        QueryWrapper<DictMaterial> pageQuery = materialQuery(safeReq.getKeyword(), materialCodes, materialTypeCodes, categoryName, commonMaterial);
         pageQuery.last(materialUsageOrderBy() + " " + limitOffset(safePage, safePageSize));
         List<PricingMaterialOptionDTO> records = toMaterialOptions(materialMapper.selectList(pageQuery));
         applyMaterialUsageCounts(records);
@@ -78,11 +82,15 @@ public class EngineeringPricingOptionService {
     public List<String> listMaterialU9CategoryNames(PricingOptionPageReq req) {
         PricingOptionPageReq safeReq = req == null ? new PricingOptionPageReq() : req;
         List<String> materialTypeCodes = parseMaterialTypeCodes(safeReq.getMaterialTypeCodes());
+        Boolean commonMaterial = commonMaterialFilter(safeReq.getCommonScope());
         QueryWrapper<DictMaterial> query = new QueryWrapper<>();
         query.select("DISTINCT category_name")
                 .eq("enabled", true)
                 .isNotNull("category_name")
                 .apply("TRIM(category_name) <> ''");
+        if (commonMaterial != null) {
+            query.eq("common_material", commonMaterial);
+        }
         applyMaterialTypeFilter(query, materialTypeCodes);
         query.orderByAsc("category_name");
         return materialMapper.selectObjs(query).stream()
@@ -155,9 +163,13 @@ public class EngineeringPricingOptionService {
     }
 
     private QueryWrapper<DictMaterial> materialQuery(String keyword, List<String> materialCodes,
-                                                     List<String> materialTypeCodes, String categoryName) {
+                                                     List<String> materialTypeCodes, String categoryName,
+                                                     Boolean commonMaterial) {
         QueryWrapper<DictMaterial> query = new QueryWrapper<>();
         query.eq("enabled", true);
+        if (commonMaterial != null) {
+            query.eq("common_material", commonMaterial);
+        }
         if (materialCodes != null && !materialCodes.isEmpty()) {
             query.in("UPPER(material_code)", materialCodes);
         }
@@ -346,6 +358,7 @@ public class EngineeringPricingOptionService {
         dto.setMesDensityRaw(material.getMesDensityRaw());
         dto.setPriceSpecs(MaterialPriceSpecSupport.normalizeDtos(priceSpecs));
         dto.setRemarks(material.getRemarks());
+        dto.setCommonMaterial(Boolean.TRUE.equals(material.getCommonMaterial()));
         return dto;
     }
 
@@ -451,6 +464,20 @@ public class EngineeringPricingOptionService {
             return null;
         }
         return value.trim();
+    }
+
+    private Boolean commonMaterialFilter(String commonScope) {
+        String normalized = trimToNull(commonScope);
+        if (normalized == null || COMMON_SCOPE_ALL.equalsIgnoreCase(normalized)) {
+            return null;
+        }
+        if (COMMON_SCOPE_COMMON.equalsIgnoreCase(normalized)) {
+            return true;
+        }
+        if (COMMON_SCOPE_UNCOMMON.equalsIgnoreCase(normalized)) {
+            return false;
+        }
+        throw new IllegalArgumentException("commonScope 只支持 ALL / COMMON / UNCOMMON");
     }
 
     private String normalizedKey(String value) {

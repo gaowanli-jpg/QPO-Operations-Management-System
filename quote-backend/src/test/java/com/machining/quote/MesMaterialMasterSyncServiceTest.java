@@ -147,6 +147,7 @@ class MesMaterialMasterSyncServiceTest {
         MesMasterDataSyncService service = service(client, materialMapper, materialPriceSpecMapper, materialTypeMapper, syncRunMapper, auditService);
         DictMaterial existing = material(10L, "MAT-001", "旧材料名", 91L, "LOCAL", true);
         existing.setDensity(7.6);
+        existing.setCommonMaterial(true);
         when(client.pageMaterials(1, 200)).thenReturn(page(3,
                 row("mes-1", " MAT-001 ", " 45#钢 ", "MATERIAL", "BUY", "MAKE", "GB/T 699", "DOC-1", "12.50", "7.85", "ENABLE"),
                 row("mes-2", "MAT-002", "成品件", "PRODUCT", "BUY", "MAKE", "STD-P", "DOC-2", "2.00", "8.01", "ENABLE"),
@@ -218,6 +219,7 @@ class MesMaterialMasterSyncServiceTest {
             assertThat(material.getMesWeight()).isEqualTo("12.50");
             assertThat(material.getMesDensityRaw()).isEqualTo("7850");
             assertThat(material.getMesSyncedAt()).isNotNull();
+            assertThat(material.getCommonMaterial()).isTrue();
         });
 
         ArgumentCaptor<DictMaterial> insertCaptor = ArgumentCaptor.forClass(DictMaterial.class);
@@ -230,6 +232,7 @@ class MesMaterialMasterSyncServiceTest {
             assertThat(material.getMaterialTypeId()).isEqualTo(102L);
             assertThat(material.getDensity()).isNull();
             assertThat(material.getMesDensityRaw()).isEqualTo("8010");
+            assertThat(material.getCommonMaterial()).isFalse();
         });
 
         ArgumentCaptor<DictMaterialPriceSpec> specCaptor = ArgumentCaptor.forClass(DictMaterialPriceSpec.class);
