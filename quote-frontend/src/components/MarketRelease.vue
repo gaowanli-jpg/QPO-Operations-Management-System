@@ -83,7 +83,7 @@
 
             <section class="release-order-default-panel">
               <div class="panel-title compact">订单默认信息</div>
-              <p class="release-order-default-hint">仅用于生成正式提单：一批生成一张销售订单，零件值优先，空值继承订单默认信息；追加销售提单以目标销售订单头为准，左侧必填项不参与。</p>
+              <p class="release-order-default-hint">仅用于生成正式提单：一批生成一张销售订单，零件值优先，空值继承订单默认信息；追加销售提单零件值优先，空值继承目标销售订单头，左侧必填项不参与。</p>
               <el-form label-width="96px" class="ticket-form release-order-default-form">
                 <el-form-item label="单据类型" required>
                   <el-input
@@ -1981,7 +1981,7 @@ const appendToSalesOrder = async (targetOrder) => {
 
   return runAction(releaseActionKeys.appendSalesOrder(), async () => {
     await ElMessageBox.confirm(
-      `确认将 ${batchRfqIds.length} 个询价单中已选的 ${orderedSelectedRows.length} 个零件追加到销售订单 ${targetOrder?.salesOrderNo || targetSalesOrderId}？本次追加以目标销售订单头为准，不使用左侧订单默认信息。`,
+      `确认将 ${batchRfqIds.length} 个询价单中已选的 ${orderedSelectedRows.length} 个零件追加到销售订单 ${targetOrder?.salesOrderNo || targetSalesOrderId}？本次追加零件值优先，空值继承目标销售订单头，不使用左侧订单默认信息。`,
       '追加销售提单确认',
       { type: 'warning', confirmButtonText: '确认追加', cancelButtonText: '取消' }
     )
