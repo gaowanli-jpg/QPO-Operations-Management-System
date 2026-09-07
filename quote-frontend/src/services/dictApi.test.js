@@ -52,15 +52,38 @@ describe('dictApi', () => {
   })
 
   test('loads material and process management dictionaries with backend pagination', async () => {
-    await dictApi.pageMaterials({ enabledOnly: true, keyword: 'raw', page: 2, pageSize: 20 })
+    await dictApi.pageMaterials({ enabledOnly: true, keyword: 'raw', page: 2, pageSize: 20, commonScope: 'COMMON', materialTypeCodes: 'MATERIAL', categoryName: 'U9原材料' })
     await dictApi.pageProcessCategories({ enabledOnly: false, keyword: 'pack', page: 3, pageSize: 50 })
     await dictApi.pageProcessDetails({ categoryId: 9, enabledOnly: true, keyword: 'cnc', page: 4, pageSize: 100 })
     await dictApi.pageExtraFeeItems({ includeDisabled: true, keyword: 'edm', page: 5, pageSize: 50 })
 
-    expect(request).toHaveBeenNthCalledWith(1, '/api/dict/materials/page?enabledOnly=true&keyword=raw&page=2&pageSize=20')
+    expect(request).toHaveBeenNthCalledWith(1, '/api/dict/materials/page?enabledOnly=true&keyword=raw&page=2&pageSize=20&commonScope=COMMON&materialTypeCodes=MATERIAL&categoryName=U9%E5%8E%9F%E6%9D%90%E6%96%99')
     expect(request).toHaveBeenNthCalledWith(2, '/api/dict/process-categories/page?enabledOnly=false&keyword=pack&page=3&pageSize=50')
     expect(request).toHaveBeenNthCalledWith(3, '/api/dict/process-details/page?categoryId=9&enabledOnly=true&keyword=cnc&page=4&pageSize=100')
     expect(request).toHaveBeenNthCalledWith(4, '/api/dict/extra-fee-items/page?includeDisabled=true&keyword=edm&page=5&pageSize=50')
+  })
+
+  test('loads material U9 categories with common and material type filters', async () => {
+    await dictApi.listMaterialU9CategoryNames({ commonScope: 'UNCOMMON', materialTypeCodes: 'MATERIAL' })
+
+    expect(request).toHaveBeenCalledWith('/api/dict/materials/u9-category-names?commonScope=UNCOMMON&materialTypeCodes=MATERIAL')
+  })
+
+  test('updates common material status and previews import files', async () => {
+    const payload = { materialIds: [1, 2], commonMaterial: true }
+    const file = new File(['物料号\nMAT-001'], 'common-materials.csv', { type: 'text/csv' })
+
+    await dictApi.updateMaterialCommonStatus(payload)
+    await dictApi.previewMaterialCommonImport(file)
+
+    expect(request).toHaveBeenNthCalledWith(1, '/api/dict/materials/common-status', {
+      method: 'PUT',
+      data: payload
+    })
+    expect(request).toHaveBeenNthCalledWith(2, '/api/dict/materials/common-status/import-preview', {
+      method: 'POST',
+      data: expect.any(FormData)
+    })
   })
 
   test('manages process arrangement tree and placements', async () => {

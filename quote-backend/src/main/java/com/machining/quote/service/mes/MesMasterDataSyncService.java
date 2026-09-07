@@ -749,8 +749,11 @@ public class MesMasterDataSyncService {
         material.setEnabled(source.enabled());
         material.setUpdatedAt(syncedAt);
         if (created) {
+            material.setCommonMaterial(false);
             material.setSortNo(0);
             material.setCreatedAt(syncedAt);
+        } else if (material.getCommonMaterial() == null) {
+            material.setCommonMaterial(false);
         }
     }
 

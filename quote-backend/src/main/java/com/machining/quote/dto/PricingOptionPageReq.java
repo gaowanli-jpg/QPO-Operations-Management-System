@@ -10,6 +10,7 @@ public class PricingOptionPageReq {
     private String materialCodes;
     private String materialTypeCodes;
     private String categoryName;
+    private String commonScope;
     private String processDetailIds;
     private String feeItemIds;
     private String sourceType;
