@@ -17,15 +17,17 @@ describe('sales order U9 sync module', () => {
   test('places U9 sync between release and delivery documents in the market sidebar', () => {
     const app = readSource('App.vue')
 
-    expect(app).toContain("paths: ['/market', '/quote-process', '/release', '/u9-sync', '/delivery-documents'")
+    expect(app).toContain("paths: ['/market', '/quote-process', '/release', '/release-append', '/u9-sync', '/delivery-documents'")
 
     const marketGroupIndex = app.indexOf("{ key: 'market'")
     const releaseIndex = app.indexOf("'/release'", marketGroupIndex)
+    const releaseAppendIndex = app.indexOf("'/release-append'", marketGroupIndex)
     const u9SyncIndex = app.indexOf("'/u9-sync'", marketGroupIndex)
     const deliveryDocumentIndex = app.indexOf("'/delivery-documents'", marketGroupIndex)
 
     expect(releaseIndex).toBeGreaterThan(-1)
-    expect(u9SyncIndex).toBeGreaterThan(releaseIndex)
+    expect(releaseAppendIndex).toBeGreaterThan(releaseIndex)
+    expect(u9SyncIndex).toBeGreaterThan(releaseAppendIndex)
     expect(deliveryDocumentIndex).toBeGreaterThan(u9SyncIndex)
   })
 

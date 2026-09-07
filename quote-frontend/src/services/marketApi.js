@@ -26,6 +26,7 @@ const MARKET_ORDER_ENDPOINTS = {
   'quote-process-supplemental': '/api/market/quote-process/supplemental-drawing/orders',
   release: '/api/market/release/orders',
   'release-append-sales-order': '/api/market/release/append-target-sales-orders',
+  'release-append': '/api/market/release-append/sales-orders',
   'delivery-document': '/api/market/delivery-documents/orders',
   'u9-sync': '/api/market/u9-sync/orders',
   'sales-order-change': '/api/change/sales-orders'
@@ -126,6 +127,8 @@ export const updateReleaseItemOrderFields = (itemId, payload) => postJson(`/api/
 export const generateTicket = (payload) => postJson('/api/market/generate-ticket', payload)
 
 export const appendReleaseToSalesOrder = (payload) => postJson('/api/market/release/append-to-sales-order', payload)
+
+export const appendSalesOrderRelease = (salesOrderId, formData) => multipartPost(`/api/market/release-append/sales-orders/${salesOrderId}/items`, formData)
 
 const scopedPath = (path, scope) => (
   scope ? `${path}?scope=${encodeURIComponent(scope)}` : path

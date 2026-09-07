@@ -27,11 +27,14 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
@@ -298,6 +301,98 @@ public class DeliveryService {
         recordSalesOrderImportAutoDeliveryAudit(header, createdTickets, startedAt);
         log.info("Sales order import auto delivery completed sourceOrderId={} ticketCount={} processRouteCount={} durationMs={}",
                 salesOrderId, createdTickets.size(), countProcessRoutes(createdTickets), System.currentTimeMillis() - startedAt);
+        return createdTickets;
+    }
+
+    @Transactional
+    public List<OrderDeliveryTicket> generateImportedSalesOrderTicketsForItems(
+            Long salesOrderId,
+            Collection<Long> salesOrderItemIds,
+            String triggerScene) {
+        long startedAt = System.currentTimeMillis();
+        if (salesOrderHeaderMapper == null || salesOrderItemMapper == null) {
+            throw new RuntimeException("销售订单提单服务不可用");
+        }
+        if (salesOrderId == null) {
+            throw new RuntimeException("销售订单来源 ID 不能为空");
+        }
+        LinkedHashSet<Long> requestedItemIds = normalizeSalesOrderItemIds(salesOrderItemIds);
+        if (requestedItemIds.isEmpty()) {
+            return List.of();
+        }
+        SalesOrderHeader header = salesOrderHeaderMapper.selectByIdForUpdate(salesOrderId);
+        if (header == null) {
+            throw new RuntimeException("销售订单不存在");
+        }
+        assertSalesOrderDataScope(header);
+        if (!QuoteStatusWorkflow.canGenerateDeliveryTicket(header.getStatus())) {
+            throw new RuntimeException("只有已报价或部分已提单的销售订单可以自动生成提单");
+        }
+
+        Map<Long, SalesOrderItem> itemById = new LinkedHashMap<>();
+        for (Long itemId : requestedItemIds.stream().sorted().toList()) {
+            SalesOrderItem item = salesOrderItemMapper.selectByIdForUpdate(itemId);
+            if (item != null) {
+                itemById.put(itemId, item);
+            }
+        }
+        List<SalesOrderDemandLine> demands = new ArrayList<>();
+        for (Long itemId : requestedItemIds) {
+            SalesOrderItem item = itemById.get(itemId);
+            if (item == null) {
+                throw new RuntimeException("销售订单零件不存在，ID=" + itemId);
+            }
+            if (!Objects.equals(salesOrderId, item.getSalesOrderId())) {
+                throw new RuntimeException("销售订单零件 " + salesOrderItemLabel(item) + " 不属于当前销售订单");
+            }
+            int remainingQty = salesOrderRemainingQty(item);
+            if (remainingQty > 0) {
+                demands.add(new SalesOrderDemandLine(item, remainingQty));
+            }
+        }
+        if (demands.isEmpty()) {
+            refreshSalesOrderHeaderStatus(header);
+            log.info("Sales order scoped auto delivery skipped sourceOrderId={} requestedItemCount={} reason=no_remaining_qty durationMs={}",
+                    salesOrderId, requestedItemIds.size(), System.currentTimeMillis() - startedAt);
+            return List.of();
+        }
+
+        String projectNo = resolveSalesOrderProjectNo(header);
+        List<OrderDeliveryTicket> createdTickets = new ArrayList<>();
+        for (SalesOrderDemandLine demand : demands) {
+            SalesOrderItem item = demand.item();
+            String orderType = firstText(item == null ? null : item.getOrderType(), firstText(header.getOrderType(), "正式订单"));
+            LocalDate startDate = item != null && item.getSalesOrderDate() != null
+                    ? item.getSalesOrderDate()
+                    : (header.getSalesOrderDate() == null ? LocalDate.now() : header.getSalesOrderDate());
+            String internalProjectNo = firstText(item == null ? null : item.getInternalProjectNo(), header.getInternalProjectNo());
+            if (isBlank(internalProjectNo)) {
+                throw new RuntimeException("内部项目号不能为空");
+            }
+            String customerOrderNo = firstText(item == null ? null : item.getCustomerOrderNo(), header.getCustomerOrderNo());
+            if (isBlank(customerOrderNo)) {
+                throw new RuntimeException("客户订单号不能为空");
+            }
+            String customerProjectNo = firstText(item == null ? null : item.getCustomerProjectNo(), header.getCustomerProjectNo());
+            OrderDeliveryTicket ticket = insertSalesOrderTicket(
+                    header,
+                    item,
+                    orderType,
+                    internalProjectNo,
+                    customerOrderNo,
+                    customerProjectNo,
+                    projectNo,
+                    startDate,
+                    demand.qty(),
+                    "计划");
+            createdTickets.add(ticket);
+            applySalesOrderRelease(demand.item(), demand.qty());
+        }
+        refreshSalesOrderHeaderStatus(header);
+        recordSalesOrderScopedAutoDeliveryAudit(header, createdTickets, triggerScene, startedAt);
+        log.info("Sales order scoped auto delivery completed sourceOrderId={} requestedItemCount={} ticketCount={} processRouteCount={} triggerScene={} durationMs={}",
+                salesOrderId, requestedItemIds.size(), createdTickets.size(), countProcessRoutes(createdTickets),
+                safeTriggerScene(triggerScene), System.currentTimeMillis() - startedAt);
         return createdTickets;
     }
 
@@ -660,6 +755,41 @@ public class DeliveryService {
                 .toList());
         summary.put("durationMs", System.currentTimeMillis() - startedAt);
         auditService.record("DELIVERY_TICKET_GENERATE", "sales_order_header", header.getId(), null, summary);
+    }
+
+    private void recordSalesOrderScopedAutoDeliveryAudit(
+            SalesOrderHeader header,
+            List<OrderDeliveryTicket> createdTickets,
+            String triggerScene,
+            long startedAt) {
+        if (auditService == null) {
+            return;
+        }
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("trigger", safeTriggerScene(triggerScene));
+        summary.put("sourceType", ReleaseSourceType.SALES_ORDER.name());
+        summary.put("sourceOrderId", header.getId());
+        summary.put("salesOrderNo", header.getSalesOrderNo());
+        summary.put("ticketCount", createdTickets == null ? 0 : createdTickets.size());
+        summary.put("processRouteCount", countProcessRoutes(createdTickets));
+        summary.put("ticketIds", createdTickets == null ? List.of() : createdTickets.stream()
+                .map(OrderDeliveryTicket::getId)
+                .toList());
+        summary.put("durationMs", System.currentTimeMillis() - startedAt);
+        auditService.record("DELIVERY_TICKET_GENERATE", "sales_order_header", header.getId(), null, summary);
+    }
+
+    private LinkedHashSet<Long> normalizeSalesOrderItemIds(Collection<Long> itemIds) {
+        if (itemIds == null || itemIds.isEmpty()) {
+            return new LinkedHashSet<>();
+        }
+        return itemIds.stream()
+                .filter(Objects::nonNull)
+                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+    }
+
+    private String safeTriggerScene(String triggerScene) {
+        return isBlank(triggerScene) ? "SALES_ORDER_IMPORT_AUTO" : triggerScene.trim();
     }
 
     private String resolveSalesOrderProjectNo(SalesOrderHeader header) {

@@ -25,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -74,12 +75,18 @@ public class SalesOrderAutoSnapshotCompletionService {
     @Transactional
     public SalesOrderAutoSnapshotCompletionResult completeImportedOrder(Long salesOrderId) {
         SalesOrderHeader header = requireMatchableSalesOrder(salesOrderId);
-        return completeInternal(header.getId());
+        return completeInternal(header.getId(), null, true);
     }
 
-    private SalesOrderAutoSnapshotCompletionResult completeInternal(Long salesOrderId) {
+    @Transactional
+    public SalesOrderAutoSnapshotCompletionResult completeImportedOrderItems(Long salesOrderId, Collection<Long> salesOrderItemIds) {
+        SalesOrderHeader header = requireSalesOrder(salesOrderId);
+        return completeInternal(header.getId(), normalizeItemIds(salesOrderItemIds), false);
+    }
+
+    private SalesOrderAutoSnapshotCompletionResult completeInternal(Long salesOrderId, Set<Long> salesOrderItemIds, boolean requireQuotedStatus) {
         long startedAt = System.currentTimeMillis();
-        List<SalesOrderItem> items = loadApplyItems(salesOrderId);
+        List<SalesOrderItem> items = loadApplyItems(salesOrderId, salesOrderItemIds);
         SalesOrderAutoSnapshotCompletionResult resp = new SalesOrderAutoSnapshotCompletionResult();
         resp.setTotalItemCount(items.size());
         if (items.isEmpty()) {
@@ -89,7 +96,7 @@ public class SalesOrderAutoSnapshotCompletionService {
         }
         log.info("Sales order auto snapshot completion started salesOrderId={} itemCount={}", salesOrderId, items.size());
 
-        Map<Long, SalesOrderHeader> headers = loadLockedAuthorizedHeaders(items);
+        Map<Long, SalesOrderHeader> headers = loadLockedAuthorizedHeaders(items, requireQuotedStatus);
         Map<String, ItemQuoteVersion> sourceByKey = releasedProductionSnapshotsByKey(items);
         int matchedCount = 0;
         int unmatchedCount = 0;
@@ -170,10 +177,16 @@ public class SalesOrderAutoSnapshotCompletionService {
         return header;
     }
 
-    private List<SalesOrderItem> loadApplyItems(Long salesOrderId) {
+    private List<SalesOrderItem> loadApplyItems(Long salesOrderId, Set<Long> salesOrderItemIds) {
+        if (salesOrderItemIds != null && salesOrderItemIds.isEmpty()) {
+            return List.of();
+        }
         LinkedHashMap<Long, SalesOrderItem> result = new LinkedHashMap<>();
         QueryWrapper<SalesOrderItem> query = new QueryWrapper<>();
         query.eq("sales_order_id", salesOrderId);
+        if (salesOrderItemIds != null && !salesOrderItemIds.isEmpty()) {
+            query.in("id", salesOrderItemIds);
+        }
         query.orderByAsc("sales_order_id").orderByAsc("line_no").orderByAsc("id");
         List<SalesOrderItem> candidates = safeList(salesOrderItemMapper.selectList(query));
         for (SalesOrderItem candidate : candidates) {
@@ -188,7 +201,7 @@ public class SalesOrderAutoSnapshotCompletionService {
         return new ArrayList<>(result.values());
     }
 
-    private Map<Long, SalesOrderHeader> loadLockedAuthorizedHeaders(List<SalesOrderItem> items) {
+    private Map<Long, SalesOrderHeader> loadLockedAuthorizedHeaders(List<SalesOrderItem> items, boolean requireQuotedStatus) {
         LinkedHashSet<Long> headerIds = items.stream()
                 .map(SalesOrderItem::getSalesOrderId)
                 .filter(Objects::nonNull)
@@ -200,10 +213,21 @@ public class SalesOrderAutoSnapshotCompletionService {
                 throw new RuntimeException("销售订单不存在：" + headerId);
             }
             assertSalesOrderScope(header);
-            assertMatchableSalesOrder(header);
+            if (requireQuotedStatus) {
+                assertMatchableSalesOrder(header);
+            }
             result.put(headerId, header);
         }
         return result;
+    }
+
+    private Set<Long> normalizeItemIds(Collection<Long> itemIds) {
+        if (itemIds == null || itemIds.isEmpty()) {
+            return Set.of();
+        }
+        return itemIds.stream()
+                .filter(Objects::nonNull)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
     }
 
     private Map<String, ItemQuoteVersion> releasedProductionSnapshotsByKey(List<SalesOrderItem> items) {
