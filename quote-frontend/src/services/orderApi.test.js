@@ -134,6 +134,36 @@ describe('orderApi', () => {
     )
   })
 
+  test('exposes sales order management maintenance endpoints', async () => {
+    const payload = { customerOrderNo: 'PO-100' }
+    const itemPayload = { items: [{ salesOrderItemId: 21, qty: 3, untaxedUnitPrice: '12.50' }] }
+    const formData = new FormData()
+
+    await orderApi.saveSalesOrderHeader(901, payload)
+    await orderApi.saveSalesOrderItems(901, itemPayload)
+    await orderApi.previewSalesOrderItemDataReplacement(901, formData)
+    await orderApi.confirmSalesOrderItemDataReplacement(901, formData)
+
+    expect(request).toHaveBeenNthCalledWith(1, '/api/market/sales-order-management/orders/901', {
+      method: 'PUT',
+      data: payload
+    })
+    expect(request).toHaveBeenNthCalledWith(2, '/api/market/sales-order-management/orders/901/items', {
+      method: 'PUT',
+      data: itemPayload
+    })
+    expect(request).toHaveBeenNthCalledWith(3, '/api/market/sales-order-management/orders/901/item-data-replacement/preview', {
+      method: 'POST',
+      data: formData,
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+    expect(request).toHaveBeenNthCalledWith(4, '/api/market/sales-order-management/orders/901/item-data-replacement/confirm', {
+      method: 'POST',
+      data: formData,
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+  })
+
   test('exposes order item maintenance endpoints', async () => {
     const payload = {
       items: [{

@@ -108,6 +108,28 @@ export const listSalesOrderProcessSheets = (salesOrderId, params = {}) => reques
 
 export const getSalesOrderDrawingSummary = (salesOrderId) => request(`/api/market/sales-order-management/orders/${salesOrderId}/drawing-summary`)
 
+export const saveSalesOrderHeader = (salesOrderId, payload = {}) => request(`/api/market/sales-order-management/orders/${salesOrderId}`, {
+  method: 'PUT',
+  data: payload
+})
+
+export const saveSalesOrderItems = (salesOrderId, payload = {}) => request(`/api/market/sales-order-management/orders/${salesOrderId}/items`, {
+  method: 'PUT',
+  data: payload
+})
+
+export const previewSalesOrderItemDataReplacement = (salesOrderId, formData) => request(`/api/market/sales-order-management/orders/${salesOrderId}/item-data-replacement/preview`, {
+  method: 'POST',
+  data: formData,
+  headers: { 'Content-Type': 'multipart/form-data' }
+})
+
+export const confirmSalesOrderItemDataReplacement = (salesOrderId, formData) => request(`/api/market/sales-order-management/orders/${salesOrderId}/item-data-replacement/confirm`, {
+  method: 'POST',
+  data: formData,
+  headers: { 'Content-Type': 'multipart/form-data' }
+})
+
 export const discardSalesOrder = (salesOrderId, payload = {}) => request(`/api/market/sales-order-management/orders/${salesOrderId}/discard`, {
   method: 'POST',
   data: payload

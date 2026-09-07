@@ -59,6 +59,9 @@ class AuditActionCatalogCharacterizationTest {
         assertThat(AuditService.inferModule("DICT_PRICING_MARKUP_FEE_CREATE")).isEqualTo("DICT");
         assertThat(AuditService.inferModule("DICT_PRICING_MARKUP_FEE_UPDATE")).isEqualTo("DICT");
         assertThat(AuditService.inferModule("DICT_PRICING_MARKUP_FEE_DELETE")).isEqualTo("DICT");
+        assertThat(AuditService.inferModule("SALES_ORDER_UPDATE")).isEqualTo("MARKET");
+        assertThat(AuditService.inferModule("SALES_ORDER_ITEM_UPDATE")).isEqualTo("MARKET");
+        assertThat(AuditService.inferModule("SALES_ORDER_ITEM_DATA_REPLACEMENT")).isEqualTo("MARKET");
         assertThat(AuditService.inferModule("SALES_ORDER_CHANGE_ITEM_UPDATE")).isEqualTo("CHANGE");
         assertThat(AuditService.inferModule("SALES_ORDER_CHANGE_ITEM_DATA_REPLACEMENT")).isEqualTo("CHANGE");
         assertThat(AuditService.inferModule("SALES_ORDER_PRODUCTION_TASK_NOTICE_EXPORT")).isEqualTo("MARKET");
@@ -97,6 +100,9 @@ class AuditActionCatalogCharacterizationTest {
         assertThat(AuditService.labelForAction("DICT_PRICING_MARKUP_FEE_CREATE")).isNotEqualTo("DICT_PRICING_MARKUP_FEE_CREATE");
         assertThat(AuditService.labelForAction("DICT_PRICING_MARKUP_FEE_UPDATE")).isNotEqualTo("DICT_PRICING_MARKUP_FEE_UPDATE");
         assertThat(AuditService.labelForAction("DICT_PRICING_MARKUP_FEE_DELETE")).isNotEqualTo("DICT_PRICING_MARKUP_FEE_DELETE");
+        assertThat(AuditService.labelForAction("SALES_ORDER_UPDATE")).isNotEqualTo("SALES_ORDER_UPDATE");
+        assertThat(AuditService.labelForAction("SALES_ORDER_ITEM_UPDATE")).isNotEqualTo("SALES_ORDER_ITEM_UPDATE");
+        assertThat(AuditService.labelForAction("SALES_ORDER_ITEM_DATA_REPLACEMENT")).isNotEqualTo("SALES_ORDER_ITEM_DATA_REPLACEMENT");
         assertThat(AuditService.labelForAction("SALES_ORDER_CHANGE_ITEM_UPDATE")).isNotEqualTo("SALES_ORDER_CHANGE_ITEM_UPDATE");
         assertThat(AuditService.labelForAction("SALES_ORDER_CHANGE_ITEM_DATA_REPLACEMENT")).isNotEqualTo("SALES_ORDER_CHANGE_ITEM_DATA_REPLACEMENT");
         assertThat(AuditService.labelForAction("SALES_ORDER_PRODUCTION_TASK_NOTICE_EXPORT")).isNotEqualTo("SALES_ORDER_PRODUCTION_TASK_NOTICE_EXPORT");
@@ -217,6 +223,18 @@ class AuditActionCatalogCharacterizationTest {
     void salesOrderChangeAuditActionsExposeStableChineseLabels() {
         assertThat(AuditService.labelForAction("SALES_ORDER_CHANGE_ITEM_UPDATE")).isEqualTo("销售变更保存零件行");
         assertThat(AuditService.labelForAction("SALES_ORDER_CHANGE_ITEM_DATA_REPLACEMENT")).isEqualTo("销售变更表格数据替换");
+    }
+
+    @Test
+    void salesOrderManagementMaintenanceAuditActionsExposeStableChineseLabelsAndTargets() throws Exception {
+        String queryService = Files.readString(AUDIT_LOG_QUERY_SERVICE, StandardCharsets.UTF_8);
+
+        assertThat(AuditService.labelForAction("SALES_ORDER_UPDATE")).isEqualTo("保存销售订单信息");
+        assertThat(AuditService.labelForAction("SALES_ORDER_ITEM_UPDATE")).isEqualTo("保存销售订单零件行");
+        assertThat(AuditService.labelForAction("SALES_ORDER_ITEM_DATA_REPLACEMENT")).isEqualTo("销售订单表格数据替换");
+        assertThat(queryService)
+                .contains("sales_order_header")
+                .contains("sales_order_item");
     }
 
     @Test

@@ -208,6 +208,9 @@ public class AuditService {
         if ("RFQ_IMPORT".equalsIgnoreCase(action)) return "MARKET";
         if ("SALES_ORDER_IMPORT_QPO".equalsIgnoreCase(action)) return "MARKET";
         if ("SALES_ORDER_DIRTY_SNAPSHOT_REPAIR".equalsIgnoreCase(action)) return "MARKET";
+        if ("SALES_ORDER_UPDATE".equalsIgnoreCase(action)) return "MARKET";
+        if ("SALES_ORDER_ITEM_UPDATE".equalsIgnoreCase(action)) return "MARKET";
+        if ("SALES_ORDER_ITEM_DATA_REPLACEMENT".equalsIgnoreCase(action)) return "MARKET";
         if ("SALES_ORDER_U9_SYNC".equalsIgnoreCase(action)) return "MARKET";
         if ("SALES_ORDER_U9_ASSIGNMENT_UPDATE".equalsIgnoreCase(action)) return "MARKET";
         if ("SALES_ORDER_U9_ORDER_DATE_UPDATE".equalsIgnoreCase(action)) return "MARKET";
@@ -319,6 +322,9 @@ public class AuditService {
             case "RFQ_IMPORT" -> "导入 RFQ";
             case "SALES_ORDER_IMPORT_QPO" -> "导入销售订单到独立主表";
             case "SALES_ORDER_DIRTY_SNAPSHOT_REPAIR" -> "\u9500\u552e\u8ba2\u5355\u810f\u5feb\u7167\u4fee\u590d";
+            case "SALES_ORDER_UPDATE" -> "保存销售订单信息";
+            case "SALES_ORDER_ITEM_UPDATE" -> "保存销售订单零件行";
+            case "SALES_ORDER_ITEM_DATA_REPLACEMENT" -> "销售订单表格数据替换";
             case "SALES_ORDER_U9_SYNC" -> "销售订单同步U9";
             case "SALES_ORDER_U9_ASSIGNMENT_UPDATE" -> "保存销售订单U9销售员和部门";
             case "SALES_ORDER_U9_ORDER_DATE_UPDATE" -> "保存销售订单U9下单日期";

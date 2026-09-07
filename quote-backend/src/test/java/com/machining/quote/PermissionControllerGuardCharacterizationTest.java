@@ -87,6 +87,7 @@ class PermissionControllerGuardCharacterizationTest {
         String processMaster = source("ProcessMasterController.java");
         String quoteProcess = source("QuoteProcessController.java");
         String order = source("OrderManagementController.java");
+        String salesOrderManage = source("SalesOrderManageController.java");
         String admin = source("AdminController.java");
         String users = source("SystemUserController.java");
         String roles = source("SystemRoleController.java");
@@ -157,6 +158,18 @@ class PermissionControllerGuardCharacterizationTest {
                 .doesNotContain("@RequirePermission(\"market:order:delete\")")
                 .doesNotContain("common:order:select")
                 .doesNotContain("common:customer:select");
+        assertThat(salesOrderManage)
+                .contains("@RequirePermission(\"market:sales-order:view\")")
+                .contains("@RequirePermission(\"market:sales-order:customer-select\")")
+                .contains("@RequirePermission(\"market:sales-order:supplement-drawing\")")
+                .contains("@RequirePermission(\"market:sales-order:production-task-notice-export\")")
+                .contains("@RequirePermission(\"market:sales-order:update\")")
+                .contains("@PutMapping(\"/orders/{salesOrderId}\")")
+                .contains("@PutMapping(\"/orders/{salesOrderId}/items\")")
+                .contains("/orders/{salesOrderId}/item-data-replacement/preview")
+                .contains("/orders/{salesOrderId}/item-data-replacement/confirm")
+                .doesNotContain("market:u9-sync:submit")
+                .doesNotContain("change:sales-order:update");
         assertThat(admin)
                 .contains("@RequirePermission(\"system:user:view\")")
                 .contains("@RequirePermission(\"market:template:view\")")
