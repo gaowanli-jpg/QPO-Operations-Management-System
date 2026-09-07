@@ -195,6 +195,28 @@ class SalesOrderU9ItemEditServiceTest {
     }
 
     @Test
+    void saveItemsRejectsU9ChangeExcludedSalesOrderItem() {
+        Fixture fixture = fixture();
+        SalesOrderHeader header = header(107L, "未同步");
+        SalesOrderItem item = item(207L, header.getId());
+        ReflectionTestUtils.setField(item, "u9ChangeExcluded", true);
+        fixture.withOrder(header, item);
+
+        SalesOrderU9ItemUpdateLineReq line = new SalesOrderU9ItemUpdateLineReq();
+        line.setSalesOrderItemId(item.getId());
+        line.setRemark("excluded");
+        SalesOrderU9ItemUpdateReq req = new SalesOrderU9ItemUpdateReq();
+        req.setItems(List.of(line));
+
+        assertThatThrownBy(() -> fixture.service.saveItems(header.getId(), req))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("已从 U9 同步和销售变更排除");
+
+        verify(fixture.itemMapper, never()).update(any(), any());
+        verify(fixture.previewService, never()).previewSalesOrder(any());
+    }
+
+    @Test
     void saveItemsRejectsInvalidQuantityAndPrice() {
         Fixture invalidQty = fixture();
         SalesOrderHeader qtyHeader = header(103L, "未同步");

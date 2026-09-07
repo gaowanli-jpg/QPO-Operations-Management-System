@@ -164,6 +164,9 @@ public class SalesOrderChangeItemEditService {
         if (!Objects.equals(header.getId(), item.getSalesOrderId())) {
             throw new RuntimeException("销售订单零件行 " + line.getSalesOrderItemId() + " 不属于当前销售订单");
         }
+        if (Boolean.TRUE.equals(item.getU9ChangeExcluded())) {
+            throw new RuntimeException("销售订单零件行 " + line.getSalesOrderItemId() + " 已从 U9 同步和销售变更排除，不能保存");
+        }
         return item;
     }
 

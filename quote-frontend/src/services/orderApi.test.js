@@ -143,6 +143,8 @@ describe('orderApi', () => {
     await orderApi.saveSalesOrderItems(901, itemPayload)
     await orderApi.previewSalesOrderItemDataReplacement(901, formData)
     await orderApi.confirmSalesOrderItemDataReplacement(901, formData)
+    await orderApi.discardSalesOrderItemForU9Change(901, 21, { reason: '不参与 U9' })
+    await orderApi.restoreSalesOrderItemForU9Change(901, 21, { reason: '恢复参与 U9' })
 
     expect(request).toHaveBeenNthCalledWith(1, '/api/market/sales-order-management/orders/901', {
       method: 'PUT',
@@ -161,6 +163,14 @@ describe('orderApi', () => {
       method: 'POST',
       data: formData,
       headers: { 'Content-Type': 'multipart/form-data' }
+    })
+    expect(request).toHaveBeenNthCalledWith(5, '/api/market/sales-order-management/orders/901/items/21/discard', {
+      method: 'POST',
+      data: { reason: '不参与 U9' }
+    })
+    expect(request).toHaveBeenNthCalledWith(6, '/api/market/sales-order-management/orders/901/items/21/restore', {
+      method: 'POST',
+      data: { reason: '恢复参与 U9' }
     })
   })
 

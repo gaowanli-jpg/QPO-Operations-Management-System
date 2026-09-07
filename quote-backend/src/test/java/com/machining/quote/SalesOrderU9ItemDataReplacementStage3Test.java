@@ -1,6 +1,7 @@
 package com.machining.quote;
 
 import com.baomidou.mybatisplus.core.conditions.Wrapper;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.machining.quote.config.PreviewFingerprintConflictException;
 import com.machining.quote.config.RequirePermission;
@@ -35,6 +36,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -213,6 +215,29 @@ class SalesOrderU9ItemDataReplacementStage3Test {
     }
 
     @Test
+    void previewTreatsU9ChangeExcludedCandidateAsUnmatched() {
+        Fixture fixture = fixture();
+        SalesOrderHeader header = header(104L, "SO-104", "未同步");
+        SalesOrderItem active = item(240L, 104L, 1, "P-ACTIVE", "A");
+        SalesOrderItem excluded = item(241L, 104L, 2, "P-EXCLUDED", "A");
+        ReflectionTestUtils.setField(excluded, "u9ChangeExcluded", true);
+        fixture.withOrder(header, List.of(active, excluded));
+        when(fixture.itemMapper.selectList(any())).thenAnswer(invocation ->
+                queryUsesU9ChangeActiveFilter(invocation.getArgument(0)) ? List.of(active) : List.of(active, excluded));
+
+        SalesOrderU9ItemDataReplacementPreviewDTO preview = fixture.service.preview(header.getId(), new ByteArrayInputStream(excel(
+                List.of("图号", "版本", "备注"),
+                List.of("P-EXCLUDED", "A", "should not update"))));
+
+        assertThat(preview.getRows()).singleElement().satisfies(row -> {
+            assertThat(row.getSalesOrderItemId()).isNull();
+            assertThat(row.getStatus()).isEqualTo(com.machining.quote.dto.SalesOrderU9ItemDataReplacementRowStatus.UNMATCHED);
+            assertThat(row.getReason()).contains("未找到对应零件");
+        });
+        verify(fixture.itemMapper, never()).update(any(), any());
+    }
+
+    @Test
     void persistenceFailureStopsBatchBeforeLatestPreviewAndAudit() {
         Fixture fixture = fixture();
         SalesOrderHeader header = header(103L, "SO-103", "未同步");
@@ -313,6 +338,13 @@ class SalesOrderU9ItemDataReplacementStage3Test {
         item.setRemark("old");
         item.setUpdatedAt(LocalDateTime.of(2026, 8, 17, 10, 0).plusMinutes(id));
         return item;
+    }
+
+    private static boolean queryUsesU9ChangeActiveFilter(Object query) {
+        if (!(query instanceof QueryWrapper<?> wrapper)) {
+            return false;
+        }
+        return wrapper.getCustomSqlSegment().toLowerCase(Locale.ROOT).contains("u9_change_excluded");
     }
 
     private record Fixture(

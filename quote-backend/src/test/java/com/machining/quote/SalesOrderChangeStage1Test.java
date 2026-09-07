@@ -23,6 +23,7 @@ import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Locale;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -169,6 +170,35 @@ class SalesOrderChangeStage1Test {
         verify(fixture.itemMapper, never()).updateById(any());
     }
 
+    @Test
+    void listAndPreviewTreatU9ChangeExcludedItemsAsInvisibleInSalesOrderChange() {
+        Fixture fixture = fixture();
+        SalesOrderHeader synced = header(9010L, "SO-9010", "已同步");
+        SalesOrderItem active = item(5010L, synced.getId(), "P-ACTIVE", "MAT-ACTIVE", "已确认");
+        SalesOrderItem excluded = item(5011L, synced.getId(), "P-EXCLUDED", "MAT-EXCLUDED", "已确认");
+        ReflectionTestUtils.setField(excluded, "u9ChangeExcluded", true);
+
+        when(fixture.headerMapper.selectCount(any())).thenReturn(1L);
+        when(fixture.headerMapper.selectList(any())).thenReturn(List.of(synced));
+        when(fixture.headerMapper.selectById(synced.getId())).thenReturn(synced);
+        when(fixture.itemMapper.selectList(any())).thenAnswer(invocation ->
+                queryUsesU9ChangeActiveFilter(invocation.getArgument(0)) ? List.of(active) : List.of(active, excluded));
+        when(fixture.itemMapper.selectCount(any())).thenAnswer(invocation ->
+                queryUsesU9ChangeActiveFilter(invocation.getArgument(0)) ? 1L : 2L);
+
+        PageResult<SalesOrderChangeOrderRow> list = fixture.service.listOrders(
+                "CUST-A", "客户A", "SO-9010", null, 1, 20);
+        SalesOrderChangePreviewResp preview = fixture.service.preview(synced.getId());
+
+        assertThat(list.getRecords()).singleElement()
+                .satisfies(row -> assertThat(row.getItemCount()).isEqualTo(1));
+        assertThat(preview.getItemCount()).isEqualTo(1);
+        assertThat(preview.getTotal()).isEqualTo(1);
+        assertThat(preview.getLines()).extracting(SalesOrderU9SyncPreviewLine::getSalesOrderItemId)
+                .containsExactly(active.getId())
+                .doesNotContain(excluded.getId());
+    }
+
     private Fixture fixture() {
         SalesOrderChangeService service = new SalesOrderChangeService();
         Fixture fixture = new Fixture(service);
@@ -218,6 +248,13 @@ class SalesOrderChangeStage1Test {
         item.setUntaxedTotalPrice(new BigDecimal("54.60"));
         item.setRemark("备注");
         return item;
+    }
+
+    private static boolean queryUsesU9ChangeActiveFilter(Object query) {
+        if (!(query instanceof QueryWrapper<?> wrapper)) {
+            return false;
+        }
+        return wrapper.getCustomSqlSegment().toLowerCase(Locale.ROOT).contains("u9_change_excluded");
     }
 
     private static String read(Path path) throws Exception {

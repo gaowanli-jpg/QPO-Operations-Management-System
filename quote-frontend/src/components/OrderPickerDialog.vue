@@ -147,8 +147,8 @@ const STATUS_OPTIONS_BY_SCOPE = {
   'delivery-document': ['部分已提单', '已生成提单'],
   'release-append-sales-order': ['已生成提单'],
   'release-append': ['可追加'],
-  'u9-sync': ['已生成提单'],
-  'sales-order-change': ['已生成提单'],
+  'u9-sync': ['部分已提单', '已生成提单'],
+  'sales-order-change': ['部分已提单', '已生成提单'],
   'engineer-setup': ['未核价'],
   'engineer-supplemental-pricing': ['已核价', '已报价', '部分已提单', '已生成提单'],
   'quote-process-supplemental': ['已报价', '部分已提单', '已生成提单']

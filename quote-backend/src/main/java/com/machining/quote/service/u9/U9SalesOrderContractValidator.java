@@ -72,9 +72,8 @@ public class U9SalesOrderContractValidator {
             errors.add("销售订单已废弃，不能同步 U9");
         } else if (QuoteStatusWorkflow.QUOTED.equals(header.getStatus())) {
             errors.add("销售订单尚未生成 QPO 提单，不能同步 U9");
-        } else if (QuoteStatusWorkflow.PARTIALLY_RELEASED.equals(header.getStatus())) {
-            errors.add("销售订单仍存在未提单数量，需全部生成提单后再同步 U9");
-        } else if (!QuoteStatusWorkflow.RELEASED.equals(header.getStatus())) {
+        } else if (!QuoteStatusWorkflow.RELEASED.equals(header.getStatus())
+                && !QuoteStatusWorkflow.PARTIALLY_RELEASED.equals(header.getStatus())) {
             errors.add("销售订单状态暂不可同步 U9");
         }
         if (STATUS_SYNCED.equals(header.getU9SyncStatus())) {

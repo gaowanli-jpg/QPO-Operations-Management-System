@@ -83,6 +83,13 @@ public class SalesOrderItem {
     private String matchMessage;
     private String remark;
     private String status;
+    private Boolean u9ChangeExcluded;
+    private LocalDateTime u9ChangeExcludedAt;
+    private Long u9ChangeExcludedBy;
+    private String u9ChangeExcludedReason;
+    private LocalDateTime u9ChangeRestoredAt;
+    private Long u9ChangeRestoredBy;
+    private String u9ChangeRestoreReason;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

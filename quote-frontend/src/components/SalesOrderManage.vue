@@ -306,6 +306,35 @@
                 </template>
               </el-table-column>
               <el-table-column prop="status" label="状态" width="110" align="center" />
+              <el-table-column label="U9/变更" width="178" align="center">
+                <template #default="{ row }">
+                  <div class="item-u9-change-exclusion-cell">
+                    <el-tooltip
+                      :content="row.u9ChangeExcluded ? '仅从 U9 同步和销售变更排除，不影响 MES 物料号、WMS 库存、已提/待产处理和 MES 生产下发' : '该零件仍参与 U9 同步和销售变更'"
+                      placement="top"
+                    >
+                      <el-tag :type="row.u9ChangeExcluded ? 'warning' : 'success'" size="small">
+                        {{ row.u9ChangeExcluded ? '已废弃' : '正常' }}
+                      </el-tag>
+                    </el-tooltip>
+                    <el-tooltip :disabled="!salesOrderItemU9ChangeExclusionLocked" :content="salesOrderItemU9ChangeExclusionLockedReason" placement="top">
+                      <span class="sales-order-action-wrap">
+                        <el-button
+                          v-permission="SALES_ORDER_UPDATE_PERMISSION"
+                          size="small"
+                          :type="row.u9ChangeExcluded ? 'success' : 'warning'"
+                          plain
+                          :loading="isItemU9ChangeExclusionPending(row)"
+                          :disabled="salesOrderItemU9ChangeExclusionLocked || isItemU9ChangeExclusionPending(row)"
+                          @click="handleSalesOrderItemU9ChangeExclusion(row)"
+                        >
+                          {{ row.u9ChangeExcluded ? '恢复' : '废弃' }}
+                        </el-button>
+                      </span>
+                    </el-tooltip>
+                  </div>
+                </template>
+              </el-table-column>
               <el-table-column label="图纸" width="90" align="center">
                 <template #default="scope">
                   <el-tag :type="scope.row.drawingUrl ? 'success' : 'warning'" size="small">
@@ -534,6 +563,7 @@ import SalesOrderItemDataReplacementDialog from './sales-order/SalesOrderItemDat
 import { usePendingAction } from '../composables/usePendingAction'
 import {
   discardSalesOrder,
+  discardSalesOrderItemForU9Change,
   downloadSalesOrderProductionTaskNotice,
   getSalesOrder,
   getSalesOrderDrawingSummary,
@@ -544,6 +574,7 @@ import {
   saveSalesOrderHeader,
   saveSalesOrderItems,
   restoreSalesOrder,
+  restoreSalesOrderItemForU9Change,
   supplementSalesOrderDrawings
 } from '../services/orderApi'
 
@@ -558,6 +589,7 @@ const salesOrderActionKeys = {
   statusChange: (orderId) => `sales-order:status-change:${orderId || 'none'}`,
   headerSave: (orderId) => `sales-order:header-save:${orderId || 'none'}`,
   itemSave: (orderId) => `sales-order:item-save:${orderId || 'none'}`,
+  itemU9ChangeExclusion: (itemId) => `sales-order:item-u9-change-exclusion:${itemId || 'none'}`,
   supplementDrawings: (orderId) => `sales-order:supplement-drawings:${orderId || 'none'}`,
   productionTaskNoticeExport: (orderId) => `sales-order:production-task-notice-export:${orderId || 'none'}`
 }
@@ -662,6 +694,8 @@ const supplementUploadPending = computed(() => isPending(salesOrderActionKeys.su
 const productionTaskNoticeExportPending = computed(() => isPending(salesOrderActionKeys.productionTaskNoticeExport(orderDetail.value?.orderInfo?.id)))
 const salesOrderEditLocked = computed(() => SALES_ORDER_EDIT_LOCKED_U9_STATUSES.includes(String(orderDetail.value?.orderInfo?.u9SyncStatus || '').trim()))
 const salesOrderEditLockedReason = computed(() => salesOrderEditLocked.value ? `当前 U9 状态不允许修改销售订单：${orderDetail.value?.orderInfo?.u9SyncStatus || '-'}` : '')
+const salesOrderItemU9ChangeExclusionLocked = computed(() => ['同步中', '结果待确认'].includes(String(orderDetail.value?.orderInfo?.u9SyncStatus || '').trim()))
+const salesOrderItemU9ChangeExclusionLockedReason = computed(() => salesOrderItemU9ChangeExclusionLocked.value ? `当前 U9 状态不能废弃或恢复销售订单零件：${orderDetail.value?.orderInfo?.u9SyncStatus || '-'}` : '')
 const dirtyItemCount = computed(() => detailItemList.value.filter(row => hasItemDraftChanges(row)).length)
 const autoReleaseSummary = computed(() => {
   const summary = orderDetail.value?.summary || {}
@@ -998,6 +1032,47 @@ const openSalesOrderItemDataReplacementDialog = () => {
   if (!orderDetail.value?.orderInfo?.id) return ElMessage.warning('请先打开销售订单详情。')
   if (salesOrderEditLocked.value) return ElMessage.warning(salesOrderEditLockedReason.value)
   itemDataReplacementVisible.value = true
+}
+
+const isItemU9ChangeExclusionPending = (row) => isPending(salesOrderActionKeys.itemU9ChangeExclusion(row?.id))
+
+const handleSalesOrderItemU9ChangeExclusion = async (row) => {
+  const salesOrderId = orderDetail.value?.orderInfo?.id
+  if (!salesOrderId || !row?.id) return ElMessage.warning('请先打开销售订单详情。')
+  if (salesOrderItemU9ChangeExclusionLocked.value) return ElMessage.warning(salesOrderItemU9ChangeExclusionLockedReason.value)
+  const restoring = Boolean(row.u9ChangeExcluded)
+  const title = restoring ? '恢复销售订单零件' : '废弃销售订单零件'
+  const placeholder = restoring ? '请输入恢复原因' : '请输入废弃原因'
+  let reason = ''
+  try {
+    const result = await ElMessageBox.prompt(
+      `${title}：${row.partNo || row.id}${row.version ? ` / ${row.version}` : ''}。仅从 U9 同步和销售变更排除，不影响 MES 物料号、WMS 库存、已提/待产处理和 MES 生产下发。`,
+      title,
+      {
+        inputPlaceholder: placeholder,
+        inputPattern: /\S+/,
+        inputErrorMessage: '原因不能为空',
+        confirmButtonText: restoring ? '确认恢复' : '确认废弃',
+        cancelButtonText: '取消',
+        type: restoring ? 'success' : 'warning'
+      }
+    )
+    reason = result.value?.trim() || ''
+  } catch {
+    return
+  }
+  const handler = restoring ? restoreSalesOrderItemForU9Change : discardSalesOrderItemForU9Change
+  return runAction(salesOrderActionKeys.itemU9ChangeExclusion(row.id), async () => {
+    try {
+      const response = await handler(salesOrderId, row.id, { reason })
+      ElMessage.success(response?.message || (restoring ? '销售订单零件已恢复。' : '销售订单零件已废弃。'))
+      await loadOrders()
+      await refreshCurrentDetail()
+    } catch (error) {
+      console.error(error)
+      ElMessage.error(error.response?.data?.message || (restoring ? '恢复销售订单零件失败。' : '废弃销售订单零件失败。'))
+    }
+  })
 }
 
 const handleSalesOrderItemDataReplacementConfirmed = async () => {
@@ -1337,6 +1412,13 @@ const formatCompactMoney = (value) => `¥${formatCompactNumber(value)}`
 
 .item-edit-date {
   min-width: 130px;
+}
+
+.item-u9-change-exclusion-cell {
+  align-items: center;
+  display: inline-flex;
+  gap: 8px;
+  justify-content: center;
 }
 
 .auto-release-summary {

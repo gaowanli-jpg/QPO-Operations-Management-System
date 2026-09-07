@@ -573,6 +573,7 @@ class AssemblyWorkflowIntegrationTests {
         if (detail == null) {
             detail = new DictProcessDetail();
             detail.setCategoryId(category.getId());
+            detail.setProcessCode("ASSY_ZERO_REUSE");
             detail.setDetailName("Assembly zero cost reuse detail");
             detail.setSortNo(0);
             processDetailMapper.insert(detail);

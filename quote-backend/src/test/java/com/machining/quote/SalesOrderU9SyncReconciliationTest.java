@@ -47,6 +47,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -207,6 +208,53 @@ class SalesOrderU9SyncReconciliationTest {
         verify(resolver, times(2)).effectiveOrgCode();
         assertThat(sellerQueryCaptor.getValue().getSqlSegment()).contains("u9_org_code");
         assertThat(departmentQueryCaptor.getValue().getSqlSegment()).contains("u9_org_code");
+    }
+
+    @Test
+    void stateServiceReserveBuildsU9RequestFromNonExcludedSalesOrderItemsOnly() {
+        SalesOrderHeaderMapper headerMapper = mock(SalesOrderHeaderMapper.class);
+        SalesOrderItemMapper itemMapper = mock(SalesOrderItemMapper.class);
+        CustomerMasterMapper customerMapper = mock(CustomerMasterMapper.class);
+        U9SyncSellerOptionCacheMapper sellerMapper = mock(U9SyncSellerOptionCacheMapper.class);
+        U9SyncDepartmentOptionCacheMapper departmentMapper = mock(U9SyncDepartmentOptionCacheMapper.class);
+        SalesOrderU9SyncStateService stateService = new SalesOrderU9SyncStateService();
+        ReflectionTestUtils.setField(stateService, "headerMapper", headerMapper);
+        ReflectionTestUtils.setField(stateService, "itemMapper", itemMapper);
+        ReflectionTestUtils.setField(stateService, "customerMapper", customerMapper);
+        ReflectionTestUtils.setField(stateService, "sellerOptionMapper", sellerMapper);
+        ReflectionTestUtils.setField(stateService, "departmentOptionMapper", departmentMapper);
+        ReflectionTestUtils.setField(stateService, "dataScopeService", mock(DataScopeService.class));
+        ReflectionTestUtils.setField(stateService, "requestAssembler", new U9SalesOrderRequestAssembler());
+        ReflectionTestUtils.setField(stateService, "contractValidator", new U9SalesOrderContractValidator());
+        ReflectionTestUtils.setField(stateService, "u9OrgCodeResolver", orgResolver("101"));
+        ReflectionTestUtils.setField(stateService, "clock", FIXED_CLOCK);
+        SalesOrderHeader header = header(9040L, "未同步");
+        SalesOrderItem active = item(90401L);
+        active.setSalesOrderId(header.getId());
+        active.setMaterialNo("MAT-ACTIVE");
+        SalesOrderItem excluded = item(90402L);
+        excluded.setSalesOrderId(header.getId());
+        excluded.setMaterialNo(null);
+        excluded.setMaterialNoStatus("未确认");
+        ReflectionTestUtils.setField(excluded, "u9ChangeExcluded", true);
+        CustomerMaster customer = new CustomerMaster();
+        customer.setEnabled(true);
+
+        when(headerMapper.selectByIdForUpdate(header.getId())).thenReturn(header);
+        when(customerMapper.selectEnabledByCode("CUST-A")).thenReturn(customer);
+        when(itemMapper.selectList(any())).thenAnswer(invocation ->
+                queryUsesU9ChangeActiveFilter(invocation.getArgument(0)) ? List.of(active) : List.of(active, excluded));
+        when(headerMapper.update(isNull(), any())).thenReturn(1);
+
+        SalesOrderU9SyncStateService.PreparedOrder prepared = stateService.reserve(header.getId());
+
+        assertThat(prepared.items()).extracting(SalesOrderItem::getId).containsExactly(active.getId());
+        assertThat(prepared.request().getSOLineDTOList()).singleElement()
+                .satisfies(line -> assertThat(line.getItemCode()).isEqualTo("MAT-ACTIVE"));
+        ArgumentCaptor<QueryWrapper<SalesOrderItem>> queryCaptor = ArgumentCaptor.forClass(QueryWrapper.class);
+        verify(itemMapper).selectList(queryCaptor.capture());
+        assertThat(queryCaptor.getValue().getCustomSqlSegment().toLowerCase(Locale.ROOT))
+                .contains("u9_change_excluded");
     }
 
     @Test
@@ -378,6 +426,13 @@ class SalesOrderU9SyncReconciliationTest {
         item.setInternalDeliveryDate(LocalDate.of(2026, 8, 28));
         item.setStatus(QuoteStatusWorkflow.RELEASED);
         return item;
+    }
+
+    private static boolean queryUsesU9ChangeActiveFilter(Object query) {
+        if (!(query instanceof QueryWrapper<?> wrapper)) {
+            return false;
+        }
+        return wrapper.getCustomSqlSegment().toLowerCase(Locale.ROOT).contains("u9_change_excluded");
     }
 
     private U9SalesOrderHeadDTO request(SalesOrderHeader header) {

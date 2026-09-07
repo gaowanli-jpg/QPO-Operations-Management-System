@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
 
 const currentDir = dirname(fileURLToPath(import.meta.url))
-const readSource = (...segments) => readFileSync(resolve(currentDir, ...segments), 'utf8')
+const readSource = (...segments) => readFileSync(resolve(currentDir, ...segments), 'utf8').replace(/\r\n/g, '\n')
 
 const functionBlock = (source, declaration) => {
   const start = source.indexOf(declaration)

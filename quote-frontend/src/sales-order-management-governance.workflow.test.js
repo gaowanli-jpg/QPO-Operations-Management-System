@@ -20,6 +20,8 @@ describe('sales order management governance and drawings', () => {
       'getSalesOrderDrawingSummary',
       'discardSalesOrder',
       'restoreSalesOrder',
+      'discardSalesOrderItemForU9Change',
+      'restoreSalesOrderItemForU9Change',
       'supplementSalesOrderDrawings',
       'downloadSalesOrderProductionTaskNotice'
     ]) {
@@ -82,5 +84,26 @@ describe('sales order management governance and drawings', () => {
     expect(salesOrderManage).toContain('listSalesOrderItems(salesOrderId')
     expect(salesOrderManage).toContain('listSalesOrderTickets(salesOrderId')
     expect(salesOrderManage).toContain('listSalesOrderProcessSheets(salesOrderId')
+  })
+
+  test('sales order detail exposes item-level U9/change exclusion without hiding excluded rows', () => {
+    expect(orderApi).toContain('discardSalesOrderItemForU9Change')
+    expect(orderApi).toContain('/api/market/sales-order-management/orders/${salesOrderId}/items/${itemId}/discard')
+    expect(orderApi).toContain('restoreSalesOrderItemForU9Change')
+    expect(orderApi).toContain('/api/market/sales-order-management/orders/${salesOrderId}/items/${itemId}/restore')
+
+    expect(salesOrderManage).toContain('u9ChangeExcluded')
+    expect(salesOrderManage).toContain('仅从 U9 同步和销售变更排除')
+    expect(salesOrderManage).toContain('不影响 MES 物料号、WMS 库存、已提/待产处理和 MES 生产下发')
+    expect(salesOrderManage).toContain('handleSalesOrderItemU9ChangeExclusion')
+    expect(salesOrderManage).toContain('discardSalesOrderItemForU9Change')
+    expect(salesOrderManage).toContain('restoreSalesOrderItemForU9Change')
+    expect(salesOrderManage).toContain("v-permission=\"SALES_ORDER_UPDATE_PERMISSION\"")
+    expect(salesOrderManage).toContain('salesOrderItemU9ChangeExclusionLocked')
+    expect(salesOrderManage).toContain("['同步中', '结果待确认'].includes")
+    expect(salesOrderManage).toContain('请输入废弃原因')
+    expect(salesOrderManage).toContain('请输入恢复原因')
+    expect(salesOrderManage).toContain('detailItemList.value = response.records || []')
+    expect(salesOrderManage).not.toContain('detailItemList.value = (response.records || []).filter')
   })
 })

@@ -222,6 +222,7 @@ public class SalesOrderChangeService {
     private List<SalesOrderItem> loadItems(Long salesOrderId) {
         QueryWrapper<SalesOrderItem> query = new QueryWrapper<>();
         query.eq("sales_order_id", salesOrderId)
+                .and(wrapper -> wrapper.eq("u9_change_excluded", false).or().isNull("u9_change_excluded"))
                 .orderByAsc("line_no")
                 .orderByAsc("id");
         return safeList(itemMapper.selectList(query));
@@ -229,7 +230,8 @@ public class SalesOrderChangeService {
 
     private long countItems(Long salesOrderId) {
         QueryWrapper<SalesOrderItem> query = new QueryWrapper<>();
-        query.eq("sales_order_id", salesOrderId);
+        query.eq("sales_order_id", salesOrderId)
+                .and(wrapper -> wrapper.eq("u9_change_excluded", false).or().isNull("u9_change_excluded"));
         Long total = itemMapper.selectCount(query);
         return total == null ? 0L : total;
     }
@@ -237,6 +239,7 @@ public class SalesOrderChangeService {
     private List<SalesOrderItem> loadPagedItems(Long salesOrderId, int page, int pageSize) {
         QueryWrapper<SalesOrderItem> query = new QueryWrapper<>();
         query.eq("sales_order_id", salesOrderId)
+                .and(wrapper -> wrapper.eq("u9_change_excluded", false).or().isNull("u9_change_excluded"))
                 .orderByAsc("line_no")
                 .orderByAsc("id")
                 .last("LIMIT " + pageSize + " OFFSET " + ((page - 1L) * pageSize));

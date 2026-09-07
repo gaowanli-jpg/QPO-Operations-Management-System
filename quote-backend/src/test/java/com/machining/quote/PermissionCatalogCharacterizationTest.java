@@ -124,6 +124,7 @@ class PermissionCatalogCharacterizationTest {
                         "/locked-items",
                         "/quote-process",
                         "/release",
+                        "/release-append",
                         "/u9-sync",
                         "/delivery-documents",
                         "/quote-template",

@@ -161,7 +161,9 @@ public class SalesOrderU9SyncStateService {
 
     private List<SalesOrderItem> loadItems(Long salesOrderId) {
         QueryWrapper<SalesOrderItem> query = new QueryWrapper<>();
-        query.eq("sales_order_id", salesOrderId).orderByAsc("id");
+        query.eq("sales_order_id", salesOrderId)
+                .and(wrapper -> wrapper.eq("u9_change_excluded", false).or().isNull("u9_change_excluded"))
+                .orderByAsc("id");
         List<SalesOrderItem> items = itemMapper.selectList(query);
         return items == null ? List.of() : items;
     }

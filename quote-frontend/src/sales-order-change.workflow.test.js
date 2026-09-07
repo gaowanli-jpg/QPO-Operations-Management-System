@@ -44,7 +44,7 @@ describe('sales order change module stage 1', () => {
     expect(component).toContain('previewSalesOrderChange')
     expect(component).toContain("const SALES_ORDER_CHANGE_VIEW_PERMISSION = 'change:sales-order:view'")
     expect(component).toContain("const SALES_ORDER_CHANGE_UPDATE_PERMISSION = 'change:sales-order:update'")
-    expect(component).toContain("const SALES_ORDER_CHANGE_ALLOWED_STATUSES = ['已生成提单']")
+    expect(component).toContain("const SALES_ORDER_CHANGE_ALLOWED_STATUSES = ['部分已提单', '已生成提单']")
     expect(component).toContain('authStore.hasPermission(SALES_ORDER_CHANGE_UPDATE_PERMISSION)')
     expect(component).toContain('hasChangeUpdatePermission')
     expect(component).toContain('只读查看')
@@ -84,7 +84,7 @@ describe('sales order change module stage 1', () => {
     expect(picker).toContain("props.orderScope === 'sales-order-change'")
     expect(picker).toContain('await listSalesOrderChangeOrders(params)')
     expect(picker).toContain("'sales-order-change': 'change:sales-order:customer-select'")
-    expect(picker).toContain("'sales-order-change': ['已生成提单']")
+    expect(picker).toContain("'sales-order-change': ['部分已提单', '已生成提单']")
     expect(picker).toContain("'sales-order-change': '销售订单'")
   })
 

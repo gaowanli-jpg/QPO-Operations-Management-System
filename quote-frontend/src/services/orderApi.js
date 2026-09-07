@@ -119,6 +119,16 @@ export const saveSalesOrderItems = (salesOrderId, payload = {}) => request(`/api
   data: payload
 })
 
+export const discardSalesOrderItemForU9Change = (salesOrderId, itemId, payload = {}) => request(`/api/market/sales-order-management/orders/${salesOrderId}/items/${itemId}/discard`, {
+  method: 'POST',
+  data: payload
+})
+
+export const restoreSalesOrderItemForU9Change = (salesOrderId, itemId, payload = {}) => request(`/api/market/sales-order-management/orders/${salesOrderId}/items/${itemId}/restore`, {
+  method: 'POST',
+  data: payload
+})
+
 export const previewSalesOrderItemDataReplacement = (salesOrderId, formData) => request(`/api/market/sales-order-management/orders/${salesOrderId}/items/data-replacement/preview`, {
   method: 'POST',
   data: formData,

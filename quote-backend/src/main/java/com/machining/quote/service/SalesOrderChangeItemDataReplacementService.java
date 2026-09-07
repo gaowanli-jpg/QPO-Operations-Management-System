@@ -295,6 +295,7 @@ public class SalesOrderChangeItemDataReplacementService {
     private List<SalesOrderItem> listItems(Long salesOrderId) {
         QueryWrapper<SalesOrderItem> query = new QueryWrapper<>();
         query.eq("sales_order_id", salesOrderId)
+                .and(wrapper -> wrapper.eq("u9_change_excluded", false).or().isNull("u9_change_excluded"))
                 .orderByAsc("line_no")
                 .orderByAsc("id");
         return safeList(itemMapper.selectList(query));

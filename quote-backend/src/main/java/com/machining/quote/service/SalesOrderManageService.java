@@ -1,6 +1,8 @@
 package com.machining.quote.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
+import com.machining.quote.config.AuthContext;
 import com.machining.quote.domain.QuoteStatusWorkflow;
 import com.machining.quote.dto.CustomerOptionDTO;
 import com.machining.quote.dto.OrderStatusChangeReq;
@@ -22,6 +24,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -40,8 +43,12 @@ public class SalesOrderManageService {
     private static final int MAX_PAGE_SIZE = 100;
     private static final String ACTION_DISCARD = "SALES_ORDER_DISCARD";
     private static final String ACTION_RESTORE = "SALES_ORDER_RESTORE";
+    private static final String ACTION_ITEM_EXCLUDE = "SALES_ORDER_ITEM_U9_CHANGE_EXCLUDE";
+    private static final String ACTION_ITEM_RESTORE = "SALES_ORDER_ITEM_U9_CHANGE_RESTORE";
     private static final String ACTION_DRAWING_SUPPLEMENT = "SALES_ORDER_DRAWING_SUPPLEMENT";
     private static final String U9_STATUS_SYNCED = "已同步";
+    private static final String U9_STATUS_SYNCING = "同步中";
+    private static final String U9_STATUS_PENDING_CONFIRMATION = "结果待确认";
 
     @Autowired
     private SalesOrderHeaderMapper salesOrderHeaderMapper;
@@ -200,6 +207,16 @@ public class SalesOrderManageService {
                 QuoteStatusWorkflow.RELEASED,
                 "只有废弃状态的销售订单可以恢复。"
         );
+    }
+
+    @Transactional
+    public OrderStatusChangeResult discardItemForU9Change(Long salesOrderId, Long itemId, OrderStatusChangeReq req) {
+        return changeItemU9ChangeExclusion(salesOrderId, itemId, req, true);
+    }
+
+    @Transactional
+    public OrderStatusChangeResult restoreItemForU9Change(Long salesOrderId, Long itemId, OrderStatusChangeReq req) {
+        return changeItemU9ChangeExclusion(salesOrderId, itemId, req, false);
     }
 
     @Transactional
@@ -518,6 +535,151 @@ public class SalesOrderManageService {
 
     private Long countSalesOrderTickets(Long salesOrderId) {
         return ticketMapper.selectCount(ticketQuery(salesOrderId));
+    }
+
+    private OrderStatusChangeResult changeItemU9ChangeExclusion(
+            Long salesOrderId,
+            Long itemId,
+            OrderStatusChangeReq req,
+            boolean exclude) {
+        if (salesOrderId == null) {
+            throw new RuntimeException("销售订单 ID 不能为空");
+        }
+        if (itemId == null) {
+            throw new RuntimeException("销售订单零件行 ID 不能为空");
+        }
+        String reason = requireU9ChangeReason(req);
+        SalesOrderHeader order = salesOrderHeaderMapper.selectByIdForUpdate(salesOrderId);
+        if (order == null) {
+            throw new RuntimeException("销售订单不存在");
+        }
+        assertSalesOrderDataScope(order);
+        assertItemU9ChangeExclusionAllowed(order);
+        SalesOrderItem item = salesOrderItemMapper.selectByIdForUpdate(itemId);
+        if (item == null) {
+            throw new RuntimeException("销售订单零件行不存在：" + itemId);
+        }
+        if (!salesOrderId.equals(item.getSalesOrderId())) {
+            throw new RuntimeException("销售订单零件行 " + itemId + " 不属于当前销售订单");
+        }
+        if (exclude && Boolean.TRUE.equals(item.getU9ChangeExcluded())) {
+            throw new RuntimeException("销售订单零件行已从 U9 同步和销售变更排除");
+        }
+        if (!exclude && !Boolean.TRUE.equals(item.getU9ChangeExcluded())) {
+            throw new RuntimeException("销售订单零件行未从 U9 同步和销售变更排除，无需恢复");
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        Long operatorId = currentUserId();
+        UpdateWrapper<SalesOrderItem> update = new UpdateWrapper<>();
+        update.eq("id", item.getId())
+                .eq("sales_order_id", order.getId())
+                .set("u9_change_excluded", exclude)
+                .set("updated_at", now);
+        if (exclude) {
+            update.set("u9_change_excluded_at", now)
+                    .set("u9_change_excluded_by", operatorId)
+                    .set("u9_change_excluded_reason", reason)
+                    .set("u9_change_restored_at", null)
+                    .set("u9_change_restored_by", null)
+                    .set("u9_change_restore_reason", null);
+            item.setU9ChangeExcludedAt(now);
+            item.setU9ChangeExcludedBy(operatorId);
+            item.setU9ChangeExcludedReason(reason);
+            item.setU9ChangeRestoredAt(null);
+            item.setU9ChangeRestoredBy(null);
+            item.setU9ChangeRestoreReason(null);
+        } else {
+            update.set("u9_change_restored_at", now)
+                    .set("u9_change_restored_by", operatorId)
+                    .set("u9_change_restore_reason", reason);
+            item.setU9ChangeRestoredAt(now);
+            item.setU9ChangeRestoredBy(operatorId);
+            item.setU9ChangeRestoreReason(reason);
+        }
+        int updated = salesOrderItemMapper.update(null, update);
+        if (updated <= 0) {
+            throw new RuntimeException("销售订单零件 U9/销售变更排除状态保存失败，请刷新后重试");
+        }
+        item.setU9ChangeExcluded(exclude);
+        item.setUpdatedAt(now);
+
+        String action = exclude ? ACTION_ITEM_EXCLUDE : ACTION_ITEM_RESTORE;
+        String message = buildItemU9ChangeMessage(order, item, reason, exclude);
+        if (auditService != null) {
+            auditService.record(
+                    action,
+                    "sales_order_item",
+                    item.getId(),
+                    null,
+                    itemU9ChangeAuditSummary(order, item, reason, exclude),
+                    "MARKET",
+                    "SUCCESS",
+                    message,
+                    null
+            );
+        }
+        log.info("Sales order item U9/change exclusion changed action={} salesOrderId={} salesOrderNo={} itemId={} lineNo={} excluded={}",
+                action, order.getId(), order.getSalesOrderNo(), item.getId(), item.getLineNo(), exclude);
+
+        OrderStatusChangeResult result = new OrderStatusChangeResult();
+        result.setSalesOrderId(order.getId());
+        result.setSalesOrderNo(order.getSalesOrderNo());
+        result.setFromStatus(order.getStatus());
+        result.setToStatus(order.getStatus());
+        result.setUpdatedItemCount(1);
+        result.setMessage(message);
+        return result;
+    }
+
+    private void assertItemU9ChangeExclusionAllowed(SalesOrderHeader order) {
+        String u9Status = order == null ? null : order.getU9SyncStatus();
+        if (U9_STATUS_SYNCING.equals(u9Status) || U9_STATUS_PENDING_CONFIRMATION.equals(u9Status)) {
+            throw new RuntimeException("U9 状态为" + u9Status + "，不能废弃或恢复销售订单零件");
+        }
+    }
+
+    private String requireU9ChangeReason(OrderStatusChangeReq req) {
+        String reason = req == null ? null : req.getReason();
+        if (reason == null || reason.trim().isEmpty()) {
+            throw new RuntimeException("原因不能为空");
+        }
+        String trimmed = reason.trim();
+        if (trimmed.length() > 500) {
+            throw new RuntimeException("原因长度不能超过 500 个字符");
+        }
+        return trimmed;
+    }
+
+    private Long currentUserId() {
+        AuthContext.SessionUser user = AuthContext.get();
+        return user == null || user.id() == null ? null : user.id().longValue();
+    }
+
+    private String buildItemU9ChangeMessage(SalesOrderHeader order, SalesOrderItem item, String reason, boolean exclude) {
+        String actionName = exclude ? "已从 U9 同步和销售变更排除" : "已恢复到 U9 同步和销售变更";
+        return actionName + "：" + firstNonBlank(order.getSalesOrderNo(), order.getDocumentNo(), String.valueOf(order.getId()))
+                + "，行号 " + (item.getLineNo() == null ? "-" : item.getLineNo())
+                + "，图号 " + firstNonBlank(item.getPartNo(), "-")
+                + "，版本 " + firstNonBlank(item.getVersion(), "-")
+                + "；原因：" + reason;
+    }
+
+    private Map<String, Object> itemU9ChangeAuditSummary(
+            SalesOrderHeader order,
+            SalesOrderItem item,
+            String reason,
+            boolean exclude) {
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("salesOrderId", order.getId());
+        summary.put("salesOrderNo", firstNonBlank(order.getSalesOrderNo(), order.getDocumentNo()));
+        summary.put("salesOrderItemId", item.getId());
+        summary.put("lineNo", item.getLineNo());
+        summary.put("partNo", item.getPartNo());
+        summary.put("version", item.getVersion());
+        summary.put("u9ChangeExcluded", exclude);
+        summary.put("reason", reason);
+        return summary;
     }
 
     private void validateSalesOrderDiscardAllowed(SalesOrderHeader order, String fromStatus, String rejectionMessage) {

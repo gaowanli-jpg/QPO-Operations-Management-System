@@ -36,7 +36,7 @@ class MaterialMasterExportExternalFieldsContractTest {
     }
 
     @Test
-    void excelExportsAndTemplateExportsIncludeMaterialIdentityColumns() throws IOException {
+    void deliveryAndTemplateExportsKeepMaterialIdentityAvailableWithoutChangingCustomerQuoteColumns() throws IOException {
         String excelExportService = read(MAIN.resolve(Path.of("service", "ExcelExportService.java")));
         assertThat(excelExportService)
                 .contains(
@@ -48,10 +48,11 @@ class MaterialMasterExportExternalFieldsContractTest {
                         "ticket.getEngineeringMaterialCategory()",
                         "sheet.getEngineeringMaterialCode()",
                         "sheet.getEngineeringMaterialTypeName()",
-                        "sheet.getEngineeringMaterialCategory()",
-                        "item.getEngineeringMaterialCode()",
-                        "item.getEngineeringMaterialTypeName()",
-                        "item.getEngineeringMaterialCategory()");
+                        "sheet.getEngineeringMaterialCategory()")
+                .doesNotContain(
+                        "row.add(safe(item.getEngineeringMaterialCode()))",
+                        "row.add(safe(item.getEngineeringMaterialTypeName()))",
+                        "row.add(safe(item.getEngineeringMaterialCategory()))");
 
         String quoteTemplateExportService = read(MAIN.resolve(Path.of("service", "QuoteTemplateExportService.java")));
         assertThat(quoteTemplateExportService)

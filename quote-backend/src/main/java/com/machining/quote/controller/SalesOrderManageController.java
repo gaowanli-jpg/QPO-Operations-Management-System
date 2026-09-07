@@ -126,6 +126,30 @@ public class SalesOrderManageController {
         return salesOrderMaintenanceService.saveItems(salesOrderId, req);
     }
 
+    @PostMapping("/orders/{salesOrderId}/items/{itemId}/discard")
+    @RequirePermission("market:sales-order:update")
+    public OrderStatusChangeResult discardItemForU9Change(
+            @PathVariable Long salesOrderId,
+            @PathVariable Long itemId,
+            @RequestBody(required = false) OrderStatusChangeReq req) {
+        return salesOrderManageService.discardItemForU9Change(
+                salesOrderId,
+                itemId,
+                req == null ? new OrderStatusChangeReq() : req);
+    }
+
+    @PostMapping("/orders/{salesOrderId}/items/{itemId}/restore")
+    @RequirePermission("market:sales-order:update")
+    public OrderStatusChangeResult restoreItemForU9Change(
+            @PathVariable Long salesOrderId,
+            @PathVariable Long itemId,
+            @RequestBody(required = false) OrderStatusChangeReq req) {
+        return salesOrderManageService.restoreItemForU9Change(
+                salesOrderId,
+                itemId,
+                req == null ? new OrderStatusChangeReq() : req);
+    }
+
     @PostMapping(
             value = "/orders/{salesOrderId}/items/data-replacement/preview",
             consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
