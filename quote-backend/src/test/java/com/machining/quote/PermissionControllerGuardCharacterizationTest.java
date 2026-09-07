@@ -165,9 +165,9 @@ class PermissionControllerGuardCharacterizationTest {
                 .contains("@RequirePermission(\"market:sales-order:production-task-notice-export\")")
                 .contains("@RequirePermission(\"market:sales-order:update\")")
                 .contains("@PutMapping(\"/orders/{salesOrderId}\")")
-                .contains("@PutMapping(\"/orders/{salesOrderId}/items\")")
-                .contains("/orders/{salesOrderId}/item-data-replacement/preview")
-                .contains("/orders/{salesOrderId}/item-data-replacement/confirm")
+                .contains("@PostMapping(\"/orders/{salesOrderId}/items/batch\")")
+                .contains("/orders/{salesOrderId}/items/data-replacement/preview")
+                .contains("/orders/{salesOrderId}/items/data-replacement/confirm")
                 .doesNotContain("market:u9-sync:submit")
                 .doesNotContain("change:sales-order:update");
         assertThat(admin)

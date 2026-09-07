@@ -148,16 +148,16 @@ describe('orderApi', () => {
       method: 'PUT',
       data: payload
     })
-    expect(request).toHaveBeenNthCalledWith(2, '/api/market/sales-order-management/orders/901/items', {
-      method: 'PUT',
+    expect(request).toHaveBeenNthCalledWith(2, '/api/market/sales-order-management/orders/901/items/batch', {
+      method: 'POST',
       data: itemPayload
     })
-    expect(request).toHaveBeenNthCalledWith(3, '/api/market/sales-order-management/orders/901/item-data-replacement/preview', {
+    expect(request).toHaveBeenNthCalledWith(3, '/api/market/sales-order-management/orders/901/items/data-replacement/preview', {
       method: 'POST',
       data: formData,
       headers: { 'Content-Type': 'multipart/form-data' }
     })
-    expect(request).toHaveBeenNthCalledWith(4, '/api/market/sales-order-management/orders/901/item-data-replacement/confirm', {
+    expect(request).toHaveBeenNthCalledWith(4, '/api/market/sales-order-management/orders/901/items/data-replacement/confirm', {
       method: 'POST',
       data: formData,
       headers: { 'Content-Type': 'multipart/form-data' }

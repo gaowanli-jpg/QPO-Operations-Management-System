@@ -60,11 +60,11 @@ class SalesOrderMaintenanceServiceTest {
         assertRoute("saveOrder", new Class<?>[]{Long.class, SalesOrderMaintenanceOrderUpdateReq.class},
                 PutMapping.class, "/orders/{salesOrderId}", "market:sales-order:update");
         assertRoute("saveItems", new Class<?>[]{Long.class, SalesOrderItemUpdateReq.class},
-                PutMapping.class, "/orders/{salesOrderId}/items", "market:sales-order:update");
+                PostMapping.class, "/orders/{salesOrderId}/items/batch", "market:sales-order:update");
         assertRoute("previewItemDataReplacement", new Class<?>[]{Long.class, org.springframework.web.multipart.MultipartFile.class},
-                PostMapping.class, "/orders/{salesOrderId}/item-data-replacement/preview", "market:sales-order:update");
+                PostMapping.class, "/orders/{salesOrderId}/items/data-replacement/preview", "market:sales-order:update");
         assertRoute("confirmItemDataReplacement", new Class<?>[]{Long.class, String.class, org.springframework.web.multipart.MultipartFile.class},
-                PostMapping.class, "/orders/{salesOrderId}/item-data-replacement/confirm", "market:sales-order:update");
+                PostMapping.class, "/orders/{salesOrderId}/items/data-replacement/confirm", "market:sales-order:update");
     }
 
     @Test

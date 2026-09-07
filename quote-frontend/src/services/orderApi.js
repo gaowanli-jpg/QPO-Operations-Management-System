@@ -113,18 +113,18 @@ export const saveSalesOrderHeader = (salesOrderId, payload = {}) => request(`/ap
   data: payload
 })
 
-export const saveSalesOrderItems = (salesOrderId, payload = {}) => request(`/api/market/sales-order-management/orders/${salesOrderId}/items`, {
-  method: 'PUT',
+export const saveSalesOrderItems = (salesOrderId, payload = {}) => request(`/api/market/sales-order-management/orders/${salesOrderId}/items/batch`, {
+  method: 'POST',
   data: payload
 })
 
-export const previewSalesOrderItemDataReplacement = (salesOrderId, formData) => request(`/api/market/sales-order-management/orders/${salesOrderId}/item-data-replacement/preview`, {
+export const previewSalesOrderItemDataReplacement = (salesOrderId, formData) => request(`/api/market/sales-order-management/orders/${salesOrderId}/items/data-replacement/preview`, {
   method: 'POST',
   data: formData,
   headers: { 'Content-Type': 'multipart/form-data' }
 })
 
-export const confirmSalesOrderItemDataReplacement = (salesOrderId, formData) => request(`/api/market/sales-order-management/orders/${salesOrderId}/item-data-replacement/confirm`, {
+export const confirmSalesOrderItemDataReplacement = (salesOrderId, formData) => request(`/api/market/sales-order-management/orders/${salesOrderId}/items/data-replacement/confirm`, {
   method: 'POST',
   data: formData,
   headers: { 'Content-Type': 'multipart/form-data' }

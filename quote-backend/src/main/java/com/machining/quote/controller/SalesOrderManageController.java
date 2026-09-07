@@ -118,7 +118,7 @@ public class SalesOrderManageController {
         return salesOrderMaintenanceService.saveOrder(salesOrderId, req);
     }
 
-    @PutMapping("/orders/{salesOrderId}/items")
+    @PostMapping("/orders/{salesOrderId}/items/batch")
     @RequirePermission("market:sales-order:update")
     public SalesOrderMaintenanceUpdateResp saveItems(
             @PathVariable Long salesOrderId,
@@ -127,7 +127,7 @@ public class SalesOrderManageController {
     }
 
     @PostMapping(
-            value = "/orders/{salesOrderId}/item-data-replacement/preview",
+            value = "/orders/{salesOrderId}/items/data-replacement/preview",
             consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @RequirePermission("market:sales-order:update")
     public SalesOrderU9ItemDataReplacementPreviewDTO previewItemDataReplacement(
@@ -142,7 +142,7 @@ public class SalesOrderManageController {
     }
 
     @PostMapping(
-            value = "/orders/{salesOrderId}/item-data-replacement/confirm",
+            value = "/orders/{salesOrderId}/items/data-replacement/confirm",
             consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @RequirePermission("market:sales-order:update")
     public SalesOrderItemDataReplacementConfirmResp confirmItemDataReplacement(
