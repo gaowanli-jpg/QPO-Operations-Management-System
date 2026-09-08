@@ -383,7 +383,7 @@ public class BusinessFileService {
         }
     }
 
-    private String normalizeDrawingFolderUrl(String rawFolderUrl) {
+    public String normalizeDrawingFolderUrl(String rawFolderUrl) {
         Optional<String> normalized = normalizePublicPath(rawFolderUrl);
         if (normalized.isEmpty()) {
             throw new IllegalArgumentException("图纸文件夹地址不正确");
