@@ -768,11 +768,10 @@ public class MesMaterialSyncService {
         String customerName = order == null ? ticket.getCustomerName() : order.getCustomerName();
         String drawingNo = required(ticket.getPartNo(), "Drawing number cannot be blank");
         String drawingVersion = ticket.getVersion() == null ? "" : ticket.getVersion().trim();
-        String drawingUrl = resolveDrawingUrl(ticket);
         MesMaterialResolveReq.Item item = new MesMaterialResolveReq.Item();
         item.setDrawingNo(drawingNo.trim());
         item.setDrawingVersion(drawingVersion);
-        item.setDrawingUrls(List.of(businessFileService.externalReadableUrl(required(drawingUrl, "Drawing URL cannot be blank"))));
+        item.setDrawingUrls(externalDrawingUrls(resolveDrawingUrl(ticket)));
         item.setRemark(trimToNull(ticket.getRemark()));
         item.setCustomerRequirements(MesCustomerRequirementsAssembler.assemble(
                 ticket.getMaterialName(),
@@ -1280,11 +1279,10 @@ public class MesMaterialSyncService {
         OrderRfq order = orderRfqMapper == null || ticket.getRfqId() == null ? null : orderRfqMapper.selectById(ticket.getRfqId());
         req.setCustomerCode(resolveCustomerCode(ticket, order));
         req.setCustomerName(order == null ? ticket.getCustomerName() : order.getCustomerName());
-        String drawingUrl = resolveDrawingUrl(ticket);
         MesMaterialResolveReq.Item item = new MesMaterialResolveReq.Item();
         item.setDrawingNo(required(ticket.getPartNo(), "图号不能为空"));
         item.setDrawingVersion(ticket.getVersion() == null ? "" : ticket.getVersion());
-        item.setDrawingUrls(List.of(businessFileService.externalReadableUrl(required(drawingUrl, "图纸不能为空"))));
+        item.setDrawingUrls(externalDrawingUrls(resolveDrawingUrl(ticket)));
         item.setRemark(trimToNull(ticket.getRemark()));
         item.setCustomerRequirements(MesCustomerRequirementsAssembler.assemble(
                 ticket.getMaterialName(),
@@ -1472,6 +1470,14 @@ public class MesMaterialSyncService {
             return item == null ? null : item.getDrawingUrl();
         }
         return null;
+    }
+
+    private List<String> externalDrawingUrls(String drawingUrl) {
+        String normalized = trimToNull(drawingUrl);
+        if (normalized == null) {
+            return null;
+        }
+        return List.of(businessFileService.externalReadableUrl(normalized));
     }
 
     private void markFailed(OrderDeliveryTicket ticket, String mesRequestId, String message) {

@@ -21,6 +21,7 @@ import com.machining.quote.service.AuditService;
 import com.machining.quote.service.BusinessFileService;
 import com.machining.quote.service.SourceItemMaterialNoSyncService;
 import com.machining.quote.service.mes.MesMaterialClient;
+import com.machining.quote.service.mes.MesMaterialRequestValidator;
 import com.machining.quote.service.mes.MesMaterialSyncService;
 import com.machining.quote.service.SystemTaskService;
 import org.junit.jupiter.api.Test;
@@ -38,6 +39,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -321,5 +323,59 @@ class MesMaterialSyncServiceTest extends MesMaterialSyncTestSupport {
         assertThat(payload.path("items").get(0).path("drawingUrls").get(0).asText())
                 .isEqualTo("http://minio-public/qpo-drawings/drawings/p100.pdf");
         assertThat(payload.path("items").get(0).has("drawingUrl")).isFalse();
+    }
+
+    @Test
+    void mesMaterialRequestValidatorAllowsMissingDrawingUrls() {
+        MesMaterialResolveReq req = new MesMaterialResolveReq();
+        req.setBizId("QPO-MAT-NO-DRAWING");
+        req.setInternalProjectNo("IP-9");
+        MesMaterialResolveReq.Item item = new MesMaterialResolveReq.Item();
+        item.setDrawingNo("P-100");
+        item.setDrawingVersion("A");
+        req.setItems(List.of(item));
+
+        assertThatCode(() -> new MesMaterialRequestValidator().validate(req))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void syncMaterialNoCallsMesWithoutDrawingUrlWhenTicketAndSourceItemHaveNoDrawing() {
+        MesMaterialSyncService service = syncService();
+        OrderDeliveryTicketMapper ticketMapper = mock(OrderDeliveryTicketMapper.class);
+        OrderRfqMapper orderMapper = mock(OrderRfqMapper.class);
+        ItemQuoteVersionMapper itemMapper = mock(ItemQuoteVersionMapper.class);
+        MesMaterialClient client = mock(MesMaterialClient.class);
+        AuditService auditService = mock(AuditService.class);
+        BusinessFileService businessFileService = mock(BusinessFileService.class);
+        OrderDeliveryTicket ticket = ticket();
+        ticket.setDrawingUrl(null);
+        when(ticketMapper.selectById(123)).thenReturn(ticket);
+        when(orderMapper.selectById(88)).thenReturn(order());
+        when(itemMapper.selectById(77)).thenReturn(item(null));
+        MesMaterialResolveResp response = new MesMaterialResolveResp();
+        response.setSuccess(true);
+        response.setMaterialNo("MES-NO-DRAWING");
+        when(client.resolveMaterial(any())).thenAnswer(invocation -> {
+            MesMaterialResolveReq req = invocation.getArgument(0);
+            response.setMesRequestId(req.getMesRequestId());
+            return response;
+        });
+        when(ticketMapper.update(any(OrderDeliveryTicket.class), any())).thenReturn(1);
+        wireSyncService(service, ticketMapper, orderMapper, itemMapper, client, auditService, businessFileService);
+
+        Map<String, Object> result = service.syncMaterialNo(123, 9010L);
+
+        assertThat(result)
+                .containsEntry("status", "SUCCESS")
+                .containsEntry("materialNo", "MES-NO-DRAWING");
+        ArgumentCaptor<MesMaterialResolveReq> reqCaptor = ArgumentCaptor.forClass(MesMaterialResolveReq.class);
+        verify(client).resolveMaterial(reqCaptor.capture());
+        MesMaterialResolveReq.Item sentItem = reqCaptor.getValue().getItems().get(0);
+        assertThat(sentItem.getDrawingNo()).isEqualTo("P-100");
+        assertThat(sentItem.getDrawingVersion()).isEqualTo("A");
+        assertThat(sentItem.getDrawingUrls()).isNull();
+        assertThat(serialize(reqCaptor.getValue()).path("items").get(0).has("drawingUrls")).isFalse();
+        verify(businessFileService, never()).externalReadableUrl(anyString());
     }
 }

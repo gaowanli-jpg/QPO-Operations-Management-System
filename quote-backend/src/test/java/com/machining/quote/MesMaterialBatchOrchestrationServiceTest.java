@@ -85,6 +85,40 @@ class MesMaterialBatchOrchestrationServiceTest {
 
     @Test
     @SuppressWarnings("unchecked")
+    void materialBatchCallsMesWithoutDrawingUrlsWhenTicketAndSourceItemHaveNoDrawing() {
+        Fixture fixture = fixture();
+        OrderDeliveryTicket noDrawing = ticket(605, "P-NO-DRAWING", "A", "IP-BATCH-NO-DRAWING");
+        noDrawing.setDrawingUrl(null);
+        fixture.withTicket(noDrawing, null);
+        when(fixture.client.resolveMaterial(any())).thenAnswer(invocation -> {
+            MesMaterialResolveReq req = invocation.getArgument(0);
+            return response(req, item("P-NO-DRAWING", "A", "EXISTING_PRODUCT", "MAT-NO-DRAWING-605", "TASK-605"));
+        });
+        when(fixture.sourceSync.syncConfirmedMaterialNo(any(), anyString(), anyString()))
+                .thenReturn(SourceItemMaterialNoSyncService.MaterialNoSyncResult.empty());
+
+        Map<String, Object> result = fixture.batchService.syncMesMaterialBatch(List.of(605), 9605L);
+
+        assertThat(result)
+                .containsEntry("totalCount", 1)
+                .containsEntry("successCount", 1)
+                .containsEntry("failedCount", 0);
+        List<Map<String, Object>> rows = (List<Map<String, Object>>) result.get("results");
+        assertThat(rows).singleElement()
+                .satisfies(row -> assertThat(row)
+                        .containsEntry("ticketId", 605)
+                        .containsEntry("status", "SUCCESS"));
+        ArgumentCaptor<MesMaterialResolveReq> reqCaptor = ArgumentCaptor.forClass(MesMaterialResolveReq.class);
+        verify(fixture.client).resolveMaterial(reqCaptor.capture());
+        MesMaterialResolveReq.Item sentItem = reqCaptor.getValue().getItems().get(0);
+        assertThat(sentItem.getDrawingNo()).isEqualTo("P-NO-DRAWING");
+        assertThat(sentItem.getDrawingVersion()).isEqualTo("A");
+        assertThat(sentItem.getDrawingUrls()).isNull();
+        verify(fixture.businessFileService, times(0)).externalReadableUrl(anyString());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
     void materialBatchDoesNotLetOneFailedGroupBlockAnotherGroup() {
         Fixture fixture = fixture();
         OrderDeliveryTicket failedGroup = ticket(611, "P-FAIL", "A", "IP-FAIL");
@@ -268,11 +302,15 @@ class MesMaterialBatchOrchestrationServiceTest {
         private DeliveryIntegrationBatchService batchService;
 
         private void withTicket(OrderDeliveryTicket ticket) {
+            withTicket(ticket, "/drawings/" + ticket.getPartNo() + ".pdf");
+        }
+
+        private void withTicket(OrderDeliveryTicket ticket, String drawingUrl) {
             when(ticketMapper.selectById(ticket.getId())).thenReturn(ticket);
             when(ticketMapper.selectByIdForUpdate(ticket.getId())).thenReturn(ticket);
             ItemQuoteVersion item = new ItemQuoteVersion();
             item.setId(ticket.getItemId());
-            item.setDrawingUrl("/drawings/" + ticket.getPartNo() + ".pdf");
+            item.setDrawingUrl(drawingUrl);
             when(itemMapper.selectById(ticket.getItemId())).thenReturn(item);
             when(itemMapper.selectByIdForUpdate(ticket.getItemId())).thenReturn(item);
         }

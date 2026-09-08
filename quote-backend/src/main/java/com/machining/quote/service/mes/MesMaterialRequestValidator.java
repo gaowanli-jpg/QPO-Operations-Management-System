@@ -2,8 +2,6 @@ package com.machining.quote.service.mes;
 
 import com.machining.quote.dto.mes.MesMaterialResolveReq;
 
-import java.util.List;
-
 public class MesMaterialRequestValidator {
     public void validate(MesMaterialResolveReq req) {
         if (req == null) {
@@ -21,10 +19,6 @@ public class MesMaterialRequestValidator {
             requireText(item.getDrawingNo(), "MES material drawingNo cannot be blank index=" + i);
             if (item.getDrawingVersion() == null) {
                 throw new IllegalArgumentException("MES material drawingVersion cannot be null index=" + i);
-            }
-            List<String> urls = item.getDrawingUrls();
-            if (urls == null || urls.stream().noneMatch(url -> trimToNull(url) != null)) {
-                throw new IllegalArgumentException("MES material drawingUrls cannot be empty index=" + i);
             }
         }
     }
