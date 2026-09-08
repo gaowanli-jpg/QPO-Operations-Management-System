@@ -83,7 +83,7 @@ public class SalesOrderQpoImportService {
 
     @Transactional
     public SalesOrderQpoImportResp importQpo(MultipartFile excelFile, Long customerId, String documentTypeCode) {
-        return importQpoInternal(excelFile, customerId, documentTypeCode, null, null, null);
+        return importQpoInternal(excelFile, customerId, documentTypeCode, null, null, null, null, null);
     }
 
     @Transactional
@@ -92,7 +92,7 @@ public class SalesOrderQpoImportService {
             Long customerId,
             String documentTypeCode,
             List<MultipartFile> drawings) {
-        return importQpoInternal(excelFile, customerId, documentTypeCode, null, drawings, null);
+        return importQpoInternal(excelFile, customerId, documentTypeCode, null, drawings, null, null, null);
     }
 
     @Transactional
@@ -102,55 +102,7 @@ public class SalesOrderQpoImportService {
             String documentTypeCode,
             List<MultipartFile> drawings,
             List<MultipartFile> versionDrawings) {
-        validateFile(excelFile);
-        CustomerMaster customer = requireCustomer(customerId);
-        if (dataScopeService != null) {
-            dataScopeService.assertCanAccessCustomer(customer);
-        }
-        String effectiveDocumentType = effectiveDocumentType(documentTypeCode);
-        String batchNo = nextBatchNo();
-        String sourceFileName = safeFileName(excelFile.getOriginalFilename());
-        long startedAt = System.currentTimeMillis();
-
-        SalesOrderQpoExcelParseResult parseResult = parse(excelFile);
-        if (parseResult.getOrderCount() <= 0 || parseResult.getOrders().isEmpty()) {
-            throw new IllegalArgumentException("销售订单表格没有可导入的订单");
-        }
-        validateDuplicateImports(customer, parseResult.getOrders());
-        DrawingBindingResult drawingBinding = bindDrawings(customer, batchNo, parseResult, drawings, versionDrawings);
-
-        SalesOrderImportBatch batch = createBatch(batchNo, sourceFileName, parseResult);
-        batchMapper.insert(batch);
-
-        SalesOrderQpoImportResp resp = baseResponse(batchNo, parseResult, drawingBinding);
-        int sequence = 1;
-        for (SalesOrderQpoOrderGroupDTO group : parseResult.getOrders()) {
-            CreatedSalesOrder created = createSalesOrderGroup(
-                    batch,
-                    customer,
-                    effectiveDocumentType,
-                    group,
-                    batchNo,
-                    sequence++,
-                    drawingBinding
-            );
-            resp.getRows().add(successRow(created, group));
-        }
-        resp.setSuccess(true);
-        resp.setStatus(STATUS_SUCCESS);
-        resp.setSuccessOrderCount(resp.getRows().size());
-        resp.setFailedOrderCount(0);
-        audit(batch, resp, customer, effectiveDocumentType, startedAt);
-        log.info("Sales order independent import completed batchNo={} orderCount={} lineCount={} uploadedDrawingCount={} matchedDrawingCount={} missingDrawingCount={} unmatchedDrawingCount={} durationMs={}",
-                batchNo,
-                resp.getTotalOrderCount(),
-                resp.getTotalLineCount(),
-                drawingBinding.uploadedDrawingCount(),
-                drawingBinding.matchedItemCount(),
-                drawingBinding.missingDrawingCount(),
-                drawingBinding.unmatchedDrawingCount(),
-                System.currentTimeMillis() - startedAt);
-        return resp;
+        return importQpoInternal(excelFile, customerId, documentTypeCode, null, drawings, versionDrawings, null, null);
     }
 
     @Transactional
@@ -161,8 +113,21 @@ public class SalesOrderQpoImportService {
             SalesOrderQpoImportDefaultsDTO defaults,
             List<MultipartFile> drawings,
             List<MultipartFile> versionDrawings) {
+        return importQpo(excelFile, customerId, documentTypeCode, defaults, drawings, versionDrawings, null, null);
+    }
+
+    @Transactional
+    public SalesOrderQpoImportResp importQpo(
+            MultipartFile excelFile,
+            Long customerId,
+            String documentTypeCode,
+            SalesOrderQpoImportDefaultsDTO defaults,
+            List<MultipartFile> drawings,
+            List<MultipartFile> versionDrawings,
+            List<MultipartFile> drawingFolderFiles,
+            String drawingFolderName) {
         validateImportDefaults(defaults);
-        return importQpoInternal(excelFile, customerId, documentTypeCode, defaults, drawings, versionDrawings);
+        return importQpoInternal(excelFile, customerId, documentTypeCode, defaults, drawings, versionDrawings, drawingFolderFiles, drawingFolderName);
     }
 
     private SalesOrderQpoImportResp importQpoInternal(
@@ -171,7 +136,9 @@ public class SalesOrderQpoImportService {
             String documentTypeCode,
             SalesOrderQpoImportDefaultsDTO defaults,
             List<MultipartFile> drawings,
-            List<MultipartFile> versionDrawings) {
+            List<MultipartFile> versionDrawings,
+            List<MultipartFile> drawingFolderFiles,
+            String drawingFolderName) {
         validateFile(excelFile);
         CustomerMaster customer = requireCustomer(customerId);
         if (dataScopeService != null) {
@@ -187,7 +154,7 @@ public class SalesOrderQpoImportService {
             throw new IllegalArgumentException("销售订单表格没有可导入的订单");
         }
         validateDuplicateImports(customer, parseResult.getOrders());
-        DrawingBindingResult drawingBinding = bindDrawings(customer, batchNo, parseResult, drawings, versionDrawings);
+        DrawingBindingResult drawingBinding = bindDrawings(customer, batchNo, parseResult, drawings, versionDrawings, drawingFolderFiles, drawingFolderName);
 
         SalesOrderImportBatch batch = createBatch(batchNo, sourceFileName, parseResult);
         batchMapper.insert(batch);
@@ -262,13 +229,37 @@ public class SalesOrderQpoImportService {
             String batchNo,
             SalesOrderQpoExcelParseResult parseResult,
             List<MultipartFile> drawings,
-            List<MultipartFile> versionDrawings) {
+            List<MultipartFile> versionDrawings,
+            List<MultipartFile> drawingFolderFiles,
+            String drawingFolderName) {
         Set<String> knownPartNos = collectKnownPartNos(parseResult);
         Set<DrawingPartNoResolver.DrawingIdentity> knownPartNoVersions = collectKnownPartNoVersions(parseResult);
         Map<String, DrawingFileInfo> drawingByPartNo = new LinkedHashMap<>();
         Map<String, DrawingFileInfo> drawingByPartNoVersion = new LinkedHashMap<>();
         List<DrawingFileInfo> uploadedDrawings = new ArrayList<>();
         int versionUploadedDrawingCount = 0;
+
+        if (drawingFolderFiles != null && !drawingFolderFiles.isEmpty()) {
+            if (businessFileService == null) {
+                throw new IllegalStateException("销售订单图纸保存服务不可用");
+            }
+            BusinessFileService.DrawingFolderSaveResult drawingFolder = businessFileService.saveDrawingFolderFiles(
+                    "SALES_ORDER_IMPORT",
+                    batchNo,
+                    drawingFolderName,
+                    drawingFolderFiles,
+                    "SALES_ORDER_IMPORT_DRAWING_FOLDER",
+                    batchNo);
+            return new DrawingBindingResult(
+                    parseResult,
+                    knownPartNos,
+                    knownPartNoVersions,
+                    drawingByPartNo,
+                    drawingByPartNoVersion,
+                    uploadedDrawings,
+                    versionUploadedDrawingCount,
+                    drawingFolder);
+        }
 
         if (drawings != null && !drawings.isEmpty()) {
             if (businessFileService == null) {
@@ -331,7 +322,8 @@ public class SalesOrderQpoImportService {
                 drawingByPartNo,
                 drawingByPartNoVersion,
                 uploadedDrawings,
-                versionUploadedDrawingCount);
+                versionUploadedDrawingCount,
+                null);
     }
 
     private Set<String> collectKnownPartNos(SalesOrderQpoExcelParseResult parseResult) {
@@ -377,6 +369,11 @@ public class SalesOrderQpoImportService {
             SalesOrderItem item,
             SalesOrderQpoExcelLineDTO line,
             DrawingBindingResult drawingBinding) {
+        if (drawingBinding != null && drawingBinding.hasDrawingFolder()) {
+            item.setDrawingUrl(drawingBinding.drawingFolderUrl());
+            item.setHasDrawing(true);
+            return;
+        }
         DrawingFileInfo drawing = drawingBinding == null ? null : drawingBinding.find(line.getPartNo(), line.getVersion());
         if (drawing != null) {
             item.setDrawingUrl(drawing.url());
@@ -410,6 +407,11 @@ public class SalesOrderQpoImportService {
         header.setCustomerOrderTitle(group.getCustomerOrderTitle());
         header.setOrderType(group.getOrderType());
         header.setInternalProjectNo(group.getInternalProjectNo());
+        if (drawingBinding != null && drawingBinding.hasDrawingFolder()) {
+            header.setDrawingFolderUrl(drawingBinding.drawingFolderUrl());
+            header.setDrawingFolderName(drawingBinding.drawingFolderName());
+            header.setDrawingFolderFileCount(drawingBinding.drawingFolderFileCount());
+        }
         header.setStatus(QUOTED);
         header.setImportBatchId(batch.getId());
         header.setTotalItemCount(group.getLines().size());
@@ -739,6 +741,8 @@ public class SalesOrderQpoImportService {
                             intValue(drawingReport.get("versionUploadedDrawingCount")))));
             summary.put("missingDrawingCount", drawingReport.get("missingDrawingCount"));
             summary.put("unmatchedDrawingCount", drawingReport.get("unmatchedDrawingCount"));
+            summary.put("drawingFolderMode", drawingReport.get("drawingFolderMode"));
+            summary.put("drawingFolderFileCount", drawingReport.get("drawingFolderFileCount"));
         }
         summary.put("durationMs", System.currentTimeMillis() - startedAt);
         auditService.record(
@@ -901,6 +905,7 @@ public class SalesOrderQpoImportService {
         private final Map<String, DrawingFileInfo> drawingByPartNoVersion;
         private final List<DrawingFileInfo> uploadedDrawings;
         private final int versionUploadedDrawingCount;
+        private final BusinessFileService.DrawingFolderSaveResult drawingFolder;
         private final Map<String, Object> report;
 
         private DrawingBindingResult(
@@ -910,19 +915,40 @@ public class SalesOrderQpoImportService {
                 Map<String, DrawingFileInfo> drawingByPartNo,
                 Map<String, DrawingFileInfo> drawingByPartNoVersion,
                 List<DrawingFileInfo> uploadedDrawings,
-                int versionUploadedDrawingCount) {
+                int versionUploadedDrawingCount,
+                BusinessFileService.DrawingFolderSaveResult drawingFolder) {
             this.knownPartNos = knownPartNos;
             this.knownPartNoVersions = knownPartNoVersions;
             this.drawingByPartNo = drawingByPartNo;
             this.drawingByPartNoVersion = drawingByPartNoVersion;
             this.uploadedDrawings = uploadedDrawings;
             this.versionUploadedDrawingCount = versionUploadedDrawingCount;
+            this.drawingFolder = drawingFolder;
             this.report = buildReport(parseResult);
         }
 
         private DrawingFileInfo find(String partNo, String version) {
+            if (hasDrawingFolder()) {
+                return new DrawingFileInfo(normalizePartNo(partNo), normalizeVersion(version), drawingFolder.folderName(), drawingFolder.folderUrl(), true);
+            }
             DrawingFileInfo versionDrawing = drawingByPartNoVersion.get(itemKey(partNo, version));
             return versionDrawing == null ? drawingByPartNo.get(normalizePartNo(partNo)) : versionDrawing;
+        }
+
+        private boolean hasDrawingFolder() {
+            return drawingFolder != null;
+        }
+
+        private String drawingFolderUrl() {
+            return drawingFolder == null ? null : drawingFolder.folderUrl();
+        }
+
+        private String drawingFolderName() {
+            return drawingFolder == null ? null : drawingFolder.folderName();
+        }
+
+        private int drawingFolderFileCount() {
+            return drawingFolder == null ? 0 : drawingFolder.fileCount();
         }
 
         private Map<String, Object> report() {
@@ -946,6 +972,10 @@ public class SalesOrderQpoImportService {
         }
 
         private DrawingSummary groupSummary(SalesOrderQpoOrderGroupDTO group) {
+            if (hasDrawingFolder()) {
+                int total = group == null || group.getLines() == null ? 0 : group.getLines().size();
+                return new DrawingSummary(drawingFolder.fileCount(), total, 0, 0);
+            }
             Set<String> groupPartNos = new HashSet<>();
             Set<DrawingPartNoResolver.DrawingIdentity> groupPartNoVersions = new HashSet<>();
             int matchedItems = 0;
@@ -982,6 +1012,24 @@ public class SalesOrderQpoImportService {
         }
 
         private Map<String, Object> buildReport(SalesOrderQpoExcelParseResult parseResult) {
+            if (hasDrawingFolder()) {
+                int totalItemCount = parseResult == null ? 0 : parseResult.getLineCount();
+                Map<String, Object> drawingReport = new LinkedHashMap<>();
+                drawingReport.put("totalItemCount", totalItemCount);
+                drawingReport.put("uploadedDrawingCount", drawingFolder.fileCount());
+                drawingReport.put("matchedItemCount", totalItemCount);
+                drawingReport.put("matchedDrawingCount", totalItemCount);
+                drawingReport.put("versionUploadedDrawingCount", 0);
+                drawingReport.put("versionMatchedDrawingCount", 0);
+                drawingReport.put("drawingMatchModes", Map.of("folder", drawingFolder.fileCount(), "partNo", 0, "partNoVersion", 0));
+                drawingReport.put("missingDrawingCount", 0);
+                drawingReport.put("unmatchedDrawingCount", 0);
+                drawingReport.put("missingItems", List.of());
+                drawingReport.put("unmatchedDrawings", List.of());
+                drawingReport.put("drawingFolderMode", true);
+                drawingReport.put("drawingFolderFileCount", drawingFolder.fileCount());
+                return drawingReport;
+            }
             List<Map<String, Object>> missingItems = new ArrayList<>();
             Set<String> matchedDrawingPartNos = new HashSet<>();
             Set<String> matchedVersionDrawingKeys = new HashSet<>();

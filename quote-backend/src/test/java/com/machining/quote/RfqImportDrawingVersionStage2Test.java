@@ -117,6 +117,65 @@ class RfqImportDrawingVersionStage2Test {
                 .containsExactly("/uploads/rfq/P-100.pdf", "/uploads/rfq/P-100.pdf");
     }
 
+    @Test
+    @SuppressWarnings("unchecked")
+    void drawingFolderBindsWholeImportedRfqWithoutFilenameMatching() {
+        MarketController controller = controller();
+        BusinessFileService businessFileService = (BusinessFileService) ReflectionTestUtils.getField(controller, "businessFileService");
+        MockMultipartFile folderDrawing = pdf("drawingFolderFiles", "folder/not-matching-name.pdf");
+        String folderUrl = "/uploads/drawing-folders/RFQ/88/folder-88/";
+        when(businessFileService.saveDrawingFolderFiles(
+                eq("RFQ"), eq("88"), eq("整单图纸"), eq(List.of(folderDrawing)), eq("RFQ_IMPORT_DRAWING_FOLDER"), eq("88")))
+                .thenReturn(drawingFolderResult(folderUrl, "整单图纸", folderDrawing));
+        OrderRfqMapper orderMapper = (OrderRfqMapper) ReflectionTestUtils.getField(controller, "orderRfqMapper");
+        when(orderMapper.updateById(any(OrderRfq.class))).thenReturn(1);
+
+        Map<String, Object> result = controller.importRfq(
+                "C001",
+                "ACME",
+                "ACME",
+                rfqFileWithSamePartDifferentVersions(),
+                List.of(),
+                List.of(),
+                List.of(folderDrawing),
+                "整单图纸"
+        );
+
+        ArgumentCaptor<OrderRfq> orderCaptor = ArgumentCaptor.forClass(OrderRfq.class);
+        verify(orderMapper).updateById(orderCaptor.capture());
+        assertThat(orderCaptor.getValue().getDrawingFolderUrl()).isEqualTo(folderUrl);
+        assertThat(orderCaptor.getValue().getDrawingFolderName()).isEqualTo("整单图纸");
+        assertThat(orderCaptor.getValue().getDrawingFolderFileCount()).isEqualTo(1);
+
+        ArgumentCaptor<ItemQuoteVersion> itemCaptor = ArgumentCaptor.forClass(ItemQuoteVersion.class);
+        verify(itemMapper(controller), times(2)).insert(itemCaptor.capture());
+        assertThat(itemCaptor.getAllValues())
+                .allSatisfy(item -> assertThat(item.getDrawingUrl()).isEqualTo(folderUrl));
+        assertThat((Map<String, Object>) result.get("drawingReport"))
+                .containsEntry("drawingFolderMode", true)
+                .containsEntry("drawingFolderFileCount", 1)
+                .containsEntry("matchedItemCount", 2)
+                .containsEntry("missingDrawingCount", 0)
+                .containsEntry("unmatchedDrawingCount", 0);
+
+        ArgumentCaptor<Object> afterDataCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(auditService(controller)).record(
+                eq("RFQ_IMPORT"),
+                eq("order_rfq"),
+                eq(88),
+                isNull(),
+                afterDataCaptor.capture(),
+                eq("MARKET"),
+                eq("SUCCESS"),
+                any(String.class),
+                isNull()
+        );
+        assertThat((Map<String, Object>) afterDataCaptor.getValue())
+                .containsEntry("drawingFolderMode", true)
+                .containsEntry("drawingFolderFileCount", 1);
+        assertThat(String.valueOf(afterDataCaptor.getValue())).doesNotContain(folderUrl);
+    }
+
     private MarketController controller() {
         AuditService auditService = mock(AuditService.class);
         OrderRfqMapper orderMapper = mock(OrderRfqMapper.class);
@@ -206,5 +265,18 @@ class RfqImportDrawingVersionStage2Test {
         return drawing.getOriginalFilename() == null
                 ? "drawing.pdf"
                 : drawing.getOriginalFilename().replaceAll(".*[\\\\/]", "");
+    }
+
+    private BusinessFileService.DrawingFolderSaveResult drawingFolderResult(
+            String folderUrl,
+            String folderName,
+            MockMultipartFile drawing) {
+        BusinessFileService.DrawingFolderFile file = new BusinessFileService.DrawingFolderFile(
+                drawing.getOriginalFilename(),
+                folderUrl + "file-1.pdf",
+                drawing.getContentType(),
+                drawing.getSize(),
+                java.time.LocalDateTime.now());
+        return new BusinessFileService.DrawingFolderSaveResult(folderUrl, folderName, 1, List.of(file));
     }
 }

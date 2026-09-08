@@ -229,10 +229,20 @@ public class SalesOrderManageService {
             Long salesOrderId,
             List<MultipartFile> drawings,
             List<MultipartFile> versionDrawings) {
+        return supplementOrderDrawings(salesOrderId, drawings, versionDrawings, null, null);
+    }
+
+    @Transactional
+    public Map<String, Object> supplementOrderDrawings(
+            Long salesOrderId,
+            List<MultipartFile> drawings,
+            List<MultipartFile> versionDrawings,
+            List<MultipartFile> drawingFolderFiles,
+            String drawingFolderName) {
         if (salesOrderId == null) {
             throw new RuntimeException("销售订单 ID 不能为空");
         }
-        if (isEmptyFiles(drawings) && isEmptyFiles(versionDrawings)) {
+        if (isEmptyFiles(drawings) && isEmptyFiles(versionDrawings) && isEmptyFiles(drawingFolderFiles)) {
             throw new RuntimeException("请至少上传一份 PDF 图纸");
         }
         if (businessFileService == null) {
@@ -244,6 +254,9 @@ public class SalesOrderManageService {
             throw new RuntimeException("销售订单不存在");
         }
         assertSalesOrderDataScope(order);
+        if (!isEmptyFiles(drawingFolderFiles)) {
+            return supplementOrderDrawingFolder(order, drawingFolderFiles, drawingFolderName);
+        }
         List<SalesOrderItem> items = listSalesOrderItems(salesOrderId);
         Map<String, List<SalesOrderItem>> itemMapByPartNo = new HashMap<>();
         Map<String, List<SalesOrderItem>> itemMapByPartNoVersion = new HashMap<>();
@@ -397,6 +410,86 @@ public class SalesOrderManageService {
             log.warn("Sales order drawing supplement completed with warnings salesOrderId={} unmatchedCount={} skippedCount={}",
                     order.getId(), unmatchedDrawings.size(), skippedFiles.size());
         }
+        return result;
+    }
+
+    private Map<String, Object> supplementOrderDrawingFolder(
+            SalesOrderHeader order,
+            List<MultipartFile> drawingFolderFiles,
+            String drawingFolderName) {
+        BusinessFileService.DrawingFolderSaveResult drawingFolder = businessFileService.saveDrawingFolderFiles(
+                "SALES_ORDER",
+                String.valueOf(order.getId()),
+                drawingFolderName,
+                drawingFolderFiles,
+                ACTION_DRAWING_SUPPLEMENT + "_FOLDER",
+                String.valueOf(order.getId()));
+        order.setDrawingFolderUrl(drawingFolder.folderUrl());
+        order.setDrawingFolderName(drawingFolder.folderName());
+        order.setDrawingFolderFileCount(drawingFolder.fileCount());
+        SalesOrderHeader update = new SalesOrderHeader();
+        update.setId(order.getId());
+        update.setDrawingFolderUrl(drawingFolder.folderUrl());
+        update.setDrawingFolderName(drawingFolder.folderName());
+        update.setDrawingFolderFileCount(drawingFolder.fileCount());
+        update.setUpdatedAt(java.time.LocalDateTime.now());
+        if (salesOrderHeaderMapper.updateById(update) <= 0) {
+            throw new RuntimeException("销售订单图纸文件夹保存失败，请刷新后重试");
+        }
+
+        List<SalesOrderItem> items = listSalesOrderItems(order.getId());
+        List<Map<String, Object>> boundItems = new ArrayList<>();
+        for (SalesOrderItem item : items) {
+            item.setDrawingUrl(drawingFolder.folderUrl());
+            item.setHasDrawing(true);
+            if (salesOrderItemMapper.updateById(item) <= 0) {
+                throw new RuntimeException("销售订单图纸文件夹绑定失败，请刷新后重试");
+            }
+            boundItems.add(buildSalesItemResult(item, drawingFolder.folderName(), "已绑定文件夹"));
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("success", true);
+        result.put("message", "补传图纸文件夹处理完成，成功绑定 " + boundItems.size() + " 个零件。");
+        result.put("boundCount", boundItems.size());
+        result.put("alreadyBoundCount", 0);
+        result.put("unmatchedCount", 0);
+        result.put("skippedCount", 0);
+        result.put("boundItems", boundItems);
+        result.put("alreadyBoundItems", List.of());
+        result.put("unmatchedDrawings", List.of());
+        result.put("skippedFiles", List.of());
+        result.put("drawingFolderMode", true);
+        result.put("drawingFolderName", drawingFolder.folderName());
+        result.put("drawingFolderFileCount", drawingFolder.fileCount());
+
+        if (auditService != null && !boundItems.isEmpty()) {
+            Map<String, Object> summary = new LinkedHashMap<>();
+            summary.put("salesOrderId", order.getId());
+            summary.put("salesOrderNo", firstNonBlank(order.getSalesOrderNo(), order.getDocumentNo()));
+            summary.put("uploadCount", drawingFolder.fileCount());
+            summary.put("uploadedDrawingCount", 0);
+            summary.put("versionUploadedDrawingCount", 0);
+            summary.put("boundCount", boundItems.size());
+            summary.put("alreadyBoundCount", 0);
+            summary.put("unmatchedCount", 0);
+            summary.put("skippedCount", 0);
+            summary.put("drawingFolderMode", true);
+            summary.put("drawingFolderFileCount", drawingFolder.fileCount());
+            auditService.record(
+                    ACTION_DRAWING_SUPPLEMENT,
+                    "sales_order_header",
+                    order.getId(),
+                    null,
+                    summary,
+                    "MARKET",
+                    "SUCCESS",
+                    AuditService.labelForAction(ACTION_DRAWING_SUPPLEMENT),
+                    null
+            );
+        }
+        log.info("Sales order drawing folder supplement completed salesOrderId={} folderFileCount={} boundCount={}",
+                order.getId(), drawingFolder.fileCount(), boundItems.size());
         return result;
     }
 

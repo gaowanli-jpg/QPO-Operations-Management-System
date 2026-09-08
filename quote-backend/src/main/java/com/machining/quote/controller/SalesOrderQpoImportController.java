@@ -34,7 +34,9 @@ public class SalesOrderQpoImportController {
             @RequestParam(value = "internalProjectNo", required = false) String internalProjectNo,
             @RequestParam("excelFile") MultipartFile excelFile,
             @RequestParam(value = "drawings", required = false) List<MultipartFile> drawings,
-            @RequestParam(value = "versionDrawings", required = false) List<MultipartFile> versionDrawings) {
+            @RequestParam(value = "versionDrawings", required = false) List<MultipartFile> versionDrawings,
+            @RequestParam(value = "drawingFolderFiles", required = false) List<MultipartFile> drawingFolderFiles,
+            @RequestParam(value = "drawingFolderName", required = false) String drawingFolderName) {
         SalesOrderQpoImportDefaultsDTO defaults = buildDefaults(
                 salesOrderDate,
                 customerOrderNo,
@@ -48,7 +50,9 @@ public class SalesOrderQpoImportController {
                 documentTypeCode,
                 defaults,
                 drawings,
-                versionDrawings);
+                versionDrawings,
+                drawingFolderFiles,
+                drawingFolderName);
     }
 
     private SalesOrderQpoImportDefaultsDTO buildDefaults(

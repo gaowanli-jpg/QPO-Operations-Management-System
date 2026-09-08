@@ -6,6 +6,7 @@ import com.machining.quote.domain.QuoteStatusWorkflow;
 import com.machining.quote.dto.ReleaseSourceType;
 import com.machining.quote.dto.SalesOrderQpoExcelLineDTO;
 import com.machining.quote.dto.SalesOrderQpoExcelParseResult;
+import com.machining.quote.dto.SalesOrderQpoImportDefaultsDTO;
 import com.machining.quote.dto.SalesOrderQpoImportResp;
 import com.machining.quote.dto.SalesOrderQpoOrderGroupDTO;
 import com.machining.quote.dto.SalesOrderAutoSnapshotCompletionResult;
@@ -282,5 +283,142 @@ class SalesOrderQpoImportDrawingWorkflowTest extends SalesOrderQpoImportTestSupp
                 .doesNotContain("multipart")
                 .doesNotContain("p1")
                 .doesNotContain("FULL-EXCEL-CONTENT-SHOULD-NOT-BE-LOGGED");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void serviceAcceptsDrawingFolderAndBindsAllImportedSalesOrderItems() throws Exception {
+        SalesOrderQpoExcelParser parser = mock(SalesOrderQpoExcelParser.class);
+        CustomerMasterMapper customerMapper = mock(CustomerMasterMapper.class);
+        SalesOrderImportBatchMapper batchMapper = mock(SalesOrderImportBatchMapper.class);
+        SalesOrderImportRecordMapper recordMapper = mock(SalesOrderImportRecordMapper.class);
+        SalesOrderHeaderMapper headerMapper = mock(SalesOrderHeaderMapper.class);
+        SalesOrderItemMapper itemMapper = mock(SalesOrderItemMapper.class);
+        AuditService auditService = mock(AuditService.class);
+        SalesOrderQpoImportService service = service(
+                parser,
+                customerMapper,
+                batchMapper,
+                recordMapper,
+                headerMapper,
+                itemMapper,
+                mock(DataScopeService.class),
+                auditService
+        );
+        BusinessFileService businessFileService = mock(BusinessFileService.class);
+        ReflectionTestUtils.setField(service, "businessFileService", businessFileService);
+        MockMultipartFile folderDrawing = new MockMultipartFile(
+                "drawingFolderFiles",
+                "folder/P-ALL.pdf",
+                "application/pdf",
+                "folder-pdf".getBytes(StandardCharsets.UTF_8)
+        );
+        String folderUrl = "/uploads/drawing-folders/SALES_ORDER_IMPORT/SOIMP-test/folder-1/";
+        when(businessFileService.saveDrawingFolderFiles(
+                eq("SALES_ORDER_IMPORT"), any(String.class), eq("销售订单图纸"), eq(List.of(folderDrawing)), eq("SALES_ORDER_IMPORT_DRAWING_FOLDER"), any(String.class)))
+                .thenReturn(drawingFolderResult(folderUrl, "销售订单图纸", folderDrawing));
+        when(customerMapper.selectById(7L)).thenReturn(customer());
+        when(parser.parse(any(InputStream.class), any(SalesOrderQpoImportDefaultsDTO.class))).thenReturn(parseResult());
+        when(headerMapper.selectCount(any())).thenReturn(0L);
+        doAnswer(invocation -> {
+            SalesOrderImportBatch batch = invocation.getArgument(0);
+            batch.setId(201L);
+            return 1;
+        }).when(batchMapper).insert(any(SalesOrderImportBatch.class));
+        doAnswer(invocation -> {
+            SalesOrderHeader header = invocation.getArgument(0);
+            header.setId(header.getCustomerOrderNo().equals("PO-001") ? 301L : 302L);
+            return 1;
+        }).when(headerMapper).insert(any(SalesOrderHeader.class));
+        doAnswer(invocation -> {
+            SalesOrderImportRecord record = invocation.getArgument(0);
+            record.setId(record.getCustomerOrderNo().equals("PO-001") ? 401L : 402L);
+            return 1;
+        }).when(recordMapper).insert(any(SalesOrderImportRecord.class));
+        doAnswer(invocation -> {
+            SalesOrderItem item = invocation.getArgument(0);
+            item.setId(item.getPartNo().equals("P-001") ? 501L : item.getPartNo().equals("P-002") ? 502L : 503L);
+            return 1;
+        }).when(itemMapper).insert(any(SalesOrderItem.class));
+
+        SalesOrderQpoImportResp resp = service.importQpo(
+                new MockMultipartFile(
+                        "excelFile",
+                        "sales-order.xlsx",
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        "xlsx".getBytes(StandardCharsets.UTF_8)
+                ),
+                7L,
+                "SO01",
+                defaults(),
+                List.of(),
+                List.of(),
+                List.of(folderDrawing),
+                "销售订单图纸");
+
+        ArgumentCaptor<SalesOrderHeader> headerCaptor = ArgumentCaptor.forClass(SalesOrderHeader.class);
+        verify(headerMapper, org.mockito.Mockito.times(2)).insert(headerCaptor.capture());
+        assertThat(headerCaptor.getAllValues())
+                .allSatisfy(header -> {
+                    assertThat(header.getDrawingFolderUrl()).isEqualTo(folderUrl);
+                    assertThat(header.getDrawingFolderName()).isEqualTo("销售订单图纸");
+                    assertThat(header.getDrawingFolderFileCount()).isEqualTo(1);
+                });
+
+        ArgumentCaptor<SalesOrderItem> itemCaptor = ArgumentCaptor.forClass(SalesOrderItem.class);
+        verify(itemMapper, org.mockito.Mockito.times(3)).insert(itemCaptor.capture());
+        assertThat(itemCaptor.getAllValues())
+                .allSatisfy(item -> {
+                    assertThat(item.getDrawingUrl()).isEqualTo(folderUrl);
+                    assertThat(item.getHasDrawing()).isTrue();
+                });
+        assertThat(resp.getDrawingReport())
+                .containsEntry("drawingFolderMode", true)
+                .containsEntry("drawingFolderFileCount", 1)
+                .containsEntry("matchedItemCount", 3)
+                .containsEntry("missingDrawingCount", 0)
+                .containsEntry("unmatchedDrawingCount", 0);
+
+        ArgumentCaptor<Object> afterDataCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(auditService).record(
+                eq("SALES_ORDER_IMPORT_QPO"),
+                eq("sales_order_import_batch"),
+                eq(201L),
+                isNull(),
+                afterDataCaptor.capture(),
+                eq("MARKET"),
+                eq("SUCCESS"),
+                any(String.class),
+                isNull()
+        );
+        Map<String, Object> afterData = (Map<String, Object>) afterDataCaptor.getValue();
+        assertThat(afterData)
+                .containsEntry("drawingFolderMode", true)
+                .containsEntry("drawingFolderFileCount", 1);
+        assertThat(String.valueOf(afterData)).doesNotContain(folderUrl).doesNotContain("folder-pdf");
+    }
+
+    private SalesOrderQpoImportDefaultsDTO defaults() {
+        SalesOrderQpoImportDefaultsDTO defaults = new SalesOrderQpoImportDefaultsDTO();
+        defaults.setSalesOrderDate(java.time.LocalDate.of(2026, 7, 1));
+        defaults.setCustomerOrderNo("PO-001");
+        defaults.setCustomerProjectNo("CP-001");
+        defaults.setCustomerOrderTitle("GSQ1");
+        defaults.setOrderType("样品订单");
+        defaults.setInternalProjectNo("IP-001");
+        return defaults;
+    }
+
+    private BusinessFileService.DrawingFolderSaveResult drawingFolderResult(
+            String folderUrl,
+            String folderName,
+            MockMultipartFile drawing) {
+        BusinessFileService.DrawingFolderFile file = new BusinessFileService.DrawingFolderFile(
+                drawing.getOriginalFilename(),
+                folderUrl + "file-1.pdf",
+                drawing.getContentType(),
+                drawing.getSize(),
+                java.time.LocalDateTime.now());
+        return new BusinessFileService.DrawingFolderSaveResult(folderUrl, folderName, 1, List.of(file));
     }
 }

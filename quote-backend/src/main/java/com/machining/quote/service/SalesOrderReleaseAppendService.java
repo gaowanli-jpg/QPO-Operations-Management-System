@@ -135,6 +135,17 @@ public class SalesOrderReleaseAppendService {
             MultipartFile excelFile,
             List<MultipartFile> drawings,
             List<MultipartFile> versionDrawings) {
+        return appendItems(salesOrderId, excelFile, drawings, versionDrawings, null, null);
+    }
+
+    @Transactional
+    public SalesOrderReleaseAppendResp appendItems(
+            Long salesOrderId,
+            MultipartFile excelFile,
+            List<MultipartFile> drawings,
+            List<MultipartFile> versionDrawings,
+            List<MultipartFile> drawingFolderFiles,
+            String drawingFolderName) {
         validateFile(excelFile);
         long startedAt = System.currentTimeMillis();
         SalesOrderHeader target = lockAndValidateTarget(salesOrderId);
@@ -145,7 +156,7 @@ public class SalesOrderReleaseAppendService {
         }
         String sourceFileName = safeFileName(excelFile.getOriginalFilename());
         String batchNo = nextBatchNo();
-        DrawingBindingResult drawingBinding = bindDrawings(target, batchNo, parseResult, drawings, versionDrawings);
+        DrawingBindingResult drawingBinding = bindDrawings(target, batchNo, parseResult, drawings, versionDrawings, drawingFolderFiles, drawingFolderName);
 
         int nextLineNo = nextLineNo(target.getId());
         LocalDateTime now = LocalDateTime.now();
@@ -372,6 +383,9 @@ public class SalesOrderReleaseAppendService {
         summary.put("matchedDrawingCount", drawingBinding.matchedItemCount());
         summary.put("missingDrawingCount", drawingBinding.missingDrawingCount());
         summary.put("unmatchedDrawingCount", drawingBinding.unmatchedDrawingCount());
+        Map<String, Object> drawingReport = drawingBinding.report();
+        summary.put("drawingFolderMode", drawingReport.get("drawingFolderMode"));
+        summary.put("drawingFolderFileCount", drawingReport.get("drawingFolderFileCount"));
         summary.put("durationMs", System.currentTimeMillis() - startedAt);
         auditService.record(AUDIT_ACTION, "sales_order_header", target.getId(), null, summary,
                 "MARKET", "SUCCESS", "追加销售提单", null);
@@ -415,13 +429,47 @@ public class SalesOrderReleaseAppendService {
             String batchNo,
             SalesOrderQpoExcelParseResult parseResult,
             List<MultipartFile> drawings,
-            List<MultipartFile> versionDrawings) {
+            List<MultipartFile> versionDrawings,
+            List<MultipartFile> drawingFolderFiles,
+            String drawingFolderName) {
         Set<String> knownPartNos = collectKnownPartNos(parseResult);
         Set<DrawingPartNoResolver.DrawingIdentity> knownPartNoVersions = collectKnownPartNoVersions(parseResult);
         Map<String, DrawingFileInfo> drawingByPartNo = new LinkedHashMap<>();
         Map<String, DrawingFileInfo> drawingByPartNoVersion = new LinkedHashMap<>();
         List<DrawingFileInfo> uploadedDrawings = new ArrayList<>();
         int versionUploadedDrawingCount = 0;
+
+        if (drawingFolderFiles != null && !drawingFolderFiles.isEmpty()) {
+            requireBusinessFileService();
+            BusinessFileService.DrawingFolderSaveResult drawingFolder = businessFileService.saveDrawingFolderFiles(
+                    "SALES_ORDER",
+                    String.valueOf(target.getId()),
+                    drawingFolderName,
+                    drawingFolderFiles,
+                    "SALES_ORDER_APPEND_DRAWING_FOLDER",
+                    String.valueOf(target.getId()));
+            target.setDrawingFolderUrl(drawingFolder.folderUrl());
+            target.setDrawingFolderName(drawingFolder.folderName());
+            target.setDrawingFolderFileCount(drawingFolder.fileCount());
+            SalesOrderHeader update = new SalesOrderHeader();
+            update.setId(target.getId());
+            update.setDrawingFolderUrl(drawingFolder.folderUrl());
+            update.setDrawingFolderName(drawingFolder.folderName());
+            update.setDrawingFolderFileCount(drawingFolder.fileCount());
+            update.setUpdatedAt(LocalDateTime.now());
+            if (headerMapper.updateById(update) <= 0) {
+                throw new RuntimeException("销售订单图纸文件夹保存失败，请刷新后重试");
+            }
+            return new DrawingBindingResult(
+                    parseResult,
+                    knownPartNos,
+                    knownPartNoVersions,
+                    drawingByPartNo,
+                    drawingByPartNoVersion,
+                    uploadedDrawings,
+                    versionUploadedDrawingCount,
+                    drawingFolder);
+        }
 
         if (drawings != null && !drawings.isEmpty()) {
             requireBusinessFileService();
@@ -478,10 +526,16 @@ public class SalesOrderReleaseAppendService {
                 drawingByPartNo,
                 drawingByPartNoVersion,
                 uploadedDrawings,
-                versionUploadedDrawingCount);
+                versionUploadedDrawingCount,
+                null);
     }
 
     private void applyDrawingBinding(SalesOrderItem item, SalesOrderQpoExcelLineDTO line, DrawingBindingResult drawingBinding) {
+        if (drawingBinding != null && drawingBinding.hasDrawingFolder()) {
+            item.setDrawingUrl(drawingBinding.drawingFolderUrl());
+            item.setHasDrawing(true);
+            return;
+        }
         DrawingFileInfo drawing = drawingBinding == null ? null : drawingBinding.find(line.getPartNo(), line.getVersion());
         if (drawing != null) {
             item.setDrawingUrl(drawing.url());
@@ -707,6 +761,7 @@ public class SalesOrderReleaseAppendService {
         private final Map<String, DrawingFileInfo> drawingByPartNoVersion;
         private final List<DrawingFileInfo> uploadedDrawings;
         private final int versionUploadedDrawingCount;
+        private final BusinessFileService.DrawingFolderSaveResult drawingFolder;
         private final Map<String, Object> report;
 
         private DrawingBindingResult(
@@ -716,19 +771,32 @@ public class SalesOrderReleaseAppendService {
                 Map<String, DrawingFileInfo> drawingByPartNo,
                 Map<String, DrawingFileInfo> drawingByPartNoVersion,
                 List<DrawingFileInfo> uploadedDrawings,
-                int versionUploadedDrawingCount) {
+                int versionUploadedDrawingCount,
+                BusinessFileService.DrawingFolderSaveResult drawingFolder) {
             this.knownPartNos = knownPartNos;
             this.knownPartNoVersions = knownPartNoVersions;
             this.drawingByPartNo = drawingByPartNo;
             this.drawingByPartNoVersion = drawingByPartNoVersion;
             this.uploadedDrawings = uploadedDrawings;
             this.versionUploadedDrawingCount = versionUploadedDrawingCount;
+            this.drawingFolder = drawingFolder;
             this.report = buildReport(parseResult);
         }
 
         private DrawingFileInfo find(String partNo, String version) {
+            if (hasDrawingFolder()) {
+                return new DrawingFileInfo(normalizePartNo(partNo), normalizeVersion(version), drawingFolder.folderName(), drawingFolder.folderUrl(), true);
+            }
             DrawingFileInfo versionDrawing = drawingByPartNoVersion.get(itemKey(partNo, version));
             return versionDrawing == null ? drawingByPartNo.get(normalizePartNo(partNo)) : versionDrawing;
+        }
+
+        private boolean hasDrawingFolder() {
+            return drawingFolder != null;
+        }
+
+        private String drawingFolderUrl() {
+            return drawingFolder == null ? null : drawingFolder.folderUrl();
         }
 
         private Map<String, Object> report() {
@@ -736,7 +804,7 @@ public class SalesOrderReleaseAppendService {
         }
 
         private int uploadedDrawingCount() {
-            return uploadedDrawings.size();
+            return hasDrawingFolder() ? drawingFolder.fileCount() : uploadedDrawings.size();
         }
 
         private int matchedItemCount() {
@@ -752,6 +820,24 @@ public class SalesOrderReleaseAppendService {
         }
 
         private Map<String, Object> buildReport(SalesOrderQpoExcelParseResult parseResult) {
+            if (hasDrawingFolder()) {
+                int totalItemCount = parseResult == null ? 0 : parseResult.getLineCount();
+                Map<String, Object> drawingReport = new LinkedHashMap<>();
+                drawingReport.put("totalItemCount", totalItemCount);
+                drawingReport.put("uploadedDrawingCount", drawingFolder.fileCount());
+                drawingReport.put("matchedItemCount", totalItemCount);
+                drawingReport.put("matchedDrawingCount", totalItemCount);
+                drawingReport.put("versionUploadedDrawingCount", 0);
+                drawingReport.put("versionMatchedDrawingCount", 0);
+                drawingReport.put("drawingMatchModes", Map.of("folder", drawingFolder.fileCount(), "partNo", 0, "partNoVersion", 0));
+                drawingReport.put("missingDrawingCount", 0);
+                drawingReport.put("unmatchedDrawingCount", 0);
+                drawingReport.put("missingItems", List.of());
+                drawingReport.put("unmatchedDrawings", List.of());
+                drawingReport.put("drawingFolderMode", true);
+                drawingReport.put("drawingFolderFileCount", drawingFolder.fileCount());
+                return drawingReport;
+            }
             List<Map<String, Object>> missingItems = new ArrayList<>();
             Set<String> matchedDrawingPartNos = new HashSet<>();
             Set<String> matchedVersionDrawingKeys = new HashSet<>();
