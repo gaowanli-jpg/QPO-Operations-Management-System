@@ -127,4 +127,18 @@ describe('QPO Stage 6 item pricing workbench redesign', () => {
     expect(source).toContain('[processRoute.value[index - 1], processRoute.value[index]] = [processRoute.value[index], processRoute.value[index - 1]]')
     expect(source).toContain('assignProcessSortNos()')
   })
+
+  test('shows drawing folders inline in the pricing pane before selecting a PDF', () => {
+    const source = readSource('components', 'ItemPricing.vue')
+
+    expect(source).toContain("import DrawingFolderFileBrowser from './common/DrawingFolderFileBrowser.vue'")
+    expect(source).toContain('<DrawingFolderFileBrowser')
+    expect(source).toContain('class="drawing-folder-inline-shell"')
+    expect(source).toContain(':compact="true"')
+    expect(source).toContain('preview-behavior="emit"')
+    expect(source).toContain('@preview="previewFolderDrawingInPane"')
+    expect(source).toContain('selectedFolderDrawingSrc')
+    expect(source).toContain('返回文件列表')
+    expect(source).toContain('backToFolderFileList')
+  })
 })

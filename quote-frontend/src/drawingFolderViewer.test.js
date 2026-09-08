@@ -6,11 +6,27 @@ import { fileURLToPath } from 'node:url'
 const currentDir = dirname(fileURLToPath(import.meta.url))
 const readSource = (...segments) => readFileSync(resolve(currentDir, ...segments), 'utf8').replace(/\r\n/g, '\n')
 const viewerPath = resolve(currentDir, 'components', 'common', 'DrawingFolderViewer.vue')
+const browserPath = resolve(currentDir, 'components', 'common', 'DrawingFolderFileBrowser.vue')
 
 describe('DrawingFolderViewer', () => {
+  test('extracts folder browsing into a reusable search and paging component', () => {
+    expect(existsSync(browserPath)).toBe(true)
+    const browserSource = readSource('components', 'common', 'DrawingFolderFileBrowser.vue')
+    const viewerSource = readSource('components', 'common', 'DrawingFolderViewer.vue')
+
+    expect(browserSource).toContain('listDrawingFolderFiles')
+    expect(browserSource).toContain('placeholder="按文件名搜索"')
+    expect(browserSource).toContain('v-model:current-page="page"')
+    expect(browserSource).toContain('v-model:page-size="pageSize"')
+    expect(browserSource).toContain('emit(\'preview\', row)')
+    expect(browserSource).toContain('downloadFile')
+    expect(viewerSource).toContain("import DrawingFolderFileBrowser from './DrawingFolderFileBrowser.vue'")
+    expect(viewerSource).toContain('<DrawingFolderFileBrowser')
+  })
+
   test('lists drawing folder files with preview and download actions only', () => {
     expect(existsSync(viewerPath)).toBe(true)
-    const source = readSource('components', 'common', 'DrawingFolderViewer.vue')
+    const source = readSource('components', 'common', 'DrawingFolderFileBrowser.vue')
 
     expect(source).toContain('listDrawingFolderFiles')
     expect(source).toContain('openAuthenticatedFileInNewWindow')
@@ -26,13 +42,15 @@ describe('DrawingFolderViewer', () => {
   })
 
   test('loads folder files with backend paging and filename fuzzy search', () => {
-    const source = readSource('components', 'common', 'DrawingFolderViewer.vue')
+    const source = readSource('components', 'common', 'DrawingFolderFileBrowser.vue')
 
     expect(source).toContain('placeholder="按文件名搜索"')
     expect(source).toContain('v-model:current-page="page"')
     expect(source).toContain('v-model:page-size="pageSize"')
     expect(source).toContain(':page-sizes="[20, 50, 100]"')
+    expect(source).toContain(':pager-count="7"')
     expect(source).toContain('layout="total, sizes, prev, pager, next, jumper"')
+    expect(source).toContain('background')
     expect(source).toContain('keyword: searchKeyword.value.trim()')
     expect(source).toContain('records || response?.files || []')
     expect(source).toContain('requestSeq')

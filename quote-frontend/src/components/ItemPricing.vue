@@ -534,10 +534,36 @@
             ></iframe>
           </div>
           <div v-else-if="currentRow?.drawingUrl && isDrawingFolderUrl(currentRow.drawingUrl)" class="drawing-folder-pane">
-            <el-empty description="当前零件绑定的是订单图纸文件夹" :image-size="90" class="drawing-empty" />
-            <el-button type="primary" plain @click="openPdfPreview(currentRow.drawingUrl, currentRow.partNo)">
-              查看图纸文件夹
-            </el-button>
+            <template v-if="selectedFolderDrawingSrc">
+              <div class="folder-drawing-preview-toolbar">
+                <el-button size="small" plain @click="backToFolderFileList">返回文件列表</el-button>
+                <span class="folder-drawing-preview-title" :title="selectedFolderDrawingName">
+                  {{ selectedFolderDrawingName || '图纸预览' }}
+                </span>
+                <el-button type="primary" size="small" plain @click="openDrawingInNewWindow(selectedFolderDrawingPath)">
+                  新窗口打开
+                </el-button>
+              </div>
+              <div v-loading="selectedFolderDrawingLoading" class="drawing-frame folder-drawing-frame">
+                <iframe
+                  :key="selectedFolderDrawingPath"
+                  :src="selectedFolderDrawingSrc"
+                  class="drawing-frame-iframe"
+                  frameborder="0"
+                  @load="selectedFolderDrawingLoading = false"
+                ></iframe>
+              </div>
+            </template>
+            <div v-else class="drawing-folder-inline-shell">
+              <DrawingFolderFileBrowser
+                :folder-url="currentRow.drawingUrl"
+                :compact="true"
+                preview-behavior="emit"
+                table-height="420"
+                empty-text="当前文件夹暂无 PDF 图纸"
+                @preview="previewFolderDrawingInPane"
+              />
+            </div>
           </div>
           <el-empty v-else description="当前零件没有绑定图纸" :image-size="90" class="drawing-empty" />
         </aside>
@@ -735,6 +761,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Delete, Plus, Top } from '@element-plus/icons-vue'
 import { useRoute, useRouter } from 'vue-router'
 import EngineeringOptionPickerDialog from './EngineeringOptionPickerDialog.vue'
+import DrawingFolderFileBrowser from './common/DrawingFolderFileBrowser.vue'
 import DrawingFolderViewer from './common/DrawingFolderViewer.vue'
 import {
   applyRepeatQuotes,
@@ -1455,10 +1482,59 @@ const currentPdfSrc = ref('')
 const folderViewerVisible = ref(false)
 const currentDrawingFolderUrl = ref('')
 const currentDrawingFolderTitle = ref('')
+const selectedFolderDrawingSrc = ref('')
+const selectedFolderDrawingPath = ref('')
+const selectedFolderDrawingName = ref('')
+const selectedFolderDrawingLoading = ref(false)
+let selectedFolderDrawingRequestSeq = 0
 
 const cleanupPdfSrc = () => {
   revokeObjectUrl(currentPdfSrc.value)
   currentPdfSrc.value = ''
+}
+
+const cleanupSelectedFolderDrawingSrc = () => {
+  revokeObjectUrl(selectedFolderDrawingSrc.value)
+  selectedFolderDrawingSrc.value = ''
+  selectedFolderDrawingPath.value = ''
+  selectedFolderDrawingName.value = ''
+  selectedFolderDrawingLoading.value = false
+}
+
+const folderFilePath = (row) => row?.publicPath || row?.url || ''
+
+const previewFolderDrawingInPane = async (row) => {
+  const path = folderFilePath(row)
+  if (!path) {
+    return ElMessage.warning('当前文件缺少访问地址。')
+  }
+  const requestSeq = ++selectedFolderDrawingRequestSeq
+  cleanupSelectedFolderDrawingSrc()
+  selectedFolderDrawingPath.value = path
+  selectedFolderDrawingName.value = row?.fileName || '图纸预览'
+  selectedFolderDrawingLoading.value = true
+  try {
+    const objectUrl = await createAuthenticatedObjectUrl(path)
+    if (requestSeq === selectedFolderDrawingRequestSeq) {
+      selectedFolderDrawingSrc.value = objectUrl
+    } else {
+      revokeObjectUrl(objectUrl)
+    }
+  } catch (error) {
+    if (requestSeq === selectedFolderDrawingRequestSeq) {
+      cleanupSelectedFolderDrawingSrc()
+      ElMessage.error(await readFileErrorMessage(error) || '图纸预览失败。')
+    }
+  } finally {
+    if (requestSeq === selectedFolderDrawingRequestSeq && !selectedFolderDrawingSrc.value) {
+      selectedFolderDrawingLoading.value = false
+    }
+  }
+}
+
+const backToFolderFileList = () => {
+  selectedFolderDrawingRequestSeq += 1
+  cleanupSelectedFolderDrawingSrc()
 }
 
 const openPdfPreview = async (url, partNo) => {
@@ -1565,7 +1641,9 @@ watch(dialogVisible, (visible) => {
     loadCurrentDrawing(currentRow.value?.drawingUrl)
   } else {
     currentDrawingRequestSeq += 1
+    selectedFolderDrawingRequestSeq += 1
     cleanupCurrentDrawingSrc()
+    cleanupSelectedFolderDrawingSrc()
     currentDrawingLoading.value = false
     materialPickerVisible.value = false
     processPickerVisible.value = false
@@ -1589,7 +1667,9 @@ watch(pdfVisible, (visible) => {
 
 onBeforeUnmount(() => {
   currentDrawingRequestSeq += 1
+  selectedFolderDrawingRequestSeq += 1
   cleanupCurrentDrawingSrc()
+  cleanupSelectedFolderDrawingSrc()
   cleanupPdfSrc()
 })
 
@@ -2228,6 +2308,8 @@ const updatePricingItemRemarkInMemory = (itemId, remark) => {
 
 // 打开弹窗，继承全局配置
 const openQuoteDialog = async (row) => {
+  selectedFolderDrawingRequestSeq += 1
+  cleanupSelectedFolderDrawingSrc()
   currentRow.value = row
   itemRemarkDraft.value = row?.remark || ''
   syncCustomerWeightDraftFromFee()
@@ -3045,6 +3127,38 @@ const submitCurrentQuote = async () => {
   flex: 1;
   min-height: 0;
   background: var(--erp-surface-soft);
+}
+
+.drawing-folder-pane,
+.drawing-folder-inline-shell {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.folder-drawing-preview-toolbar {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--erp-border-soft);
+  background: var(--erp-surface);
+}
+
+.folder-drawing-preview-title {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--erp-text);
+  font-size: 13px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.folder-drawing-frame {
+  border-top: 0;
 }
 
 .drawing-frame-iframe {
