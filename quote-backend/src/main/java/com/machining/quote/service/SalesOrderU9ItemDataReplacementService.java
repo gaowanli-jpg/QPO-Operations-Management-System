@@ -135,8 +135,7 @@ public class SalesOrderU9ItemDataReplacementService {
         preview.setRecognizedFields(new ArrayList<>(safeList(parsed.getRecognizedFields())));
         preview.setRows(rows);
         preview.setSummary(summarize(rows, safeList(parsed.getRows()).size()));
-        preview.setCanConfirm(preview.getSummary().getErrorCount() == 0
-                && preview.getSummary().getChangedCount() > 0);
+        preview.setCanConfirm(preview.getSummary().getChangedCount() > 0);
         preview.setPreviewFingerprint(fingerprint(header, parsed, rows, items));
         return preview;
     }

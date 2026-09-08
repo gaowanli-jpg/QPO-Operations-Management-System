@@ -380,6 +380,52 @@ class OrderItemMaintenanceServiceTest {
 
     @Test
     @SuppressWarnings("unchecked")
+    void itemDataReplacementSkipsErrorRowsAndAppliesValidRows() throws Exception {
+        Fixture fixture = fixture();
+        OrderRfq order = order(909, "RFQ-909", QuoteStatusWorkflow.PRICED);
+        ItemQuoteVersion invalid = item(1011, 909, "P-ERR", "A", 10);
+        invalid.setRemark("old invalid");
+        ItemQuoteVersion valid = item(1012, 909, "P-OK", "A", 10);
+        valid.setRemark("old valid");
+        MockMultipartFile workbook = orderReplacementWorkbook(
+                List.of("图号", "版本", "下单日期", "备注"),
+                List.of(
+                        row("P-ERR", "A", "not-a-date", "bad remark"),
+                        row("P-OK", "A", "", "good remark")));
+
+        when(fixture.orderMapper.selectById(909)).thenReturn(order);
+        when(fixture.orderMapper.selectByIdForUpdate(909)).thenReturn(order);
+        when(fixture.itemMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(invalid, valid));
+        when(fixture.ticketMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of());
+        when(fixture.itemMapper.selectByIdForUpdate(1012)).thenReturn(valid);
+        when(fixture.itemMapper.updateById(any(ItemQuoteVersion.class))).thenReturn(1);
+
+        Map<String, Object> preview = fixture.service.previewItemDataReplacement(909, workbook);
+
+        assertThat(preview).containsEntry("canConfirm", true);
+        assertThat((Map<String, Object>) preview.get("summary"))
+                .containsEntry("importedCount", 2)
+                .containsEntry("changedCount", 1)
+                .containsEntry("errorCount", 1);
+
+        Map<String, Object> result = fixture.service.confirmItemDataReplacement(
+                909,
+                workbook,
+                String.valueOf(preview.get("previewFingerprint")));
+
+        assertThat(result).containsEntry("success", true);
+        assertThat((Map<String, Object>) result.get("summary"))
+                .containsEntry("updatedItemCount", 1)
+                .containsEntry("changedCount", 1)
+                .containsEntry("errorCount", 1);
+        assertThat(invalid.getRemark()).isEqualTo("old invalid");
+        assertThat(valid.getRemark()).isEqualTo("good remark");
+        verify(fixture.itemMapper, never()).updateById(argThat(item -> item.getId().equals(1011)));
+        verify(fixture.itemMapper).updateById(argThat(item -> item.getId().equals(1012)));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
     void discardOrderItemStoresPreviousStatusAndLeavesTicketSnapshotUntouched() {
         Fixture fixture = fixture();
         OrderRfq order = order(905, "RFQ-905", QuoteStatusWorkflow.RELEASED);

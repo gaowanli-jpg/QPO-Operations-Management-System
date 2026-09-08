@@ -348,6 +348,46 @@ class SalesOrderChangeItemDataReplacementServiceTest {
     }
 
     @Test
+    void confirmSkipsErrorRowsAndAppliesValidRowsInSalesOrderChange() {
+        Fixture fixture = fixture();
+        SalesOrderHeader header = header(109L, "SO-109", "已同步");
+        SalesOrderItem invalid = item(290L, 109L, 1, "P-ERR", "A");
+        invalid.setRemark("old invalid");
+        SalesOrderItem valid = item(291L, 109L, 2, "P-OK", "A");
+        valid.setRemark("old valid");
+        SalesOrderChangePreviewResp latestPreview = new SalesOrderChangePreviewResp();
+        latestPreview.setSalesOrderId(header.getId());
+        fixture.withOrder(header, List.of(invalid, valid));
+        when(fixture.previewService.preview(header.getId())).thenReturn(latestPreview);
+        byte[] excel = excel(
+                List.of("图号", "版本", "行号", "数量", "备注"),
+                List.of("P-ERR", "A", 1, 1, "bad remark"),
+                List.of("P-OK", "A", 2, "", "good remark"));
+
+        SalesOrderU9ItemDataReplacementPreviewDTO preview = fixture.service.preview(
+                header.getId(), new ByteArrayInputStream(excel));
+
+        assertThat(preview.isCanConfirm()).isTrue();
+        assertThat(preview.getSummary().getChangedCount()).isEqualTo(1);
+        assertThat(preview.getSummary().getErrorCount()).isEqualTo(1);
+
+        SalesOrderChangeItemDataReplacementConfirmResp result = fixture.service.confirm(
+                header.getId(),
+                new ByteArrayInputStream(excel),
+                preview.getPreviewFingerprint(),
+                "本地局部校正");
+
+        assertThat(result.getSuccess()).isTrue();
+        assertThat(result.getUpdatedCount()).isEqualTo(1);
+        assertThat(result.getSummary().getErrorCount()).isEqualTo(1);
+        assertThat(invalid.getRemark()).isEqualTo("old invalid");
+        assertThat(valid.getRemark()).isEqualTo("good remark");
+        assertThat(result.getPreview()).isSameAs(latestPreview);
+        verify(fixture.itemMapper, times(1)).update(isNull(), any(UpdateWrapper.class));
+        verify(fixture.changeRecordItemMapper, times(1)).insert(any(SalesOrderChangeRecordItem.class));
+    }
+
+    @Test
     void previewTreatsU9ChangeExcludedCandidateAsUnmatchedInSalesOrderChange() {
         Fixture fixture = fixture();
         SalesOrderHeader header = header(107L, "SO-107", "已同步");

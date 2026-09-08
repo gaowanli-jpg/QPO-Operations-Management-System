@@ -150,7 +150,7 @@ class ReleaseItemDataReplacementStage3PreviewServiceTest {
                 List.of(ReleaseOrderSource.rfq(101)),
                 new ByteArrayInputStream(new byte[]{1}));
 
-        assertThat(result.isCanConfirm()).isFalse();
+        assertThat(result.isCanConfirm()).isTrue();
         assertThat(result.getRows()).extracting(ReleaseItemDataReplacementRowDTO::getStatus)
                 .containsExactly(ReleaseItemDataReplacementRowStatus.ERROR, ReleaseItemDataReplacementRowStatus.QUANTITY_ONLY);
         assertThat(result.getRows().get(0).getReason()).contains("第2行第3列").contains("下单日期");

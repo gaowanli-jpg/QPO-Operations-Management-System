@@ -247,6 +247,44 @@ class SalesOrderU9ItemDataReplacementStage3Test {
     }
 
     @Test
+    void confirmSkipsErrorRowsAndAppliesValidRows() {
+        Fixture fixture = fixture();
+        SalesOrderHeader header = header(106L, "SO-106", "未同步");
+        SalesOrderItem invalid = item(260L, 106L, 1, "P-ERR", "A");
+        invalid.setRemark("old invalid");
+        SalesOrderItem valid = item(261L, 106L, 2, "P-OK", "A");
+        valid.setRemark("old valid");
+        SalesOrderU9SyncPreviewResp latestPreview = new SalesOrderU9SyncPreviewResp();
+        latestPreview.setSalesOrderId(header.getId());
+        fixture.withOrder(header, List.of(invalid, valid));
+        when(fixture.previewService.previewSalesOrder(header.getId())).thenReturn(latestPreview);
+        byte[] excel = excel(
+                List.of("图号", "版本", "行号", "数量", "备注"),
+                List.of("P-ERR", "A", 1, 1, "bad remark"),
+                List.of("P-OK", "A", 2, "", "good remark"));
+
+        SalesOrderU9ItemDataReplacementPreviewDTO preview = fixture.service.preview(
+                header.getId(), new ByteArrayInputStream(excel));
+
+        assertThat(preview.isCanConfirm()).isTrue();
+        assertThat(preview.getSummary().getChangedCount()).isEqualTo(1);
+        assertThat(preview.getSummary().getErrorCount()).isEqualTo(1);
+
+        SalesOrderU9ItemDataReplacementConfirmDTO result = fixture.service.confirm(
+                header.getId(),
+                new ByteArrayInputStream(excel),
+                preview.getPreviewFingerprint());
+
+        assertThat(result.getSuccess()).isTrue();
+        assertThat(result.getUpdatedCount()).isEqualTo(1);
+        assertThat(result.getSummary().getErrorCount()).isEqualTo(1);
+        assertThat(invalid.getRemark()).isEqualTo("old invalid");
+        assertThat(valid.getRemark()).isEqualTo("good remark");
+        assertThat(result.getPreview()).isSameAs(latestPreview);
+        verify(fixture.itemMapper, times(1)).update(isNull(), any(UpdateWrapper.class));
+    }
+
+    @Test
     void previewTreatsU9ChangeExcludedCandidateAsUnmatched() {
         Fixture fixture = fixture();
         SalesOrderHeader header = header(104L, "SO-104", "未同步");

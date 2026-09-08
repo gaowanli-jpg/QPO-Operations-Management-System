@@ -386,6 +386,43 @@ class SalesOrderMaintenanceServiceTest {
     }
 
     @Test
+    void dataReplacementSkipsErrorRowsAndAppliesValidSalesOrderRows() throws Exception {
+        Fixture fixture = fixture();
+        SalesOrderHeader header = header(19L, "NOT_SYNCED");
+        SalesOrderItem invalid = item(701L, 19L);
+        invalid.setLineNo(10);
+        invalid.setPartNo("P-ERR");
+        invalid.setRemark("old invalid");
+        SalesOrderItem valid = item(702L, 19L);
+        valid.setLineNo(20);
+        valid.setPartNo("P-OK");
+        valid.setRemark("old valid");
+        fixture.withOrder(header, List.of(invalid, valid));
+        byte[] excel = excel(
+                List.of("图号", "版本", "行号", "客户交期", "备注"),
+                List.of("P-ERR", "A", 10, "not-a-date", "bad remark"),
+                List.of("P-OK", "A", 20, "", "good remark"));
+
+        SalesOrderU9ItemDataReplacementPreviewDTO preview = fixture.replacementService.preview(
+                header.getId(), new ByteArrayInputStream(excel));
+
+        assertThat(preview.isCanConfirm()).isTrue();
+        assertThat(preview.getSummary().getImportedCount()).isEqualTo(2);
+        assertThat(preview.getSummary().getChangedCount()).isEqualTo(1);
+        assertThat(preview.getSummary().getErrorCount()).isEqualTo(1);
+
+        SalesOrderItemDataReplacementConfirmResp result = fixture.replacementService.confirm(
+                header.getId(), new ByteArrayInputStream(excel), preview.getPreviewFingerprint());
+
+        assertThat(result.getSuccess()).isTrue();
+        assertThat(result.getUpdatedCount()).isEqualTo(1);
+        assertThat(result.getSummary().getErrorCount()).isEqualTo(1);
+        assertThat(invalid.getRemark()).isEqualTo("old invalid");
+        assertThat(valid.getRemark()).isEqualTo("good remark");
+        verify(fixture.itemMapper, times(1)).update(isNull(), any(UpdateWrapper.class));
+    }
+
+    @Test
     void controllerDelegatesSalesOrderManagementDataReplacementWithoutReasonParameter() throws Exception {
         SalesOrderManageController controller = new SalesOrderManageController();
         SalesOrderItemDataReplacementService service = mock(SalesOrderItemDataReplacementService.class);

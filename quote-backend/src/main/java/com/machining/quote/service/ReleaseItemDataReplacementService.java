@@ -197,9 +197,8 @@ public class ReleaseItemDataReplacementService {
         preview.setRecognizedFields(new ArrayList<>(safeList(parsed.getRecognizedFields())));
         preview.setRows(rows);
         preview.setSummary(summarize(rows, safeList(parsed.getRows()).size()));
-        preview.setCanConfirm(preview.getSummary().getErrorCount() == 0
-                && (preview.getSummary().getChangedCount() > 0
-                || preview.getSummary().getQuantityOnlyCount() > 0));
+        preview.setCanConfirm(preview.getSummary().getChangedCount() > 0
+                || preview.getSummary().getQuantityOnlyCount() > 0);
         preview.setPreviewFingerprint(fingerprint(
                 rfqIds,
                 ordersById,

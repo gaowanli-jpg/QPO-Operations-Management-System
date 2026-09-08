@@ -5,6 +5,7 @@ import com.machining.quote.config.AuthContext;
 import com.machining.quote.config.PreviewFingerprintConflictException;
 import com.machining.quote.domain.QuoteStatusWorkflow;
 import com.machining.quote.dto.ReleaseItemDataReplacementConfirmDTO;
+import com.machining.quote.dto.ReleaseItemDataReplacementExcelErrorDTO;
 import com.machining.quote.dto.ReleaseItemDataReplacementExcelParseResult;
 import com.machining.quote.dto.ReleaseItemDataReplacementExcelRowDTO;
 import com.machining.quote.dto.ReleaseOrderSource;
@@ -152,6 +153,48 @@ class ReleaseItemDataReplacementStage4ConfirmServiceTest {
                 .containsExactly("RFQ:301", "RFQ:302");
         verify(context.itemMapper).updateById(argThat(item -> item.getId().equals(301)));
         verify(context.itemMapper).updateById(argThat(item -> item.getId().equals(302)));
+    }
+
+    @Test
+    void confirmSkipsParserErrorRowsAndAppliesValidReleaseRows() {
+        ReleaseItemDataReplacementExcelRowDTO invalidRow = excelRow(2, "P-ERR", "A", values("salesOrderDate", "bad"));
+        ReleaseItemDataReplacementExcelErrorDTO error = new ReleaseItemDataReplacementExcelErrorDTO();
+        error.setExcelRowNumber(2);
+        error.setColumnNumber(3);
+        error.setField("salesOrderDate");
+        error.setLabel("下单日期");
+        error.setMessage("下单日期不是有效日期");
+        invalidRow.getErrors().add(error);
+        ReleaseItemDataReplacementExcelParseResult parsed = parseResult(
+                List.of("salesOrderDate", "materialName"),
+                invalidRow,
+                excelRow(3, "P-OK", "A", values("materialName", "good material")));
+        ItemQuoteVersion invalid = item(303, 101, "P-ERR", "A", 5);
+        invalid.setMaterialName("old invalid");
+        ItemQuoteVersion valid = item(304, 101, "P-OK", "A", 5);
+        valid.setMaterialName("old valid");
+        TestContext context = context(
+                parsed,
+                List.of(order(101, "RFQ-101", "ACME")),
+                List.of(invalid, valid),
+                List.of());
+
+        String fingerprint = context.service.preview(List.of(ReleaseOrderSource.rfq(101)), stream())
+                .getPreviewFingerprint();
+        ReleaseItemDataReplacementConfirmDTO result = context.service.confirm(
+                List.of(ReleaseOrderSource.rfq(101)),
+                stream(),
+                fingerprint);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getSummary().getImportedCount()).isEqualTo(2);
+        assertThat(result.getSummary().getChangedCount()).isEqualTo(1);
+        assertThat(result.getSummary().getErrorCount()).isEqualTo(1);
+        assertThat(result.getSummary().getUpdatedItemCount()).isEqualTo(1);
+        assertThat(invalid.getMaterialName()).isEqualTo("old invalid");
+        assertThat(valid.getMaterialName()).isEqualTo("good material");
+        verify(context.itemMapper, never()).updateById(argThat(item -> item.getId().equals(303)));
+        verify(context.itemMapper).updateById(argThat(item -> item.getId().equals(304)));
     }
 
     @Test

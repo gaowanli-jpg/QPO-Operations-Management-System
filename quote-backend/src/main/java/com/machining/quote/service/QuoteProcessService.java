@@ -352,8 +352,11 @@ public class QuoteProcessService {
         if (!previewFingerprint.trim().equals(currentFingerprint)) {
             throw new PreviewFingerprintConflictException("数据已发生变化，请重新预览");
         }
-        if (preview.getSummary().getErrorCount() > 0) {
-            throw new IllegalArgumentException("表格数据替换存在错误行，请修正后重新预览");
+        if (!preview.isCanConfirm()) {
+            if (preview.getSummary().getErrorCount() > 0) {
+                throw new IllegalArgumentException("表格数据替换存在错误行，请修正后重新预览");
+            }
+            throw new IllegalArgumentException("当前替换数据不能确认，请重新预览");
         }
 
         List<Map<String, Object>> affectedRows = new ArrayList<>();
@@ -701,7 +704,7 @@ public class QuoteProcessService {
         preview.setRecognizedFields(parsed.recognizedFields());
         preview.setRows(rows);
         preview.setSummary(summary);
-        preview.setCanConfirm(summary.getErrorCount() == 0 && summary.getChangedCount() > 0);
+        preview.setCanConfirm(summary.getChangedCount() > 0);
         return preview;
     }
 

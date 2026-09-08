@@ -1583,8 +1583,7 @@ public class OrderManagementService {
         preview.put("recognizedFields", safeList(parsed.getRecognizedFields()));
         preview.put("rows", rows);
         preview.put("summary", summary);
-        preview.put("canConfirm", numberValue(summary.get("errorCount")).intValue() == 0
-                && numberValue(summary.get("changedCount")).intValue() > 0);
+        preview.put("canConfirm", numberValue(summary.get("changedCount")).intValue() > 0);
         preview.put("previewFingerprint", replacementFingerprint(order, parsed, rows, itemsById, ticketedQtyByItemId));
         return preview;
     }
