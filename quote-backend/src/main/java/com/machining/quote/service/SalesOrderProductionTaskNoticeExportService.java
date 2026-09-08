@@ -188,6 +188,9 @@ public class SalesOrderProductionTaskNoticeExportService {
             return;
         }
         int extraRows = dataRowDelta(itemCount);
+        if (extraRows <= 0) {
+            return;
+        }
         Row templateRow = sheet.getRow(TEMPLATE_DATA_END_ROW);
         List<CellRangeAddress> templateMergedRegions = mergedRegionsForRow(sheet, TEMPLATE_DATA_END_ROW);
         sheet.shiftRows(FIRST_ROW_AFTER_TEMPLATE_DATA, sheet.getLastRowNum(), extraRows, true, false);
@@ -263,23 +266,8 @@ public class SalesOrderProductionTaskNoticeExportService {
                     source.getLastRow() + rowOffset,
                     source.getFirstColumn(),
                     source.getLastColumn());
-            if (!mergedRegionExists(sheet, target)) {
-                sheet.addMergedRegion(target);
-            }
+            sheet.addMergedRegionUnsafe(target);
         }
-    }
-
-    private boolean mergedRegionExists(Sheet sheet, CellRangeAddress target) {
-        for (int i = 0; i < sheet.getNumMergedRegions(); i++) {
-            CellRangeAddress existing = sheet.getMergedRegion(i);
-            if (existing.getFirstRow() == target.getFirstRow()
-                    && existing.getLastRow() == target.getLastRow()
-                    && existing.getFirstColumn() == target.getFirstColumn()
-                    && existing.getLastColumn() == target.getLastColumn()) {
-                return true;
-            }
-        }
-        return false;
     }
 
     private void removeMergedRegionsWithin(Sheet sheet, int firstRow, int lastRow) {

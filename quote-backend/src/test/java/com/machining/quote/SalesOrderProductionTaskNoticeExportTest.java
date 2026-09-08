@@ -20,11 +20,13 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.io.ByteArrayInputStream;
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -165,6 +167,14 @@ class SalesOrderProductionTaskNoticeExportTest {
     }
 
     @Test
+    void exportSupportsLargeProductionTaskNoticeRowsUpToTwoThousand() throws Exception {
+        assertTimeoutPreemptively(Duration.ofSeconds(20), () -> {
+            assertLargeProductionTaskNoticeExport(150);
+            assertLargeProductionTaskNoticeExport(2000);
+        });
+    }
+
+    @Test
     void controllerEndpointIsSecuredAndWritesXlsxDownload() throws Exception {
         SalesOrderProductionTaskNoticeExportService service = mock(SalesOrderProductionTaskNoticeExportService.class);
         byte[] bytes = new byte[] { 1, 2, 3 };
@@ -197,6 +207,41 @@ class SalesOrderProductionTaskNoticeExportTest {
         ReflectionTestUtils.setField(service, "dataScopeService", dataScopeService);
         ReflectionTestUtils.setField(service, "auditService", auditService);
         return new Fixture(service, headerMapper, itemMapper, dataScopeService, auditService);
+    }
+
+    private void assertLargeProductionTaskNoticeExport(int itemCount) throws Exception {
+        SalesOrderHeader header = new SalesOrderHeader();
+        header.setId(920L + itemCount);
+        header.setSalesOrderNo("SOQPO-LARGE-" + itemCount);
+        header.setSalesOrderDate(LocalDate.of(2026, 9, 4));
+
+        List<SalesOrderItem> items = java.util.stream.IntStream.rangeClosed(1, itemCount)
+                .mapToObj(index -> {
+                    SalesOrderItem item = item(920000L + index, header.getId(), index, index % 2 == 0 ? "已匹配" : "未匹配");
+                    item.setPartNo("PN-LARGE-" + index);
+                    item.setQty(index);
+                    item.setVersion("V" + index);
+                    item.setEngineeringMaterialName("6061");
+                    item.setSurfaceTreatment("本色阳极");
+                    item.setSalesOrderDate(LocalDate.of(2026, 9, 4));
+                    item.setInternalDeliveryDate(LocalDate.of(2026, 9, 24));
+                    item.setRemark("ROW-" + index);
+                    return item;
+                })
+                .toList();
+
+        Fixture fixture = fixture(header, items);
+
+        byte[] bytes = fixture.service.export(header.getId());
+
+        try (Workbook workbook = WorkbookFactory.create(new ByteArrayInputStream(bytes))) {
+            Sheet sheet = workbook.getSheet("StandardDocPrintTemplate");
+            int lastDataRow = 11 + itemCount;
+            assertThat(text(sheet, lastDataRow, "B")).isEqualTo(String.valueOf(itemCount * 10));
+            assertThat(text(sheet, lastDataRow, "P")).isEqualTo("PN-LARGE-" + itemCount);
+            assertThat(text(sheet, lastDataRow, "AG")).isEqualTo("ROW-" + itemCount);
+            assertThat(text(sheet, lastDataRow + 3, "AB")).isEqualTo("表单编号：SOQPO-LARGE-" + itemCount);
+        }
     }
 
     private SalesOrderItem item(Long id, Long salesOrderId, Integer lineNo, String matchStatus) {
