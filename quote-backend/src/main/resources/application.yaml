@@ -80,6 +80,7 @@ erp:
     u9-sales-order-sync-path: ${ERP_DATA_CENTER_U9_SALES_ORDER_SYNC_PATH:}
     u9-common-entity-query-path: ${ERP_DATA_CENTER_U9_COMMON_ENTITY_QUERY_PATH:}
     mes-production-dispatch-path: ${ERP_DATA_CENTER_MES_PRODUCTION_DISPATCH_PATH:/api/v1/mes/openapi/demand/create}
+    mes-stock-picking-order-create-path: ${ERP_DATA_CENTER_MES_STOCK_PICKING_ORDER_CREATE_PATH:/api/v1/mes/openapi/production-order/create}
   # Deprecated direct-system fallback values. Data Center is the new integration boundary.
   u9:
     base-url: ${ERP_U9_BASE_URL:}

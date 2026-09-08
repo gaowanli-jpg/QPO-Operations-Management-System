@@ -74,6 +74,29 @@ describe('deliveredItemApi', () => {
     expect(JSON.stringify(params)).not.toContain('wms' + 'ProductionOrderNo')
   })
 
+  test('submitLockedStockPickingOrderBatch posts one MES stock picking task for selected allocation ids', async () => {
+    await deliveredItemApi.submitLockedStockPickingOrderBatch([101, 102])
+
+    expect(request).toHaveBeenCalledWith('/api/order-delivery/locked-items/stock-picking-orders', {
+      method: 'POST',
+      data: { allocationIds: [101, 102] }
+    })
+  })
+
+  test('discard and restore locked allocations through module-owned endpoints', async () => {
+    await deliveredItemApi.discardLockedItem(101, { reason: '不再处理' })
+    await deliveredItemApi.restoreLockedItem(101, {})
+
+    expect(request).toHaveBeenNthCalledWith(1, '/api/order-delivery/locked-items/101/discard', {
+      method: 'POST',
+      data: { reason: '不再处理' }
+    })
+    expect(request).toHaveBeenNthCalledWith(2, '/api/order-delivery/locked-items/101/restore', {
+      method: 'POST',
+      data: {}
+    })
+  })
+
 
   test('listProductionItems calls production work pool endpoint with params', async () => {
     const params = { mesProductionStatus: 'FAILED', partNo: 'P-200' }

@@ -205,6 +205,7 @@ public class DataCenterIntegrationClient {
                 || DataCenterEndpointRegistry.MES_MATERIAL_RESOLVE.equals(code)
                 || DataCenterEndpointRegistry.WMS_INVENTORY_ALLOCATE.equals(code)
                 || DataCenterEndpointRegistry.MES_PRODUCTION_DISPATCH.equals(code)
+                || DataCenterEndpointRegistry.MES_STOCK_PICKING_ORDER_CREATE.equals(code)
                 || DataCenterEndpointRegistry.MES_PROCESS_TYPE_LIST.equals(code)
                 || DataCenterEndpointRegistry.MES_MATERIAL_PAGE.equals(code);
     }

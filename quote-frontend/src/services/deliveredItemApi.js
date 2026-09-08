@@ -26,6 +26,21 @@ export const submitWmsAllocationBatch = (ticketIds = []) => request('/api/order-
 
 export const listLockedItems = (params = {}) => request('/api/order-delivery/locked-items', { params })
 
+export const submitLockedStockPickingOrderBatch = (allocationIds = []) => request('/api/order-delivery/locked-items/stock-picking-orders', {
+  method: 'POST',
+  data: { allocationIds }
+})
+
+export const discardLockedItem = (allocationId, payload = {}) => request(`/api/order-delivery/locked-items/${allocationId}/discard`, {
+  method: 'POST',
+  data: payload
+})
+
+export const restoreLockedItem = (allocationId, payload = {}) => request(`/api/order-delivery/locked-items/${allocationId}/restore`, {
+  method: 'POST',
+  data: payload
+})
+
 export const listProductionItems = (params = {}) => request('/api/order-delivery/production-items', { params })
 
 export const discardProductionItem = (allocationId, payload = {}) => request(`/api/order-delivery/production-items/${allocationId}/discard`, {

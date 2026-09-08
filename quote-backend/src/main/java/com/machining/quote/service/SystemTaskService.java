@@ -9,6 +9,7 @@ import com.machining.quote.mapper.OrderDeliveryTicketAllocationMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.SystemTaskMapper;
 import com.machining.quote.service.mes.MesProductionDispatchService;
+import com.machining.quote.service.mes.LockedItemStockPickingOrderService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -47,6 +48,8 @@ public class SystemTaskService {
     private QuoteProcessService quoteProcessService;
     @Autowired(required = false)
     private MesProductionDispatchService mesProductionDispatchService;
+    @Autowired(required = false)
+    private LockedItemStockPickingOrderService lockedItemStockPickingOrderService;
     @Autowired(required = false)
     private DeliveryIntegrationBatchService deliveryIntegrationBatchService;
     @Autowired(required = false)
@@ -165,6 +168,29 @@ public class SystemTaskService {
                 task.getId(), taskAllocationIds.size());
         taskExecutor.execute(() -> runTask(task.getId(),
                 () -> mesProductionDispatchService.dispatchBatch(taskAllocationIds, task.getId())));
+        return taskMapper.selectById(task.getId());
+    }
+
+    public SystemTask submitLockedStockPickingOrderBatchTask(List<Integer> allocationIds) {
+        if (lockedItemStockPickingOrderService == null) {
+            throw new RuntimeException("MES 提库存工单下发服务不可用");
+        }
+        List<Integer> normalizedAllocationIds = lockedItemStockPickingOrderService.normalizeAllocationIds(allocationIds);
+        lockedItemStockPickingOrderService.assertCanAccessAllocations(normalizedAllocationIds);
+        normalizedAllocationIds = filterDiscardedAllocationIds(normalizedAllocationIds);
+        if (normalizedAllocationIds.isEmpty()) {
+            throw new RuntimeException("所选锁库零件均已废弃，不能提交提库存工单任务");
+        }
+        List<Integer> taskAllocationIds = normalizedAllocationIds;
+        Map<String, Object> request = new LinkedHashMap<>();
+        request.put("allocationIds", taskAllocationIds);
+        request.put("allocationCount", taskAllocationIds.size());
+        SystemTask task = createTask("LOCKED_ITEM_STOCK_PICKING_ORDER", request);
+        recordTaskSubmitAudit("LOCKED_ITEM_STOCK_PICKING_SUBMIT", "DELIVERY", task, request);
+        log.info("Locked item stock picking order submitted taskId={} allocationCount={}",
+                task.getId(), taskAllocationIds.size());
+        taskExecutor.execute(() -> runTask(task.getId(),
+                () -> lockedItemStockPickingOrderService.dispatchBatch(taskAllocationIds, task.getId())));
         return taskMapper.selectById(task.getId());
     }
 
