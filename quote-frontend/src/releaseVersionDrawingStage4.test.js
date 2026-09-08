@@ -6,59 +6,43 @@ import { fileURLToPath } from 'node:url'
 const currentDir = dirname(fileURLToPath(import.meta.url))
 const readSource = (...segments) => readFileSync(resolve(currentDir, ...segments), 'utf8').replace(/\r\n/g, '\n')
 
-describe('release drawing replacement stage 4', () => {
-  test('market api exposes release drawing replacement endpoint', () => {
+describe('release drawing replacement frontend retirement', () => {
+  test('market api no longer exposes the release drawing replacement helper', () => {
     const apiSource = readSource('services', 'marketApi.js')
 
-    expect(apiSource).toContain('replaceReleaseDrawings')
-    expect(apiSource).toContain('/api/market/release/drawings/replace')
+    expect(apiSource).not.toContain('replaceReleaseDrawings')
+    expect(apiSource).not.toContain('/api/market/release/drawings/replace')
   })
 
-  test('market release reuses PDF collection helpers and submits all selected orders', () => {
-    const source = readSource('components', 'MarketRelease.vue')
-    const submitBlock = source.slice(
-      source.indexOf('const submitReplacementDrawings = async () =>'),
-      source.indexOf('const adjustInternalLeadTime')
-    )
-
-    expect(source).toContain('collectPdfFilesFromDataTransfer')
-    expect(source).toContain('mergePdfFiles')
-    expect(source).toContain('isPdfFile')
-    expect(source).toContain('导入替换图纸')
-    expect(source).toContain('replacementDrawingFiles')
-    expect(source).toContain('replacementVersionDrawingFiles')
-    expect(source).toContain('clientSkippedReplacementFiles')
-    expect(source).toContain('仅支持 PDF 图纸')
-    expect(source).toContain('按图号替换')
-    expect(source).toContain('按图号+版本替换')
-    expect(source).toContain('class="drawing-replace-dual-grid"')
-
-    expect(submitBlock).toContain("if (selectedOrderSources.value.length === 0) return ElMessage.warning('请先选择订单。')")
-    expect(submitBlock).not.toContain('if (selectedRfqIds.value.length === 0)')
-    expect(submitBlock).toContain("formData.append('sources', JSON.stringify(selectedOrderSources.value))")
-    expect(submitBlock).toContain("formData.append('rfqIds', JSON.stringify(selectedRfqIds.value))")
-    expect(submitBlock).toContain("formData.append('drawings', file)")
-    expect(submitBlock).toContain("formData.append('versionDrawings', file)")
-    expect(submitBlock).toContain('const response = await replaceReleaseDrawings(formData)')
-    expect(submitBlock).toContain('await fetchReleaseItemsBatch()')
-    expect(submitBlock).not.toContain('clearSelectedRows()')
-    expect(submitBlock).not.toContain('selectedRows.value.map')
-  })
-
-  test('market release displays drawing replacement result and refreshed drawing status', () => {
+  test('market release hides the drawing replacement button and dialog', () => {
     const source = readSource('components', 'MarketRelease.vue')
 
-    expect(source).toContain('replacementDrawingResult')
-    expect(source).toContain('replacedCount')
-    expect(source).toContain('unmatchedDrawings')
-    expect(source).toContain('skippedFiles')
-    expect(source).toContain('非PDF')
-    expect(source).toContain('label="图纸"')
-    expect(source).toContain('row.hasDrawing || row.drawingUrl')
-    expect(source).toContain("{{ row.hasDrawing || row.drawingUrl ? '已绑定' : '缺图' }}")
+    expect(source).not.toContain('导入替换图纸')
+    expect(source).not.toContain('openDrawingReplaceDialog')
+    expect(source).not.toContain('submitReplacementDrawings')
+    expect(source).not.toContain('drawingReplaceVisible')
+    expect(source).not.toContain('replacementDrawingFiles')
+    expect(source).not.toContain('replacementVersionDrawingFiles')
+    expect(source).not.toContain('replaceReleaseDrawings')
+    expect(source).not.toContain('drawing-replace-dialog')
+    expect(source).not.toContain('drawing-replace-dual-grid')
   })
 
-  test('market release summarizes selected orders as a compact table without the inquiry order heading', () => {
+  test('market release keeps table data replacement and selection import actions', () => {
+    const source = readSource('components', 'MarketRelease.vue')
+    const actionStart = source.indexOf('class="release-table-actions import-action-row"')
+    const actionEnd = source.indexOf('<el-table', actionStart)
+    expect(actionStart).toBeGreaterThanOrEqual(0)
+    expect(actionEnd).toBeGreaterThan(actionStart)
+    const actionRow = source.slice(actionStart, actionEnd)
+
+    expect(actionRow).toContain('表格数据替换')
+    expect(actionRow).toContain('保存修改')
+    expect(actionRow).toContain('导入表格选定')
+    expect(actionRow).not.toContain('导入替换图纸')
+  })
+
+  test('market release keeps the compact selected-order summary unchanged', () => {
     const source = readSource('components', 'MarketRelease.vue')
     const orderSummaryPanel = source.slice(
       source.indexOf('<el-table\n              class="selected-orders-mini-table"'),
@@ -76,30 +60,11 @@ describe('release drawing replacement stage 4', () => {
     expect(orderSummaryPanel).not.toContain('@click="openOrderPicker"')
   })
 
-  test('market release uses horizontal import actions and shared drawing upload wording', () => {
+  test('market release still displays drawing status on item rows', () => {
     const source = readSource('components', 'MarketRelease.vue')
 
-    expect(source).toContain('class="release-table-actions import-action-row"')
-    expect(source).toContain('支持 图号.pdf、图号 空格说明.pdf，例如 L20100000733.pdf 或 L20100000733 定位块.pdf；文件名中的 - 会按图号内容处理。')
-    expect(source).toContain('支持 图号_版本.pdf、图号_版本 空格说明.pdf，例如 L20100000733_A.pdf；文件名中的 - 会按图号或版本内容处理。')
-    expect(source).toContain('class="custom-dropzone drawing-replace-dropzone supplement-dropzone"')
-    expect(source).toContain('class="drawing-replace-upload-actions import-upload-button-stack"')
-    expect(source).toContain('将 <em>图纸文件夹</em> 或多个 PDF 图纸直接拖拽至此处')
-    expect(source).toContain('无需勾选零件')
-  })
-
-  test('market release keeps paired drawing replacement entrances equal height with aligned buttons', () => {
-    const source = readSource('components', 'MarketRelease.vue')
-
-    expect(source).toContain('.drawing-replace-dual-grid {\n  display: grid')
-    expect(source).toContain('align-items: stretch')
-    expect(source).toContain('.drawing-replace-entry {\n  display: flex')
-    expect(source).toContain('.drawing-replace-entry-title {\n  min-height: 24px')
-    expect(source).toContain('.drawing-replace-dropzone {\n  display: flex')
-    expect(source).toContain('min-height: 280px')
-    expect(source).toContain('.drawing-replace-dropzone :deep(.el-upload__tip) {\n  min-height: 48px')
-    expect(source).toContain('.drawing-replace-upload-actions {\n  display: flex')
-    expect(source).toContain('margin-top: auto')
-    expect(source).toContain('.folder-select-button {\n  width: 100%')
+    expect(source).toContain('label="图纸"')
+    expect(source).toContain('row.hasDrawing || row.drawingUrl')
+    expect(source).toContain("{{ row.hasDrawing || row.drawingUrl ? '已绑定' : '缺图' }}")
   })
 })

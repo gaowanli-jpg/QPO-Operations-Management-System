@@ -83,6 +83,51 @@ class SalesOrderProductionTaskNoticeExportTest {
     }
 
     @Test
+    void exportSkipsU9ChangeExcludedSalesOrderItems() throws Exception {
+        SalesOrderHeader header = new SalesOrderHeader();
+        header.setId(932L);
+        header.setSalesOrderNo("SOQPO-932");
+        header.setSalesOrderDate(LocalDate.of(2026, 9, 8));
+
+        SalesOrderItem active = item(9321L, 932L, 1, null);
+        active.setPartNo("PN-PRODUCTION");
+        active.setQty(2);
+        active.setVersion("A");
+
+        SalesOrderItem excluded = item(9322L, 932L, 2, null);
+        excluded.setPartNo("PN-U9-EXCLUDED");
+        excluded.setQty(9);
+        excluded.setVersion("B");
+        excluded.setU9ChangeExcluded(true);
+
+        Fixture fixture = fixture(header, List.of(active, excluded));
+
+        byte[] bytes = fixture.service.export(932L);
+
+        ArgumentCaptor<Object> afterDataCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(fixture.auditService).record(
+                eq("SALES_ORDER_PRODUCTION_TASK_NOTICE_EXPORT"),
+                eq("sales_order_header"),
+                eq(932L),
+                isNull(),
+                afterDataCaptor.capture(),
+                eq("MARKET"),
+                eq("SUCCESS"),
+                eq(AuditService.labelForAction("SALES_ORDER_PRODUCTION_TASK_NOTICE_EXPORT")),
+                isNull()
+        );
+        assertThat((Map<String, Object>) afterDataCaptor.getValue())
+                .containsEntry("rowCount", 1);
+
+        try (Workbook workbook = WorkbookFactory.create(new ByteArrayInputStream(bytes))) {
+            Sheet sheet = workbook.getSheet("StandardDocPrintTemplate");
+            assertThat(text(sheet, 12, "P")).isEqualTo("PN-PRODUCTION");
+            assertThat(text(sheet, 12, "T")).isEqualTo("2");
+            assertThat(text(sheet, 13, "P")).isBlank();
+        }
+    }
+
+    @Test
     void exportAllowsEmptyNoticeWhenAllSalesOrderItemsAreDiscarded() throws Exception {
         SalesOrderHeader header = new SalesOrderHeader();
         header.setId(931L);

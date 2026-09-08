@@ -237,17 +237,6 @@
                 >
                   保存修改
                 </el-button>
-                <el-button
-                  v-permission="'market:release:create'"
-                  size="small"
-                  plain
-                  class="workflow-soft-button"
-                  :disabled="selectedOrders.length === 0 || replacingDrawings || submitting || dataReplacementBusy"
-                  :loading="replacingDrawings"
-                  @click="openDrawingReplaceDialog"
-                >
-                  导入替换图纸
-                </el-button>
                 <el-upload
                   ref="selectionUploadRef"
                   action="#"
@@ -646,163 +635,6 @@
       </el-row>
     </section>
 
-    <el-dialog
-      v-model="drawingReplaceVisible"
-      title="导入替换图纸"
-      width="720px"
-      :close-on-click-modal="false"
-    >
-      <div class="drawing-replace-dialog">
-        <el-alert
-          :title="`将按图号匹配当前已选 ${selectedOrders.length} 个订单，匹配成功会覆盖旧图纸。`"
-          description="系统会在当前选中的订单范围内按图号匹配全部零件，命中后替换图纸；无需勾选零件。"
-          type="warning"
-          :closable="false"
-          show-icon
-        />
-
-        <div class="erp-upload-surface drawing-replace-upload">
-          <div class="drawing-replace-dual-grid">
-            <section class="drawing-replace-entry">
-              <div class="drawing-replace-entry-title">按图号替换</div>
-              <div
-                v-permission="'market:release:create'"
-                class="custom-dropzone drawing-replace-dropzone supplement-dropzone"
-                @dragover.prevent
-                @drop.prevent="handleReplacementDrop"
-              >
-                <el-icon class="el-icon--upload dropzone-icon"><upload-filled /></el-icon>
-                <div class="el-upload__text dropzone-text">
-                  将 <em>图纸文件夹</em> 或多个 PDF 图纸直接拖拽至此处
-                </div>
-                <div class="el-upload__tip">支持 图号.pdf、图号 空格说明.pdf，例如 L20100000733.pdf 或 L20100000733 定位块.pdf；文件名中的 - 会按图号内容处理。</div>
-                <div class="folder-select-row">或点击下方按钮选择多个 PDF / 图纸文件夹</div>
-                <div class="drawing-replace-upload-actions import-upload-button-stack">
-                  <el-button v-permission="'market:release:create'" plain class="workflow-soft-button folder-select-button" :disabled="replacingDrawings || submitting" @click="triggerReplacementFileSelect">选择多个 PDF</el-button>
-                  <el-button v-permission="'market:release:create'" plain class="workflow-soft-button folder-select-button" :disabled="replacingDrawings || submitting" @click="triggerReplacementFolderSelect">选择文件夹</el-button>
-                </div>
-                <input type="file" ref="replacementFileInput" accept=".pdf" multiple class="hidden-input" @change="handleReplacementFileSelect" />
-                <input type="file" ref="replacementFolderInput" webkitdirectory directory multiple class="hidden-input" @change="handleReplacementFolderSelect" />
-              </div>
-
-              <div v-if="replacementDrawingFiles.length > 0" class="replacement-file-stats">
-                <h4>按图号待替换图纸（{{ replacementDrawingFiles.length }} 份）</h4>
-                <ul class="replacement-pdf-list">
-                  <li v-for="(file, index) in replacementDrawingFiles" :key="`${file.name}-${file.size}-${index}`">
-                    <span>{{ file.name }}</span>
-                    <el-button v-permission="'market:release:create'" link type="danger" size="small" :disabled="replacingDrawings || submitting" @click="removeReplacementDrawingFile(index)">移除</el-button>
-                  </li>
-                </ul>
-              </div>
-            </section>
-
-            <section class="drawing-replace-entry">
-              <div class="drawing-replace-entry-title">按图号+版本替换</div>
-              <div
-                v-permission="'market:release:create'"
-                class="custom-dropzone drawing-replace-dropzone supplement-dropzone"
-                @dragover.prevent
-                @drop.prevent="handleReplacementVersionDrop"
-              >
-                <el-icon class="el-icon--upload dropzone-icon"><upload-filled /></el-icon>
-                <div class="el-upload__text dropzone-text">
-                  将 <em>图纸文件夹</em> 或多个 PDF 图纸直接拖拽至此处
-                </div>
-                <div class="el-upload__tip">支持 图号_版本.pdf、图号_版本 空格说明.pdf，例如 L20100000733_A.pdf；文件名中的 - 会按图号或版本内容处理。</div>
-                <div class="folder-select-row">或点击下方按钮选择多个 PDF / 图纸文件夹</div>
-                <div class="drawing-replace-upload-actions import-upload-button-stack">
-                  <el-button v-permission="'market:release:create'" plain class="workflow-soft-button folder-select-button" :disabled="replacingDrawings || submitting" @click="triggerReplacementVersionFileSelect">选择多个 PDF</el-button>
-                  <el-button v-permission="'market:release:create'" plain class="workflow-soft-button folder-select-button" :disabled="replacingDrawings || submitting" @click="triggerReplacementVersionFolderSelect">选择文件夹</el-button>
-                </div>
-                <input type="file" ref="replacementVersionFileInput" accept=".pdf" multiple class="hidden-input" @change="handleReplacementVersionFileSelect" />
-                <input type="file" ref="replacementVersionFolderInput" webkitdirectory directory multiple class="hidden-input" @change="handleReplacementVersionFolderSelect" />
-              </div>
-
-              <div v-if="replacementVersionDrawingFiles.length > 0" class="replacement-file-stats">
-                <h4>按图号+版本待替换图纸（{{ replacementVersionDrawingFiles.length }} 份）</h4>
-                <ul class="replacement-pdf-list">
-                  <li v-for="(file, index) in replacementVersionDrawingFiles" :key="`${file.name}-${file.size}-${index}`">
-                    <span>{{ file.name }}</span>
-                    <el-button v-permission="'market:release:create'" link type="danger" size="small" :disabled="replacingDrawings || submitting" @click="removeReplacementVersionDrawingFile(index)">移除</el-button>
-                  </li>
-                </ul>
-              </div>
-            </section>
-          </div>
-        </div>
-
-        <div v-if="clientSkippedReplacementFiles.length > 0 && !replacementDrawingResult" class="replacement-result">
-          <el-alert
-            :title="`已跳过 ${clientSkippedReplacementFiles.length} 个非 PDF 文件。`"
-            type="warning"
-            :closable="false"
-            show-icon
-          />
-        </div>
-
-        <div v-if="replacementDrawingResult" class="replacement-result">
-          <el-alert
-            :title="replacementDrawingResult.message || '图纸替换处理完成。'"
-            :type="replacementResultHasWarnings ? 'warning' : 'success'"
-            :closable="false"
-            show-icon
-          />
-          <div class="replacement-summary-grid">
-            <div><strong>{{ replacementDrawingResult.uploadCount || 0 }}</strong><span>上传PDF</span></div>
-            <div><strong>{{ replacementDrawingResult.matchedCount || 0 }}</strong><span>匹配零件</span></div>
-            <div><strong>{{ replacementDrawingResult.replacedCount || 0 }}</strong><span>已替换</span></div>
-            <div><strong>{{ replacementDrawingResult.unmatchedCount || 0 }}</strong><span>未匹配</span></div>
-            <div><strong>{{ replacementSkippedFiles.length }}</strong><span>非PDF</span></div>
-          </div>
-          <el-tabs>
-            <el-tab-pane :label="`已替换 ${replacementReplacedItems.length}`">
-              <ul v-if="replacementReplacedItems.length" class="result-list replacement-result-list">
-                <li v-for="(item, index) in replacementReplacedItems" :key="index">
-                  <span class="result-main">{{ item.partNo || '-' }} / {{ item.version || '-' }}</span>
-                  <span v-if="item.rfqNo" class="result-sub"> - {{ item.rfqNo }}</span>
-                  <span v-if="item.fileName" class="result-sub"> - {{ item.fileName }}</span>
-                </li>
-              </ul>
-              <el-empty v-else description="无记录" :image-size="60" />
-            </el-tab-pane>
-            <el-tab-pane :label="`未匹配 ${replacementUnmatchedDrawings.length}`">
-              <ul v-if="replacementUnmatchedDrawings.length" class="result-list replacement-result-list">
-                <li v-for="(item, index) in replacementUnmatchedDrawings" :key="index">
-                  <span class="result-main">{{ item.fileName || '-' }}</span>
-                  <span v-if="item.reason" class="result-reason"> - {{ item.reason }}</span>
-                </li>
-              </ul>
-              <el-empty v-else description="无记录" :image-size="60" />
-            </el-tab-pane>
-            <el-tab-pane :label="`非PDF ${replacementSkippedFiles.length}`">
-              <ul v-if="replacementSkippedFiles.length" class="result-list replacement-result-list">
-                <li v-for="(item, index) in replacementSkippedFiles" :key="index">
-                  <span class="result-main">{{ item.fileName || '-' }}</span>
-                  <span v-if="item.reason" class="result-reason"> - {{ item.reason }}</span>
-                </li>
-              </ul>
-              <el-empty v-else description="无记录" :image-size="60" />
-            </el-tab-pane>
-          </el-tabs>
-        </div>
-      </div>
-
-      <template #footer>
-        <div class="erp-dialog-footer">
-          <el-button @click="drawingReplaceVisible = false">关闭</el-button>
-          <el-button
-            v-permission="'market:release:create'"
-            type="primary"
-            :loading="replacingDrawings"
-            :disabled="(replacementDrawingFiles.length === 0 && replacementVersionDrawingFiles.length === 0) || replacingDrawings || submitting"
-            @click="submitReplacementDrawings"
-          >
-            上传并替换
-          </el-button>
-        </div>
-      </template>
-    </el-dialog>
-
     <ReleaseItemDataReplacementDialog
       v-model="dataReplacementVisible"
       :sources="selectedOrderSources"
@@ -867,19 +699,17 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { DocumentChecked, UploadFilled } from '@element-plus/icons-vue'
+import { DocumentChecked } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
 import OrderPickerDialog from './OrderPickerDialog.vue'
 import DrawingFolderViewer from './common/DrawingFolderViewer.vue'
 import ReleaseItemDataReplacementDialog from './market-release/ReleaseItemDataReplacementDialog.vue'
-import { collectPdfFilesFromDataTransfer, isPdfFile, mergePdfFiles } from '../utils/drawingUpload'
 import {
   generateTicket,
   getReleaseSummary,
   appendReleaseToSalesOrder,
   listReleaseItemsBatch,
   parsePartSelectionBatch,
-  replaceReleaseDrawings,
   setInternalTargetLeadTime as setInternalTargetLeadTimeRequest,
   shiftInternalTargetLeadTime,
   updateInternalTargetLeadTime,
@@ -915,21 +745,12 @@ const releaseItemTotal = ref(0)
 const selectedItemIdMap = reactive({})
 const itemTableRef = ref(null)
 const selectionUploadRef = ref(null)
-const replacementFileInput = ref(null)
-const replacementFolderInput = ref(null)
-const replacementVersionFileInput = ref(null)
-const replacementVersionFolderInput = ref(null)
 const releaseItemPagination = reactive({ page: 1, pageSize: DEFAULT_CLIENT_PAGE_SIZE })
 const acceptedQtyMap = reactive({})
 const internalShiftDays = ref(0)
 const manualInternalTargetDate = ref('')
-const drawingReplaceVisible = ref(false)
 const dataReplacementVisible = ref(false)
 const dataReplacementBusy = ref(false)
-const replacementDrawingFiles = ref([])
-const replacementVersionDrawingFiles = ref([])
-const replacementDrawingResult = ref(null)
-const clientSkippedReplacementFiles = ref([])
 const releaseResult = ref(null)
 const pdfVisible = ref(false)
 const pdfTitle = ref('')
@@ -963,7 +784,6 @@ const selectedSourcesIncludeNonRfq = computed(() => selectedOrderSources.value.s
 const { isPending, runAction } = usePendingAction()
 const releaseActionKeys = {
   importSelection: 'market:release:import-selection',
-  replaceDrawings: 'market:release:replace-drawings',
   bulkSave: 'market:release:bulk-save-drafts',
   shiftInternalLeadTime: 'market:release:shift-internal-lead-time',
   setInternalTargetLeadTime: 'market:release:set-internal-target-lead-time',
@@ -980,13 +800,12 @@ const submitting = computed(() => generatingTicket.value || appendingSalesOrder.
 const adjustingInternalLeadTime = computed(() => isPending(releaseActionKeys.shiftInternalLeadTime))
 const settingInternalTargetLeadTime = computed(() => isPending(releaseActionKeys.setInternalTargetLeadTime))
 const importSelecting = computed(() => isPending(releaseActionKeys.importSelection))
-const replacingDrawings = computed(() => isPending(releaseActionKeys.replaceDrawings))
 const savingReleaseDrafts = computed(() => isPending(releaseActionKeys.bulkSave))
 const releaseDraftRowsForBulkSave = computed(() => collectReleaseRowsWithDraftChanges([
   ...Object.values(selectedItemIdMap),
   ...itemList.value
 ], rowKey))
-const bulkSaveDisabled = computed(() => submitting.value || dataReplacementBusy.value || replacingDrawings.value || savingReleaseDrafts.value)
+const bulkSaveDisabled = computed(() => submitting.value || dataReplacementBusy.value || savingReleaseDrafts.value)
 const dataReplacementDisabled = computed(() => selectedOrders.value.length === 0 || dataReplacementBusy.value || submitting.value || selectedSourcesIncludeNonRfq.value)
 const dataReplacementDraftRowsByKey = computed(() => {
   const rowsByKey = {}
@@ -1076,13 +895,6 @@ const selectedRows = computed(() => Object.values(selectedItemIdMap))
 const selectedRowsWithUnsavedOrderFields = computed(() => selectedRows.value.filter(hasUnsavedOrderFieldDraft))
 const appendSalesOrderDisabled = computed(() => (selectedRows.value.length === 0 || selectedRowsWithUnsavedOrderFields.value.length > 0 || selectedSourcesIncludeNonRfq.value || submitting.value || dataReplacementBusy.value))
 const selectedReleaseItemIds = computed(() => new Set(selectedRows.value.map(row => rowKey(row))))
-const replacementReplacedItems = computed(() => replacementDrawingResult.value?.replacedItems || [])
-const replacementUnmatchedDrawings = computed(() => replacementDrawingResult.value?.unmatchedDrawings || [])
-const replacementSkippedFiles = computed(() => replacementDrawingResult.value?.skippedFiles || [])
-const replacementResultHasWarnings = computed(() => (
-  Number(replacementDrawingResult.value?.unmatchedCount || 0) > 0
-  || replacementSkippedFiles.value.length > 0
-))
 
 const resetReleasePagination = () => {
   releaseItemPagination.page = 1
@@ -1702,150 +1514,6 @@ const handleDataReplacementConfirmed = async (response) => {
   })
   itemList.value = applied.itemList
   await syncReleaseItemTableSelection()
-}
-
-const openDrawingReplaceDialog = () => {
-  if (selectedOrders.value.length === 0) {
-    ElMessage.warning('请先选择订单。')
-    return
-  }
-  replacementDrawingFiles.value = []
-  replacementVersionDrawingFiles.value = []
-  replacementDrawingResult.value = null
-  clientSkippedReplacementFiles.value = []
-  drawingReplaceVisible.value = true
-}
-
-const addClientSkippedReplacementFiles = (files = []) => {
-  const skipped = Array.from(files || [])
-    .filter(file => !isPdfFile(file))
-    .map(file => ({
-      fileName: file.name || '-',
-      reason: '仅支持 PDF 图纸'
-    }))
-  if (skipped.length === 0) return
-
-  const seen = new Set(clientSkippedReplacementFiles.value.map(item => item.fileName))
-  clientSkippedReplacementFiles.value = [
-    ...clientSkippedReplacementFiles.value,
-    ...skipped.filter(item => {
-      if (seen.has(item.fileName)) return false
-      seen.add(item.fileName)
-      return true
-    })
-  ]
-  ElMessage.warning(`已跳过 ${skipped.length} 个非 PDF 文件。`)
-}
-
-const addReplacementDrawingFiles = (files, sourceLabel, targetFiles = replacementDrawingFiles) => {
-  const incomingFiles = Array.from(files || [])
-  addClientSkippedReplacementFiles(incomingFiles)
-  const beforeCount = targetFiles.value.length
-  targetFiles.value = mergePdfFiles(targetFiles.value, incomingFiles)
-  const addedCount = targetFiles.value.length - beforeCount
-  replacementDrawingResult.value = null
-  if (addedCount > 0) {
-    ElMessage.success(`成功${sourceLabel} ${addedCount} 份 PDF。`)
-  } else if (incomingFiles.length > 0) {
-    ElMessage.warning('未找到新的 PDF 图纸。')
-  }
-}
-
-const handleReplacementDrop = async (event) => {
-  if (replacingDrawings.value || submitting.value) return
-  addClientSkippedReplacementFiles(event.dataTransfer?.files)
-  const pdfs = await collectPdfFilesFromDataTransfer(event.dataTransfer)
-  addReplacementDrawingFiles(pdfs, '提取')
-}
-
-const handleReplacementVersionDrop = async (event) => {
-  if (replacingDrawings.value || submitting.value) return
-  addClientSkippedReplacementFiles(event.dataTransfer?.files)
-  const pdfs = await collectPdfFilesFromDataTransfer(event.dataTransfer)
-  addReplacementDrawingFiles(pdfs, '提取', replacementVersionDrawingFiles)
-}
-
-const triggerReplacementFileSelect = () => {
-  if (!replacingDrawings.value && !submitting.value) replacementFileInput.value?.click()
-}
-
-const triggerReplacementFolderSelect = () => {
-  if (!replacingDrawings.value && !submitting.value) replacementFolderInput.value?.click()
-}
-
-const triggerReplacementVersionFileSelect = () => {
-  if (!replacingDrawings.value && !submitting.value) replacementVersionFileInput.value?.click()
-}
-
-const triggerReplacementVersionFolderSelect = () => {
-  if (!replacingDrawings.value && !submitting.value) replacementVersionFolderInput.value?.click()
-}
-
-const handleReplacementFileSelect = (event) => {
-  addReplacementDrawingFiles(event.target.files, '选择')
-  event.target.value = ''
-}
-
-const handleReplacementFolderSelect = (event) => {
-  addReplacementDrawingFiles(event.target.files, '从选中的文件夹中提取')
-  event.target.value = ''
-}
-
-const handleReplacementVersionFileSelect = (event) => {
-  addReplacementDrawingFiles(event.target.files, '选择', replacementVersionDrawingFiles)
-  event.target.value = ''
-}
-
-const handleReplacementVersionFolderSelect = (event) => {
-  addReplacementDrawingFiles(event.target.files, '从选中的文件夹中提取', replacementVersionDrawingFiles)
-  event.target.value = ''
-}
-
-const removeReplacementDrawingFile = (index) => {
-  replacementDrawingFiles.value.splice(index, 1)
-}
-
-const removeReplacementVersionDrawingFile = (index) => {
-  replacementVersionDrawingFiles.value.splice(index, 1)
-}
-
-const submitReplacementDrawings = async () => {
-  if (selectedOrderSources.value.length === 0) return ElMessage.warning('请先选择订单。')
-  if (replacementDrawingFiles.value.length === 0 && replacementVersionDrawingFiles.value.length === 0) return ElMessage.warning('请先选择需要替换的 PDF 图纸。')
-
-  const formData = new FormData()
-  formData.append('rfqIds', JSON.stringify(selectedRfqIds.value))
-  formData.append('sources', JSON.stringify(selectedOrderSources.value))
-  replacementDrawingFiles.value.forEach(file => formData.append('drawings', file))
-  replacementVersionDrawingFiles.value.forEach(file => formData.append('versionDrawings', file))
-
-  return runAction(releaseActionKeys.replaceDrawings, async () => {
-    try {
-      const response = await replaceReleaseDrawings(formData)
-      const skippedFiles = [
-        ...(response?.skippedFiles || []),
-        ...clientSkippedReplacementFiles.value
-      ]
-      replacementDrawingResult.value = {
-        ...(response || {}),
-        skippedFiles,
-        skippedCount: skippedFiles.length
-      }
-      replacementDrawingFiles.value = []
-      replacementVersionDrawingFiles.value = []
-      clientSkippedReplacementFiles.value = []
-      await fetchReleaseItemsBatch()
-
-      if (Number(replacementDrawingResult.value.unmatchedCount || 0) > 0 || skippedFiles.length > 0) {
-        ElMessage.warning(response?.message || '图纸替换处理完成，存在未匹配或跳过文件。')
-      } else {
-        ElMessage.success(response?.message || '图纸替换处理完成。')
-      }
-    } catch (error) {
-      console.error(error)
-      ElMessage.error(error.response?.data?.message || '图纸替换失败。')
-    }
-  })
 }
 
 const adjustInternalLeadTime = async (direction) => {
@@ -2514,207 +2182,9 @@ onBeforeUnmount(() => {
   margin-top: 14px;
 }
 
-.drawing-replace-dialog {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
 .pdf-frame-shell {
   width: 100%;
   height: 70vh;
-}
-
-.drawing-replace-upload {
-  padding: 0;
-  border: none;
-  background: transparent;
-}
-
-.drawing-replace-dual-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  align-items: stretch;
-  gap: 14px;
-}
-
-.drawing-replace-entry {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.drawing-replace-entry-title {
-  min-height: 24px;
-  display: flex;
-  align-items: center;
-  margin-bottom: 8px;
-  padding-left: 10px;
-  border-left: 3px solid var(--erp-primary);
-  color: var(--erp-text);
-  font-size: 14px;
-  font-weight: 700;
-}
-
-.custom-dropzone {
-  width: 100%;
-  padding: 28px 16px;
-  border: 1px dashed #aab6c8;
-  border-radius: 8px;
-  background: var(--erp-surface-soft);
-  text-align: center;
-  transition: border-color 0.2s ease, background-color 0.2s ease;
-}
-
-.custom-dropzone:hover {
-  border-color: var(--erp-primary);
-  background: #f3f8fc;
-}
-
-.dropzone-icon {
-  margin-bottom: 12px;
-  color: #8c98aa;
-  font-size: 42px;
-}
-
-.dropzone-text {
-  color: var(--erp-text-secondary);
-  font-size: 15px;
-}
-
-.drawing-replace-dropzone {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  align-items: center;
-  min-height: 280px;
-  box-sizing: border-box;
-}
-
-.drawing-replace-dropzone :deep(.el-upload__tip) {
-  min-height: 48px;
-  margin-top: 8px;
-  color: var(--erp-text-secondary);
-}
-
-.folder-select-row {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 38px;
-  margin-top: 12px;
-  color: var(--erp-text-secondary);
-  font-size: var(--erp-font-size-sm);
-}
-
-.drawing-replace-upload-actions {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 10px;
-  width: 100%;
-  margin-top: auto;
-  padding-top: 12px;
-}
-
-.drawing-replace-upload-actions :deep(.el-button) {
-  margin-left: 0;
-}
-
-.import-upload-button-stack {
-  flex-direction: column;
-}
-
-.folder-select-button {
-  width: 100%;
-  min-height: 32px;
-  min-width: 150px;
-  padding-inline: 14px;
-}
-
-.hidden-input {
-  display: none;
-}
-
-.replacement-file-stats {
-  padding: 12px 14px;
-  border: 1px solid #cfe8d2;
-  border-radius: 8px;
-  background: #f4fbf5;
-  color: var(--erp-success);
-}
-
-.replacement-file-stats h4 {
-  margin: 0 0 8px;
-  font-size: 14px;
-}
-
-.replacement-pdf-list,
-.result-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  max-height: 150px;
-  overflow-y: auto;
-}
-
-.replacement-pdf-list li,
-.result-list li {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 7px 0;
-  border-bottom: 1px solid #dcefe0;
-  color: #256b2b;
-}
-
-.replacement-pdf-list li:last-child,
-.result-list li:last-child {
-  border-bottom: none;
-}
-
-.replacement-result {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.replacement-summary-grid {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.replacement-summary-grid > div {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: 56px;
-  border: 1px solid var(--erp-border-soft);
-  border-radius: 6px;
-  background: var(--erp-surface-soft);
-}
-
-.replacement-summary-grid strong {
-  color: var(--erp-text);
-  font-size: 18px;
-}
-
-.replacement-summary-grid span,
-.result-sub {
-  color: var(--erp-text-secondary);
-  font-size: 12px;
-}
-
-.result-main {
-  color: var(--erp-text);
-  font-weight: 700;
-}
-
-.result-reason {
-  color: var(--erp-warning);
 }
 
 @media (max-width: 1180px) {
@@ -2747,10 +2217,6 @@ onBeforeUnmount(() => {
     width: 100%;
   }
 
-  .replacement-summary-grid {
-    grid-template-columns: 1fr;
-  }
-
   .release-result-header {
     display: grid;
     grid-template-columns: 1fr;
@@ -2764,8 +2230,5 @@ onBeforeUnmount(() => {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .drawing-replace-dual-grid {
-    grid-template-columns: 1fr;
-  }
 }
 </style>

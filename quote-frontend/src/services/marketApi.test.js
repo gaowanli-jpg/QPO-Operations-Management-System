@@ -284,17 +284,9 @@ describe('marketApi', () => {
     })
   })
 
-  test('replaceReleaseDrawings uploads release drawing replacement form data', async () => {
-    const formData = new FormData()
-    formData.append('rfqIds', JSON.stringify([18, 19]))
-
-    await marketApi.replaceReleaseDrawings(formData)
-
-    expect(request).toHaveBeenCalledWith('/api/market/release/drawings/replace', {
-      method: 'POST',
-      data: formData,
-      headers: { 'Content-Type': 'multipart/form-data' }
-    })
+  test('does not expose retired release drawing replacement helper', () => {
+    expect('replaceReleaseDrawings' in marketApi).toBe(false)
+    expect(request).not.toHaveBeenCalled()
   })
 
   test('shiftInternalTargetLeadTime posts shift payload', async () => {

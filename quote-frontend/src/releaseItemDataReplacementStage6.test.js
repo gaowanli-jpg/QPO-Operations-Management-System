@@ -259,7 +259,7 @@ describe('release item data replacement stage 6 state convergence', () => {
     const handlerBlock = blockBetween(
       marketReleaseSource,
       'const handleDataReplacementConfirmed = async (response) =>',
-      'const openDrawingReplaceDialog = () =>'
+      'const adjustInternalLeadTime = async (direction) =>'
     )
     expect(handlerBlock).toContain('applyReleaseItemDataReplacementResult')
     expect(handlerBlock).toContain('itemList.value = applied.itemList')

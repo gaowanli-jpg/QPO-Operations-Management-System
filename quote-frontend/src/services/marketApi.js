@@ -106,8 +106,6 @@ export const parsePartSelection = (rfqId, formData) => multipartPost(`/api/marke
 
 export const parsePartSelectionBatch = (formData) => multipartPost('/api/market/release/parse-part-selection/batch', formData)
 
-export const replaceReleaseDrawings = (formData) => multipartPost('/api/market/release/drawings/replace', formData)
-
 export const previewReleaseItemDataReplacement = (formData) => multipartPost('/api/market/release/item-data-replacement/preview', formData)
 
 export const confirmReleaseItemDataReplacement = (formData) => multipartPost('/api/market/release/item-data-replacement/confirm', formData)
