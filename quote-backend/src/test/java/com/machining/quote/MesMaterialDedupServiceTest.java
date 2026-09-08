@@ -13,7 +13,6 @@ import com.machining.quote.mapper.OrderDeliveryTicketMesRequestMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMesWaiterMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
 import com.machining.quote.service.AuditService;
-import com.machining.quote.service.BusinessFileService;
 import com.machining.quote.service.mes.MesMaterialClient;
 import com.machining.quote.service.mes.MesMaterialDedupService;
 import com.machining.quote.service.mes.MesMaterialSyncService;
@@ -210,7 +209,6 @@ class MesMaterialDedupServiceTest {
         fixture.itemMapper = mock(ItemQuoteVersionMapper.class);
         fixture.client = mock(MesMaterialClient.class);
         fixture.auditService = mock(AuditService.class);
-        fixture.businessFileService = mock(BusinessFileService.class);
         fixture.dedupService = new MesMaterialDedupService();
         fixture.syncService = new MesMaterialSyncService();
 
@@ -218,7 +216,6 @@ class MesMaterialDedupServiceTest {
         when(fixture.ticketMapper.update(any(OrderDeliveryTicket.class), any())).thenReturn(1);
         when(fixture.orderMapper.selectById(88)).thenReturn(order());
         when(fixture.itemMapper.selectById(77)).thenReturn(item());
-        when(fixture.businessFileService.externalReadableUrl(anyString())).thenAnswer(invocation -> invocation.getArgument(0));
         wireDedup(fixture);
         wireSync(fixture);
         return fixture;
@@ -237,7 +234,6 @@ class MesMaterialDedupServiceTest {
         ReflectionTestUtils.setField(fixture.syncService, "orderRfqMapper", fixture.orderMapper);
         ReflectionTestUtils.setField(fixture.syncService, "itemMapper", fixture.itemMapper);
         ReflectionTestUtils.setField(fixture.syncService, "mesMaterialClient", fixture.client);
-        ReflectionTestUtils.setField(fixture.syncService, "businessFileService", fixture.businessFileService);
         ReflectionTestUtils.setField(fixture.syncService, "auditService", fixture.auditService);
         ReflectionTestUtils.setField(fixture.syncService, "dedupService", fixture.dedupService);
     }
@@ -296,7 +292,6 @@ class MesMaterialDedupServiceTest {
         private ItemQuoteVersionMapper itemMapper;
         private MesMaterialClient client;
         private AuditService auditService;
-        private BusinessFileService businessFileService;
         private MesMaterialDedupService dedupService;
         private MesMaterialSyncService syncService;
     }

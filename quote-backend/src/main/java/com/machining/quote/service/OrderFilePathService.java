@@ -47,6 +47,16 @@ public class OrderFilePathService {
                 + safePathSegment(filename);
     }
 
+    public String drawingFolderUrl(String sourceType, String sourceId, String folderId) {
+        return "/uploads/drawing-folders/"
+                + safePathSegment(sourceType)
+                + "/"
+                + safePathSegment(sourceId)
+                + "/"
+                + safePathSegment(folderId)
+                + "/";
+    }
+
     private String orderFolderName(OrderRfq order) {
         if (!isBlank(order.getRfqNo())) {
             return order.getRfqNo();

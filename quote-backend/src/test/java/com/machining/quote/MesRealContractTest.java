@@ -40,7 +40,6 @@ class MesRealContractTest {
         MesMaterialResolveReq.Item first = new MesMaterialResolveReq.Item();
         first.setDrawingNo("QPO-MES-E2E-P001");
         first.setDrawingVersion("A");
-        first.setDrawingUrls(List.of("http://qpo-test.example/api/files/P001.pdf"));
         first.setRemark("QPO MES E2E material preparation");
         first.setCustomerRequirements(MesCustomerRequirementsAssembler.assemble(
                 "  精密安装板\r\n二级  ",
@@ -49,7 +48,6 @@ class MesRealContractTest {
         MesMaterialResolveReq.Item second = new MesMaterialResolveReq.Item();
         second.setDrawingNo("QPO-MES-E2E-P002");
         second.setDrawingVersion("");
-        second.setDrawingUrls(List.of("http://qpo-test.example/api/files/P002.pdf"));
 
         req.setItems(List.of(first, second));
 
@@ -68,7 +66,7 @@ class MesRealContractTest {
                 .containsEntry("drawingVersion", "")
                 .doesNotContainKey("customerRequirements");
         assertThat(json)
-                .doesNotContain("\"mesRequestId\"", "\"partNo\"", "\"version\"", "\"drawingUrl\"", "\"sourceType\"", "\"ticketId\"", "\"rfqId\"", "\"sourceOrderId\"", "\"sourceItemId\"")
+                .doesNotContain("\"mesRequestId\"", "\"partNo\"", "\"version\"", "\"drawingUrl\"", "\"drawingUrls\"", "\"sourceType\"", "\"ticketId\"", "\"rfqId\"", "\"sourceOrderId\"", "\"sourceItemId\"")
                 .contains("\"items\":[");
     }
 

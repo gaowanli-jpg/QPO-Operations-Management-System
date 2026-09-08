@@ -17,7 +17,6 @@ import com.machining.quote.mapper.OrderDeliveryTicketMesWaiterMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
 import com.machining.quote.mapper.SalesOrderItemMapper;
 import com.machining.quote.service.AuditService;
-import com.machining.quote.service.BusinessFileService;
 import com.machining.quote.service.SourceItemMaterialNoSyncService;
 import com.machining.quote.service.mes.MesMaterialClient;
 import com.machining.quote.service.mes.MesMaterialDedupService;
@@ -247,7 +246,6 @@ class MesMaterialDedupCallbackWorkflowTest {
         fixture.itemMapper = mock(ItemQuoteVersionMapper.class);
         fixture.salesOrderItemMapper = mock(SalesOrderItemMapper.class);
         fixture.client = mock(MesMaterialClient.class);
-        fixture.businessFileService = mock(BusinessFileService.class);
         fixture.auditService = mock(AuditService.class);
         fixture.sourceSyncService = new SourceItemMaterialNoSyncService();
         fixture.dedupService = new MesMaterialDedupService();
@@ -255,7 +253,6 @@ class MesMaterialDedupCallbackWorkflowTest {
 
         when(fixture.orderMapper.selectById(88)).thenReturn(order());
         when(fixture.itemMapper.selectById(77)).thenReturn(item());
-        when(fixture.businessFileService.externalReadableUrl(anyString())).thenAnswer(invocation -> invocation.getArgument(0));
         wireSourceSync(fixture);
         wireDedup(fixture);
         wireSync(fixture);
@@ -283,7 +280,6 @@ class MesMaterialDedupCallbackWorkflowTest {
         ReflectionTestUtils.setField(fixture.syncService, "itemMapper", fixture.itemMapper);
         ReflectionTestUtils.setField(fixture.syncService, "salesOrderItemMapper", fixture.salesOrderItemMapper);
         ReflectionTestUtils.setField(fixture.syncService, "mesMaterialClient", fixture.client);
-        ReflectionTestUtils.setField(fixture.syncService, "businessFileService", fixture.businessFileService);
         ReflectionTestUtils.setField(fixture.syncService, "auditService", fixture.auditService);
         ReflectionTestUtils.setField(fixture.syncService, "dedupService", fixture.dedupService);
         ReflectionTestUtils.setField(
@@ -400,7 +396,6 @@ class MesMaterialDedupCallbackWorkflowTest {
         private ItemQuoteVersionMapper itemMapper;
         private SalesOrderItemMapper salesOrderItemMapper;
         private MesMaterialClient client;
-        private BusinessFileService businessFileService;
         private AuditService auditService;
         private SourceItemMaterialNoSyncService sourceSyncService;
         private MesMaterialDedupService dedupService;
