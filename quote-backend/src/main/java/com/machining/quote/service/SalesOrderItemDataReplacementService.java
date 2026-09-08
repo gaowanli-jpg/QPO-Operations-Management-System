@@ -241,6 +241,7 @@ public class SalesOrderItemDataReplacementService {
             case "customerDeliveryDate" -> line.setCustomerDeliveryDate((LocalDate) value);
             case "internalDeliveryDate" -> line.setInternalDeliveryDate((LocalDate) value);
             case "untaxedUnitPrice" -> line.setUntaxedUnitPrice((BigDecimal) value);
+            case "taxIncludedUnitPrice" -> line.setTaxIncludedUnitPrice((BigDecimal) value);
             case "customerOrderNo" -> line.setCustomerOrderNo(stringValue(value));
             case "customerProjectNo" -> line.setCustomerProjectNo(stringValue(value));
             case "internalProjectNo" -> line.setInternalProjectNo(stringValue(value));
@@ -294,6 +295,7 @@ public class SalesOrderItemDataReplacementService {
             case CUSTOMER_DELIVERY_DATE -> item.getCustomerDeliveryDate();
             case INTERNAL_DELIVERY_DATE -> item.getInternalDeliveryDate();
             case UNTAXED_UNIT_PRICE -> item.getUntaxedUnitPrice();
+            case TAX_INCLUDED_UNIT_PRICE -> item.getTaxIncludedUnitPrice();
             case CUSTOMER_ORDER_NO -> item.getCustomerOrderNo();
             case CUSTOMER_PROJECT_NO -> item.getCustomerProjectNo();
             case INTERNAL_PROJECT_NO -> item.getInternalProjectNo();

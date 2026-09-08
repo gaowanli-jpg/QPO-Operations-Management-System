@@ -10,11 +10,8 @@ import com.machining.quote.dto.SalesOrderItemUpdateReq;
 import com.machining.quote.dto.SalesOrderMaintenanceOrderUpdateReq;
 import com.machining.quote.dto.SalesOrderMaintenanceUpdateResp;
 import com.machining.quote.dto.SalesOrderU9ItemDataReplacementPreviewDTO;
-import com.machining.quote.entity.DictPricingMarkupFee;
-import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.SalesOrderHeader;
 import com.machining.quote.entity.SalesOrderItem;
-import com.machining.quote.mapper.DictPricingMarkupFeeMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.SalesOrderHeaderMapper;
 import com.machining.quote.mapper.SalesOrderItemMapper;
@@ -134,7 +131,7 @@ class SalesOrderMaintenanceServiceTest {
     }
 
     @Test
-    void saveItemsUpdatesEditableFieldsAndRecalculatesTaxIncludedPriceFromCurrentRatio() {
+    void saveItemsUpdatesEditableFieldsWithoutDerivingTaxIncludedPriceFromUntaxedPrice() {
         Fixture fixture = fixture();
         SalesOrderHeader header = header(11L, "未同步");
         SalesOrderItem item = item(201L, 11L);
@@ -170,9 +167,9 @@ class SalesOrderMaintenanceServiceTest {
                 "remark");
         assertThat(item.getQty()).isEqualTo(3);
         assertThat(item.getUntaxedUnitPrice()).isEqualByComparingTo("200.00");
-        assertThat(item.getTaxIncludedUnitPrice()).isEqualByComparingTo("226.0000");
+        assertThat(item.getTaxIncludedUnitPrice()).isEqualByComparingTo("113.00");
         assertThat(item.getUntaxedTotalPrice()).isEqualByComparingTo("600.00");
-        assertThat(item.getTaxIncludedTotalPrice()).isEqualByComparingTo("678.0000");
+        assertThat(item.getTaxIncludedTotalPrice()).isEqualByComparingTo("339.00");
         assertThat(item.getRemainingQty()).isEqualTo(2);
         assertThat(item.getUnshippedQty()).isEqualTo(2);
         assertThat(item.getCustomerDeliveryDate()).isEqualTo(LocalDate.of(2026, 10, 1));
@@ -189,46 +186,29 @@ class SalesOrderMaintenanceServiceTest {
     }
 
     @Test
-    void saveItemsFallsBackToEnabledNormalTaxRateAndRejectsWhenNoTaxBasisExists() {
-        Fixture fallback = fixture();
+    void saveItemsUpdatesTaxIncludedUnitPriceIndependentlyFromUntaxedPrice() {
+        Fixture fixture = fixture();
         SalesOrderHeader header = header(12L, "未同步");
         SalesOrderItem item = item(202L, 12L);
-        item.setUntaxedUnitPrice(null);
-        item.setTaxIncludedUnitPrice(null);
-        fallback.withOrder(header, List.of(item));
-        when(fallback.pricingMarkupFeeMapper.selectList(any(QueryWrapper.class)))
-                .thenReturn(List.of(taxFee("13")));
+        item.setUntaxedUnitPrice(new BigDecimal("100.00"));
+        item.setTaxIncludedUnitPrice(new BigDecimal("113.00"));
+        fixture.withOrder(header, List.of(item));
 
         SalesOrderItemUpdateReq req = new SalesOrderItemUpdateReq();
         SalesOrderItemUpdateLineReq line = new SalesOrderItemUpdateLineReq();
         line.setSalesOrderItemId(item.getId());
-        line.setUntaxedUnitPrice(new BigDecimal("100.00"));
+        line.setTaxIncludedUnitPrice(new BigDecimal("118.50"));
         req.setItems(List.of(line));
 
-        fallback.maintenanceService.saveItems(header.getId(), req);
+        SalesOrderMaintenanceUpdateResp result = fixture.maintenanceService.saveItems(header.getId(), req);
 
+        assertThat(result.getUpdatedCount()).isEqualTo(1);
+        assertThat(result.getChangedFields()).containsExactly("taxIncludedUnitPrice");
         assertThat(item.getUntaxedUnitPrice()).isEqualByComparingTo("100.00");
-        assertThat(item.getTaxIncludedUnitPrice()).isEqualByComparingTo("113.0000");
-        verify(fallback.pricingMarkupFeeMapper).selectList(any(QueryWrapper.class));
-
-        Fixture reject = fixture();
-        SalesOrderHeader rejectHeader = header(13L, "未同步");
-        SalesOrderItem rejectItem = item(203L, 13L);
-        rejectItem.setUntaxedUnitPrice(null);
-        rejectItem.setTaxIncludedUnitPrice(null);
-        reject.withOrder(rejectHeader, List.of(rejectItem));
-        when(reject.pricingMarkupFeeMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of());
-
-        SalesOrderItemUpdateReq rejectReq = new SalesOrderItemUpdateReq();
-        SalesOrderItemUpdateLineReq rejectLine = new SalesOrderItemUpdateLineReq();
-        rejectLine.setSalesOrderItemId(rejectItem.getId());
-        rejectLine.setUntaxedUnitPrice(new BigDecimal("100.00"));
-        rejectReq.setItems(List.of(rejectLine));
-
-        assertThatThrownBy(() -> reject.maintenanceService.saveItems(rejectHeader.getId(), rejectReq))
-                .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("税率");
-        verify(reject.itemMapper, never()).update(any(), any());
+        assertThat(item.getTaxIncludedUnitPrice()).isEqualByComparingTo("118.50");
+        assertThat(item.getUntaxedTotalPrice()).isEqualByComparingTo("200.00");
+        assertThat(item.getTaxIncludedTotalPrice()).isEqualByComparingTo("237.00");
+        verify(fixture.itemMapper).update(isNull(), any(UpdateWrapper.class));
     }
 
     @Test
@@ -270,8 +250,8 @@ class SalesOrderMaintenanceServiceTest {
         item.setTaxIncludedUnitPrice(new BigDecimal("113.00"));
         fixture.withOrder(header, List.of(item));
         byte[] excel = excel(
-                List.of("图号", "版本", "行号", "数量", "客户交期", "内部交期", "未税单价", "客户订单号", "客户项目号", "内部项目号", "备注"),
-                List.of(item.getPartNo(), item.getVersion(), item.getLineNo(), 4, "2026-10-11", "2026-10-02", "120.00", "PO-X", "CP-X", "IP-X", "note"));
+                List.of("图号", "版本", "行号", "数量", "客户交期", "内部交期", "未税单价", "含税单价", "客户订单号", "客户项目号", "内部项目号", "备注"),
+                List.of(item.getPartNo(), item.getVersion(), item.getLineNo(), 4, "2026-10-11", "2026-10-02", "120.00", "150.00", "PO-X", "CP-X", "IP-X", "note"));
 
         SalesOrderU9ItemDataReplacementPreviewDTO preview = fixture.replacementService.preview(
                 header.getId(), new ByteArrayInputStream(excel));
@@ -288,13 +268,14 @@ class SalesOrderMaintenanceServiceTest {
                 "customerDeliveryDate",
                 "internalDeliveryDate",
                 "untaxedUnitPrice",
+                "taxIncludedUnitPrice",
                 "customerOrderNo",
                 "customerProjectNo",
                 "internalProjectNo",
                 "remark");
         assertThat(item.getQty()).isEqualTo(4);
         assertThat(item.getUntaxedUnitPrice()).isEqualByComparingTo("120.00");
-        assertThat(item.getTaxIncludedUnitPrice()).isEqualByComparingTo("135.6000");
+        assertThat(item.getTaxIncludedUnitPrice()).isEqualByComparingTo("150.00");
         verify(fixture.ticketMapper, never()).update(any(), any());
         verifyAudit(fixture.auditService, "SALES_ORDER_ITEM_DATA_REPLACEMENT", header.getId());
     }
@@ -363,7 +344,6 @@ class SalesOrderMaintenanceServiceTest {
         ReflectionTestUtils.setField(maintenanceService, "headerMapper", fixture.headerMapper);
         ReflectionTestUtils.setField(maintenanceService, "itemMapper", fixture.itemMapper);
         ReflectionTestUtils.setField(maintenanceService, "ticketMapper", fixture.ticketMapper);
-        ReflectionTestUtils.setField(maintenanceService, "pricingMarkupFeeMapper", fixture.pricingMarkupFeeMapper);
         ReflectionTestUtils.setField(maintenanceService, "dataScopeService", fixture.dataScopeService);
         ReflectionTestUtils.setField(maintenanceService, "auditService", fixture.auditService);
         ReflectionTestUtils.setField(replacementService, "excelParser", new SalesOrderItemDataReplacementExcelParser());
@@ -413,15 +393,6 @@ class SalesOrderMaintenanceServiceTest {
         return item;
     }
 
-    private static DictPricingMarkupFee taxFee(String rate) {
-        DictPricingMarkupFee fee = new DictPricingMarkupFee();
-        fee.setPricingScope("NORMAL");
-        fee.setFeeCategory("TAX");
-        fee.setRatePercent(new BigDecimal(rate));
-        fee.setEnabled(true);
-        return fee;
-    }
-
     private static byte[] excel(List<String> headers, List<?>... rows) {
         try (Workbook workbook = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             Sheet sheet = workbook.createSheet("replacement");
@@ -457,7 +428,6 @@ class SalesOrderMaintenanceServiceTest {
             SalesOrderHeaderMapper headerMapper,
             SalesOrderItemMapper itemMapper,
             OrderDeliveryTicketMapper ticketMapper,
-            DictPricingMarkupFeeMapper pricingMarkupFeeMapper,
             DataScopeService dataScopeService,
             AuditService auditService) {
         private Fixture(SalesOrderMaintenanceService maintenanceService, SalesOrderItemDataReplacementService replacementService) {
@@ -467,7 +437,6 @@ class SalesOrderMaintenanceServiceTest {
                     mock(SalesOrderHeaderMapper.class),
                     mock(SalesOrderItemMapper.class),
                     mock(OrderDeliveryTicketMapper.class),
-                    mock(DictPricingMarkupFeeMapper.class),
                     mock(DataScopeService.class),
                     mock(AuditService.class));
         }

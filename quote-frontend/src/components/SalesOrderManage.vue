@@ -431,7 +431,17 @@
                 </template>
               </el-table-column>
               <el-table-column label="含税单价" width="110" align="right">
-                <template #default="scope">{{ formatMoney(scope.row.taxIncludedUnitPrice) }}</template>
+                <template #default="{ row }">
+                  <el-input
+                    v-if="itemDrafts[row.id]"
+                    v-model="itemDrafts[row.id].taxIncludedUnitPrice"
+                    class="item-edit-input item-edit-money"
+                    inputmode="decimal"
+                    :disabled="salesOrderEditLocked"
+                    placeholder="含税单价"
+                  />
+                  <span v-else>{{ formatMoney(row.taxIncludedUnitPrice) }}</span>
+                </template>
               </el-table-column>
               <el-table-column label="未税总价" width="120" align="right">
                 <template #default="scope">{{ formatMoney(scope.row.untaxedTotalPrice) }}</template>
@@ -607,6 +617,7 @@ const SALES_ORDER_HEADER_EDITABLE_FIELDS = [
 const SALES_ORDER_ITEM_EDITABLE_FIELDS = [
   'qty',
   'untaxedUnitPrice',
+  'taxIncludedUnitPrice',
   'customerDeliveryDate',
   'internalDeliveryDate',
   'customerOrderNo',
@@ -989,6 +1000,7 @@ const resetItemDrafts = (rows = []) => {
 const buildItemDraft = (row = {}) => ({
   qty: row.qty ?? null,
   untaxedUnitPrice: draftValue(row.untaxedUnitPrice),
+  taxIncludedUnitPrice: draftValue(row.taxIncludedUnitPrice),
   customerDeliveryDate: draftValue(row.customerDeliveryDate),
   internalDeliveryDate: draftValue(row.internalDeliveryDate),
   customerOrderNo: draftValue(row.customerOrderNo),

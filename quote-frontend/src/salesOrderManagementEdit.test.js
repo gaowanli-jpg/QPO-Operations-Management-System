@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url'
 
 const currentDir = dirname(fileURLToPath(import.meta.url))
 const componentSource = () => readFileSync(resolve(currentDir, 'components', 'SalesOrderManage.vue'), 'utf8').replace(/\r\n/g, '\n')
+const replacementDialogSource = () => readFileSync(resolve(currentDir, 'components', 'sales-order', 'SalesOrderItemDataReplacementDialog.vue'), 'utf8').replace(/\r\n/g, '\n')
 const apiSource = () => readFileSync(resolve(currentDir, 'services', 'orderApi.js'), 'utf8')
 
 describe('sales order management editable detail', () => {
@@ -45,6 +46,7 @@ describe('sales order management editable detail', () => {
     expect(itemPane).toContain('itemDrafts[row.id]')
     expect(itemPane).toContain('itemDrafts[row.id].qty')
     expect(itemPane).toContain('itemDrafts[row.id].untaxedUnitPrice')
+    expect(itemPane).toContain('itemDrafts[row.id].taxIncludedUnitPrice')
     expect(itemPane).toContain('itemDrafts[row.id].customerDeliveryDate')
     expect(itemPane).toContain('itemDrafts[row.id].internalDeliveryDate')
     expect(itemPane).toContain('itemDrafts[row.id].customerOrderNo')
@@ -53,6 +55,7 @@ describe('sales order management editable detail', () => {
     expect(itemPane).toContain('itemDrafts[row.id].remark')
     expect(component).toContain("'qty'")
     expect(component).toContain("'untaxedUnitPrice'")
+    expect(component).toContain("'taxIncludedUnitPrice'")
     expect(component).toContain("'customerDeliveryDate'")
     expect(component).toContain("'internalDeliveryDate'")
     expect(component).toContain("'customerOrderNo'")
@@ -61,6 +64,9 @@ describe('sales order management editable detail', () => {
     expect(component).toContain("'remark'")
     expect(component).toContain('saveSalesOrderItemChanges')
     expect(component).toContain('openSalesOrderItemDataReplacementDialog')
+
+    const replacementDialog = replacementDialogSource()
+    expect(replacementDialog).toContain('未税单价、含税单价、交期')
   })
 
   test('editing is locked while U9 is syncing pending confirmation or already synced', () => {

@@ -2,16 +2,12 @@ package com.machining.quote.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
-import com.machining.quote.domain.PricingFeeCategory;
-import com.machining.quote.domain.PricingScope;
 import com.machining.quote.dto.SalesOrderItemUpdateLineReq;
 import com.machining.quote.dto.SalesOrderItemUpdateReq;
 import com.machining.quote.dto.SalesOrderMaintenanceOrderUpdateReq;
 import com.machining.quote.dto.SalesOrderMaintenanceUpdateResp;
-import com.machining.quote.entity.DictPricingMarkupFee;
 import com.machining.quote.entity.SalesOrderHeader;
 import com.machining.quote.entity.SalesOrderItem;
-import com.machining.quote.mapper.DictPricingMarkupFeeMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.SalesOrderHeaderMapper;
 import com.machining.quote.mapper.SalesOrderItemMapper;
@@ -20,7 +16,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -45,7 +40,6 @@ public class SalesOrderMaintenanceService {
     private static final int TEXT_120 = 120;
     private static final int TEXT_200 = 200;
     private static final int TEXT_500 = 500;
-    private static final int PRICE_SCALE = 4;
 
     @Autowired
     private SalesOrderHeaderMapper headerMapper;
@@ -53,8 +47,6 @@ public class SalesOrderMaintenanceService {
     private SalesOrderItemMapper itemMapper;
     @Autowired(required = false)
     private OrderDeliveryTicketMapper ticketMapper;
-    @Autowired(required = false)
-    private DictPricingMarkupFeeMapper pricingMarkupFeeMapper;
     @Autowired(required = false)
     private DataScopeService dataScopeService;
     @Autowired(required = false)
@@ -155,12 +147,18 @@ public class SalesOrderMaintenanceService {
         }
         if (line.hasField(SalesOrderItemUpdateLineReq.FIELD_UNTAXED_UNIT_PRICE)) {
             BigDecimal price = line.getUntaxedUnitPrice();
-            validatePrice(price);
+            validatePrice(price, "未税单价");
             if (!sameDecimal(item.getUntaxedUnitPrice(), price)) {
-                BigDecimal taxIncluded = resolveTaxIncludedUnitPrice(item, price);
                 item.setUntaxedUnitPrice(price);
-                item.setTaxIncludedUnitPrice(taxIncluded);
                 changed.add(SalesOrderItemUpdateLineReq.FIELD_UNTAXED_UNIT_PRICE);
+            }
+        }
+        if (line.hasField(SalesOrderItemUpdateLineReq.FIELD_TAX_INCLUDED_UNIT_PRICE)) {
+            BigDecimal price = line.getTaxIncludedUnitPrice();
+            validatePrice(price, "含税单价");
+            if (!sameDecimal(item.getTaxIncludedUnitPrice(), price)) {
+                item.setTaxIncludedUnitPrice(price);
+                changed.add(SalesOrderItemUpdateLineReq.FIELD_TAX_INCLUDED_UNIT_PRICE);
             }
         }
         applyText(item.getCustomerOrderNo(), line.getCustomerOrderNo(), TEXT_120,
@@ -365,51 +363,10 @@ public class SalesOrderMaintenanceService {
         }
     }
 
-    private void validatePrice(BigDecimal price) {
+    private void validatePrice(BigDecimal price, String label) {
         if (price == null || price.compareTo(BigDecimal.ZERO) < 0) {
-            throw new RuntimeException("未税单价必须大于等于 0");
+            throw new RuntimeException(label + "必须大于等于 0");
         }
-    }
-
-    private BigDecimal resolveTaxIncludedUnitPrice(SalesOrderItem item, BigDecimal newUntaxedPrice) {
-        BigDecimal ratio = currentTaxRatio(item);
-        if (ratio == null) {
-            ratio = configuredNormalTaxRatio();
-        }
-        if (ratio == null) {
-            throw new RuntimeException("缺少可用于换算含税单价的税率，请先维护启用的 NORMAL 税率");
-        }
-        return newUntaxedPrice.multiply(ratio).setScale(PRICE_SCALE, RoundingMode.HALF_UP);
-    }
-
-    private BigDecimal currentTaxRatio(SalesOrderItem item) {
-        BigDecimal untaxed = item.getUntaxedUnitPrice();
-        BigDecimal taxIncluded = item.getTaxIncludedUnitPrice();
-        if (untaxed == null || taxIncluded == null || untaxed.compareTo(BigDecimal.ZERO) <= 0) {
-            return null;
-        }
-        return taxIncluded.divide(untaxed, 10, RoundingMode.HALF_UP);
-    }
-
-    private BigDecimal configuredNormalTaxRatio() {
-        if (pricingMarkupFeeMapper == null) {
-            return null;
-        }
-        QueryWrapper<DictPricingMarkupFee> query = new QueryWrapper<>();
-        query.eq("pricing_scope", PricingScope.NORMAL.name())
-                .eq("fee_category", PricingFeeCategory.TAX.name())
-                .eq("enabled", true)
-                .orderByAsc("sort_no")
-                .orderByAsc("id");
-        List<DictPricingMarkupFee> fees = pricingMarkupFeeMapper.selectList(query);
-        if (fees == null || fees.isEmpty()) {
-            return null;
-        }
-        BigDecimal rate = fees.stream()
-                .map(DictPricingMarkupFee::getRatePercent)
-                .filter(Objects::nonNull)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        return BigDecimal.ONE.add(rate.divide(BigDecimal.valueOf(100), 10, RoundingMode.HALF_UP));
     }
 
     private void recalculateDerivedFields(SalesOrderItem item) {
