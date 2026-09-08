@@ -120,6 +120,41 @@ class ReleaseItemDataReplacementStage4ConfirmServiceTest {
     }
 
     @Test
+    void confirmWithoutItemIdentifierUpdatesAllMatchingPartVersionRows() {
+        ReleaseItemDataReplacementExcelParseResult parsed = parseResult(
+                List.of("materialName"),
+                excelRow(2, "P-DUP", "A", values("materialName", "bulk material")));
+        ItemQuoteVersion first = item(301, 101, "P-DUP", "A", 5);
+        first.setMaterialName("old first");
+        ItemQuoteVersion second = item(302, 101, " p-dup ", " a ", 6);
+        second.setMaterialName("old second");
+        TestContext context = context(
+                parsed,
+                List.of(order(101, "RFQ-101", "ACME")),
+                List.of(first, second),
+                List.of());
+
+        String fingerprint = context.service.preview(List.of(ReleaseOrderSource.rfq(101)), stream())
+                .getPreviewFingerprint();
+        ReleaseItemDataReplacementConfirmDTO result = context.service.confirm(
+                List.of(ReleaseOrderSource.rfq(101)),
+                stream(),
+                fingerprint);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getSummary().getImportedCount()).isEqualTo(1);
+        assertThat(result.getSummary().getMatchedCount()).isEqualTo(2);
+        assertThat(result.getSummary().getChangedCount()).isEqualTo(2);
+        assertThat(result.getSummary().getUpdatedItemCount()).isEqualTo(2);
+        assertThat(first.getMaterialName()).isEqualTo("bulk material");
+        assertThat(second.getMaterialName()).isEqualTo("bulk material");
+        assertThat(result.getAffectedRows()).extracting(row -> row.get("releaseItemKey"))
+                .containsExactly("RFQ:301", "RFQ:302");
+        verify(context.itemMapper).updateById(argThat(item -> item.getId().equals(301)));
+        verify(context.itemMapper).updateById(argThat(item -> item.getId().equals(302)));
+    }
+
+    @Test
     void changedTargetOrTicketQuantityRejectsStaleFingerprintBeforeUpdates() {
         ReleaseItemDataReplacementExcelParseResult parsed = parseResult(
                 List.of("materialName"),

@@ -37,6 +37,7 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
@@ -327,6 +328,54 @@ class OrderItemMaintenanceServiceTest {
                 .containsEntry("matchedCount", 1);
         assertThat((Map<String, Integer>) auditSummary.get("changedFieldCounts"))
                 .containsEntry("materialName", 1);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void itemDataReplacementWithoutItemIdUpdatesAllMatchingPartVersionRows() throws Exception {
+        Fixture fixture = fixture();
+        OrderRfq order = order(908, "RFQ-908", QuoteStatusWorkflow.PRICED);
+        ItemQuoteVersion first = item(1009, 908, "P-DUP", "A", 10);
+        first.setRemark("old first");
+        ItemQuoteVersion second = item(1010, 908, " p-dup ", " a ", 12);
+        second.setRemark("old second");
+        MockMultipartFile workbook = orderReplacementWorkbook(
+                List.of("图号", "版本", "备注"),
+                List.of(row("P-DUP", "A", "bulk remark")));
+
+        when(fixture.orderMapper.selectById(908)).thenReturn(order);
+        when(fixture.orderMapper.selectByIdForUpdate(908)).thenReturn(order);
+        when(fixture.itemMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(first, second));
+        when(fixture.ticketMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of());
+        when(fixture.itemMapper.selectByIdForUpdate(1009)).thenReturn(first);
+        when(fixture.itemMapper.selectByIdForUpdate(1010)).thenReturn(second);
+        when(fixture.itemMapper.updateById(any(ItemQuoteVersion.class))).thenReturn(1);
+
+        Map<String, Object> preview = fixture.service.previewItemDataReplacement(908, workbook);
+
+        assertThat(preview).containsEntry("canConfirm", true);
+        assertThat((List<Map<String, Object>>) preview.get("rows"))
+                .extracting(row -> row.get("itemId"))
+                .containsExactly(1009, 1010);
+        assertThat((Map<String, Object>) preview.get("summary"))
+                .containsEntry("importedCount", 1)
+                .containsEntry("matchedCount", 2)
+                .containsEntry("changedCount", 2)
+                .containsEntry("errorCount", 0);
+
+        Map<String, Object> result = fixture.service.confirmItemDataReplacement(
+                908,
+                workbook,
+                String.valueOf(preview.get("previewFingerprint")));
+
+        assertThat(result).containsEntry("success", true);
+        assertThat((Map<String, Object>) result.get("summary"))
+                .containsEntry("updatedItemCount", 2)
+                .containsEntry("changedCount", 2);
+        assertThat(first.getRemark()).isEqualTo("bulk remark");
+        assertThat(second.getRemark()).isEqualTo("bulk remark");
+        verify(fixture.itemMapper).updateById(argThat(item -> item.getId().equals(1009)));
+        verify(fixture.itemMapper).updateById(argThat(item -> item.getId().equals(1010)));
     }
 
     @Test

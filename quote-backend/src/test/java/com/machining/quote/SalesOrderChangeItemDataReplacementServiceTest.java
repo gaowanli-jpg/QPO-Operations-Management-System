@@ -294,10 +294,8 @@ class SalesOrderChangeItemDataReplacementServiceTest {
 
         Fixture errors = fixture();
         SalesOrderHeader errorHeader = header(104L, "SO-104", "已同步");
-        errors.withOrder(errorHeader, List.of(
-                item(240L, 104L, 1, "P-DUP", "A"),
-                item(241L, 104L, 2, "P-DUP", "A")));
-        byte[] errorExcel = excel(List.of("图号", "版本", "备注"), List.of("P-DUP", "A", "new"));
+        errors.withOrder(errorHeader, List.of(item(240L, 104L, 1, "P-ERR", "A")));
+        byte[] errorExcel = excel(List.of("图号", "版本", "数量"), List.of("P-ERR", "A", 1));
         String errorFingerprint = errors.service.preview(errorHeader.getId(), new ByteArrayInputStream(errorExcel))
                 .getPreviewFingerprint();
         assertThatThrownBy(() -> errors.service.confirm(
@@ -313,6 +311,40 @@ class SalesOrderChangeItemDataReplacementServiceTest {
                 pending.getId(), new ByteArrayInputStream(excel(List.of("图号", "版本", "备注"), List.of("P-PENDING", "A", "new")))))
                 .hasMessageContaining("只允许变更已同步 U9 的销售订单");
         verify(wrongStatus.itemMapper, never()).update(any(), any());
+    }
+
+    @Test
+    void confirmWithoutLineNoUpdatesAllMatchingPartVersionRowsInSalesOrderChange() {
+        Fixture fixture = fixture();
+        SalesOrderHeader header = header(108L, "SO-108", "已同步");
+        SalesOrderItem first = item(280L, 108L, 1, "P-DUP", "A");
+        SalesOrderItem second = item(281L, 108L, 2, " p-dup ", " a ");
+        SalesOrderChangePreviewResp latestPreview = new SalesOrderChangePreviewResp();
+        latestPreview.setSalesOrderId(header.getId());
+        fixture.withOrder(header, List.of(first, second));
+        when(fixture.previewService.preview(header.getId())).thenReturn(latestPreview);
+        byte[] excel = excel(
+                List.of("图号", "版本", "备注"),
+                List.of("P-DUP", "A", "bulk remark"));
+
+        String fingerprint = fixture.service.preview(header.getId(), new ByteArrayInputStream(excel))
+                .getPreviewFingerprint();
+        SalesOrderChangeItemDataReplacementConfirmResp result = fixture.service.confirm(
+                header.getId(),
+                new ByteArrayInputStream(excel),
+                fingerprint,
+                "本地批量校正");
+
+        assertThat(result.getSuccess()).isTrue();
+        assertThat(result.getUpdatedCount()).isEqualTo(2);
+        assertThat(result.getSummary().getImportedCount()).isEqualTo(1);
+        assertThat(result.getSummary().getMatchedCount()).isEqualTo(2);
+        assertThat(result.getSummary().getChangedCount()).isEqualTo(2);
+        assertThat(first.getRemark()).isEqualTo("bulk remark");
+        assertThat(second.getRemark()).isEqualTo("bulk remark");
+        assertThat(result.getPreview()).isSameAs(latestPreview);
+        verify(fixture.itemMapper, times(2)).update(isNull(), any(UpdateWrapper.class));
+        verify(fixture.changeRecordItemMapper, times(2)).insert(any(SalesOrderChangeRecordItem.class));
     }
 
     @Test

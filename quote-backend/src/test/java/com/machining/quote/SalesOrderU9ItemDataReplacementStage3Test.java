@@ -215,6 +215,38 @@ class SalesOrderU9ItemDataReplacementStage3Test {
     }
 
     @Test
+    void confirmWithoutLineNoUpdatesAllMatchingPartVersionRows() {
+        Fixture fixture = fixture();
+        SalesOrderHeader header = header(105L, "SO-105", "未同步");
+        SalesOrderItem first = item(250L, 105L, 1, "P-DUP", "A");
+        SalesOrderItem second = item(251L, 105L, 2, " p-dup ", " a ");
+        SalesOrderU9SyncPreviewResp latestPreview = new SalesOrderU9SyncPreviewResp();
+        latestPreview.setSalesOrderId(header.getId());
+        fixture.withOrder(header, List.of(first, second));
+        when(fixture.previewService.previewSalesOrder(header.getId())).thenReturn(latestPreview);
+        byte[] excel = excel(
+                List.of("图号", "版本", "备注"),
+                List.of("P-DUP", "A", "bulk remark"));
+
+        String fingerprint = fixture.service.preview(header.getId(), new ByteArrayInputStream(excel))
+                .getPreviewFingerprint();
+        SalesOrderU9ItemDataReplacementConfirmDTO result = fixture.service.confirm(
+                header.getId(),
+                new ByteArrayInputStream(excel),
+                fingerprint);
+
+        assertThat(result.getSuccess()).isTrue();
+        assertThat(result.getUpdatedCount()).isEqualTo(2);
+        assertThat(result.getSummary().getImportedCount()).isEqualTo(1);
+        assertThat(result.getSummary().getMatchedCount()).isEqualTo(2);
+        assertThat(result.getSummary().getChangedCount()).isEqualTo(2);
+        assertThat(first.getRemark()).isEqualTo("bulk remark");
+        assertThat(second.getRemark()).isEqualTo("bulk remark");
+        assertThat(result.getPreview()).isSameAs(latestPreview);
+        verify(fixture.itemMapper, times(2)).update(isNull(), any(UpdateWrapper.class));
+    }
+
+    @Test
     void previewTreatsU9ChangeExcludedCandidateAsUnmatched() {
         Fixture fixture = fixture();
         SalesOrderHeader header = header(104L, "SO-104", "未同步");

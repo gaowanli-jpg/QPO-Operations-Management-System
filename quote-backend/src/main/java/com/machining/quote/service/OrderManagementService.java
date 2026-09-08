@@ -1574,9 +1574,9 @@ public class OrderManagementService {
 
         List<Map<String, Object>> rows = new ArrayList<>();
         for (OrderItemDataReplacementExcelRowDTO excelRow : safeList(parsed.getRows())) {
-            rows.add(previewReplacementRow(excelRow, order, itemsById, candidatesByKey, ticketedQtyByItemId));
+            rows.addAll(previewReplacementRows(excelRow, order, itemsById, candidatesByKey, ticketedQtyByItemId));
         }
-        Map<String, Object> summary = summarizeReplacementRows(rows);
+        Map<String, Object> summary = summarizeReplacementRows(rows, safeList(parsed.getRows()).size());
 
         Map<String, Object> preview = new LinkedHashMap<>();
         preview.put("success", true);
@@ -1598,7 +1598,7 @@ public class OrderManagementService {
         return grouped;
     }
 
-    private Map<String, Object> previewReplacementRow(
+    private List<Map<String, Object>> previewReplacementRows(
             OrderItemDataReplacementExcelRowDTO excelRow,
             OrderRfq order,
             Map<Integer, ItemQuoteVersion> itemsById,
@@ -1616,17 +1616,17 @@ public class OrderManagementService {
                     .map(OrderItemDataReplacementExcelErrorDTO::getMessage)
                     .filter(Objects::nonNull)
                     .collect(Collectors.joining("；")));
-            return row;
+            return List.of(row);
         }
 
-        ItemQuoteVersion item = null;
         if (excelRow.getItemId() != null) {
-            item = itemsById.get(excelRow.getItemId());
+            ItemQuoteVersion item = itemsById.get(excelRow.getItemId());
             if (item == null) {
                 row.put("status", "UNMATCHED");
                 row.put("reason", "当前询价订单未找到该零件ID");
-                return row;
+                return List.of(row);
             }
+            return List.of(previewMatchedReplacementRow(excelRow, order, item, ticketedQtyByItemId));
         } else {
             List<ItemQuoteVersion> candidates = candidatesByKey.getOrDefault(
                     itemKey(excelRow.getNormalizedPartNo(), excelRow.getNormalizedVersion()),
@@ -1634,16 +1634,26 @@ public class OrderManagementService {
             if (candidates.isEmpty()) {
                 row.put("status", "UNMATCHED");
                 row.put("reason", "当前询价订单未找到对应图号和版本的零件");
-                return row;
+                return List.of(row);
             }
-            if (candidates.size() > 1) {
-                row.put("status", "ERROR");
-                row.put("reason", "当前询价订单存在多个相同图号和版本的零件，请使用零件ID匹配");
-                return row;
+            List<Map<String, Object>> matchedRows = new ArrayList<>();
+            for (ItemQuoteVersion item : candidates) {
+                matchedRows.add(previewMatchedReplacementRow(excelRow, order, item, ticketedQtyByItemId));
             }
-            item = candidates.get(0);
+            return matchedRows;
         }
 
+    }
+
+    private Map<String, Object> previewMatchedReplacementRow(
+            OrderItemDataReplacementExcelRowDTO excelRow,
+            OrderRfq order,
+            ItemQuoteVersion item,
+            Map<Integer, Integer> ticketedQtyByItemId) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("excelRowNumber", excelRow.getExcelRowNumber());
+        row.put("partNo", excelRow.getPartNo());
+        row.put("version", excelRow.getVersion());
         row.put("rfqId", item.getRfqId());
         row.put("rfqNo", order.getRfqNo());
         row.put("itemId", item.getId());
@@ -1756,9 +1766,9 @@ public class OrderManagementService {
                 .orElse(field);
     }
 
-    private Map<String, Object> summarizeReplacementRows(List<Map<String, Object>> rows) {
+    private Map<String, Object> summarizeReplacementRows(List<Map<String, Object>> rows, int importedCount) {
         Map<String, Object> summary = new LinkedHashMap<>();
-        summary.put("importedCount", rows.size());
+        summary.put("importedCount", importedCount);
         summary.put("matchedCount", 0);
         summary.put("changedCount", 0);
         summary.put("quantityOnlyCount", 0);
