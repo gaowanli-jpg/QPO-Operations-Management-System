@@ -367,6 +367,12 @@
       customer-scope="delivered-item"
       @select="handleCustomerSelected"
     />
+
+    <DrawingFolderViewer
+      v-model="folderViewerVisible"
+      :folder-url="currentDrawingFolderUrl"
+      :title="`图纸文件夹：${currentDrawingFolderTitle || '未命名图纸'}`"
+    />
   </div>
 </template>
 
@@ -374,8 +380,9 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { openAuthenticatedFileInNewWindow } from '../api'
+import { isDrawingFolderUrl, openAuthenticatedFileInNewWindow } from '../api'
 import CustomerPickerDialog from './CustomerPickerDialog.vue'
+import DrawingFolderViewer from './common/DrawingFolderViewer.vue'
 import {
   discardDeliveredItem,
   getDeliveredItem,
@@ -452,6 +459,9 @@ const total = ref(0)
 const detailVisible = ref(false)
 const selectedItem = ref(null)
 const customerPickerVisible = ref(false)
+const folderViewerVisible = ref(false)
+const currentDrawingFolderUrl = ref('')
+const currentDrawingFolderTitle = ref('')
 const mesBatchResult = ref(null)
 const wmsBatchResult = ref(null)
 const advancedFiltersVisible = ref(false)
@@ -607,6 +617,12 @@ const openDetail = async (row) => {
 const openDrawingPreview = async (row) => {
   if (!row?.drawingUrl) {
     return ElMessage.warning('当前零件没有绑定图纸。')
+  }
+  if (isDrawingFolderUrl(row.drawingUrl)) {
+    currentDrawingFolderUrl.value = row.drawingUrl
+    currentDrawingFolderTitle.value = row.partNo || '未命名图纸'
+    folderViewerVisible.value = true
+    return
   }
   const result = await openAuthenticatedFileInNewWindow(row.drawingUrl)
   if (!result.success) {

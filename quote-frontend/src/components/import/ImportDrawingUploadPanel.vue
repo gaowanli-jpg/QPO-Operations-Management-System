@@ -16,20 +16,22 @@
     >
       <el-icon class="el-icon--upload dropzone-icon"><UploadFilled /></el-icon>
       <div class="el-upload__text dropzone-text">
-        将 <em>图纸文件夹</em> 或多个 PDF 图纸直接拖拽至此处
+        将 <em>{{ isFolderMode ? '订单图纸文件夹' : '图纸文件夹' }}</em> 或多个 PDF 图纸直接拖拽至此处
       </div>
 
-      <div class="folder-select-row">或点击下方按钮选择多个 PDF / 图纸文件夹</div>
+      <div class="folder-select-row">{{ isFolderMode ? '或点击下方按钮选择整单图纸文件夹' : '或点击下方按钮选择多个 PDF / 图纸文件夹' }}</div>
       <div class="import-upload-button-stack">
-        <el-button
-          v-permission="permission"
-          plain
-          class="workflow-soft-button folder-select-button import-axis-button"
-          :disabled="disabled"
-          @click="triggerFileSelect"
-        >
-          选择多个 PDF
-        </el-button>
+        <template v-if="!isFolderMode">
+          <el-button
+            v-permission="permission"
+            plain
+            class="workflow-soft-button folder-select-button import-axis-button"
+            :disabled="disabled"
+            @click="triggerFileSelect"
+          >
+            选择多个 PDF
+          </el-button>
+        </template>
         <el-button
           v-permission="permission"
           plain
@@ -37,7 +39,7 @@
           :disabled="disabled"
           @click="triggerFolderSelect"
         >
-          选择文件夹
+          {{ isFolderMode ? '选择订单图纸文件夹' : '选择文件夹' }}
         </el-button>
       </div>
       <input type="file" ref="fileInput" accept=".pdf" multiple class="hidden-input" @change="handleFileSelect" />
@@ -46,6 +48,7 @@
 
     <div v-if="files.length > 0" class="file-stats">
       <h4>{{ selectedTitle }}（{{ files.length }} 份）</h4>
+      <p v-if="isFolderMode && folderNameDisplay" class="folder-name-line">文件夹：{{ folderNameDisplay }}</p>
       <ul class="pdf-list">
         <li v-for="(file, index) in files" :key="fileKey(file, index)">
           <span>{{ file.name }}</span>
@@ -69,7 +72,7 @@
 import { computed, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { UploadFilled } from '@element-plus/icons-vue'
-import { collectPdfFilesFromDataTransfer, mergePdfFiles } from '../../utils/drawingUpload'
+import { collectPdfFilesFromDataTransfer, extractDrawingFolderName, mergePdfFiles } from '../../utils/drawingUpload'
 
 const props = defineProps({
   modelValue: {
@@ -88,17 +91,21 @@ const props = defineProps({
     type: String,
     default: '已成功提取待提交图纸'
   },
+  uploadMode: { type: String, default: 'matching' },
+  folderName: { type: String, default: '' },
   disabled: {
     type: Boolean,
     default: false
   }
 })
 
-const emit = defineEmits(['update:modelValue'])
+const emit = defineEmits(['update:modelValue', 'update:folderName'])
 
 const fileInput = ref(null)
 const folderInput = ref(null)
 const files = computed(() => props.modelValue || [])
+const isFolderMode = computed(() => props.uploadMode === 'folder')
+const folderNameDisplay = computed(() => props.folderName || extractDrawingFolderName(files.value))
 
 const updateFiles = (nextFiles) => {
   emit('update:modelValue', nextFiles)
@@ -108,8 +115,12 @@ const addFiles = (incomingFiles, sourceLabel) => {
   const nextFiles = mergePdfFiles(files.value, incomingFiles)
   const addedCount = nextFiles.length - files.value.length
   updateFiles(nextFiles)
+  if (isFolderMode.value) {
+    const nextFolderName = extractDrawingFolderName(incomingFiles) || props.folderName || ''
+    emit('update:folderName', nextFolderName)
+  }
   if (addedCount > 0) {
-    ElMessage.success(`成功${sourceLabel} ${addedCount} 份 PDF！`)
+    ElMessage.success(`成功${sourceLabel} ${addedCount} 份 PDF${isFolderMode.value ? ' 到订单图纸文件夹' : ''}！`)
   } else {
     ElMessage.warning('未找到新的 PDF 文件！')
   }
@@ -250,6 +261,12 @@ const fileKey = (file, index) => `${file?.name || 'pdf'}|${file?.size ?? ''}|${f
 .file-stats h4 {
   margin: 0;
   font-size: 14px;
+}
+
+.folder-name-line {
+  margin: 6px 0 0;
+  color: var(--erp-text-secondary);
+  font-size: 13px;
 }
 
 .pdf-list {

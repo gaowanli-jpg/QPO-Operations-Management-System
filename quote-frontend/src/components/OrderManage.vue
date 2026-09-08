@@ -553,6 +553,8 @@
       v-model="supplementVisible"
       v-model:files="supplementFiles"
       v-model:version-files="supplementVersionFiles"
+      v-model:folder-files="supplementDrawingFolderFiles"
+      v-model:folder-name="supplementDrawingFolderName"
       title="补传图纸"
       :order-label="orderDetail?.orderInfo?.rfqNo || '-'"
       :customer-name="orderDetail?.orderInfo?.customerName || '-'"
@@ -567,6 +569,8 @@
       v-model="replaceDrawingVisible"
       v-model:files="replaceDrawingFiles"
       v-model:version-files="replaceVersionDrawingFiles"
+      v-model:folder-files="replaceDrawingFolderFiles"
+      v-model:folder-name="replaceDrawingFolderName"
       title="导入替换图纸"
       submit-text="上传并替换"
       list-title="当前订单零件"
@@ -599,6 +603,8 @@
       v-model:excel-file="orderItemAppendExcelFile"
       v-model:files="orderItemAppendDrawingFiles"
       v-model:version-files="orderItemAppendVersionDrawingFiles"
+      v-model:folder-files="orderItemAppendDrawingFolderFiles"
+      v-model:folder-name="orderItemAppendDrawingFolderName"
       :current-items="detailItemList"
       :order-label="orderDetail?.orderInfo?.rfqNo || '-'"
       :customer-name="orderDetail?.orderInfo?.customerName || '-'"
@@ -614,6 +620,12 @@
       :current-customer-code="selectedCustomerCode"
       customer-scope="market-order"
       @select="handleCustomerSelected"
+    />
+
+    <DrawingFolderViewer
+      v-model="folderViewerVisible"
+      :folder-url="currentDrawingFolderUrl"
+      :title="`图纸文件夹：${currentDrawingFolderTitle || '未命名图纸'}`"
     />
 
     <el-dialog
@@ -644,9 +656,11 @@ import CustomerPickerDialog from './CustomerPickerDialog.vue'
 import OrderItemAppendDialog from './order/OrderItemAppendDialog.vue'
 import OrderItemDataReplacementDialog from './order/OrderItemDataReplacementDialog.vue'
 import SupplementDrawingDialog from './order/SupplementDrawingDialog.vue'
+import DrawingFolderViewer from './common/DrawingFolderViewer.vue'
 import { usePendingAction } from '../composables/usePendingAction'
 import {
   createAuthenticatedObjectUrl,
+  isDrawingFolderUrl,
   readFileErrorMessage,
   revokeObjectUrl
 } from '../api'
@@ -702,10 +716,14 @@ const detailProcessSheetTotal = ref(0)
 const supplementVisible = ref(false)
 const supplementFiles = ref([])
 const supplementVersionFiles = ref([])
+const supplementDrawingFolderFiles = ref([])
+const supplementDrawingFolderName = ref('')
 const supplementResult = ref(null)
 const replaceDrawingVisible = ref(false)
 const replaceDrawingFiles = ref([])
 const replaceVersionDrawingFiles = ref([])
+const replaceDrawingFolderFiles = ref([])
+const replaceDrawingFolderName = ref('')
 const replaceDrawingResult = ref(null)
 const orderItemDataReplacementVisible = ref(false)
 const orderItemDataReplacementBusy = ref(false)
@@ -713,12 +731,17 @@ const orderItemAppendVisible = ref(false)
 const orderItemAppendExcelFile = ref(null)
 const orderItemAppendDrawingFiles = ref([])
 const orderItemAppendVersionDrawingFiles = ref([])
+const orderItemAppendDrawingFolderFiles = ref([])
+const orderItemAppendDrawingFolderName = ref('')
 const orderItemAppendResult = ref(null)
 const customerPickerVisible = ref(false)
 const pdfVisible = ref(false)
 const pdfTitle = ref('')
 const pdfLoaded = ref(false)
 const currentPdfSrc = ref('')
+const folderViewerVisible = ref(false)
+const currentDrawingFolderUrl = ref('')
+const currentDrawingFolderTitle = ref('')
 
 const ORDER_ITEM_UPDATE_PERMISSION = 'market:order:update-item'
 const ORDER_MANAGEMENT_STATUSES = ['未核价', '已核价', '已报价', '部分已提单', '已生成提单', '废弃']
@@ -1202,6 +1225,8 @@ const openSupplementDialog = () => {
   supplementResult.value = null
   supplementFiles.value = []
   supplementVersionFiles.value = []
+  supplementDrawingFolderFiles.value = []
+  supplementDrawingFolderName.value = ''
   supplementVisible.value = true
 }
 
@@ -1209,6 +1234,8 @@ const openReplaceDrawingDialog = () => {
   replaceDrawingResult.value = null
   replaceDrawingFiles.value = []
   replaceVersionDrawingFiles.value = []
+  replaceDrawingFolderFiles.value = []
+  replaceDrawingFolderName.value = ''
   replaceDrawingVisible.value = true
 }
 
@@ -1228,8 +1255,18 @@ const openOrderItemAppendDialog = () => {
   orderItemAppendExcelFile.value = null
   orderItemAppendDrawingFiles.value = []
   orderItemAppendVersionDrawingFiles.value = []
+  orderItemAppendDrawingFolderFiles.value = []
+  orderItemAppendDrawingFolderName.value = ''
   orderItemAppendResult.value = null
   orderItemAppendVisible.value = true
+}
+
+const appendDrawingFolderFields = (formData, files, folderName) => {
+  if (!files?.length) return
+  files.forEach(file => {
+    formData.append('drawingFolderFiles', file)
+  })
+  formData.append('drawingFolderName', folderName || '')
 }
 
 const submitOrderItemAppend = async () => {
@@ -1242,12 +1279,15 @@ const submitOrderItemAppend = async () => {
     formData.append('excelFile', orderItemAppendExcelFile.value)
     orderItemAppendDrawingFiles.value.forEach(file => formData.append('drawings', file))
     orderItemAppendVersionDrawingFiles.value.forEach(file => formData.append('versionDrawings', file))
+    appendDrawingFolderFields(formData, orderItemAppendDrawingFolderFiles.value, orderItemAppendDrawingFolderName.value)
     try {
       const response = await appendOrderItems(rfqId, formData)
       orderItemAppendResult.value = response
       orderItemAppendExcelFile.value = null
       orderItemAppendDrawingFiles.value = []
       orderItemAppendVersionDrawingFiles.value = []
+      orderItemAppendDrawingFolderFiles.value = []
+      orderItemAppendDrawingFolderName.value = ''
       clearOrderItemDrafts()
       await refreshCurrentDetail()
       await loadOrders()
@@ -1357,18 +1397,24 @@ const performStatusAction = async (row, action) => {
 
 const submitSupplementDrawings = async () => {
   if (!orderDetail.value?.orderInfo?.id) return ElMessage.warning('请先打开询价订单详情。')
-  if (supplementFiles.value.length === 0 && supplementVersionFiles.value.length === 0) return ElMessage.warning('请先选择需要补传的 PDF 图纸。')
+  if (supplementDrawingFolderFiles.value.length === 0 && supplementFiles.value.length === 0 && supplementVersionFiles.value.length === 0) return ElMessage.warning('请先选择需要补传的 PDF 图纸或订单图纸文件夹。')
 
   const rfqId = orderDetail.value.orderInfo.id
   return runAction(orderActionKeys.supplementDrawings(rfqId), async () => {
     const formData = new FormData()
     supplementFiles.value.forEach(file => formData.append('drawings', file))
     supplementVersionFiles.value.forEach(file => formData.append('versionDrawings', file))
+    supplementDrawingFolderFiles.value.forEach(file => formData.append('drawingFolderFiles', file))
+    if (supplementDrawingFolderFiles.value.length > 0) {
+      formData.append('drawingFolderName', supplementDrawingFolderName.value || '')
+    }
     const response = await supplementDrawings(rfqId, formData)
     supplementResult.value = response
     ElMessage.success(response.message || '补传图纸处理完成。')
     supplementFiles.value = []
     supplementVersionFiles.value = []
+    supplementDrawingFolderFiles.value = []
+    supplementDrawingFolderName.value = ''
     await refreshCurrentDetail()
     await loadOrders()
   }).catch((error) => {
@@ -1381,13 +1427,14 @@ const submitSupplementDrawings = async () => {
 
 const submitReplaceDrawings = async () => {
   if (!orderDetail.value?.orderInfo?.id) return ElMessage.warning('请先打开询价订单详情。')
-  if (replaceDrawingFiles.value.length === 0 && replaceVersionDrawingFiles.value.length === 0) return ElMessage.warning('请先选择需要替换的 PDF 图纸。')
+  if (replaceDrawingFolderFiles.value.length === 0 && replaceDrawingFiles.value.length === 0 && replaceVersionDrawingFiles.value.length === 0) return ElMessage.warning('请先选择需要替换的 PDF 图纸或订单图纸文件夹。')
 
   const rfqId = orderDetail.value.orderInfo.id
   return runAction(orderActionKeys.replaceDrawings(rfqId), async () => {
     const formData = new FormData()
     replaceDrawingFiles.value.forEach(file => formData.append('drawings', file))
     replaceVersionDrawingFiles.value.forEach(file => formData.append('versionDrawings', file))
+    appendDrawingFolderFields(formData, replaceDrawingFolderFiles.value, replaceDrawingFolderName.value)
     try {
       const response = await replaceOrderDrawings(rfqId, formData)
       replaceDrawingResult.value = {
@@ -1399,6 +1446,8 @@ const submitReplaceDrawings = async () => {
       }
       replaceDrawingFiles.value = []
       replaceVersionDrawingFiles.value = []
+      replaceDrawingFolderFiles.value = []
+      replaceDrawingFolderName.value = ''
       await refreshCurrentDetail()
       await loadOrders()
       if (Number(replaceDrawingResult.value.unmatchedCount || 0) > 0 || Number(replaceDrawingResult.value.skippedCount || 0) > 0) {
@@ -1421,6 +1470,12 @@ const cleanupPdfSrc = () => {
 const openPdfPreview = async (url, partNo) => {
   if (!url) {
     return ElMessage.warning('当前零件没有绑定图纸。')
+  }
+  if (isDrawingFolderUrl(url)) {
+    currentDrawingFolderUrl.value = url
+    currentDrawingFolderTitle.value = partNo || '未命名图纸'
+    folderViewerVisible.value = true
+    return
   }
   pdfTitle.value = partNo || '未命名图纸'
   pdfLoaded.value = false

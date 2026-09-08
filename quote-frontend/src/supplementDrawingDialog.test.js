@@ -21,28 +21,42 @@ describe('shared supplement drawing dialog', () => {
   test('supports multiple PDF and folder selection with the existing upload helpers', () => {
     expect(dialog).toContain('collectPdfFilesFromDataTransfer')
     expect(dialog).toContain('mergePdfFiles')
+    expect(dialog).toContain('extractDrawingFolderName')
     expect(dialog).toContain('webkitdirectory')
     expect(dialog).toContain('选择多个 PDF')
     expect(dialog).toContain('选择文件夹')
+    expect(dialog).toContain('上传订单图纸文件夹')
     expect(dialog).toContain('@drop.prevent="handleDrop"')
   })
 
-  test('exposes independent part-version files and disables submit only when both entrances are empty', () => {
+  test('exposes order-folder and part-version files and disables submit only when all entrances are empty', () => {
+    expect(dialog).toContain('folderFiles: { type: Array, default: () => [] }')
+    expect(dialog).toContain('folderName: { type: String, default: \'\' }')
+    expect(dialog).toContain("'update:folderFiles'")
+    expect(dialog).toContain("'update:folderName'")
     expect(dialog).toContain('versionFiles: { type: Array, default: () => [] }')
     expect(dialog).toContain("'update:versionFiles'")
+    expect(dialog).toContain('props.folderFiles')
     expect(dialog).toContain('props.versionFiles')
+    expect(dialog).toContain("emit('update:folderFiles'")
     expect(dialog).toContain("emit('update:versionFiles'")
-    expect(dialog).toContain('files.length === 0 && versionFiles.length === 0')
+    expect(dialog).toContain('folderFiles.length === 0 && files.length === 0 && versionFiles.length === 0')
   })
 
-  test('parents submit part-version supplement drawings without changing old drawings field', () => {
+  test('parents submit order-folder and part-version supplement drawings without changing old drawings field', () => {
     for (const source of [orderManage, salesOrderManage]) {
       expect(source).toContain('v-model:files="supplementFiles"')
       expect(source).toContain('v-model:version-files="supplementVersionFiles"')
+      expect(source).toContain('v-model:folder-files="supplementDrawingFolderFiles"')
+      expect(source).toContain('v-model:folder-name="supplementDrawingFolderName"')
       expect(source).toContain('const supplementVersionFiles = ref([])')
+      expect(source).toContain('const supplementDrawingFolderFiles = ref([])')
       expect(source).toContain('supplementVersionFiles.value.forEach')
+      expect(source).toContain('supplementDrawingFolderFiles.value.forEach')
       expect(source).toContain("formData.append('drawings', file)")
       expect(source).toContain("formData.append('versionDrawings', file)")
+      expect(source).toContain("formData.append('drawingFolderFiles', file)")
+      expect(source).toContain("formData.append('drawingFolderName'")
     }
   })
 

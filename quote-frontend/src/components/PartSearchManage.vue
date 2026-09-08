@@ -165,12 +165,19 @@
         ></iframe>
       </div>
     </el-dialog>
+
+    <DrawingFolderViewer
+      v-model="folderViewerVisible"
+      :folder-url="currentDrawingFolderUrl"
+      :title="currentDrawingFolderTitle"
+    />
   </div>
 </template>
 
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import DrawingFolderViewer from './common/DrawingFolderViewer.vue'
 import {
   getRfqPartSearchItem,
   getSalesPartSearchItem,
@@ -179,6 +186,7 @@ import {
 } from '../services/partSearchApi'
 import {
   createAuthenticatedObjectUrl,
+  isDrawingFolderUrl,
   readFileErrorMessage,
   revokeObjectUrl
 } from '../api'
@@ -197,6 +205,9 @@ const pdfVisible = ref(false)
 const pdfLoaded = ref(false)
 const pdfTitle = ref('')
 const currentPdfSrc = ref('')
+const folderViewerVisible = ref(false)
+const currentDrawingFolderUrl = ref('')
+const currentDrawingFolderTitle = ref('')
 
 const ORDER_SUMMARY_LABELS = {
   id: '订单ID',
@@ -437,6 +448,12 @@ const cleanupPdfSrc = () => {
 const openPdfPreview = async (url, partNo) => {
   if (!url) {
     return ElMessage.warning('当前零件没有绑定图纸。')
+  }
+  if (isDrawingFolderUrl(url)) {
+    currentDrawingFolderUrl.value = url
+    currentDrawingFolderTitle.value = `图纸文件夹：${partNo || '未命名图纸'}`
+    folderViewerVisible.value = true
+    return
   }
   pdfTitle.value = partNo || '未命名图纸'
   pdfLoaded.value = false

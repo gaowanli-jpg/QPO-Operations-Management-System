@@ -157,8 +157,8 @@ class SalesOrderIndependentCharacterizationTest {
         assertThat(deliveryTicketTests)
                 .contains("rfqGenerationWritesSourceIdentityForBackwardCompatibleTickets")
                 .contains("generatesSalesOrderTicketsAndRollsHeaderStatusFromPartialToReleased");
-        assertThat(deliveredTests).contains("LEFT JOIN order_rfq rfq", "sales_item.drawing_url");
-        assertThat(deliveredMapper).contains("LEFT JOIN sales_order_item sales_item");
+        assertThat(deliveredTests).contains("LEFT JOIN order_rfq rfq", "direct_sales_item.drawing_url", "rfq_sales_item.drawing_url");
+        assertThat(deliveredMapper).contains("LEFT JOIN sales_order_item direct_sales_item", "LEFT JOIN sales_order_item rfq_sales_item");
         assertThat(lockedTests).contains("LEFT JOIN order_rfq rfq", "LEFT JOIN order_delivery_ticket ticket");
         assertThat(lockedMapper).contains("alloc.source_type", "alloc.source_order_id", "alloc.source_item_id");
     }

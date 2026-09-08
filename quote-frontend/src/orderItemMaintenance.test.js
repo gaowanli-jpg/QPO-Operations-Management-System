@@ -70,10 +70,14 @@ describe('order item maintenance detail table', () => {
     expect(component).toContain('v-model:excel-file="orderItemAppendExcelFile"')
     expect(component).toContain('v-model:files="orderItemAppendDrawingFiles"')
     expect(component).toContain('v-model:version-files="orderItemAppendVersionDrawingFiles"')
+    expect(component).toContain('v-model:folder-files="orderItemAppendDrawingFolderFiles"')
+    expect(component).toContain('v-model:folder-name="orderItemAppendDrawingFolderName"')
     expect(component).toContain('appendOrderItems(')
     expect(component).toContain("formData.append('excelFile', orderItemAppendExcelFile.value)")
     expect(component).toContain("formData.append('drawings', file)")
     expect(component).toContain("formData.append('versionDrawings', file)")
+    expect(component).toContain("formData.append('drawingFolderFiles', file)")
+    expect(component).toContain("formData.append('drawingFolderName'")
   })
 
   test('append dialog mirrors the clean supplemental drawing upload layout', () => {
@@ -82,8 +86,13 @@ describe('order item maintenance detail table', () => {
 
     expect(component).toContain(':current-items="detailItemList"')
     expect(dialog).toContain('currentItems: { type: Array, default: () => [] }')
+    expect(dialog).toContain('folderFiles: { type: Array, default: () => [] }')
+    expect(dialog).toContain('folderName: { type: String, default: \'\' }')
+    expect(dialog).toContain("'update:folderFiles'")
+    expect(dialog).toContain("'update:folderName'")
     expect(dialog).toContain('<section class="erp-dialog-section append-current-items">')
     expect(dialog).toContain('当前订单零件')
+    expect(dialog).toContain('上传订单图纸文件夹')
     expect(dialog).toContain('class="erp-upload-surface append-upload-surface"')
     expect(dialog).toContain('class="append-upload-dual-grid"')
     expect(dialog).toContain('<el-icon class="el-icon--upload append-upload-icon"><upload-filled /></el-icon>')

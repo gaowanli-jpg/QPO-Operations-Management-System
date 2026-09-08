@@ -94,7 +94,18 @@
       <div class="append-step append-step-drawings">
         <div class="section-title">
           <span class="step-index">04</span>
-          <span>上传关联图纸</span>
+          <span>上传关联图纸 / 上传订单图纸文件夹</span>
+        </div>
+        <div class="drawing-folder-upload-row">
+          <ImportDrawingUploadPanel
+            v-model="drawingFolderFiles"
+            v-model:folder-name="drawingFolderName"
+            upload-mode="folder"
+            permission="market:release-append:create"
+            alert-title="推荐：上传整单图纸文件夹，系统会把该文件夹绑定到目标销售订单和本次追加零件。"
+            selected-title="追加提单整单图纸文件夹待提交文件"
+            :disabled="isPending(APPEND_ACTION_KEY)"
+          />
         </div>
         <div class="drawing-upload-dual-grid">
           <ImportDrawingUploadPanel
@@ -196,6 +207,8 @@ const targetOrder = ref(null)
 const excelFile = ref(null)
 const drawingFiles = ref([])
 const versionDrawingFiles = ref([])
+const drawingFolderFiles = ref([])
+const drawingFolderName = ref('')
 const appendResult = ref(null)
 const customerPickerVisible = ref(false)
 const orderPickerVisible = ref(false)
@@ -253,7 +266,17 @@ const resetUploads = () => {
   excelFile.value = null
   drawingFiles.value = []
   versionDrawingFiles.value = []
+  drawingFolderFiles.value = []
+  drawingFolderName.value = ''
   excelUploadRef.value?.clearFiles?.()
+}
+
+const appendDrawingFolderFields = (formData, files, folderName) => {
+  if (!files?.length) return
+  files.forEach(file => {
+    formData.append('drawingFolderFiles', file)
+  })
+  formData.append('drawingFolderName', folderName || '')
 }
 
 const submitAppend = () => {
@@ -266,6 +289,7 @@ const submitAppend = () => {
     formData.append('excelFile', excelFile.value)
     drawingFiles.value.forEach(file => formData.append('drawings', file))
     versionDrawingFiles.value.forEach(file => formData.append('versionDrawings', file))
+    appendDrawingFolderFields(formData, drawingFolderFiles.value, drawingFolderName.value)
 
     try {
       const response = await appendSalesOrderRelease(targetSalesOrderId.value, formData)
@@ -404,6 +428,10 @@ const buildDrawingReportHtml = (report) => {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
+}
+
+.drawing-folder-upload-row {
+  margin-bottom: 14px;
 }
 
 .submit-footer {

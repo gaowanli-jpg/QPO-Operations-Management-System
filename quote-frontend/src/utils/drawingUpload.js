@@ -6,6 +6,14 @@ export const collectPdfFilesFromFileList = (fileList) => {
   return Array.from(fileList || []).filter(isPdfFile)
 }
 
+export const extractDrawingFolderName = (fileList) => {
+  const files = Array.from(fileList || [])
+  const firstPath = files
+    .map(file => String(file?.webkitRelativePath || '').replace(/\\/g, '/'))
+    .find(path => path.includes('/'))
+  return firstPath ? firstPath.split('/').filter(Boolean)[0] || '' : ''
+}
+
 export const mergePdfFiles = (currentFiles = [], incomingFiles = []) => {
   const seen = new Set()
   return [...currentFiles, ...collectPdfFilesFromFileList(incomingFiles)].filter(file => {

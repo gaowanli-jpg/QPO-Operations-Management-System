@@ -342,6 +342,20 @@
                   </el-tag>
                 </template>
               </el-table-column>
+              <el-table-column label="图纸预览" width="100" align="center">
+                <template #default="scope">
+                  <el-button
+                    v-if="scope.row.drawingUrl"
+                    type="primary"
+                    size="small"
+                    plain
+                    @click.stop="openDrawingPreview(scope.row)"
+                  >
+                    预览
+                  </el-button>
+                  <el-tag v-else type="info" size="small">无图</el-tag>
+                </template>
+              </el-table-column>
               <el-table-column prop="description" label="物料描述" min-width="180" show-overflow-tooltip />
               <el-table-column prop="orderType" label="订单类型" width="120" show-overflow-tooltip />
               <el-table-column prop="customerOrderNo" label="客户订单号" min-width="160" show-overflow-tooltip>
@@ -545,6 +559,8 @@
       v-model="supplementVisible"
       v-model:files="supplementFiles"
       v-model:version-files="supplementVersionFiles"
+      v-model:folder-files="supplementDrawingFolderFiles"
+      v-model:folder-name="supplementDrawingFolderName"
       title="补传销售订单图纸"
       :order-label="orderDetail?.orderInfo?.salesOrderNo || '-'"
       :customer-name="orderDetail?.orderInfo?.customerName || selectedCustomer || '-'"
@@ -561,6 +577,12 @@
       customer-scope="sales-order"
       @select="handleCustomerSelected"
     />
+
+    <DrawingFolderViewer
+      v-model="folderViewerVisible"
+      :folder-url="currentDrawingFolderUrl"
+      :title="`图纸文件夹：${currentDrawingFolderTitle || '未命名图纸'}`"
+    />
   </div>
 </template>
 
@@ -571,7 +593,9 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import CustomerPickerDialog from './CustomerPickerDialog.vue'
 import SupplementDrawingDialog from './order/SupplementDrawingDialog.vue'
 import SalesOrderItemDataReplacementDialog from './sales-order/SalesOrderItemDataReplacementDialog.vue'
+import DrawingFolderViewer from './common/DrawingFolderViewer.vue'
 import { usePendingAction } from '../composables/usePendingAction'
+import { isDrawingFolderUrl, openAuthenticatedFileInNewWindow } from '../api'
 import {
   discardSalesOrder,
   discardSalesOrderItemForU9Change,
@@ -684,7 +708,12 @@ const detailProcessSheetTotal = ref(0)
 const supplementVisible = ref(false)
 const supplementFiles = ref([])
 const supplementVersionFiles = ref([])
+const supplementDrawingFolderFiles = ref([])
+const supplementDrawingFolderName = ref('')
 const supplementResult = ref(null)
+const folderViewerVisible = ref(false)
+const currentDrawingFolderUrl = ref('')
+const currentDrawingFolderTitle = ref('')
 const customerPickerVisible = ref(false)
 const orderEditDraft = reactive({
   documentTypeCode: '',
@@ -952,7 +981,32 @@ const openSupplementDialog = () => {
   supplementResult.value = null
   supplementFiles.value = []
   supplementVersionFiles.value = []
+  supplementDrawingFolderFiles.value = []
+  supplementDrawingFolderName.value = ''
   supplementVisible.value = true
+}
+
+const appendDrawingFolderFields = (formData, files, folderName) => {
+  if (!files?.length) return
+  files.forEach(file => {
+    formData.append('drawingFolderFiles', file)
+  })
+  formData.append('drawingFolderName', folderName || '')
+}
+
+const openDrawingPreview = async (row) => {
+  const url = row?.drawingUrl
+  if (!url) return ElMessage.warning('当前零件没有绑定图纸。')
+  if (isDrawingFolderUrl(url)) {
+    currentDrawingFolderUrl.value = url
+    currentDrawingFolderTitle.value = row?.partNo || '未命名图纸'
+    folderViewerVisible.value = true
+    return
+  }
+  const result = await openAuthenticatedFileInNewWindow(url)
+  if (!result.success) {
+    ElMessage.error(result.blocked ? '浏览器阻止了预览窗口，请允许弹窗后重试。' : (result.message || '图纸预览失败。'))
+  }
 }
 
 const handleProductionTaskNoticeExport = async () => {
@@ -1185,18 +1239,24 @@ const performStatusAction = async (row, action) => {
 
 const submitSupplementDrawings = async () => {
   if (!orderDetail.value?.orderInfo?.id) return ElMessage.warning('请先打开销售订单详情。')
-  if (supplementFiles.value.length === 0 && supplementVersionFiles.value.length === 0) return ElMessage.warning('请先选择需要补传的 PDF 图纸。')
+  if (supplementDrawingFolderFiles.value.length === 0 && supplementFiles.value.length === 0 && supplementVersionFiles.value.length === 0) return ElMessage.warning('请先选择需要补传的 PDF 图纸或订单图纸文件夹。')
 
   const salesOrderId = orderDetail.value.orderInfo.id
   return runAction(salesOrderActionKeys.supplementDrawings(salesOrderId), async () => {
     const formData = new FormData()
     supplementFiles.value.forEach(file => formData.append('drawings', file))
     supplementVersionFiles.value.forEach(file => formData.append('versionDrawings', file))
+    supplementDrawingFolderFiles.value.forEach(file => formData.append('drawingFolderFiles', file))
+    if (supplementDrawingFolderFiles.value.length > 0) {
+      formData.append('drawingFolderName', supplementDrawingFolderName.value || '')
+    }
     const response = await supplementSalesOrderDrawings(salesOrderId, formData)
     supplementResult.value = response
     ElMessage.success(response.message || '补传图纸处理完成。')
     supplementFiles.value = []
     supplementVersionFiles.value = []
+    supplementDrawingFolderFiles.value = []
+    supplementDrawingFolderName.value = ''
     await fetchDetailItems()
     await fetchDrawingSummary()
     await loadOrders()
