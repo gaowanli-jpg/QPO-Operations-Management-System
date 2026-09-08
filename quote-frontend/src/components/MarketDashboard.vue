@@ -92,7 +92,17 @@
             <div class="import-step import-step-drawings">
               <div class="section-title">
                 <span class="step-index">03</span>
-                <span>步骤 3：上传关联图纸（PDF）</span>
+                <span>步骤 3：上传关联图纸（PDF） / 上传订单图纸文件夹</span>
+              </div>
+              <div class="drawing-folder-upload-row">
+                <ImportDrawingUploadPanel
+                  v-model="drawingFolderFiles"
+                  v-model:folder-name="drawingFolderName"
+                  upload-mode="folder"
+                  permission="market:rfq:upload-drawing"
+                  alert-title="推荐：上传整单图纸文件夹，系统会把该文件夹绑定到订单和所有零件，不再依赖图纸文件名匹配。"
+                  selected-title="整单图纸文件夹待提交文件"
+                />
               </div>
               <div class="drawing-upload-dual-grid">
                 <ImportDrawingUploadPanel
@@ -310,7 +320,18 @@
             <div class="import-step import-step-sales-order-drawings">
               <div class="section-title">
                 <span class="step-index">04</span>
-                <span>步骤 4：上传关联图纸（PDF）</span>
+                <span>步骤 4：上传关联图纸（PDF） / 上传订单图纸文件夹</span>
+              </div>
+              <div class="drawing-folder-upload-row">
+                <ImportDrawingUploadPanel
+                  v-model="salesOrderDrawingFolderFiles"
+                  v-model:folder-name="salesOrderDrawingFolderName"
+                  upload-mode="folder"
+                  permission="market:rfq:import-sales-order"
+                  :disabled="isPending(IMPORT_SALES_ORDER_ACTION_KEY)"
+                  alert-title="推荐：上传整单图纸文件夹，系统会把该文件夹绑定到销售订单和所有零件，不再依赖图纸文件名匹配。"
+                  selected-title="销售订单整单图纸文件夹待提交文件"
+                />
               </div>
               <div class="drawing-upload-dual-grid">
                 <ImportDrawingUploadPanel
@@ -450,6 +471,8 @@ const rfqForm = reactive({
 const excelFile = ref(null)
 const drawingFiles = ref([])
 const versionDrawingFiles = ref([])
+const drawingFolderFiles = ref([])
+const drawingFolderName = ref('')
 const excelUploadRef = ref(null)
 const customerPickerVisible = ref(false)
 const activeImportMode = ref('rfq')
@@ -469,6 +492,8 @@ const salesOrderForm = reactive({
 const salesOrderFile = ref(null)
 const salesOrderDrawingFiles = ref([])
 const salesOrderVersionDrawingFiles = ref([])
+const salesOrderDrawingFolderFiles = ref([])
+const salesOrderDrawingFolderName = ref('')
 const salesOrderUploadRef = ref(null)
 const salesOrderCustomerPickerVisible = ref(false)
 const salesOrderImportResult = ref(null)
@@ -613,11 +638,20 @@ const buildDrawingReportHtml = (report) => {
     <div style="font-weight: 600; color: ${hasWarning ? '#E6A23C' : '#67C23A'};">图纸匹配结果</div>
     <div style="margin-top: 6px; color: #606266;">
       Excel 零件 ${report.totalItemCount ?? 0} 个，上传 PDF ${report.uploadedDrawingCount ?? 0} 份，已绑定零件 ${report.matchedItemCount ?? 0} 个。
+      ${report.drawingFolderMode ? `整单图纸文件夹模式，文件数 ${report.drawingFolderFileCount ?? report.uploadedDrawingCount ?? 0} 份。` : ''}
     </div>
     ${missingHtml}
     ${unmatchedHtml}
     ${okHtml}
   </div>`
+}
+
+const appendDrawingFolderFields = (formData, files, folderName) => {
+  if (!files?.length) return
+  files.forEach(file => {
+    formData.append('drawingFolderFiles', file)
+  })
+  formData.append('drawingFolderName', folderName || '')
 }
 
 const submitSalesOrderImport = async () => {
@@ -649,6 +683,7 @@ const submitSalesOrderImport = async () => {
     salesOrderVersionDrawingFiles.value.forEach(file => {
       formData.append('versionDrawings', file)
     })
+    appendDrawingFolderFields(formData, salesOrderDrawingFolderFiles.value, salesOrderDrawingFolderName.value)
 
     try {
       const response = await importSalesOrderToQpo(formData)
@@ -682,6 +717,8 @@ const submitSalesOrderImport = async () => {
           salesOrderFile.value = null
           salesOrderDrawingFiles.value = []
           salesOrderVersionDrawingFiles.value = []
+          salesOrderDrawingFolderFiles.value = []
+          salesOrderDrawingFolderName.value = ''
           salesOrderUploadRef.value?.clearFiles?.()
         })
       } else {
@@ -712,6 +749,7 @@ const submitRfqPackage = async () => {
     versionDrawingFiles.value.forEach(file => {
       formData.append('versionDrawings', file)
     })
+    appendDrawingFolderFields(formData, drawingFolderFiles.value, drawingFolderName.value)
 
     try {
       const response = await importRfq(formData)
@@ -737,6 +775,8 @@ const submitRfqPackage = async () => {
           excelFile.value = null
           drawingFiles.value = [] // 清空拖拽出来的 PDF
           versionDrawingFiles.value = []
+          drawingFolderFiles.value = []
+          drawingFolderName.value = ''
           if (excelUploadRef.value) {
             excelUploadRef.value.clearFiles() // 清空原生的 Excel 选择框
           }
@@ -927,6 +967,10 @@ const submitRfqPackage = async () => {
   align-items: stretch;
   gap: 16px;
   padding: 18px 20px;
+}
+
+.drawing-folder-upload-row {
+  padding: 18px 20px 0;
 }
 
 .drawing-upload-dual-grid :deep(.import-drawing-upload-panel) {

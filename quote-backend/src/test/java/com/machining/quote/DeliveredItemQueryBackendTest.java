@@ -43,6 +43,10 @@ class DeliveredItemQueryBackendTest {
                         "private String rfqNo;",
                         "private String customerName;",
                         "private Integer itemId;",
+                        "private Long salesOrderId;",
+                        "private String salesOrderNo;",
+                        "private String salesOrderCustomerCode;",
+                        "private String salesOrderCustomerName;",
                         "private String partNo;",
                         "private String version;",
                         "private String orderType;",
@@ -85,11 +89,19 @@ class DeliveredItemQueryBackendTest {
                         "FROM order_delivery_ticket ticket",
                         "LEFT JOIN order_rfq rfq ON rfq.id = ticket.rfq_id",
                         "LEFT JOIN item_quote_version item ON item.id = ticket.item_id",
+                        "LEFT JOIN sales_order_item direct_sales_item",
+                        "LEFT JOIN sales_order_header direct_sales_order",
+                        "LEFT JOIN sales_order_item rfq_sales_item ON rfq_sales_item.source_ticket_id = ticket.id",
+                        "LEFT JOIN sales_order_header rfq_sales_order",
                         "COALESCE(ticket.rfq_no, rfq.rfq_no) AS rfq_no",
                         "COALESCE(ticket.customer_name, rfq.customer_name) AS customer_name",
+                        "COALESCE(direct_sales_order.id, rfq_sales_order.id) AS sales_order_id",
+                        "COALESCE(direct_sales_order.sales_order_no, rfq_sales_order.sales_order_no) AS sales_order_no",
+                        "COALESCE(direct_sales_order.customer_code, rfq_sales_order.customer_code) AS sales_order_customer_code",
+                        "COALESCE(direct_sales_order.customer_name, rfq_sales_order.customer_name) AS sales_order_customer_name",
                         "ticket.order_type AS order_type",
                         "ticket.remark",
-                        "COALESCE(ticket.drawing_url, sales_item.drawing_url, item.drawing_url) AS drawing_url"
+                        "COALESCE(ticket.drawing_url, direct_sales_item.drawing_url, rfq_sales_item.drawing_url, item.drawing_url) AS drawing_url"
                 );
         assertThat(source)
                 .as("Delivered-item order type is the immutable delivery-ticket batch type, not an RFQ/item fallback")

@@ -39,6 +39,8 @@ class DeliveredItemQueryIntegrationTest {
     private final List<Integer> allocationIds = new ArrayList<>();
     private final List<Integer> itemIds = new ArrayList<>();
     private final List<Integer> rfqIds = new ArrayList<>();
+    private final List<Long> salesOrderItemIds = new ArrayList<>();
+    private final List<Long> salesOrderIds = new ArrayList<>();
     private final List<Long> userIds = new ArrayList<>();
     private final List<Long> roleIds = new ArrayList<>();
 
@@ -46,7 +48,9 @@ class DeliveredItemQueryIntegrationTest {
     void tearDown() {
         AuthContext.clear();
         deleteByIds("order_delivery_ticket_allocation", allocationIds);
+        deleteByIds("sales_order_item", salesOrderItemIds);
         deleteByIds("order_delivery_ticket", ticketIds);
+        deleteByIds("sales_order_header", salesOrderIds);
         deleteByIds("item_quote_version", itemIds);
         deleteByIds("order_rfq", rfqIds);
         deleteByIds("system_user", userIds);
@@ -196,6 +200,35 @@ class DeliveredItemQueryIntegrationTest {
     }
 
     @Test
+    void rfqDerivedDeliveredTicketExposesSalesOrderNavigationFields() {
+        int legacyUserId = uniqueLegacyId();
+        long roleId = insertRole("CUSTOMER");
+        long userId = insertUser(legacyUserId);
+        linkUserRole(userId, roleId);
+        insertCustomerScope(roleId, "DerivedCustomer");
+        AuthContext.set(new AuthContext.SessionUser(legacyUserId, "delivered-derived", "Delivered Derived", "MARKET"));
+
+        String rfqNo = "QPO-DI-DERIVED-" + UUID.randomUUID();
+        int ticketId = createTicket(rfqNo, "DerivedCustomer", "DERIVED-PART", "A", null, null);
+        long salesOrderId = createSalesOrder("SO-DERIVED-" + UUID.randomUUID(), "C-DERIVED", "DerivedCustomer");
+        createSalesOrderItem(salesOrderId, ticketId, "DERIVED-PART", "A", "/uploads/sales/derived-part.pdf");
+
+        DeliveredItemQueryReq req = new DeliveredItemQueryReq();
+        req.setPage(1);
+        req.setPageSize(20);
+        req.setPartNo("DERIVED-PART");
+        DeliveredItemDTO row = deliveredItemService.listTickets(req).getRecords().get(0);
+
+        assertThat(row.getId()).isEqualTo(ticketId);
+        assertThat(row.getSourceType()).isEqualTo("RFQ");
+        assertThat(row.getSalesOrderId()).isEqualTo(salesOrderId);
+        assertThat(row.getSalesOrderNo()).startsWith("SO-DERIVED-");
+        assertThat(row.getSalesOrderCustomerCode()).isEqualTo("C-DERIVED");
+        assertThat(row.getSalesOrderCustomerName()).isEqualTo("DerivedCustomer");
+        assertThat(row.getDrawingUrl()).isEqualTo("/uploads/sales/derived-part.pdf");
+    }
+
+    @Test
     void lockedAllocationCanTraceCompletedTicketDetailWithoutBypassingDataScope() {
         String customerName = "TraceCustomer";
         int legacyUserId = uniqueLegacyId();
@@ -301,6 +334,35 @@ class DeliveredItemQueryIntegrationTest {
                 """, Integer.class, materialNo, partNo, version, customerName, ticketId);
         allocationIds.add(allocationId);
         return allocationId;
+    }
+
+    private long createSalesOrder(String salesOrderNo, String customerCode, String customerName) {
+        Long id = jdbcTemplate.queryForObject("""
+                INSERT INTO sales_order_header (
+                    sales_order_no, document_no, customer_code, customer_name, status, source_type,
+                    source_release_batch_key, source_release_request_hash,
+                    sales_order_date, customer_order_no, order_type, internal_project_no
+                )
+                VALUES (?, ?, ?, ?, '已生成提单', 'RFQ_RELEASE', ?, ?, CURRENT_DATE, 'PO-DERIVED', '正式订单', 'IP-DERIVED')
+                RETURNING id
+                """, Long.class, salesOrderNo, "DOC-" + salesOrderNo, customerCode, customerName,
+                "test-batch-" + salesOrderNo,
+                "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
+        salesOrderIds.add(id);
+        return id;
+    }
+
+    private long createSalesOrderItem(long salesOrderId, int sourceTicketId, String partNo, String version, String drawingUrl) {
+        Long id = jdbcTemplate.queryForObject("""
+                INSERT INTO sales_order_item (
+                    sales_order_id, source_type, source_ticket_id, line_no, part_no, description,
+                    qty, version, drawing_url, has_drawing, status
+                )
+                VALUES (?, 'RFQ', ?, 1, ?, 'Derived sales item', 1, ?, ?, TRUE, '已生成提单')
+                RETURNING id
+                """, Long.class, salesOrderId, sourceTicketId, partNo, version, drawingUrl);
+        salesOrderItemIds.add(id);
+        return id;
     }
 
     private List<String> partNos(PageResult<DeliveredItemDTO> page) {

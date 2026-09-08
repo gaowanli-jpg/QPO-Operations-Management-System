@@ -90,6 +90,71 @@ class QuoteProcessLeadTimeReplacementWorkflowTest extends CoreWorkflowIntegratio
     }
 
     @Test
+    void leadTimeReplacementWithoutLineIdentifierUpdatesAllMatchingPartVersionRows() throws Exception {
+        OrderRfq order = pricedOrder("QP-DUP");
+        ItemQuoteVersion first = quoteProcessItem(order, "QP-DUP-001", "A", "2026-03-20");
+        ItemQuoteVersion second = quoteProcessItem(order, "QP-DUP-001", "A", "2026-03-21");
+
+        byte[] workbook = workbook(List.of(
+                List.of("图号", "版本", "报价交期"),
+                List.of("QP-DUP-001", "A", "2026/4/5")
+        ));
+
+        QuoteLeadTimeReplacementPreviewDTO preview = quoteProcessService.previewLeadTimeReplacement(
+                order.getId(), new ByteArrayInputStream(workbook));
+
+        assertThat(preview.isCanConfirm()).isTrue();
+        assertThat(preview.getSummary().getImportedCount()).isEqualTo(1);
+        assertThat(preview.getSummary().getMatchedCount()).isEqualTo(2);
+        assertThat(preview.getSummary().getChangedCount()).isEqualTo(2);
+        assertThat(preview.getSummary().getErrorCount()).isZero();
+        assertThat(preview.getRows()).extracting(QuoteLeadTimeReplacementRowDTO::getItemId)
+                .containsExactly(first.getId(), second.getId());
+
+        QuoteLeadTimeReplacementConfirmDTO confirmed = quoteProcessService.confirmLeadTimeReplacement(
+                order.getId(), new ByteArrayInputStream(workbook), preview.getPreviewFingerprint());
+
+        assertThat(confirmed.isSuccess()).isTrue();
+        assertThat(confirmed.getSummary().getUpdatedItemCount()).isEqualTo(2);
+        assertThat(itemMapper.selectById(first.getId()).getQuoteLeadTime()).isEqualTo("2026-04-05");
+        assertThat(itemMapper.selectById(second.getId()).getQuoteLeadTime()).isEqualTo("2026-04-05");
+        assertThat(confirmed.getAffectedRows()).extracting(row -> row.get("id"))
+                .containsExactly(first.getId(), second.getId());
+    }
+
+    @Test
+    void leadTimeReplacementSkipsInvalidRowsAndAppliesValidRows() throws Exception {
+        OrderRfq order = pricedOrder("QP-PARTIAL");
+        ItemQuoteVersion invalid = quoteProcessItem(order, "QP-PARTIAL-ERR", "A", "2026-03-20");
+        ItemQuoteVersion valid = quoteProcessItem(order, "QP-PARTIAL-OK", "A", "2026-03-21");
+
+        byte[] workbook = workbook(List.of(
+                List.of("图号", "版本", "报价交期"),
+                List.of("QP-PARTIAL-ERR", "A", "not-a-date"),
+                List.of("QP-PARTIAL-OK", "A", "2026/4/5")
+        ));
+
+        QuoteLeadTimeReplacementPreviewDTO preview = quoteProcessService.previewLeadTimeReplacement(
+                order.getId(), new ByteArrayInputStream(workbook));
+
+        assertThat(preview.isCanConfirm()).isTrue();
+        assertThat(preview.getSummary().getImportedCount()).isEqualTo(2);
+        assertThat(preview.getSummary().getChangedCount()).isEqualTo(1);
+        assertThat(preview.getSummary().getErrorCount()).isEqualTo(1);
+
+        QuoteLeadTimeReplacementConfirmDTO confirmed = quoteProcessService.confirmLeadTimeReplacement(
+                order.getId(), new ByteArrayInputStream(workbook), preview.getPreviewFingerprint());
+
+        assertThat(confirmed.isSuccess()).isTrue();
+        assertThat(confirmed.getSummary().getUpdatedItemCount()).isEqualTo(1);
+        assertThat(confirmed.getSummary().getErrorCount()).isEqualTo(1);
+        assertThat(itemMapper.selectById(invalid.getId()).getQuoteLeadTime()).isEqualTo("2026-03-20");
+        assertThat(itemMapper.selectById(valid.getId()).getQuoteLeadTime()).isEqualTo("2026-04-05");
+        assertThat(confirmed.getAffectedRows()).extracting(row -> row.get("id"))
+                .containsExactly(valid.getId());
+    }
+
+    @Test
     void leadTimeReplacementRejectsInvalidDateWithoutWriting() throws Exception {
         OrderRfq order = pricedOrder("QP-BAD-DATE");
         ItemQuoteVersion item = quoteProcessItem(order, "QP-BAD-DATE-001", "A", "2026-03-20");

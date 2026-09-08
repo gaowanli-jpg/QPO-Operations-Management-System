@@ -208,6 +208,9 @@ public class AuditService {
         if ("RFQ_IMPORT".equalsIgnoreCase(action)) return "MARKET";
         if ("SALES_ORDER_IMPORT_QPO".equalsIgnoreCase(action)) return "MARKET";
         if ("SALES_ORDER_DIRTY_SNAPSHOT_REPAIR".equalsIgnoreCase(action)) return "MARKET";
+        if ("SALES_ORDER_UPDATE".equalsIgnoreCase(action)) return "MARKET";
+        if ("SALES_ORDER_ITEM_UPDATE".equalsIgnoreCase(action)) return "MARKET";
+        if ("SALES_ORDER_ITEM_DATA_REPLACEMENT".equalsIgnoreCase(action)) return "MARKET";
         if ("SALES_ORDER_U9_SYNC".equalsIgnoreCase(action)) return "MARKET";
         if ("SALES_ORDER_U9_ASSIGNMENT_UPDATE".equalsIgnoreCase(action)) return "MARKET";
         if ("SALES_ORDER_U9_ORDER_DATE_UPDATE".equalsIgnoreCase(action)) return "MARKET";
@@ -218,6 +221,9 @@ public class AuditService {
         if ("SALES_ORDER_RESTORE".equalsIgnoreCase(action)) return "MARKET";
         if ("SALES_ORDER_DRAWING_SUPPLEMENT".equalsIgnoreCase(action)) return "MARKET";
         if ("SALES_ORDER_PRODUCTION_TASK_NOTICE_EXPORT".equalsIgnoreCase(action)) return "MARKET";
+        if ("SALES_ORDER_APPEND_RELEASE".equalsIgnoreCase(action)) return "MARKET";
+        if ("SALES_ORDER_ITEM_U9_CHANGE_EXCLUDE".equalsIgnoreCase(action)) return "MARKET";
+        if ("SALES_ORDER_ITEM_U9_CHANGE_RESTORE".equalsIgnoreCase(action)) return "MARKET";
         if (startsWith(action, "SALES_ORDER_CHANGE_")) return "CHANGE";
         if ("ORDER_QUOTE_COMPLETE".equalsIgnoreCase(action)) return "ENGINEER";
         if ("PRICING_SHEET_EXPORT".equalsIgnoreCase(action)) return "ENGINEER";
@@ -319,6 +325,9 @@ public class AuditService {
             case "RFQ_IMPORT" -> "导入 RFQ";
             case "SALES_ORDER_IMPORT_QPO" -> "导入销售订单到独立主表";
             case "SALES_ORDER_DIRTY_SNAPSHOT_REPAIR" -> "\u9500\u552e\u8ba2\u5355\u810f\u5feb\u7167\u4fee\u590d";
+            case "SALES_ORDER_UPDATE" -> "保存销售订单信息";
+            case "SALES_ORDER_ITEM_UPDATE" -> "保存销售订单零件行";
+            case "SALES_ORDER_ITEM_DATA_REPLACEMENT" -> "销售订单表格数据替换";
             case "SALES_ORDER_U9_SYNC" -> "销售订单同步U9";
             case "SALES_ORDER_U9_ASSIGNMENT_UPDATE" -> "保存销售订单U9销售员和部门";
             case "SALES_ORDER_U9_ORDER_DATE_UPDATE" -> "保存销售订单U9下单日期";
@@ -329,6 +338,9 @@ public class AuditService {
             case "SALES_ORDER_RESTORE" -> "恢复销售订单";
             case "SALES_ORDER_DRAWING_SUPPLEMENT" -> "补传销售订单图纸";
             case "SALES_ORDER_PRODUCTION_TASK_NOTICE_EXPORT" -> "导出生产任务通知单";
+            case "SALES_ORDER_APPEND_RELEASE" -> "追加销售提单";
+            case "SALES_ORDER_ITEM_U9_CHANGE_EXCLUDE" -> "销售订单零件排除U9与销售变更";
+            case "SALES_ORDER_ITEM_U9_CHANGE_RESTORE" -> "恢复销售订单零件U9与销售变更";
             case "SALES_ORDER_CHANGE_ITEM_UPDATE" -> "销售变更保存零件行";
             case "SALES_ORDER_CHANGE_ITEM_DATA_REPLACEMENT" -> "销售变更表格数据替换";
             case "QUOTE_EXPORT_TASK_SUBMIT" -> "提交报价单导出任务";

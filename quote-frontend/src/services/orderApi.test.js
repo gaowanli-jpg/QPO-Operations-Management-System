@@ -134,6 +134,55 @@ describe('orderApi', () => {
     )
   })
 
+  test('exposes sales order management maintenance endpoints', async () => {
+    const payload = { customerOrderNo: 'PO-100' }
+    const itemPayload = {
+      items: [{
+        salesOrderItemId: 21,
+        version: 'B',
+        qty: 3,
+        untaxedUnitPrice: '12.50',
+        materialName: '6061-T6',
+        surfaceTreatment: 'Anodized'
+      }]
+    }
+    const formData = new FormData()
+
+    await orderApi.saveSalesOrderHeader(901, payload)
+    await orderApi.saveSalesOrderItems(901, itemPayload)
+    await orderApi.previewSalesOrderItemDataReplacement(901, formData)
+    await orderApi.confirmSalesOrderItemDataReplacement(901, formData)
+    await orderApi.discardSalesOrderItemForU9Change(901, 21, { reason: '不参与 U9' })
+    await orderApi.restoreSalesOrderItemForU9Change(901, 21, { reason: '恢复参与 U9' })
+
+    expect(request).toHaveBeenNthCalledWith(1, '/api/market/sales-order-management/orders/901', {
+      method: 'PUT',
+      data: payload
+    })
+    expect(request).toHaveBeenNthCalledWith(2, '/api/market/sales-order-management/orders/901/items/batch', {
+      method: 'POST',
+      data: itemPayload
+    })
+    expect(request).toHaveBeenNthCalledWith(3, '/api/market/sales-order-management/orders/901/items/data-replacement/preview', {
+      method: 'POST',
+      data: formData,
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+    expect(request).toHaveBeenNthCalledWith(4, '/api/market/sales-order-management/orders/901/items/data-replacement/confirm', {
+      method: 'POST',
+      data: formData,
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+    expect(request).toHaveBeenNthCalledWith(5, '/api/market/sales-order-management/orders/901/items/21/discard', {
+      method: 'POST',
+      data: { reason: '不参与 U9' }
+    })
+    expect(request).toHaveBeenNthCalledWith(6, '/api/market/sales-order-management/orders/901/items/21/restore', {
+      method: 'POST',
+      data: { reason: '恢复参与 U9' }
+    })
+  })
+
   test('exposes order item maintenance endpoints', async () => {
     const payload = {
       items: [{

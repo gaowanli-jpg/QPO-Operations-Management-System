@@ -185,7 +185,7 @@ public class ReleaseItemDataReplacementService {
 
         List<ReleaseItemDataReplacementRowDTO> rows = new ArrayList<>();
         for (ReleaseItemDataReplacementExcelRowDTO excelRow : safeList(parsed.getRows())) {
-            rows.add(previewRow(
+            rows.addAll(previewRows(
                     excelRow,
                     candidatesByKey,
                     ordersById,
@@ -196,10 +196,9 @@ public class ReleaseItemDataReplacementService {
         preview.setSuccess(true);
         preview.setRecognizedFields(new ArrayList<>(safeList(parsed.getRecognizedFields())));
         preview.setRows(rows);
-        preview.setSummary(summarize(rows));
-        preview.setCanConfirm(preview.getSummary().getErrorCount() == 0
-                && (preview.getSummary().getChangedCount() > 0
-                || preview.getSummary().getQuantityOnlyCount() > 0));
+        preview.setSummary(summarize(rows, safeList(parsed.getRows()).size()));
+        preview.setCanConfirm(preview.getSummary().getChangedCount() > 0
+                || preview.getSummary().getQuantityOnlyCount() > 0);
         preview.setPreviewFingerprint(fingerprint(
                 rfqIds,
                 ordersById,
@@ -607,7 +606,7 @@ public class ReleaseItemDataReplacementService {
         return candidates.size() == 1 ? candidates.get(0) : null;
     }
 
-    private ReleaseItemDataReplacementRowDTO previewRow(
+    private List<ReleaseItemDataReplacementRowDTO> previewRows(
             ReleaseItemDataReplacementExcelRowDTO excelRow,
             Map<ItemKey, List<ItemQuoteVersion>> candidatesByKey,
             Map<Integer, OrderRfq> ordersById,
@@ -622,7 +621,7 @@ public class ReleaseItemDataReplacementService {
                     .map(ReleaseItemDataReplacementExcelErrorDTO::getMessage)
                     .filter(Objects::nonNull)
                     .collect(Collectors.joining("；")));
-            return row;
+            return List.of(row);
         }
 
         List<ItemQuoteVersion> candidates = candidatesByKey.getOrDefault(
@@ -631,15 +630,24 @@ public class ReleaseItemDataReplacementService {
         if (candidates.isEmpty()) {
             row.setStatus(ReleaseItemDataReplacementRowStatus.UNMATCHED);
             row.setReason("当前所选询价单范围内未找到对应零件");
-            return row;
-        }
-        if (candidates.size() > 1) {
-            row.setStatus(ReleaseItemDataReplacementRowStatus.ERROR);
-            row.setReason("当前所选询价单范围内存在多个相同图号和版本的零件");
-            return row;
+            return List.of(row);
         }
 
-        ItemQuoteVersion item = candidates.get(0);
+        List<ReleaseItemDataReplacementRowDTO> rows = new ArrayList<>();
+        for (ItemQuoteVersion item : candidates) {
+            rows.add(previewMatchedRow(excelRow, item, ordersById, ticketedQtyByItemId));
+        }
+        return rows;
+    }
+
+    private ReleaseItemDataReplacementRowDTO previewMatchedRow(
+            ReleaseItemDataReplacementExcelRowDTO excelRow,
+            ItemQuoteVersion item,
+            Map<Integer, OrderRfq> ordersById,
+            Map<Integer, Integer> ticketedQtyByItemId) {
+        ReleaseItemDataReplacementRowDTO row = baseRow(excelRow);
+        Map<String, Object> values = safeMap(excelRow.getValues());
+        row.setAcceptedQty(integerValue(values.get(ReleaseItemDataReplacementField.ACCEPTED_QTY.getPropertyName())));
         OrderRfq order = ordersById.get(item.getRfqId());
         row.setRfqId(item.getRfqId());
         row.setRfqNo(order == null ? null : order.getRfqNo());
@@ -718,9 +726,11 @@ public class ReleaseItemDataReplacementService {
         return row;
     }
 
-    private ReleaseItemDataReplacementSummaryDTO summarize(List<ReleaseItemDataReplacementRowDTO> rows) {
+    private ReleaseItemDataReplacementSummaryDTO summarize(
+            List<ReleaseItemDataReplacementRowDTO> rows,
+            int importedCount) {
         ReleaseItemDataReplacementSummaryDTO summary = new ReleaseItemDataReplacementSummaryDTO();
-        summary.setImportedCount(rows.size());
+        summary.setImportedCount(importedCount);
         for (ReleaseItemDataReplacementRowDTO row : rows) {
             if (row.getItemId() != null) {
                 summary.setMatchedCount(summary.getMatchedCount() + 1);

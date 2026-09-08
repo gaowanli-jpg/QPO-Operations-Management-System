@@ -1,6 +1,7 @@
 package com.machining.quote.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.machining.quote.domain.QuoteStatusWorkflow;
 import com.machining.quote.entity.SalesOrderHeader;
 import com.machining.quote.entity.SalesOrderItem;
 import com.machining.quote.mapper.SalesOrderHeaderMapper;
@@ -93,6 +94,7 @@ public class SalesOrderProductionTaskNoticeExportService {
     private List<SalesOrderItem> listItems(Long salesOrderId) {
         QueryWrapper<SalesOrderItem> query = new QueryWrapper<>();
         query.eq("sales_order_id", salesOrderId)
+                .and(wrapper -> wrapper.ne("status", QuoteStatusWorkflow.DISCARDED).or().isNull("status"))
                 .orderByAsc("line_no")
                 .orderByAsc("id");
         List<SalesOrderItem> items = salesOrderItemMapper.selectList(query);
@@ -100,6 +102,7 @@ public class SalesOrderProductionTaskNoticeExportService {
             return List.of();
         }
         return items.stream()
+                .filter(item -> !QuoteStatusWorkflow.DISCARDED.equals(item.getStatus()))
                 .sorted(Comparator
                         .comparing(SalesOrderItem::getLineNo, Comparator.nullsLast(Integer::compareTo))
                         .thenComparing(SalesOrderItem::getId, Comparator.nullsLast(Long::compareTo)))
@@ -188,13 +191,16 @@ public class SalesOrderProductionTaskNoticeExportService {
             return;
         }
         int extraRows = dataRowDelta(itemCount);
+        if (extraRows <= 0) {
+            return;
+        }
         Row templateRow = sheet.getRow(TEMPLATE_DATA_END_ROW);
         List<CellRangeAddress> templateMergedRegions = mergedRegionsForRow(sheet, TEMPLATE_DATA_END_ROW);
         sheet.shiftRows(FIRST_ROW_AFTER_TEMPLATE_DATA, sheet.getLastRowNum(), extraRows, true, false);
         for (int i = 0; i < extraRows; i++) {
             int rowIndex = FIRST_ROW_AFTER_TEMPLATE_DATA + i;
-            copyBlankRow(sheet, templateRow, rowIndex);
             copyMergedRegions(sheet, templateMergedRegions, TEMPLATE_DATA_END_ROW, rowIndex);
+            copyBlankRow(sheet, templateRow, rowIndex);
         }
     }
 
@@ -235,7 +241,7 @@ public class SalesOrderProductionTaskNoticeExportService {
         }
         row.setHeight(templateRow.getHeight());
         for (int col = FIRST_DATA_COLUMN; col <= LAST_DATA_COLUMN; col++) {
-            Cell sourceCell = templateRow.getCell(col, Row.MissingCellPolicy.RETURN_BLANK_AS_NULL);
+            Cell sourceCell = templateRow.getCell(col, Row.MissingCellPolicy.RETURN_NULL_AND_BLANK);
             Cell targetCell = row.getCell(col, Row.MissingCellPolicy.CREATE_NULL_AS_BLANK);
             if (sourceCell != null) {
                 targetCell.setCellStyle(sourceCell.getCellStyle());
@@ -263,23 +269,8 @@ public class SalesOrderProductionTaskNoticeExportService {
                     source.getLastRow() + rowOffset,
                     source.getFirstColumn(),
                     source.getLastColumn());
-            if (!mergedRegionExists(sheet, target)) {
-                sheet.addMergedRegion(target);
-            }
+            sheet.addMergedRegionUnsafe(target);
         }
-    }
-
-    private boolean mergedRegionExists(Sheet sheet, CellRangeAddress target) {
-        for (int i = 0; i < sheet.getNumMergedRegions(); i++) {
-            CellRangeAddress existing = sheet.getMergedRegion(i);
-            if (existing.getFirstRow() == target.getFirstRow()
-                    && existing.getLastRow() == target.getLastRow()
-                    && existing.getFirstColumn() == target.getFirstColumn()
-                    && existing.getLastColumn() == target.getLastColumn()) {
-                return true;
-            }
-        }
-        return false;
     }
 
     private void removeMergedRegionsWithin(Sheet sheet, int firstRow, int lastRow) {

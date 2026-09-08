@@ -6,6 +6,7 @@ const DataCenterSsoCallback = () => import('../views/DataCenterSsoCallback.vue')
 const DashboardHome = () => import('../components/dashboard/DashboardHome.vue')
 const MarketDashboard = () => import('../components/MarketDashboard.vue')
 const MarketRelease = () => import('../components/MarketRelease.vue')
+const ReleaseAppendManage = () => import('../components/ReleaseAppendManage.vue')
 const SalesOrderU9Sync = () => import('../components/SalesOrderU9Sync.vue')
 const DeliveryDocumentManage = () => import('../components/DeliveryDocumentManage.vue')
 const QuoteProcess = () => import('../components/QuoteProcess.vue')
@@ -35,6 +36,7 @@ const routes = [
   { path: '/market', component: MarketDashboard, meta: { permission: 'market:rfq:view' } },
   { path: '/quote-process', component: QuoteProcess, meta: { permission: 'market:quote-process:view' } },
   { path: '/release', component: MarketRelease, meta: { permission: 'market:release:view' } },
+  { path: '/release-append', component: ReleaseAppendManage, meta: { permission: 'market:release-append:view' } },
   { path: '/u9-sync', component: SalesOrderU9Sync, meta: { permission: 'market:u9-sync:view' } },
   { path: '/delivery-documents', component: DeliveryDocumentManage, meta: { permission: 'market:delivery-document:view' } },
   { path: '/engineering', component: GlobalSetup, meta: { permission: 'engineer:setup:view' } },

@@ -172,7 +172,7 @@ public class RfqReleaseSalesOrderService {
         }
 
         Map<Integer, OrderRfq> lockedOrders = lockOrders(context);
-        List<ReleaseLine> releaseLines = lockAndValidateLines(delegatedReq, context, lockedOrders, true);
+        List<ReleaseLine> releaseLines = lockAndValidateLines(delegatedReq, context, lockedOrders);
         List<ItemAssemblyRelation> sourceRelations = selectedAssemblyRelations(releaseLines);
         Set<Integer> selectedRelationParents = sourceRelations.stream()
                 .map(ItemAssemblyRelation::getParentItemId)
@@ -280,14 +280,6 @@ public class RfqReleaseSalesOrderService {
             DeliveryGenerateReq req,
             RfqReleaseBatchValidationService.BatchContext context,
             Map<Integer, OrderRfq> lockedOrders) {
-        return lockAndValidateLines(req, context, lockedOrders, false);
-    }
-
-    private List<ReleaseLine> lockAndValidateLines(
-            DeliveryGenerateReq req,
-            RfqReleaseBatchValidationService.BatchContext context,
-            Map<Integer, OrderRfq> lockedOrders,
-            boolean forceContextOrderFields) {
         List<Integer> itemIds = req.getItems().stream()
                 .map(this::resolveItemId)
                 .sorted()
@@ -321,9 +313,7 @@ public class RfqReleaseSalesOrderService {
             if (acceptedQty <= 0) {
                 throw new RuntimeException("零件 " + itemLabel(item) + " 的通过数量必须大于 0");
             }
-            EffectiveOrderFields fields = forceContextOrderFields
-                    ? effectiveFieldsFromContext(context)
-                    : effectiveFields(item, context);
+            EffectiveOrderFields fields = effectiveFields(item, context);
             result.add(new ReleaseLine(item, acceptedQty, fields));
         }
         result.sort(Comparator
@@ -678,16 +668,6 @@ public class RfqReleaseSalesOrderService {
                 .allMatch(item -> qtyByItem.getOrDefault(item.getId(), 0) >= safeInt(item.getQty()));
         order.setStatus(allReleasableItemsTicketed ? HEADER_RELEASED : QuoteStatusWorkflow.PARTIALLY_RELEASED);
         orderMapper.updateById(order);
-    }
-
-    private EffectiveOrderFields effectiveFieldsFromContext(RfqReleaseBatchValidationService.BatchContext context) {
-        return new EffectiveOrderFields(
-                context.salesOrderDate(),
-                context.customerOrderNo(),
-                context.customerProjectNo(),
-                context.customerOrderTitle(),
-                context.orderType(),
-                context.internalProjectNo());
     }
 
     private String releaseEligibilityFailureReason(ItemQuoteVersion item) {

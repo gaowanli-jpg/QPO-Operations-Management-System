@@ -295,7 +295,7 @@ class CoreDeliveryWorkflowIntegrationTest extends CoreWorkflowIntegrationTestSup
         assertThat(secondBatch.get(0).getOrderType()).isEqualTo("预测订单");
 
         QueryWrapper<OrderDeliveryTicket> ticketQw = new QueryWrapper<>();
-        ticketQw.eq("rfq_id", order.getId()).eq("item_id", item.getId());
+        ticketQw.eq("rfq_id", order.getId()).eq("item_id", item.getId()).orderByAsc("id");
         List<OrderDeliveryTicket> tickets = ticketMapper.selectList(ticketQw);
         assertThat(tickets).extracting(OrderDeliveryTicket::getQty)
                 .containsExactly(4, 6);

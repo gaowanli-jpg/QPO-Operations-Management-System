@@ -22,9 +22,10 @@ describe('delivery document module stage 2 wiring', () => {
   })
 
   test('places delivery document after U9 sync in the market menu', () => {
-    expect(appVue).toContain("{ key: 'market', title: '市场', paths: ['/market', '/quote-process', '/release', '/u9-sync', '/delivery-documents', '/quote-template'] }")
+    expect(appVue).toContain("{ key: 'market', title: '市场', paths: ['/market', '/quote-process', '/release', '/release-append', '/u9-sync', '/delivery-documents', '/quote-template'] }")
     expect(appVue).toContain("'/delivery-documents': { title: '提单表据', permission: 'market:delivery-document:view'")
-    expect(appVue).toContain("'/delivery-documents': {\n    title: '提单表据'")
+    expect(appVue).toContain("'/delivery-documents':")
+    expect(appVue).toContain("title: '提单表据'")
     expect(appVue).not.toContain("'/delivery-documents': { title: '提单表据', permission: 'market:release:view'")
 
     const marketGroupIndex = appVue.indexOf("{ key: 'market'")

@@ -1,6 +1,7 @@
 package com.machining.quote;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.machining.quote.domain.QuoteStatusWorkflow;
 import com.machining.quote.dto.OrderStatusChangeReq;
 import com.machining.quote.entity.OrderDeliveryTicket;
@@ -23,9 +24,11 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -57,6 +60,71 @@ class SalesOrderManagementGovernanceTest {
                 .doesNotContain("@DeleteMapping")
                 .doesNotContain("market:order:delete")
                 .doesNotContain("market:history-order:");
+    }
+
+    @Test
+    void controllerExposesItemLevelU9ChangeExclusionEndpointsWithUpdatePermission() throws IOException {
+        String source = read(CONTROLLER);
+
+        assertThat(source)
+                .contains(
+                        "@PostMapping(\"/orders/{salesOrderId}/items/{itemId}/discard\")",
+                        "@PostMapping(\"/orders/{salesOrderId}/items/{itemId}/restore\")",
+                        "@RequirePermission(\"market:sales-order:update\")",
+                        "discardItemForU9Change",
+                        "restoreItemForU9Change")
+                .doesNotContain(
+                        "@RequirePermission(\"market:sales-order:discard\")\n    public OrderStatusChangeResult discardItemForU9Change",
+                        "@RequirePermission(\"market:sales-order:restore\")\n    public OrderStatusChangeResult restoreItemForU9Change");
+    }
+
+    @Test
+    void salesOrderItemU9ChangeExclusionMigrationAndEntityUseDedicatedFields() throws IOException {
+        Path migration = Path.of("src", "main", "resources", "db", "migration", "V48__sales_order_item_u9_change_exclusion.sql");
+        assertThat(migration).exists();
+        String migrationSource = read(migration);
+        assertThat(migrationSource)
+                .contains(
+                        "ALTER TABLE sales_order_item",
+                        "ADD COLUMN IF NOT EXISTS u9_change_excluded boolean DEFAULT false NOT NULL",
+                        "ADD COLUMN IF NOT EXISTS u9_change_excluded_at timestamp",
+                        "ADD COLUMN IF NOT EXISTS u9_change_excluded_by bigint",
+                        "ADD COLUMN IF NOT EXISTS u9_change_excluded_reason character varying(500)",
+                        "ADD COLUMN IF NOT EXISTS u9_change_restored_at timestamp",
+                        "ADD COLUMN IF NOT EXISTS u9_change_restored_by bigint",
+                        "ADD COLUMN IF NOT EXISTS u9_change_restore_reason character varying(500)",
+                        "idx_sales_order_item_u9_change_excluded_order")
+                .doesNotContain("order_delivery_ticket", "order_delivery_ticket_allocation", "u9_sync_status");
+
+        String entity = read(Path.of("src", "main", "java", "com", "machining", "quote", "entity", "SalesOrderItem.java"));
+        assertThat(entity)
+                .contains(
+                        "private Boolean u9ChangeExcluded;",
+                        "private LocalDateTime u9ChangeExcludedAt;",
+                        "private Long u9ChangeExcludedBy;",
+                        "private String u9ChangeExcludedReason;",
+                        "private LocalDateTime u9ChangeRestoredAt;",
+                        "private Long u9ChangeRestoredBy;",
+                        "private String u9ChangeRestoreReason;");
+    }
+
+    @Test
+    void itemLevelExclusionIsNotConsumedByMesWmsDeliveredOrProductionFlows() throws IOException {
+        for (Path source : List.of(
+                Path.of("src", "main", "java", "com", "machining", "quote", "service", "DeliveryService.java"),
+                Path.of("src", "main", "java", "com", "machining", "quote", "service", "DeliveredItemService.java"),
+                Path.of("src", "main", "java", "com", "machining", "quote", "service", "DeliveryAutoMesMaterialSyncService.java"),
+                Path.of("src", "main", "java", "com", "machining", "quote", "service", "SourceItemMaterialNoSyncService.java"),
+                Path.of("src", "main", "java", "com", "machining", "quote", "service", "ProductionItemService.java"),
+                Path.of("src", "main", "java", "com", "machining", "quote", "service", "LockedItemService.java"),
+                Path.of("src", "main", "java", "com", "machining", "quote", "service", "mes", "MesMaterialSyncService.java"),
+                Path.of("src", "main", "java", "com", "machining", "quote", "service", "mes", "MesProductionDispatchService.java"),
+                Path.of("src", "main", "java", "com", "machining", "quote", "service", "wms", "WmsReservationPlanService.java"),
+                Path.of("src", "main", "java", "com", "machining", "quote", "service", "wms", "WmsReservationStateService.java"))) {
+            assertThat(read(source))
+                    .as(source.toString())
+                    .doesNotContain("u9_change_excluded", "u9ChangeExcluded");
+        }
     }
 
     @Test
@@ -140,6 +208,87 @@ class SalesOrderManagementGovernanceTest {
                 .hasMessageContaining("只有已生成提单且未同步 U9 的销售订单可以废弃");
         verify(ticketed.headerMapper, never()).updateById(any());
         verify(ticketed.itemMapper, never()).updateById(any());
+    }
+
+    @Test
+    void itemLevelExclusionOnlyMarksSalesOrderItemForU9AndSalesChangeWithoutChangingBusinessStatuses() throws Exception {
+        SalesOrderHeader header = header(320L, QuoteStatusWorkflow.RELEASED);
+        header.setU9SyncStatus("已同步");
+        SalesOrderItem item = item(820L, header.getId(), QuoteStatusWorkflow.RELEASED);
+        Fixture fixture = fixture(header, List.of(item), 1L);
+        when(fixture.itemMapper.selectByIdForUpdate(item.getId())).thenReturn(item);
+        when(fixture.itemMapper.update(isNull(), any(UpdateWrapper.class))).thenReturn(1);
+
+        Object discardResult = invokeItemStatusAction(fixture.service, "discardItemForU9Change", header.getId(), item.getId(), "U9 不再处理该行");
+
+        assertThat(String.valueOf(discardResult)).contains("已从 U9 同步和销售变更排除");
+        ArgumentCaptor<UpdateWrapper<SalesOrderItem>> updateCaptor = ArgumentCaptor.forClass(UpdateWrapper.class);
+        verify(fixture.itemMapper).update(isNull(), updateCaptor.capture());
+        String sqlSet = updateCaptor.getValue().getSqlSet();
+        assertThat(sqlSet)
+                .contains(
+                        "u9_change_excluded=",
+                        "u9_change_excluded_at=",
+                        "u9_change_excluded_by=",
+                        "u9_change_excluded_reason=",
+                        "updated_at=")
+                .doesNotContain("status=", "u9_sync_status=");
+        assertThat(item.getStatus()).isEqualTo(QuoteStatusWorkflow.RELEASED);
+        assertThat(header.getStatus()).isEqualTo(QuoteStatusWorkflow.RELEASED);
+        assertThat(header.getU9SyncStatus()).isEqualTo("已同步");
+        verify(fixture.headerMapper, never()).updateById(any());
+        verify(fixture.itemMapper, never()).updateById(any());
+        verify(fixture.auditService).record(eq("SALES_ORDER_ITEM_U9_CHANGE_EXCLUDE"), eq("sales_order_item"), eq(item.getId()), isNull(), any(), eq("MARKET"), eq("SUCCESS"), any(), isNull());
+
+        ReflectionTestUtils.setField(item, "u9ChangeExcluded", true);
+        Object restoreResult = invokeItemStatusAction(fixture.service, "restoreItemForU9Change", header.getId(), item.getId(), "恢复本地校正");
+
+        assertThat(String.valueOf(restoreResult)).contains("已恢复到 U9 同步和销售变更");
+        verify(fixture.auditService).record(eq("SALES_ORDER_ITEM_U9_CHANGE_RESTORE"), eq("sales_order_item"), eq(item.getId()), isNull(), any(), eq("MARKET"), eq("SUCCESS"), any(), isNull());
+    }
+
+    @Test
+    void itemLevelExclusionRequiresReasonRejectsForeignItemAndRunningU9Statuses() throws Exception {
+        SalesOrderHeader header = header(321L, QuoteStatusWorkflow.RELEASED);
+        SalesOrderItem item = item(821L, header.getId(), QuoteStatusWorkflow.RELEASED);
+        Fixture missingReason = fixture(header, List.of(item), 0L);
+        when(missingReason.itemMapper.selectByIdForUpdate(item.getId())).thenReturn(item);
+
+        assertThatThrownBy(() -> invokeItemStatusAction(missingReason.service, "discardItemForU9Change", header.getId(), item.getId(), " "))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("原因不能为空");
+        verify(missingReason.itemMapper, never()).update(isNull(), any(UpdateWrapper.class));
+
+        SalesOrderHeader running = header(322L, QuoteStatusWorkflow.RELEASED);
+        running.setU9SyncStatus("同步中");
+        SalesOrderItem runningItem = item(822L, running.getId(), QuoteStatusWorkflow.RELEASED);
+        Fixture runningFixture = fixture(running, List.of(runningItem), 0L);
+        when(runningFixture.itemMapper.selectByIdForUpdate(runningItem.getId())).thenReturn(runningItem);
+        assertThatThrownBy(() -> invokeItemStatusAction(runningFixture.service, "discardItemForU9Change", running.getId(), runningItem.getId(), "暂停 U9 行"))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("U9 状态为同步中")
+                .hasMessageContaining("不能废弃或恢复销售订单零件");
+        verify(runningFixture.itemMapper, never()).update(isNull(), any(UpdateWrapper.class));
+
+        SalesOrderHeader pending = header(323L, QuoteStatusWorkflow.RELEASED);
+        pending.setU9SyncStatus("结果待确认");
+        SalesOrderItem pendingItem = item(823L, pending.getId(), QuoteStatusWorkflow.RELEASED);
+        Fixture pendingFixture = fixture(pending, List.of(pendingItem), 0L);
+        when(pendingFixture.itemMapper.selectByIdForUpdate(pendingItem.getId())).thenReturn(pendingItem);
+        assertThatThrownBy(() -> invokeItemStatusAction(pendingFixture.service, "restoreItemForU9Change", pending.getId(), pendingItem.getId(), "恢复 U9 行"))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("U9 状态为结果待确认")
+                .hasMessageContaining("不能废弃或恢复销售订单零件");
+        verify(pendingFixture.itemMapper, never()).update(isNull(), any(UpdateWrapper.class));
+
+        SalesOrderHeader foreignHeader = header(324L, QuoteStatusWorkflow.RELEASED);
+        SalesOrderItem foreignItem = item(824L, 999L, QuoteStatusWorkflow.RELEASED);
+        Fixture foreignFixture = fixture(foreignHeader, List.of(foreignItem), 0L);
+        when(foreignFixture.itemMapper.selectByIdForUpdate(foreignItem.getId())).thenReturn(foreignItem);
+        assertThatThrownBy(() -> invokeItemStatusAction(foreignFixture.service, "discardItemForU9Change", foreignHeader.getId(), foreignItem.getId(), "暂停 U9 行"))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("不属于当前销售订单");
+        verify(foreignFixture.itemMapper, never()).update(isNull(), any(UpdateWrapper.class));
     }
 
     @Test
@@ -266,12 +415,115 @@ class SalesOrderManagementGovernanceTest {
                 .doesNotContain("multipart");
     }
 
+    @Test
+    @SuppressWarnings("unchecked")
+    void orderDetailSummaryIncludesStoredItemPriceTotalsForReadOnlyHeaderBoxes() {
+        SalesOrderHeader header = header(420L, QuoteStatusWorkflow.RELEASED);
+        Fixture fixture = fixture(header, List.of(), 0L);
+        Map<String, Object> itemStats = new LinkedHashMap<>();
+        itemStats.put("sales_order_id", 420L);
+        itemStats.put("item_count", 2L);
+        itemStats.put("total_quantity", 7L);
+        itemStats.put("released_quantity", 3L);
+        itemStats.put("drawing_missing_count", 0L);
+        itemStats.put("order_untaxed_total_price", new BigDecimal("1234.56"));
+        itemStats.put("order_tax_included_total_price", new BigDecimal("1395.05"));
+        when(fixture.itemMapper.selectMaps(any(QueryWrapper.class))).thenReturn(List.of(itemStats));
+        when(fixture.itemMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of());
+
+        Map<String, Object> detail = fixture.service.getOrderDetail(header.getId());
+
+        Map<String, Object> summary = (Map<String, Object>) detail.get("summary");
+        assertThat(summary)
+                .containsEntry("orderUntaxedTotalPrice", new BigDecimal("1234.56"))
+                .containsEntry("orderTaxIncludedTotalPrice", new BigDecimal("1395.05"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void supplementDrawingFolderBindsAllSalesOrderItemsAndStoresHeaderMetadata() throws Exception {
+        SalesOrderHeader header = header(420L, QuoteStatusWorkflow.QUOTED);
+        SalesOrderItem itemA = item(720L, 420L, QuoteStatusWorkflow.QUOTED);
+        itemA.setPartNo("P-720");
+        SalesOrderItem itemB = item(721L, 420L, QuoteStatusWorkflow.QUOTED);
+        itemB.setPartNo("P-721");
+        itemB.setDrawingUrl("/old/P-721.pdf");
+        itemB.setHasDrawing(true);
+        Fixture fixture = fixture(header, List.of(itemA, itemB), 0L);
+        MockMultipartFile folderDrawing = new MockMultipartFile(
+                "drawingFolderFiles",
+                "folder/sales-order-pack.pdf",
+                "application/pdf",
+                "folder-pdf".getBytes(StandardCharsets.UTF_8)
+        );
+        String folderUrl = "/uploads/drawing-folders/SALES_ORDER/420/folder-420/";
+        when(fixture.businessFileService.saveDrawingFolderFiles(
+                eq("SALES_ORDER"), eq("420"), eq("销售订单图纸"), eq(List.of(folderDrawing)), eq("SALES_ORDER_DRAWING_SUPPLEMENT_FOLDER"), eq("420")))
+                .thenReturn(drawingFolderResult(folderUrl, "销售订单图纸", folderDrawing));
+        when(fixture.headerMapper.updateById(any(SalesOrderHeader.class))).thenReturn(1);
+        when(fixture.itemMapper.updateById(any(SalesOrderItem.class))).thenReturn(1);
+
+        Object result = invokeSupplement(
+                fixture.service,
+                420L,
+                List.of(),
+                List.of(),
+                List.of(folderDrawing),
+                "销售订单图纸");
+
+        assertThat((Map<String, Object>) result)
+                .containsEntry("boundCount", 2)
+                .containsEntry("alreadyBoundCount", 0)
+                .containsEntry("unmatchedCount", 0)
+                .containsEntry("skippedCount", 0)
+                .containsEntry("drawingFolderFileCount", 1);
+        assertThat(header.getDrawingFolderUrl()).isEqualTo(folderUrl);
+        assertThat(header.getDrawingFolderName()).isEqualTo("销售订单图纸");
+        assertThat(header.getDrawingFolderFileCount()).isEqualTo(1);
+        assertThat(itemA.getDrawingUrl()).isEqualTo(folderUrl);
+        assertThat(itemA.getHasDrawing()).isTrue();
+        assertThat(itemB.getDrawingUrl()).isEqualTo(folderUrl);
+        assertThat(itemB.getHasDrawing()).isTrue();
+
+        ArgumentCaptor<Object> afterDataCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(fixture.auditService).record(
+                eq("SALES_ORDER_DRAWING_SUPPLEMENT"),
+                eq("sales_order_header"),
+                eq(420L),
+                isNull(),
+                afterDataCaptor.capture(),
+                eq("MARKET"),
+                eq("SUCCESS"),
+                any(String.class),
+                isNull()
+        );
+        assertThat((Map<String, Object>) afterDataCaptor.getValue())
+                .containsEntry("drawingFolderMode", true)
+                .containsEntry("drawingFolderFileCount", 1)
+                .containsEntry("boundCount", 2);
+        assertThat(String.valueOf(afterDataCaptor.getValue())).doesNotContain(folderUrl).doesNotContain("folder-pdf");
+    }
+
     private Object invokeStatusAction(SalesOrderManageService service, String action, Long salesOrderId, String reason) throws Exception {
         Method method = SalesOrderManageService.class.getMethod(action, Long.class, OrderStatusChangeReq.class);
         OrderStatusChangeReq req = new OrderStatusChangeReq();
         req.setReason(reason);
         try {
             return method.invoke(service, salesOrderId, req);
+        } catch (InvocationTargetException e) {
+            if (e.getCause() instanceof RuntimeException runtimeException) {
+                throw runtimeException;
+            }
+            throw e;
+        }
+    }
+
+    private Object invokeItemStatusAction(SalesOrderManageService service, String action, Long salesOrderId, Long itemId, String reason) throws Exception {
+        Method method = SalesOrderManageService.class.getMethod(action, Long.class, Long.class, OrderStatusChangeReq.class);
+        OrderStatusChangeReq req = new OrderStatusChangeReq();
+        req.setReason(reason);
+        try {
+            return method.invoke(service, salesOrderId, itemId, req);
         } catch (InvocationTargetException e) {
             if (e.getCause() instanceof RuntimeException runtimeException) {
                 throw runtimeException;
@@ -308,6 +560,24 @@ class SalesOrderManagementGovernanceTest {
         }
     }
 
+    private Object invokeSupplement(
+            SalesOrderManageService service,
+            Long salesOrderId,
+            List<MultipartFile> drawings,
+            List<MultipartFile> versionDrawings,
+            List<MultipartFile> drawingFolderFiles,
+            String drawingFolderName) throws Exception {
+        Method method = SalesOrderManageService.class.getMethod("supplementOrderDrawings", Long.class, List.class, List.class, List.class, String.class);
+        try {
+            return method.invoke(service, salesOrderId, drawings, versionDrawings, drawingFolderFiles, drawingFolderName);
+        } catch (InvocationTargetException e) {
+            if (e.getCause() instanceof RuntimeException runtimeException) {
+                throw runtimeException;
+            }
+            throw e;
+        }
+    }
+
     private Fixture fixture(SalesOrderHeader header, List<SalesOrderItem> items, Long ticketCount) {
         SalesOrderHeaderMapper headerMapper = mock(SalesOrderHeaderMapper.class);
         SalesOrderItemMapper itemMapper = mock(SalesOrderItemMapper.class);
@@ -318,7 +588,9 @@ class SalesOrderManagementGovernanceTest {
         when(headerMapper.selectByIdForUpdate(header.getId())).thenReturn(header);
         when(headerMapper.selectById(header.getId())).thenReturn(header);
         when(itemMapper.selectList(any(QueryWrapper.class))).thenReturn(items);
+        when(itemMapper.selectMaps(any(QueryWrapper.class))).thenReturn(List.of());
         when(ticketMapper.selectCount(any(QueryWrapper.class))).thenReturn(ticketCount);
+        when(ticketMapper.selectMaps(any(QueryWrapper.class))).thenReturn(List.of());
         SalesOrderManageService service = new SalesOrderManageService();
         ReflectionTestUtils.setField(service, "salesOrderHeaderMapper", headerMapper);
         ReflectionTestUtils.setField(service, "salesOrderItemMapper", itemMapper);
@@ -356,6 +628,19 @@ class SalesOrderManagementGovernanceTest {
     private String read(Path path) throws IOException {
         assertThat(Files.exists(path)).as("%s should exist", path).isTrue();
         return Files.readString(path, StandardCharsets.UTF_8);
+    }
+
+    private BusinessFileService.DrawingFolderSaveResult drawingFolderResult(
+            String folderUrl,
+            String folderName,
+            MockMultipartFile drawing) {
+        BusinessFileService.DrawingFolderFile file = new BusinessFileService.DrawingFolderFile(
+                drawing.getOriginalFilename(),
+                folderUrl + "file-1.pdf",
+                drawing.getContentType(),
+                drawing.getSize(),
+                java.time.LocalDateTime.now());
+        return new BusinessFileService.DrawingFolderSaveResult(folderUrl, folderName, 1, List.of(file));
     }
 
     private record Fixture(

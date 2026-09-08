@@ -352,8 +352,11 @@ public class QuoteProcessService {
         if (!previewFingerprint.trim().equals(currentFingerprint)) {
             throw new PreviewFingerprintConflictException("数据已发生变化，请重新预览");
         }
-        if (preview.getSummary().getErrorCount() > 0) {
-            throw new IllegalArgumentException("表格数据替换存在错误行，请修正后重新预览");
+        if (!preview.isCanConfirm()) {
+            if (preview.getSummary().getErrorCount() > 0) {
+                throw new IllegalArgumentException("表格数据替换存在错误行，请修正后重新预览");
+            }
+            throw new IllegalArgumentException("当前替换数据不能确认，请重新预览");
         }
 
         List<Map<String, Object>> affectedRows = new ArrayList<>();
@@ -419,16 +422,7 @@ public class QuoteProcessService {
                 throw new RuntimeException("订单存在未核价零件，不能保存报价单：" + String.join("、", unpricedItems));
             }
 
-            List<String> missingLeadTimes = items.stream()
-                    .filter(item -> !QuoteStatusWorkflow.DISCARDED.equals(item.getStatus()))
-                    .filter(item -> isBlank(leadTimeService.effectiveLeadTime(item)))
-                    .map(this::itemLabel)
-                    .toList();
-            if (!missingLeadTimes.isEmpty()) {
-                throw new RuntimeException("以下零件缺少报价交期，不能保存报价单：" + String.join("、", missingLeadTimes));
-            }
-
-            Map<String, Object> before = quoteSheetSummary(order, items, missingLeadTimes.size(), 0);
+            Map<String, Object> before = quoteSheetSummary(order, items, 0, 0);
             order.setStatus(QuoteStatusWorkflow.nextAfterMarketSaveQuote(order.getStatus()));
             orderRfqMapper.updateById(order);
             int itemStatusUpdatedCount = markPricedItemsAsQuoted(items);
@@ -481,16 +475,7 @@ public class QuoteProcessService {
                 throw new RuntimeException("没有补充报价待确认零件，不能保存补充报价单");
             }
 
-            List<String> missingLeadTimes = items.stream()
-                    .filter(item -> !QuoteStatusWorkflow.DISCARDED.equals(item.getStatus()))
-                    .filter(item -> isBlank(leadTimeService.effectiveLeadTime(item)))
-                    .map(this::itemLabel)
-                    .toList();
-            if (!missingLeadTimes.isEmpty()) {
-                throw new RuntimeException("以下补图零件缺少报价交期，不能保存补充报价单：" + String.join("、", missingLeadTimes));
-            }
-
-            Map<String, Object> before = supplementalQuoteSheetSummary(order, items, missingLeadTimes.size(), 0);
+            Map<String, Object> before = supplementalQuoteSheetSummary(order, items, 0, 0);
             int itemStatusUpdatedCount = markSupplementalItemsAsQuoted(items);
             OrderRfq savedOrder = QuoteStatusWorkflow.isReleasedOrderStatus(order.getStatus())
                     ? refreshReleasedOrderStatus(order.getId())
@@ -709,41 +694,42 @@ public class QuoteProcessService {
                 rows.add(row);
                 continue;
             }
-            if (candidates.size() > 1) {
-                row.setStatus("ERROR");
-                row.setReason("当前 RFQ 存在多个相同图号和版本的零件");
-                rows.add(row);
-                continue;
+            for (ItemQuoteVersion item : candidates) {
+                rows.add(previewMatchedLeadTimeReplacementRow(order, excelRow, item));
             }
-
-            ItemQuoteVersion item = candidates.get(0);
-            row.setRfqId(item.getRfqId());
-            row.setRfqNo(order == null ? null : order.getRfqNo());
-            row.setItemId(item.getId());
-            row.setCurrentQuoteLeadTime(item.getQuoteLeadTime());
-            if (isBlank(row.getImportedQuoteLeadTime())) {
-                row.setStatus("EMPTY_VALUE");
-                row.setReason("报价交期为空，未替换");
-                rows.add(row);
-                continue;
-            }
-            if (Objects.equals(normalizeBlank(item.getQuoteLeadTime()), normalizeBlank(row.getImportedQuoteLeadTime()))) {
-                row.setStatus("UNCHANGED");
-                row.setReason("报价交期未变化");
-            } else {
-                row.setStatus("CHANGED");
-                row.setReason("");
-            }
-            rows.add(row);
         }
 
-        QuoteLeadTimeReplacementSummaryDTO summary = summarizeLeadTimeReplacement(rows);
+        QuoteLeadTimeReplacementSummaryDTO summary = summarizeLeadTimeReplacement(rows, safeList(parsed.rows()).size());
         QuoteLeadTimeReplacementPreviewDTO preview = new QuoteLeadTimeReplacementPreviewDTO();
         preview.setRecognizedFields(parsed.recognizedFields());
         preview.setRows(rows);
         preview.setSummary(summary);
-        preview.setCanConfirm(summary.getErrorCount() == 0 && summary.getChangedCount() > 0);
+        preview.setCanConfirm(summary.getChangedCount() > 0);
         return preview;
+    }
+
+    private QuoteLeadTimeReplacementRowDTO previewMatchedLeadTimeReplacementRow(
+            OrderRfq order,
+            QuoteLeadTimeReplacementRowDTO excelRow,
+            ItemQuoteVersion item) {
+        QuoteLeadTimeReplacementRowDTO row = copyReplacementRow(excelRow);
+        row.setRfqId(item.getRfqId());
+        row.setRfqNo(order == null ? null : order.getRfqNo());
+        row.setItemId(item.getId());
+        row.setCurrentQuoteLeadTime(item.getQuoteLeadTime());
+        if (isBlank(row.getImportedQuoteLeadTime())) {
+            row.setStatus("EMPTY_VALUE");
+            row.setReason("报价交期为空，未替换");
+            return row;
+        }
+        if (Objects.equals(normalizeBlank(item.getQuoteLeadTime()), normalizeBlank(row.getImportedQuoteLeadTime()))) {
+            row.setStatus("UNCHANGED");
+            row.setReason("报价交期未变化");
+        } else {
+            row.setStatus("CHANGED");
+            row.setReason("");
+        }
+        return row;
     }
 
     private QuoteLeadTimeReplacementRowDTO copyReplacementRow(QuoteLeadTimeReplacementRowDTO source) {
@@ -758,9 +744,11 @@ public class QuoteProcessService {
         return row;
     }
 
-    private QuoteLeadTimeReplacementSummaryDTO summarizeLeadTimeReplacement(List<QuoteLeadTimeReplacementRowDTO> rows) {
+    private QuoteLeadTimeReplacementSummaryDTO summarizeLeadTimeReplacement(
+            List<QuoteLeadTimeReplacementRowDTO> rows,
+            int importedCount) {
         QuoteLeadTimeReplacementSummaryDTO summary = new QuoteLeadTimeReplacementSummaryDTO();
-        summary.setImportedCount(rows == null ? 0 : rows.size());
+        summary.setImportedCount(importedCount);
         for (QuoteLeadTimeReplacementRowDTO row : safeList(rows)) {
             if (row.getItemId() != null) {
                 summary.setMatchedCount(summary.getMatchedCount() + 1);

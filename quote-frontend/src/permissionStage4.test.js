@@ -18,6 +18,7 @@ const protectedRoutePermissions = {
   '/market': 'market:rfq:view',
   '/quote-process': 'market:quote-process:view',
   '/release': 'market:release:view',
+  '/release-append': 'market:release-append:view',
   '/u9-sync': 'market:u9-sync:view',
   '/delivery-documents': 'market:delivery-document:view',
   '/engineering': 'engineer:setup:view',

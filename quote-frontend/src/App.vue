@@ -104,7 +104,7 @@ const sidebarWidth = computed(() => isSidebarCollapsed.value ? '72px' : '200px')
 
 const menuGroups = [
   { key: 'dashboard', title: '首页', paths: ['/dashboard'] },
-  { key: 'market', title: '市场', paths: ['/market', '/quote-process', '/release', '/u9-sync', '/delivery-documents', '/quote-template'] },
+  { key: 'market', title: '市场', paths: ['/market', '/quote-process', '/release', '/release-append', '/u9-sync', '/delivery-documents', '/quote-template'] },
   { key: 'engineer', title: '工程', paths: ['/engineering', '/material-process'] },
   { key: 'orders', title: '订单', paths: ['/orders', '/sales-orders', '/part-search', '/delivered-items', '/production-items', '/locked-items'] },
   { key: 'change', title: '变更', paths: ['/sales-order-change'] },
@@ -116,6 +116,7 @@ const menuMetaByPath = {
   '/market': { title: '新单导入', permission: 'market:rfq:view', icon: DataBoard },
   '/quote-process': { title: '报价处理', permission: 'market:quote-process:view', icon: Document },
   '/release': { title: '议价提单', permission: 'market:release:view', icon: Files },
+  '/release-append': { title: '追加提单', permission: 'market:release-append:view', icon: Files },
   '/u9-sync': { title: 'U9同步', permission: 'market:u9-sync:view', icon: Document },
   '/delivery-documents': { title: '提单表据', permission: 'market:delivery-document:view', icon: Document },
   '/quote-template': { title: '报价模板', permission: 'market:template:view', icon: Files },
@@ -188,6 +189,10 @@ const shellMetaByPath = {
   '/release': {
     title: '议价提单',
     description: '处理议价结果并生成生产交付资料。'
+  },
+  '/release-append': {
+    title: '追加提单',
+    description: '向同客户的 U9 未处理销售订单追加新零件并生成提单行。'
   },
   '/u9-sync': {
     title: 'U9同步',

@@ -20,6 +20,7 @@ import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -27,6 +28,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -65,6 +67,74 @@ class FileStorageStage3Test {
         assertThat(insertedObject.get().getOriginalFilename()).isEqualTo("DRW-001.pdf");
         assertThat(insertedObject.get().getBizType()).isEqualTo("RFQ_IMPORT_DRAWING");
         assertThat(insertedObject.get().getBizId()).isEqualTo("RFQ-2026-0001");
+    }
+
+    @Test
+    void businessFileServiceSavesDrawingFolderFilesUnderOneFolderPrefixAndRecordsMetadataPerPdf() throws Exception {
+        OrderFilePathService pathService = pathService();
+        FileStorageRouter router = mock(FileStorageRouter.class);
+        SystemFileObjectMapper objectMapper = mock(SystemFileObjectMapper.class);
+        List<SystemFileObject> insertedObjects = new java.util.ArrayList<>();
+        when(router.saveActive(any(), any(), anyLong(), any(), any())).thenAnswer(invocation ->
+                new StoredFile(StorageType.MINIO, 7L, invocation.getArgument(0), invocation.getArgument(4),
+                        invocation.getArgument(3), invocation.getArgument(2), null));
+        when(objectMapper.insert(any(SystemFileObject.class))).thenAnswer(invocation -> {
+            insertedObjects.add(invocation.getArgument(0));
+            return 1;
+        });
+
+        BusinessFileService service = new BusinessFileService(pathService, router, objectMapper);
+        MockMultipartFile first = new MockMultipartFile("drawingFolderFiles", "A-100.pdf", "application/pdf", "pdf1".getBytes(StandardCharsets.UTF_8));
+        MockMultipartFile second = new MockMultipartFile("drawingFolderFiles", "A-101.PDF", "application/pdf", "pdf2".getBytes(StandardCharsets.UTF_8));
+        MockMultipartFile skipped = new MockMultipartFile("drawingFolderFiles", "note.txt", "text/plain", "txt".getBytes(StandardCharsets.UTF_8));
+
+        BusinessFileService.DrawingFolderSaveResult result = service.saveDrawingFolderFiles(
+                "RFQ",
+                "101",
+                "客户A图纸包",
+                List.of(first, second, skipped),
+                "RFQ_DRAWING_FOLDER",
+                "101");
+
+        assertThat(result.folderUrl())
+                .startsWith("/uploads/drawing-folders/RFQ/101/")
+                .endsWith("/");
+        assertThat(result.folderName()).isEqualTo("客户A图纸包");
+        assertThat(result.fileCount()).isEqualTo(2);
+        assertThat(result.files()).extracting(BusinessFileService.DrawingFolderFile::fileName)
+                .containsExactly("A-100.pdf", "A-101.PDF");
+        assertThat(result.files()).allSatisfy(file -> assertThat(file.publicPath()).startsWith(result.folderUrl()).endsWith(".pdf"));
+        assertThat(insertedObjects).hasSize(2);
+        assertThat(insertedObjects).extracting(SystemFileObject::getPublicPath)
+                .allSatisfy(path -> assertThat(path).startsWith(result.folderUrl()));
+        assertThat(insertedObjects).extracting(SystemFileObject::getBizType)
+                .containsExactly("RFQ_DRAWING_FOLDER", "RFQ_DRAWING_FOLDER");
+        assertThat(insertedObjects).extracting(SystemFileObject::getBizId)
+                .containsExactly("101", "101");
+        verify(router, times(2)).saveActive(any(), any(), anyLong(), any(), any());
+    }
+
+    @Test
+    void businessFileServiceListsDrawingFolderFilesByFolderPrefix() {
+        OrderFilePathService pathService = pathService();
+        FileStorageRouter router = mock(FileStorageRouter.class);
+        SystemFileObjectMapper objectMapper = mock(SystemFileObjectMapper.class);
+        SystemFileObject first = folderObject("/uploads/drawing-folders/RFQ/101/FOLDER/A.pdf", "A.pdf", 12L);
+        SystemFileObject second = folderObject("/uploads/drawing-folders/RFQ/101/FOLDER/B.pdf", "B.pdf", 34L);
+        when(objectMapper.selectList(any())).thenReturn(List.of(first, second));
+
+        BusinessFileService service = new BusinessFileService(pathService, router, objectMapper);
+
+        List<BusinessFileService.DrawingFolderFile> files = service.listDrawingFolderFiles(
+                "/uploads/drawing-folders/RFQ/101/FOLDER/");
+
+        assertThat(files).hasSize(2);
+        assertThat(files).extracting(BusinessFileService.DrawingFolderFile::fileName)
+                .containsExactly("A.pdf", "B.pdf");
+        assertThat(files).extracting(BusinessFileService.DrawingFolderFile::publicPath)
+                .containsExactly(first.getPublicPath(), second.getPublicPath());
+        assertThat(files).extracting(BusinessFileService.DrawingFolderFile::sizeBytes)
+                .containsExactly(12L, 34L);
     }
 
     @Test
@@ -138,5 +208,17 @@ class FileStorageStage3Test {
         order.setCustomerName("客户A");
         order.setRfqNo("RFQ-2026-0001");
         return order;
+    }
+
+    private SystemFileObject folderObject(String publicPath, String filename, Long sizeBytes) {
+        SystemFileObject object = new SystemFileObject();
+        object.setPublicPath(publicPath);
+        object.setStorageType("MINIO");
+        object.setStorageConfigId(7L);
+        object.setObjectKey(publicPath.substring("/uploads/".length()));
+        object.setOriginalFilename(filename);
+        object.setContentType("application/pdf");
+        object.setSizeBytes(sizeBytes);
+        return object;
     }
 }

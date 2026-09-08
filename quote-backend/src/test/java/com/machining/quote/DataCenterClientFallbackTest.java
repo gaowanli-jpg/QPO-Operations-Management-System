@@ -263,7 +263,6 @@ class DataCenterClientFallbackTest {
         MesMaterialResolveReq.Item item = new MesMaterialResolveReq.Item();
         item.setDrawingNo("P-100");
         item.setDrawingVersion("A");
-        item.setDrawingUrls(List.of("http://qpo.local/P-100.pdf"));
         req.setItems(List.of(item));
         return req;
     }

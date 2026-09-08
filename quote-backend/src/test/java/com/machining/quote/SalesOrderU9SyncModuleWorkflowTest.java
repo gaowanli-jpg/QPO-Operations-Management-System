@@ -32,6 +32,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -250,6 +251,93 @@ class SalesOrderU9SyncModuleWorkflowTest {
     }
 
     @Test
+    void previewTreatsU9ChangeExcludedItemsAsNonexistentForCountsLinesAndValidation() {
+        Fixture fixture = fixture();
+        SalesOrderHeader header = header(9010L, "SOQPO-010", QuoteStatusWorkflow.RELEASED, "未同步");
+        SalesOrderItem active = item(5010L, header.getId(), "P-ACTIVE", "MAT-ACTIVE", "已确认");
+        SalesOrderItem excluded = item(5011L, header.getId(), "P-EXCLUDED", null, "未确认");
+        ReflectionTestUtils.setField(excluded, "u9ChangeExcluded", true);
+
+        when(fixture.headerMapper.selectById(header.getId())).thenReturn(header);
+        when(fixture.itemMapper.selectList(any())).thenAnswer(invocation ->
+                queryUsesU9ChangeActiveFilter(invocation.getArgument(0)) ? List.of(active) : List.of(active, excluded));
+        when(fixture.itemMapper.selectCount(any())).thenAnswer(invocation ->
+                queryUsesU9ChangeActiveFilter(invocation.getArgument(0)) ? 1L : 2L);
+
+        SalesOrderU9SyncPreviewResp resp = fixture.service.previewSalesOrder(header.getId());
+
+        assertThat(resp.getItemCount()).isEqualTo(1);
+        assertThat(resp.getTotal()).isEqualTo(1);
+        assertThat(resp.getMaterialConfirmedItemCount()).isEqualTo(1);
+        assertThat(resp.getMissingMaterialItemCount()).isZero();
+        assertThat(resp.getSyncReady()).isTrue();
+        assertThat(resp.getLines()).extracting(SalesOrderU9SyncPreviewLine::getSalesOrderItemId)
+                .containsExactly(active.getId())
+                .doesNotContain(excluded.getId());
+        assertThat(resp.getRequestFingerprint()).hasSize(64);
+    }
+
+    @Test
+    void previewReturnsNoSyncableItemsWhenEverySalesOrderItemIsU9ChangeExcluded() {
+        Fixture fixture = fixture();
+        SalesOrderHeader header = header(9011L, "SOQPO-011", QuoteStatusWorkflow.RELEASED, "未同步");
+        SalesOrderItem excluded = item(5012L, header.getId(), "P-EXCLUDED", "MAT-EXCLUDED", "已确认");
+        ReflectionTestUtils.setField(excluded, "u9ChangeExcluded", true);
+
+        when(fixture.headerMapper.selectById(header.getId())).thenReturn(header);
+        when(fixture.itemMapper.selectList(any())).thenAnswer(invocation ->
+                queryUsesU9ChangeActiveFilter(invocation.getArgument(0)) ? List.of() : List.of(excluded));
+        when(fixture.itemMapper.selectCount(any())).thenAnswer(invocation ->
+                queryUsesU9ChangeActiveFilter(invocation.getArgument(0)) ? 0L : 1L);
+
+        SalesOrderU9SyncPreviewResp resp = fixture.service.previewSalesOrder(header.getId());
+
+        assertThat(resp.getItemCount()).isZero();
+        assertThat(resp.getTotal()).isZero();
+        assertThat(resp.getLines()).isEmpty();
+        assertThat(resp.getSyncReady()).isFalse();
+        assertThat(resp.getBlockedReason()).contains("销售订单没有可同步零件");
+        assertThat(resp.getRequestFingerprint()).isNull();
+    }
+
+    @Test
+    void partiallyReleasedHeaderCanSyncWhenOnlyExcludedRowsHaveUnreleasedQuantity() {
+        Fixture fixture = fixture();
+        SalesOrderHeader header = header(9012L, "SOQPO-012", QuoteStatusWorkflow.PARTIALLY_RELEASED, "未同步");
+        SalesOrderItem active = item(5013L, header.getId(), "P-ACTIVE", "MAT-ACTIVE", "已确认");
+        SalesOrderItem excluded = item(5014L, header.getId(), "P-EXCLUDED", "MAT-EXCLUDED", "已确认");
+        excluded.setReleasedQty(0);
+        excluded.setRemainingQty(5);
+        ReflectionTestUtils.setField(excluded, "u9ChangeExcluded", true);
+
+        when(fixture.headerMapper.selectById(header.getId())).thenReturn(header);
+        when(fixture.itemMapper.selectList(any())).thenAnswer(invocation ->
+                queryUsesU9ChangeActiveFilter(invocation.getArgument(0)) ? List.of(active) : List.of(active, excluded));
+        when(fixture.itemMapper.selectCount(any())).thenAnswer(invocation ->
+                queryUsesU9ChangeActiveFilter(invocation.getArgument(0)) ? 1L : 2L);
+
+        SalesOrderU9SyncPreviewResp resp = fixture.service.previewSalesOrder(header.getId());
+
+        assertThat(resp.getSyncReady()).isTrue();
+        assertThat(resp.getBlockedReason()).isBlank();
+        assertThat(resp.getLines()).extracting(SalesOrderU9SyncPreviewLine::getSalesOrderItemId)
+                .containsExactly(active.getId());
+    }
+
+    @Test
+    void materialReadinessFiltersOnlyInspectNonExcludedSalesOrderItems() {
+        Fixture fixture = fixture();
+        when(fixture.headerMapper.selectCount(any())).thenReturn(0L);
+
+        fixture.service.listOrders("客户A", "SOQPO", null, null, "READY", 1, 20);
+
+        ArgumentCaptor<QueryWrapper<SalesOrderHeader>> queryCaptor = ArgumentCaptor.forClass(QueryWrapper.class);
+        verify(fixture.headerMapper).selectCount(queryCaptor.capture());
+        assertThat(queryCaptor.getValue().getCustomSqlSegment().toLowerCase(Locale.ROOT))
+                .contains("u9_change_excluded");
+    }
+
+    @Test
     void previewAllowsRowsWithOnlyUntaxedPriceBeforeU9Sync() {
         Fixture fixture = fixture();
         SalesOrderHeader header = header(9001L, "SOQPO-001", QuoteStatusWorkflow.RELEASED, "未同步");
@@ -294,16 +382,22 @@ class SalesOrderU9SyncModuleWorkflowTest {
         when(fixture.headerMapper.selectById(9001L)).thenReturn(quoted);
         when(fixture.headerMapper.selectById(9002L)).thenReturn(partial);
         when(fixture.headerMapper.selectById(9003L)).thenReturn(synced);
+        SalesOrderItem quotedItem = item(5001L, quoted.getId(), "P-001", "MAT-001", "已确认");
+        SalesOrderItem partialItem = unreleasedItem(5002L, partial.getId(), "P-002", "MAT-002", "已确认");
+        SalesOrderItem syncedItem = item(5003L, synced.getId(), "P-003", "MAT-003", "已确认");
         when(fixture.itemMapper.selectList(any())).thenReturn(
-                List.of(item(5001L, quoted.getId(), "P-001", "MAT-001", "已确认")),
-                List.of(item(5002L, partial.getId(), "P-002", "MAT-002", "已确认")),
-                List.of(item(5003L, synced.getId(), "P-003", "MAT-003", "已确认"))
+                List.of(quotedItem),
+                List.of(quotedItem),
+                List.of(partialItem),
+                List.of(partialItem),
+                List.of(syncedItem),
+                List.of(syncedItem)
         );
 
         assertThat(fixture.service.previewSalesOrder(quoted.getId()).getBlockedReason())
                 .contains("尚未生成 QPO 提单");
         assertThat(fixture.service.previewSalesOrder(partial.getId()).getBlockedReason())
-                .contains("仍存在未提单数量");
+                .contains("尚未全部生成提单");
         assertThat(fixture.service.previewSalesOrder(synced.getId()).getBlockedReason())
                 .contains("已同步");
         verify(fixture.headerMapper, never()).updateById(any());
@@ -401,6 +495,20 @@ class SalesOrderU9SyncModuleWorkflowTest {
         item.setRemark("销售订单备注");
         item.setStatus(QuoteStatusWorkflow.RELEASED);
         return item;
+    }
+
+    private SalesOrderItem unreleasedItem(Long id, Long salesOrderId, String partNo, String materialNo, String materialNoStatus) {
+        SalesOrderItem item = item(id, salesOrderId, partNo, materialNo, materialNoStatus);
+        item.setReleasedQty(0);
+        item.setRemainingQty(item.getQty());
+        return item;
+    }
+
+    private static boolean queryUsesU9ChangeActiveFilter(Object query) {
+        if (!(query instanceof QueryWrapper<?> wrapper)) {
+            return false;
+        }
+        return wrapper.getCustomSqlSegment().toLowerCase(Locale.ROOT).contains("u9_change_excluded");
     }
 
     private static final class Fixture {

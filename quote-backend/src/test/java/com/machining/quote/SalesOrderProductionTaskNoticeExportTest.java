@@ -1,6 +1,7 @@
 package com.machining.quote;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.machining.quote.domain.QuoteStatusWorkflow;
 import com.machining.quote.entity.SalesOrderHeader;
 import com.machining.quote.entity.SalesOrderItem;
 import com.machining.quote.mapper.SalesOrderHeaderMapper;
@@ -20,11 +21,13 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.io.ByteArrayInputStream;
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -33,6 +36,90 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class SalesOrderProductionTaskNoticeExportTest {
+
+    @Test
+    void exportSkipsDiscardedSalesOrderItems() throws Exception {
+        SalesOrderHeader header = new SalesOrderHeader();
+        header.setId(930L);
+        header.setSalesOrderNo("SOQPO-930");
+        header.setSalesOrderDate(LocalDate.of(2026, 9, 8));
+
+        SalesOrderItem active = item(9301L, 930L, 1, null);
+        active.setPartNo("PN-ACTIVE");
+        active.setQty(2);
+        active.setVersion("A");
+
+        SalesOrderItem discarded = item(9302L, 930L, 2, null);
+        discarded.setPartNo("PN-DISCARDED");
+        discarded.setQty(9);
+        discarded.setVersion("B");
+        discarded.setStatus(QuoteStatusWorkflow.DISCARDED);
+
+        Fixture fixture = fixture(header, List.of(active, discarded));
+
+        byte[] bytes = fixture.service.export(930L);
+
+        ArgumentCaptor<Object> afterDataCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(fixture.auditService).record(
+                eq("SALES_ORDER_PRODUCTION_TASK_NOTICE_EXPORT"),
+                eq("sales_order_header"),
+                eq(930L),
+                isNull(),
+                afterDataCaptor.capture(),
+                eq("MARKET"),
+                eq("SUCCESS"),
+                eq(AuditService.labelForAction("SALES_ORDER_PRODUCTION_TASK_NOTICE_EXPORT")),
+                isNull()
+        );
+        assertThat((Map<String, Object>) afterDataCaptor.getValue())
+                .containsEntry("rowCount", 1);
+
+        try (Workbook workbook = WorkbookFactory.create(new ByteArrayInputStream(bytes))) {
+            Sheet sheet = workbook.getSheet("StandardDocPrintTemplate");
+            assertThat(text(sheet, 12, "P")).isEqualTo("PN-ACTIVE");
+            assertThat(text(sheet, 12, "T")).isEqualTo("2");
+            assertThat(text(sheet, 13, "P")).isBlank();
+        }
+    }
+
+    @Test
+    void exportAllowsEmptyNoticeWhenAllSalesOrderItemsAreDiscarded() throws Exception {
+        SalesOrderHeader header = new SalesOrderHeader();
+        header.setId(931L);
+        header.setSalesOrderNo("SOQPO-931");
+        header.setSalesOrderDate(LocalDate.of(2026, 9, 8));
+
+        SalesOrderItem discarded = item(9311L, 931L, 1, null);
+        discarded.setPartNo("PN-DISCARDED-ONLY");
+        discarded.setQty(5);
+        discarded.setStatus(QuoteStatusWorkflow.DISCARDED);
+
+        Fixture fixture = fixture(header, List.of(discarded));
+
+        byte[] bytes = fixture.service.export(931L);
+
+        ArgumentCaptor<Object> afterDataCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(fixture.auditService).record(
+                eq("SALES_ORDER_PRODUCTION_TASK_NOTICE_EXPORT"),
+                eq("sales_order_header"),
+                eq(931L),
+                isNull(),
+                afterDataCaptor.capture(),
+                eq("MARKET"),
+                eq("SUCCESS"),
+                eq(AuditService.labelForAction("SALES_ORDER_PRODUCTION_TASK_NOTICE_EXPORT")),
+                isNull()
+        );
+        assertThat((Map<String, Object>) afterDataCaptor.getValue())
+                .containsEntry("rowCount", 0);
+
+        try (Workbook workbook = WorkbookFactory.create(new ByteArrayInputStream(bytes))) {
+            Sheet sheet = workbook.getSheet("StandardDocPrintTemplate");
+            assertThat(text(sheet, 12, "P")).isBlank();
+            assertThat(text(sheet, 12, "T")).isBlank();
+            assertThat(text(sheet, 15, "AB")).contains("SOQPO-931");
+        }
+    }
 
     @Test
     void exportFillsProductionTaskNoticeTemplateFromSalesOrderHeaderAndItems() throws Exception {
@@ -165,6 +252,14 @@ class SalesOrderProductionTaskNoticeExportTest {
     }
 
     @Test
+    void exportSupportsLargeProductionTaskNoticeRowsUpToTwoThousand() throws Exception {
+        assertTimeoutPreemptively(Duration.ofSeconds(20), () -> {
+            assertLargeProductionTaskNoticeExport(150);
+            assertLargeProductionTaskNoticeExport(2000);
+        });
+    }
+
+    @Test
     void controllerEndpointIsSecuredAndWritesXlsxDownload() throws Exception {
         SalesOrderProductionTaskNoticeExportService service = mock(SalesOrderProductionTaskNoticeExportService.class);
         byte[] bytes = new byte[] { 1, 2, 3 };
@@ -197,6 +292,54 @@ class SalesOrderProductionTaskNoticeExportTest {
         ReflectionTestUtils.setField(service, "dataScopeService", dataScopeService);
         ReflectionTestUtils.setField(service, "auditService", auditService);
         return new Fixture(service, headerMapper, itemMapper, dataScopeService, auditService);
+    }
+
+    private void assertLargeProductionTaskNoticeExport(int itemCount) throws Exception {
+        SalesOrderHeader header = new SalesOrderHeader();
+        header.setId(920L + itemCount);
+        header.setSalesOrderNo("SOQPO-LARGE-" + itemCount);
+        header.setSalesOrderDate(LocalDate.of(2026, 9, 4));
+
+        List<SalesOrderItem> items = java.util.stream.IntStream.rangeClosed(1, itemCount)
+                .mapToObj(index -> {
+                    SalesOrderItem item = item(920000L + index, header.getId(), index, index % 2 == 0 ? "已匹配" : "未匹配");
+                    item.setPartNo("PN-LARGE-" + index);
+                    item.setQty(index);
+                    item.setVersion("V" + index);
+                    item.setEngineeringMaterialName("6061");
+                    item.setSurfaceTreatment("本色阳极");
+                    item.setSalesOrderDate(LocalDate.of(2026, 9, 4));
+                    item.setInternalDeliveryDate(LocalDate.of(2026, 9, 24));
+                    item.setRemark("ROW-" + index);
+                    return item;
+                })
+                .toList();
+
+        Fixture fixture = fixture(header, items);
+
+        byte[] bytes = fixture.service.export(header.getId());
+
+        try (Workbook workbook = WorkbookFactory.create(new ByteArrayInputStream(bytes))) {
+            Sheet sheet = workbook.getSheet("StandardDocPrintTemplate");
+            int lastDataRow = 11 + itemCount;
+            assertDataRowStyleMatches(sheet, 62, 63);
+            assertDataRowStyleMatches(sheet, 62, lastDataRow - 1);
+            assertThat(text(sheet, lastDataRow, "B")).isEqualTo(String.valueOf(itemCount * 10));
+            assertThat(text(sheet, lastDataRow, "P")).isEqualTo("PN-LARGE-" + itemCount);
+            assertThat(text(sheet, lastDataRow, "AG")).isEqualTo("ROW-" + itemCount);
+            assertThat(text(sheet, lastDataRow + 3, "AB")).isEqualTo("表单编号：SOQPO-LARGE-" + itemCount);
+        }
+    }
+
+    private void assertDataRowStyleMatches(Sheet sheet, int templateRowNumber, int actualRowNumber) {
+        Row templateRow = sheet.getRow(templateRowNumber - 1);
+        Row actualRow = sheet.getRow(actualRowNumber - 1);
+        assertThat(actualRow).as("row %s exists", actualRowNumber).isNotNull();
+        for (int columnIndex = columnIndex("B"); columnIndex <= columnIndex("AI"); columnIndex++) {
+            assertThat(actualRow.getCell(columnIndex, Row.MissingCellPolicy.CREATE_NULL_AS_BLANK).getCellStyle().getIndex())
+                    .as("row %s column %s style", actualRowNumber, columnName(columnIndex))
+                    .isEqualTo(templateRow.getCell(columnIndex, Row.MissingCellPolicy.CREATE_NULL_AS_BLANK).getCellStyle().getIndex());
+        }
     }
 
     private SalesOrderItem item(Long id, Long salesOrderId, Integer lineNo, String matchStatus) {
@@ -242,6 +385,17 @@ class SalesOrderProductionTaskNoticeExportTest {
             result = result * 26 + (column.charAt(i) - 'A' + 1);
         }
         return result - 1;
+    }
+
+    private String columnName(int zeroBasedColumnIndex) {
+        int value = zeroBasedColumnIndex + 1;
+        StringBuilder builder = new StringBuilder();
+        while (value > 0) {
+            int remainder = (value - 1) % 26;
+            builder.insert(0, (char) ('A' + remainder));
+            value = (value - 1) / 26;
+        }
+        return builder.toString();
     }
 
     private boolean hasMergedRegion(Sheet sheet, String range) {

@@ -147,7 +147,7 @@ class SalesOrderU9ItemDataReplacementStage2Test {
     }
 
     @Test
-    void unmatchedRowsDoNotBlockConfirmationButErrorsDo() {
+    void unmatchedRowsDoNotBlockConfirmationAndDuplicateTargetsExpandWithoutLineNo() {
         Fixture ambiguous = fixture();
         SalesOrderHeader header = header(101L, "SO-101", "未同步");
         ambiguous.withOrder(header, List.of(
@@ -160,12 +160,18 @@ class SalesOrderU9ItemDataReplacementStage2Test {
                         List.of("P-DUP", "A", "new remark"),
                         List.of("NO-MATCH", "A", "unmatched"))));
 
-        assertThat(duplicatePreview.isCanConfirm()).isFalse();
+        assertThat(duplicatePreview.isCanConfirm()).isTrue();
         assertThat(duplicatePreview.getRows()).extracting(SalesOrderU9ItemDataReplacementRowDTO::getStatus)
                 .containsExactly(
-                        SalesOrderU9ItemDataReplacementRowStatus.ERROR,
+                        SalesOrderU9ItemDataReplacementRowStatus.CHANGED,
+                        SalesOrderU9ItemDataReplacementRowStatus.CHANGED,
                         SalesOrderU9ItemDataReplacementRowStatus.UNMATCHED);
-        assertThat(duplicatePreview.getSummary().getErrorCount()).isEqualTo(1);
+        assertThat(duplicatePreview.getRows()).extracting(SalesOrderU9ItemDataReplacementRowDTO::getSalesOrderItemId)
+                .containsExactly(210L, 211L, null);
+        assertThat(duplicatePreview.getSummary().getImportedCount()).isEqualTo(2);
+        assertThat(duplicatePreview.getSummary().getMatchedCount()).isEqualTo(2);
+        assertThat(duplicatePreview.getSummary().getChangedCount()).isEqualTo(2);
+        assertThat(duplicatePreview.getSummary().getErrorCount()).isZero();
         assertThat(duplicatePreview.getSummary().getUnmatchedCount()).isEqualTo(1);
     }
 

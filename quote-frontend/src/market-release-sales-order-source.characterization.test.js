@@ -71,7 +71,7 @@ describe('market release sales order source characterization', () => {
     const marketApi = readSource('services', 'marketApi.js')
 
     expect(marketApi).toContain("release: '/api/market/release/orders'")
-    expect(source).toContain("const SALES_ORDER_SCOPES = ['release-append-sales-order', 'u9-sync', 'sales-order-change']")
+    expect(source).toContain("const SALES_ORDER_SCOPES = ['release-append-sales-order', 'release-append', 'u9-sync', 'sales-order-change']")
     expect(source).not.toContain("const SALES_ORDER_SCOPES = ['release'")
     expect(source).toContain("'release-append-sales-order': '销售订单'")
     expect(source).toContain('const resolveOrderSourceType = (order) => (')

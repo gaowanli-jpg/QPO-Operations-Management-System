@@ -83,7 +83,7 @@
 
             <section class="release-order-default-panel">
               <div class="panel-title compact">订单默认信息</div>
-              <p class="release-order-default-hint">仅用于生成正式提单：一批生成一张销售订单，零件值优先，空值继承订单默认信息；追加销售提单以目标销售订单头为准，左侧必填项不参与。</p>
+              <p class="release-order-default-hint">仅用于生成正式提单：一批生成一张销售订单，零件值优先，空值继承订单默认信息；追加销售提单零件值优先，空值继承目标销售订单头，左侧必填项不参与。</p>
               <el-form label-width="96px" class="ticket-form release-order-default-form">
                 <el-form-item label="单据类型" required>
                   <el-input
@@ -837,6 +837,12 @@
       @select="appendToSalesOrder"
     />
 
+    <DrawingFolderViewer
+      v-model="folderViewerVisible"
+      :folder-url="currentDrawingFolderUrl"
+      :title="currentDrawingFolderTitle"
+    />
+
     <el-dialog
       v-model="pdfVisible"
       :title="`图纸预览：${pdfTitle}`"
@@ -864,6 +870,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { DocumentChecked, UploadFilled } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
 import OrderPickerDialog from './OrderPickerDialog.vue'
+import DrawingFolderViewer from './common/DrawingFolderViewer.vue'
 import ReleaseItemDataReplacementDialog from './market-release/ReleaseItemDataReplacementDialog.vue'
 import { collectPdfFilesFromDataTransfer, isPdfFile, mergePdfFiles } from '../utils/drawingUpload'
 import {
@@ -887,6 +894,7 @@ import {
 } from '../utils/clientPagination'
 import {
   createAuthenticatedObjectUrl,
+  isDrawingFolderUrl,
   readFileErrorMessage,
   revokeObjectUrl
 } from '../api'
@@ -927,6 +935,9 @@ const pdfVisible = ref(false)
 const pdfTitle = ref('')
 const pdfLoaded = ref(false)
 const currentPdfSrc = ref('')
+const folderViewerVisible = ref(false)
+const currentDrawingFolderUrl = ref('')
+const currentDrawingFolderTitle = ref('')
 
 const loading = ref(false)
 let syncingReleaseItemSelection = false
@@ -1919,6 +1930,12 @@ const openPdfPreview = async (url, partNo) => {
   if (!url) {
     return ElMessage.warning('当前零件没有绑定图纸。')
   }
+  if (isDrawingFolderUrl(url)) {
+    currentDrawingFolderUrl.value = url
+    currentDrawingFolderTitle.value = `图纸文件夹：${partNo || '未命名图纸'}`
+    folderViewerVisible.value = true
+    return
+  }
   pdfTitle.value = partNo || '未命名图纸'
   pdfLoaded.value = false
   cleanupPdfSrc()
@@ -1981,7 +1998,7 @@ const appendToSalesOrder = async (targetOrder) => {
 
   return runAction(releaseActionKeys.appendSalesOrder(), async () => {
     await ElMessageBox.confirm(
-      `确认将 ${batchRfqIds.length} 个询价单中已选的 ${orderedSelectedRows.length} 个零件追加到销售订单 ${targetOrder?.salesOrderNo || targetSalesOrderId}？本次追加以目标销售订单头为准，不使用左侧订单默认信息。`,
+      `确认将 ${batchRfqIds.length} 个询价单中已选的 ${orderedSelectedRows.length} 个零件追加到销售订单 ${targetOrder?.salesOrderNo || targetSalesOrderId}？本次追加零件值优先，空值继承目标销售订单头，不使用左侧订单默认信息。`,
       '追加销售提单确认',
       { type: 'warning', confirmButtonText: '确认追加', cancelButtonText: '取消' }
     )

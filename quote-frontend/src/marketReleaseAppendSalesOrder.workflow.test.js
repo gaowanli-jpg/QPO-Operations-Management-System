@@ -16,9 +16,9 @@ describe('market release append sales order workflow', () => {
     expect(source).toContain('appendReleaseToSalesOrder(payload)')
     expect(source).toContain('order-scope="release-append-sales-order"')
     expect(source).toContain('title="选择要追加的销售订单"')
-    expect(source).toContain('仅用于生成正式提单：一批生成一张销售订单，零件值优先，空值继承订单默认信息；追加销售提单以目标销售订单头为准，左侧必填项不参与。')
+    expect(source).toContain('仅用于生成正式提单：一批生成一张销售订单，零件值优先，空值继承订单默认信息；追加销售提单零件值优先，空值继承目标销售订单头，左侧必填项不参与。')
     expect(source).toContain('请先保存已选零件的行级订单字段草稿，再追加销售提单。')
-    expect(source).toContain('本次追加以目标销售订单头为准，不使用左侧订单默认信息。')
+    expect(source).toContain('本次追加零件值优先，空值继承目标销售订单头，不使用左侧订单默认信息。')
 
     const disabledDefinition = source.match(/const appendSalesOrderDisabled = computed\(\(\) => \(([^)]*)\)\)/s)?.[1] || ''
     expect(disabledDefinition).toContain('selectedRows.value.length === 0')

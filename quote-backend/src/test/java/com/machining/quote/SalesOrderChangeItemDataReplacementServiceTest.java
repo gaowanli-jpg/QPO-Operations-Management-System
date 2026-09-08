@@ -1,6 +1,7 @@
 package com.machining.quote;
 
 import com.baomidou.mybatisplus.core.conditions.Wrapper;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.machining.quote.config.AuthContext;
 import com.machining.quote.config.PreviewFingerprintConflictException;
@@ -43,6 +44,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -292,10 +294,8 @@ class SalesOrderChangeItemDataReplacementServiceTest {
 
         Fixture errors = fixture();
         SalesOrderHeader errorHeader = header(104L, "SO-104", "已同步");
-        errors.withOrder(errorHeader, List.of(
-                item(240L, 104L, 1, "P-DUP", "A"),
-                item(241L, 104L, 2, "P-DUP", "A")));
-        byte[] errorExcel = excel(List.of("图号", "版本", "备注"), List.of("P-DUP", "A", "new"));
+        errors.withOrder(errorHeader, List.of(item(240L, 104L, 1, "P-ERR", "A")));
+        byte[] errorExcel = excel(List.of("图号", "版本", "数量"), List.of("P-ERR", "A", 1));
         String errorFingerprint = errors.service.preview(errorHeader.getId(), new ByteArrayInputStream(errorExcel))
                 .getPreviewFingerprint();
         assertThatThrownBy(() -> errors.service.confirm(
@@ -311,6 +311,104 @@ class SalesOrderChangeItemDataReplacementServiceTest {
                 pending.getId(), new ByteArrayInputStream(excel(List.of("图号", "版本", "备注"), List.of("P-PENDING", "A", "new")))))
                 .hasMessageContaining("只允许变更已同步 U9 的销售订单");
         verify(wrongStatus.itemMapper, never()).update(any(), any());
+    }
+
+    @Test
+    void confirmWithoutLineNoUpdatesAllMatchingPartVersionRowsInSalesOrderChange() {
+        Fixture fixture = fixture();
+        SalesOrderHeader header = header(108L, "SO-108", "已同步");
+        SalesOrderItem first = item(280L, 108L, 1, "P-DUP", "A");
+        SalesOrderItem second = item(281L, 108L, 2, " p-dup ", " a ");
+        SalesOrderChangePreviewResp latestPreview = new SalesOrderChangePreviewResp();
+        latestPreview.setSalesOrderId(header.getId());
+        fixture.withOrder(header, List.of(first, second));
+        when(fixture.previewService.preview(header.getId())).thenReturn(latestPreview);
+        byte[] excel = excel(
+                List.of("图号", "版本", "备注"),
+                List.of("P-DUP", "A", "bulk remark"));
+
+        String fingerprint = fixture.service.preview(header.getId(), new ByteArrayInputStream(excel))
+                .getPreviewFingerprint();
+        SalesOrderChangeItemDataReplacementConfirmResp result = fixture.service.confirm(
+                header.getId(),
+                new ByteArrayInputStream(excel),
+                fingerprint,
+                "本地批量校正");
+
+        assertThat(result.getSuccess()).isTrue();
+        assertThat(result.getUpdatedCount()).isEqualTo(2);
+        assertThat(result.getSummary().getImportedCount()).isEqualTo(1);
+        assertThat(result.getSummary().getMatchedCount()).isEqualTo(2);
+        assertThat(result.getSummary().getChangedCount()).isEqualTo(2);
+        assertThat(first.getRemark()).isEqualTo("bulk remark");
+        assertThat(second.getRemark()).isEqualTo("bulk remark");
+        assertThat(result.getPreview()).isSameAs(latestPreview);
+        verify(fixture.itemMapper, times(2)).update(isNull(), any(UpdateWrapper.class));
+        verify(fixture.changeRecordItemMapper, times(2)).insert(any(SalesOrderChangeRecordItem.class));
+    }
+
+    @Test
+    void confirmSkipsErrorRowsAndAppliesValidRowsInSalesOrderChange() {
+        Fixture fixture = fixture();
+        SalesOrderHeader header = header(109L, "SO-109", "已同步");
+        SalesOrderItem invalid = item(290L, 109L, 1, "P-ERR", "A");
+        invalid.setRemark("old invalid");
+        SalesOrderItem valid = item(291L, 109L, 2, "P-OK", "A");
+        valid.setRemark("old valid");
+        SalesOrderChangePreviewResp latestPreview = new SalesOrderChangePreviewResp();
+        latestPreview.setSalesOrderId(header.getId());
+        fixture.withOrder(header, List.of(invalid, valid));
+        when(fixture.previewService.preview(header.getId())).thenReturn(latestPreview);
+        byte[] excel = excel(
+                List.of("图号", "版本", "行号", "数量", "备注"),
+                List.of("P-ERR", "A", 1, 1, "bad remark"),
+                List.of("P-OK", "A", 2, "", "good remark"));
+
+        SalesOrderU9ItemDataReplacementPreviewDTO preview = fixture.service.preview(
+                header.getId(), new ByteArrayInputStream(excel));
+
+        assertThat(preview.isCanConfirm()).isTrue();
+        assertThat(preview.getSummary().getChangedCount()).isEqualTo(1);
+        assertThat(preview.getSummary().getErrorCount()).isEqualTo(1);
+
+        SalesOrderChangeItemDataReplacementConfirmResp result = fixture.service.confirm(
+                header.getId(),
+                new ByteArrayInputStream(excel),
+                preview.getPreviewFingerprint(),
+                "本地局部校正");
+
+        assertThat(result.getSuccess()).isTrue();
+        assertThat(result.getUpdatedCount()).isEqualTo(1);
+        assertThat(result.getSummary().getErrorCount()).isEqualTo(1);
+        assertThat(invalid.getRemark()).isEqualTo("old invalid");
+        assertThat(valid.getRemark()).isEqualTo("good remark");
+        assertThat(result.getPreview()).isSameAs(latestPreview);
+        verify(fixture.itemMapper, times(1)).update(isNull(), any(UpdateWrapper.class));
+        verify(fixture.changeRecordItemMapper, times(1)).insert(any(SalesOrderChangeRecordItem.class));
+    }
+
+    @Test
+    void previewTreatsU9ChangeExcludedCandidateAsUnmatchedInSalesOrderChange() {
+        Fixture fixture = fixture();
+        SalesOrderHeader header = header(107L, "SO-107", "已同步");
+        SalesOrderItem active = item(270L, 107L, 1, "P-ACTIVE", "A");
+        SalesOrderItem excluded = item(271L, 107L, 2, "P-EXCLUDED", "A");
+        ReflectionTestUtils.setField(excluded, "u9ChangeExcluded", true);
+        fixture.withOrder(header, List.of(active, excluded));
+        when(fixture.itemMapper.selectList(any())).thenAnswer(invocation ->
+                queryUsesU9ChangeActiveFilter(invocation.getArgument(0)) ? List.of(active) : List.of(active, excluded));
+
+        SalesOrderU9ItemDataReplacementPreviewDTO preview = fixture.service.preview(header.getId(), new ByteArrayInputStream(excel(
+                List.of("图号", "版本", "备注"),
+                List.of("P-EXCLUDED", "A", "should not update"))));
+
+        assertThat(preview.getRows()).singleElement().satisfies(row -> {
+            assertThat(row.getSalesOrderItemId()).isNull();
+            assertThat(row.getStatus()).isEqualTo(SalesOrderU9ItemDataReplacementRowStatus.UNMATCHED);
+            assertThat(row.getReason()).contains("未找到对应零件");
+        });
+        verify(fixture.itemMapper, never()).update(any(), any());
+        verify(fixture.changeRecordMapper, never()).insert(any());
     }
 
     @Test
@@ -425,6 +523,13 @@ class SalesOrderChangeItemDataReplacementServiceTest {
         item.setDrawingUrl("https://private.example/drawing.pdf");
         item.setUpdatedAt(LocalDateTime.of(2026, 8, 24, 10, 0).plusMinutes(id));
         return item;
+    }
+
+    private static boolean queryUsesU9ChangeActiveFilter(Object query) {
+        if (!(query instanceof QueryWrapper<?> wrapper)) {
+            return false;
+        }
+        return wrapper.getCustomSqlSegment().toLowerCase(Locale.ROOT).contains("u9_change_excluded");
     }
 
     private record Fixture(

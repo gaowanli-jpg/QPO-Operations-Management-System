@@ -287,6 +287,7 @@ abstract class CoreWorkflowIntegrationTestSupport {
         if (detail == null) {
             detail = new DictProcessDetail();
             detail.setCategoryId(category.getId());
+            detail.setProcessCode(processCode);
             detail.setDetailName(detailName);
             detail.setDetailRemarks("test process detail");
             detail.setEnabled(true);

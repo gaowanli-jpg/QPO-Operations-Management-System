@@ -169,6 +169,23 @@ class FlywayMigrationPolicyTest {
                 .doesNotContain("parent_id = 3", "parent_id = 158", "parent_id = 190", "parent_id = 199");
     }
 
+    @Test
+    void salesOrderManagementButtonPermissionParentsAreRepairedByPermissionCode() throws IOException {
+        Path migrationPath = MIGRATION_DIR.resolve("V47__repair_sales_order_management_permission_parent_ids.sql");
+        assertThat(migrationPath).exists();
+
+        String migration = read(migrationPath);
+        assertThat(migration)
+                .contains(
+                        "UPDATE system_permission child",
+                        "JOIN system_permission parent",
+                        "child.permission_code = mapping.child_code",
+                        "parent.permission_code = mapping.parent_code",
+                        "('market:sales-order:production-task-notice-export', 'market:sales-order:view')",
+                        "('market:sales-order:update', 'market:sales-order:view')")
+                .doesNotContain("parent_id = 190", "parent_id = 150");
+    }
+
     private static List<MigrationFile> migrationFiles() throws IOException {
         List<MigrationFile> migrations = new ArrayList<>();
         try (var paths = Files.list(MIGRATION_DIR)) {

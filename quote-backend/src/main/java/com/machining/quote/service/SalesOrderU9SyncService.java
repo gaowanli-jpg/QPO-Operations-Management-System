@@ -433,6 +433,7 @@ public class SalesOrderU9SyncService {
     private List<SalesOrderItem> loadItems(Long salesOrderId) {
         QueryWrapper<SalesOrderItem> query = new QueryWrapper<>();
         query.eq("sales_order_id", salesOrderId)
+                .and(wrapper -> wrapper.eq("u9_change_excluded", false).or().isNull("u9_change_excluded"))
                 .orderByAsc("line_no")
                 .orderByAsc("id");
         List<SalesOrderItem> items = itemMapper.selectList(query);
@@ -441,7 +442,8 @@ public class SalesOrderU9SyncService {
 
     private long countItems(Long salesOrderId) {
         QueryWrapper<SalesOrderItem> query = new QueryWrapper<>();
-        query.eq("sales_order_id", salesOrderId);
+        query.eq("sales_order_id", salesOrderId)
+                .and(wrapper -> wrapper.eq("u9_change_excluded", false).or().isNull("u9_change_excluded"));
         Long total = itemMapper.selectCount(query);
         return total == null ? 0L : total;
     }
@@ -449,6 +451,7 @@ public class SalesOrderU9SyncService {
     private List<SalesOrderItem> loadPagedItems(Long salesOrderId, int page, int pageSize) {
         QueryWrapper<SalesOrderItem> query = new QueryWrapper<>();
         query.eq("sales_order_id", salesOrderId)
+                .and(wrapper -> wrapper.eq("u9_change_excluded", false).or().isNull("u9_change_excluded"))
                 .orderByAsc("line_no")
                 .orderByAsc("id")
                 .last("LIMIT " + pageSize + " OFFSET " + ((page - 1L) * pageSize));
@@ -680,10 +683,11 @@ public class SalesOrderU9SyncService {
         String normalized = materialReadyStatus.trim().toUpperCase(Locale.ROOT);
         if ("READY".equals(normalized) || "已就绪".equals(materialReadyStatus.trim())) {
             query.apply("""
-                    EXISTS (SELECT 1 FROM sales_order_item soi WHERE soi.sales_order_id = sales_order_header.id)
+                    EXISTS (SELECT 1 FROM sales_order_item soi WHERE soi.sales_order_id = sales_order_header.id AND COALESCE(soi.u9_change_excluded, false) = false)
                     AND NOT EXISTS (
                         SELECT 1 FROM sales_order_item soi
                         WHERE soi.sales_order_id = sales_order_header.id
+                        AND COALESCE(soi.u9_change_excluded, false) = false
                         AND (soi.material_no IS NULL OR TRIM(soi.material_no) = '' OR COALESCE(soi.material_no_status, '') <> '已确认')
                     )
                     """);
@@ -693,6 +697,7 @@ public class SalesOrderU9SyncService {
                     EXISTS (
                         SELECT 1 FROM sales_order_item soi
                         WHERE soi.sales_order_id = sales_order_header.id
+                        AND COALESCE(soi.u9_change_excluded, false) = false
                         AND (soi.material_no IS NULL OR TRIM(soi.material_no) = '' OR COALESCE(soi.material_no_status, '') <> '已确认')
                     )
                     """);

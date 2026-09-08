@@ -344,7 +344,7 @@ import { CLIENT_PAGE_SIZES, DEFAULT_CLIENT_PAGE_SIZE } from '../utils/clientPagi
 const SALES_ORDER_CHANGE_VIEW_PERMISSION = 'change:sales-order:view'
 const SALES_ORDER_CHANGE_ORDER_SELECT_PERMISSION = 'change:sales-order:order-select'
 const SALES_ORDER_CHANGE_UPDATE_PERMISSION = 'change:sales-order:update'
-const SALES_ORDER_CHANGE_ALLOWED_STATUSES = ['已生成提单']
+const SALES_ORDER_CHANGE_ALLOWED_STATUSES = ['部分已提单', '已生成提单']
 const SALES_ORDER_CHANGE_ITEM_EDITABLE_FIELDS = [
   'qty',
   'customerDeliveryDate',

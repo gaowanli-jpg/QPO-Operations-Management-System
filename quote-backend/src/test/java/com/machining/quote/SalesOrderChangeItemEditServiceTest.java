@@ -234,6 +234,23 @@ class SalesOrderChangeItemEditServiceTest {
         verify(invalidPrice.itemMapper, never()).update(any(), any());
     }
 
+    @Test
+    void saveItemsRejectsU9ChangeExcludedSalesOrderItem() {
+        Fixture fixture = fixture();
+        SalesOrderHeader header = header(107L, "已同步");
+        SalesOrderItem item = item(207L, header.getId());
+        ReflectionTestUtils.setField(item, "u9ChangeExcluded", true);
+        fixture.withOrder(header, item);
+
+        assertThatThrownBy(() -> fixture.service.saveItems(header.getId(), request("本地校正", item.getId())))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("已从 U9 同步和销售变更排除");
+
+        verify(fixture.itemMapper, never()).update(any(), any());
+        verify(fixture.changeRecordMapper, never()).insert(any());
+        verify(fixture.previewService, never()).preview(any());
+    }
+
     private Fixture fixture() {
         SalesOrderChangeItemEditService service = new SalesOrderChangeItemEditService();
         Fixture fixture = new Fixture(service);

@@ -8,7 +8,6 @@ import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
-import com.machining.quote.service.BusinessFileService;
 import com.machining.quote.service.DeliveryIntegrationBatchService;
 import com.machining.quote.service.SourceItemMaterialNoSyncService;
 import com.machining.quote.service.mes.MesMaterialClient;
@@ -81,6 +80,39 @@ class MesMaterialBatchOrchestrationServiceTest {
         assertThat(req.getItems().get(0).getCustomerRequirements())
                 .isEqualTo("材料名称：Material note P-EXIST\n表面处理：Anodized");
         verify(fixture.sourceSync).syncConfirmedMaterialNo(existing, "MAT-EXIST-601", "MES material resolved");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void materialBatchCallsMesWithoutDrawingUrlsWhenTicketAndSourceItemHaveNoDrawing() {
+        Fixture fixture = fixture();
+        OrderDeliveryTicket noDrawing = ticket(605, "P-NO-DRAWING", "A", "IP-BATCH-NO-DRAWING");
+        noDrawing.setDrawingUrl(null);
+        fixture.withTicket(noDrawing, null);
+        when(fixture.client.resolveMaterial(any())).thenAnswer(invocation -> {
+            MesMaterialResolveReq req = invocation.getArgument(0);
+            return response(req, item("P-NO-DRAWING", "A", "EXISTING_PRODUCT", "MAT-NO-DRAWING-605", "TASK-605"));
+        });
+        when(fixture.sourceSync.syncConfirmedMaterialNo(any(), anyString(), anyString()))
+                .thenReturn(SourceItemMaterialNoSyncService.MaterialNoSyncResult.empty());
+
+        Map<String, Object> result = fixture.batchService.syncMesMaterialBatch(List.of(605), 9605L);
+
+        assertThat(result)
+                .containsEntry("totalCount", 1)
+                .containsEntry("successCount", 1)
+                .containsEntry("failedCount", 0);
+        List<Map<String, Object>> rows = (List<Map<String, Object>>) result.get("results");
+        assertThat(rows).singleElement()
+                .satisfies(row -> assertThat(row)
+                        .containsEntry("ticketId", 605)
+                        .containsEntry("status", "SUCCESS"));
+        ArgumentCaptor<MesMaterialResolveReq> reqCaptor = ArgumentCaptor.forClass(MesMaterialResolveReq.class);
+        verify(fixture.client).resolveMaterial(reqCaptor.capture());
+        MesMaterialResolveReq.Item sentItem = reqCaptor.getValue().getItems().get(0);
+        assertThat(sentItem.getDrawingNo()).isEqualTo("P-NO-DRAWING");
+        assertThat(sentItem.getDrawingVersion()).isEqualTo("A");
+        assertThat(sentItem.getDrawingUrls()).isNull();
     }
 
     @Test
@@ -185,7 +217,6 @@ class MesMaterialBatchOrchestrationServiceTest {
         fixture.orderMapper = mock(OrderRfqMapper.class);
         fixture.itemMapper = mock(ItemQuoteVersionMapper.class);
         fixture.client = mock(MesMaterialClient.class);
-        fixture.businessFileService = mock(BusinessFileService.class);
         fixture.sourceSync = mock(SourceItemMaterialNoSyncService.class);
         fixture.syncService = new MesMaterialSyncService();
         fixture.batchService = new DeliveryIntegrationBatchService();
@@ -197,14 +228,10 @@ class MesMaterialBatchOrchestrationServiceTest {
         when(fixture.orderMapper.selectById(88)).thenReturn(order);
         when(fixture.ticketMapper.update(any(OrderDeliveryTicket.class), any())).thenReturn(1);
         when(fixture.ticketMapper.updateById(any(OrderDeliveryTicket.class))).thenReturn(1);
-        when(fixture.businessFileService.externalReadableUrl(anyString()))
-                .thenAnswer(invocation -> "http://qpo.test" + invocation.getArgument(0, String.class));
-
         ReflectionTestUtils.setField(fixture.syncService, "ticketMapper", fixture.ticketMapper);
         ReflectionTestUtils.setField(fixture.syncService, "orderRfqMapper", fixture.orderMapper);
         ReflectionTestUtils.setField(fixture.syncService, "itemMapper", fixture.itemMapper);
         ReflectionTestUtils.setField(fixture.syncService, "mesMaterialClient", fixture.client);
-        ReflectionTestUtils.setField(fixture.syncService, "businessFileService", fixture.businessFileService);
         ReflectionTestUtils.setField(fixture.syncService, "sourceItemMaterialNoSyncService", fixture.sourceSync);
 
         ReflectionTestUtils.setField(fixture.batchService, "ticketMapper", fixture.ticketMapper);
@@ -262,17 +289,20 @@ class MesMaterialBatchOrchestrationServiceTest {
         private OrderRfqMapper orderMapper;
         private ItemQuoteVersionMapper itemMapper;
         private MesMaterialClient client;
-        private BusinessFileService businessFileService;
         private SourceItemMaterialNoSyncService sourceSync;
         private MesMaterialSyncService syncService;
         private DeliveryIntegrationBatchService batchService;
 
         private void withTicket(OrderDeliveryTicket ticket) {
+            withTicket(ticket, "/drawings/" + ticket.getPartNo() + ".pdf");
+        }
+
+        private void withTicket(OrderDeliveryTicket ticket, String drawingUrl) {
             when(ticketMapper.selectById(ticket.getId())).thenReturn(ticket);
             when(ticketMapper.selectByIdForUpdate(ticket.getId())).thenReturn(ticket);
             ItemQuoteVersion item = new ItemQuoteVersion();
             item.setId(ticket.getItemId());
-            item.setDrawingUrl("/drawings/" + ticket.getPartNo() + ".pdf");
+            item.setDrawingUrl(drawingUrl);
             when(itemMapper.selectById(ticket.getItemId())).thenReturn(item);
             when(itemMapper.selectByIdForUpdate(ticket.getItemId())).thenReturn(item);
         }

@@ -84,6 +84,26 @@ describe('sales order management regression coverage', () => {
     expect(salesOrderManage).toContain('pageSize: detailItemPagination.pageSize')
   })
 
+  test('opens sales order detail from delivered item deep link without auto opening supplement dialog', () => {
+    const deepLinkSource = salesOrderManage.slice(
+      salesOrderManage.indexOf('const normalizeRouteSalesOrderId'),
+      salesOrderManage.indexOf('const fetchDrawingSummary')
+    )
+
+    expect(salesOrderManage).toContain("import { useRoute } from 'vue-router'")
+    expect(salesOrderManage).toContain('const route = useRoute()')
+    expect(deepLinkSource).toContain('const normalizeRouteSalesOrderId = (value) =>')
+    expect(deepLinkSource).toContain('const openDetailBySalesOrderId = async (salesOrderId, options = {}) =>')
+    expect(deepLinkSource).toContain('const applySalesOrderDeepLink = async (value) =>')
+    expect(deepLinkSource).toContain('await getSalesOrder(salesOrderId)')
+    expect(deepLinkSource).toContain('selectedCustomer.value = orderInfo.customerName || selectedCustomer.value')
+    expect(deepLinkSource).toContain('selectedCustomerCode.value = orderInfo.customerCode || selectedCustomerCode.value')
+    expect(deepLinkSource).toContain('await loadOrders()')
+    expect(salesOrderManage).toContain('() => route.query.salesOrderId')
+    expect(salesOrderManage).toContain('applySalesOrderDeepLink')
+    expect(deepLinkSource).not.toContain('supplementVisible.value = true')
+  })
+
   test('aligns sales order detail with auto release and material number ownership', () => {
     expect(salesOrderManage).not.toContain('prop="salesMaterialNo"')
     expect(salesOrderManage).not.toContain('销售料号')

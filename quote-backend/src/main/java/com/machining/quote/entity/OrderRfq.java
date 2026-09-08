@@ -33,6 +33,9 @@ public class OrderRfq {
     private String sourceType;
     private String customerCode;
     private String customerShortName;
+    private String drawingFolderUrl;
+    private String drawingFolderName;
+    private Integer drawingFolderFileCount;
     @Deprecated
     private String salesDocumentTypeCode;
     @Deprecated

@@ -549,6 +549,17 @@ public class OrderManagementService {
             MultipartFile excelFile,
             List<MultipartFile> drawings,
             List<MultipartFile> versionDrawings) {
+        return appendOrderItems(rfqId, excelFile, drawings, versionDrawings, null, null);
+    }
+
+    @Transactional
+    public Map<String, Object> appendOrderItems(
+            Integer rfqId,
+            MultipartFile excelFile,
+            List<MultipartFile> drawings,
+            List<MultipartFile> versionDrawings,
+            List<MultipartFile> drawingFolderFiles,
+            String drawingFolderName) {
         long startedAt = System.currentTimeMillis();
         OrderRfq order = requireOrderForUpdate(rfqId);
         String orderStatusBefore = order.getStatus();
@@ -576,19 +587,27 @@ public class OrderManagementService {
 
         List<Map<String, Object>> unmatchedDrawings = new ArrayList<>();
         List<Map<String, Object>> skippedFiles = new ArrayList<>();
-        Map<String, AppendDrawingFileInfo> drawingByPartNo = saveAppendDrawingsByPartNo(
-                order,
-                drawings,
-                excelPartNos,
-                unmatchedDrawings,
-                skippedFiles);
-        Map<String, AppendDrawingFileInfo> drawingByPartNoVersion = saveAppendDrawingsByPartNoVersion(
-                order,
-                versionDrawings,
-                excelPartNos,
-                excelPartNoVersions,
-                unmatchedDrawings,
-                skippedFiles);
+        BusinessFileService.DrawingFolderSaveResult drawingFolder = null;
+        Map<String, AppendDrawingFileInfo> drawingByPartNo = Map.of();
+        Map<String, AppendDrawingFileInfo> drawingByPartNoVersion = Map.of();
+        if (!isEmptyFiles(drawingFolderFiles)) {
+            drawingFolder = saveRfqDrawingFolder(order, drawingFolderFiles, drawingFolderName,
+                    "ORDER_ITEM_APPEND_DRAWING_FOLDER");
+        } else {
+            drawingByPartNo = saveAppendDrawingsByPartNo(
+                    order,
+                    drawings,
+                    excelPartNos,
+                    unmatchedDrawings,
+                    skippedFiles);
+            drawingByPartNoVersion = saveAppendDrawingsByPartNoVersion(
+                    order,
+                    versionDrawings,
+                    excelPartNos,
+                    excelPartNoVersions,
+                    unmatchedDrawings,
+                    skippedFiles);
+        }
 
         int insertedCount = 0;
         int boundCount = 0;
@@ -603,9 +622,12 @@ public class OrderManagementService {
             Integer qty = row.getQty();
             validateOrderItemQty(qty, 0);
             String normalizedVersion = normalizeVersion(row.getVersion());
-            AppendDrawingFileInfo matchedDrawing = drawingByPartNoVersion.get(itemKey(normalizedPartNo, normalizedVersion));
-            if (matchedDrawing == null) {
-                matchedDrawing = drawingByPartNo.get(normalizedPartNo);
+            AppendDrawingFileInfo matchedDrawing = null;
+            if (drawingFolder == null) {
+                matchedDrawing = drawingByPartNoVersion.get(itemKey(normalizedPartNo, normalizedVersion));
+                if (matchedDrawing == null) {
+                    matchedDrawing = drawingByPartNo.get(normalizedPartNo);
+                }
             }
 
             ItemQuoteVersion item = new ItemQuoteVersion();
@@ -620,14 +642,19 @@ public class OrderManagementService {
             item.setLeadTime(trimToNull(row.getLeadTime()));
             item.setRemark(trimToNull(row.getRemark()));
             item.setStatus(QuoteStatusWorkflow.UNPRICED);
-            if (matchedDrawing != null) {
+            if (drawingFolder != null) {
+                item.setDrawingUrl(drawingFolder.folderUrl());
+            } else if (matchedDrawing != null) {
                 item.setDrawingUrl(matchedDrawing.url());
             }
             if (itemMapper.insert(item) <= 0) {
                 throw new RuntimeException("新增询价订单零件保存失败，请刷新后重试");
             }
             insertedCount++;
-            if (matchedDrawing != null) {
+            if (drawingFolder != null) {
+                boundCount++;
+                boundItems.add(buildItemResult(item, drawingFolder.folderName(), "已绑定文件夹"));
+            } else if (matchedDrawing != null) {
                 boundCount++;
                 boundItems.add(buildItemResult(item, matchedDrawing.originalFilename(), "已绑定"));
             } else {
@@ -646,6 +673,7 @@ public class OrderManagementService {
         auditSummary.put("orderStatusBefore", orderStatusBefore);
         auditSummary.put("orderStatusAfter", order.getStatus());
         auditSummary.put("durationMs", System.currentTimeMillis() - startedAt);
+        addDrawingFolderAuditSummary(auditSummary, drawingFolder);
         auditOrderSuccess("ORDER_ITEM_APPEND_IMPORT", order, auditSummary);
 
         Map<String, Object> result = new LinkedHashMap<>();
@@ -663,6 +691,7 @@ public class OrderManagementService {
         result.put("missingItems", missingDrawingItems);
         result.put("unmatchedDrawings", unmatchedDrawings);
         result.put("skippedFiles", skippedFiles);
+        addDrawingFolderResult(result, drawingFolder);
         log.info("Order item append import completed rfqId={} insertedCount={} boundCount={} missingDrawingCount={} unmatchedDrawingCount={} skippedFileCount={} orderStatusBefore={} orderStatusAfter={} durationMs={}",
                 rfqId, insertedCount, boundCount, missingDrawingItems.size(), unmatchedDrawings.size(), skippedFiles.size(),
                 orderStatusBefore, order.getStatus(), System.currentTimeMillis() - startedAt);
@@ -725,9 +754,22 @@ public class OrderManagementService {
             Integer rfqId,
             List<MultipartFile> drawings,
             List<MultipartFile> versionDrawings) {
+        return supplementDrawings(rfqId, drawings, versionDrawings, null, null);
+    }
+
+    @Transactional
+    public Map<String, Object> supplementDrawings(
+            Integer rfqId,
+            List<MultipartFile> drawings,
+            List<MultipartFile> versionDrawings,
+            List<MultipartFile> drawingFolderFiles,
+            String drawingFolderName) {
         OrderRfq order = requireOrderForUpdate(rfqId);
-        if (isEmptyFiles(drawings) && isEmptyFiles(versionDrawings)) {
+        if (isEmptyFiles(drawings) && isEmptyFiles(versionDrawings) && isEmptyFiles(drawingFolderFiles)) {
             throw new RuntimeException("请至少上传一份 PDF 图纸");
+        }
+        if (!isEmptyFiles(drawingFolderFiles)) {
+            return supplementDrawingFolder(order, drawingFolderFiles, drawingFolderName);
         }
 
         List<ItemQuoteVersion> items = listItems(rfqId);
@@ -897,9 +939,22 @@ public class OrderManagementService {
             Integer rfqId,
             List<MultipartFile> drawings,
             List<MultipartFile> versionDrawings) {
+        return replaceDrawings(rfqId, drawings, versionDrawings, null, null);
+    }
+
+    @Transactional
+    public Map<String, Object> replaceDrawings(
+            Integer rfqId,
+            List<MultipartFile> drawings,
+            List<MultipartFile> versionDrawings,
+            List<MultipartFile> drawingFolderFiles,
+            String drawingFolderName) {
         OrderRfq order = requireOrderForUpdate(rfqId);
-        if (isEmptyFiles(drawings) && isEmptyFiles(versionDrawings)) {
+        if (isEmptyFiles(drawings) && isEmptyFiles(versionDrawings) && isEmptyFiles(drawingFolderFiles)) {
             throw new RuntimeException("请至少上传一份 PDF 图纸");
+        }
+        if (!isEmptyFiles(drawingFolderFiles)) {
+            return replaceDrawingFolder(order, drawingFolderFiles, drawingFolderName);
         }
 
         List<ItemQuoteVersion> items = listItems(rfqId);
@@ -986,6 +1041,167 @@ public class OrderManagementService {
                     rfqId, unmatchedDrawings.size(), skippedFiles.size());
         }
         return result;
+    }
+
+    private Map<String, Object> supplementDrawingFolder(
+            OrderRfq order,
+            List<MultipartFile> drawingFolderFiles,
+            String drawingFolderName) {
+        BusinessFileService.DrawingFolderSaveResult drawingFolder = saveRfqDrawingFolder(
+                order,
+                drawingFolderFiles,
+                drawingFolderName,
+                "ORDER_SUPPLEMENT_DRAWING_FOLDER");
+        List<ItemQuoteVersion> items = listItems(order.getId());
+        List<Map<String, Object>> boundItems = new ArrayList<>();
+        int restoredUnpricedCount = 0;
+        for (ItemQuoteVersion item : items) {
+            boolean hadDrawingBefore = !isBlank(item.getDrawingUrl());
+            String oldStatus = item.getStatus();
+            String nextStatus = QuoteStatusWorkflow.statusAfterSupplementDrawing(
+                    oldStatus,
+                    hadDrawingBefore,
+                    item.getTaxIncludedUnitPrice() != null);
+            item.setDrawingUrl(drawingFolder.folderUrl());
+            item.setStatus(nextStatus);
+            if (QuoteStatusWorkflow.UNPRICED.equals(nextStatus) && !QuoteStatusWorkflow.UNPRICED.equals(oldStatus)) {
+                restoredUnpricedCount++;
+            }
+            if (itemMapper.updateById(item) <= 0) {
+                throw new RuntimeException("询价订单图纸文件夹保存失败，请刷新后重试");
+            }
+            boundItems.add(buildItemResult(item, drawingFolder.folderName(), "已绑定文件夹"));
+        }
+
+        if (!boundItems.isEmpty()) {
+            Map<String, Object> auditSummary = new LinkedHashMap<>();
+            auditSummary.put("rfqId", order.getId());
+            auditSummary.put("uploadCount", drawingFolder.fileCount());
+            auditSummary.put("uploadedDrawingCount", 0);
+            auditSummary.put("versionUploadedDrawingCount", 0);
+            auditSummary.put("boundCount", boundItems.size());
+            auditSummary.put("alreadyBoundCount", 0);
+            auditSummary.put("unmatchedCount", 0);
+            auditSummary.put("skippedCount", 0);
+            auditSummary.put("restoredUnpricedCount", restoredUnpricedCount);
+            addDrawingFolderAuditSummary(auditSummary, drawingFolder);
+            auditService.record(
+                    "ORDER_SUPPLEMENT_DRAWINGS",
+                    "order_rfq",
+                    order.getId(),
+                    null,
+                    auditSummary);
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("success", true);
+        result.put("message", "补传图纸文件夹处理完成，成功绑定 " + boundItems.size() + " 个零件。");
+        result.put("boundCount", boundItems.size());
+        result.put("alreadyBoundCount", 0);
+        result.put("unmatchedCount", 0);
+        result.put("skippedCount", 0);
+        result.put("restoredUnpricedCount", restoredUnpricedCount);
+        result.put("boundItems", boundItems);
+        result.put("alreadyBoundItems", List.of());
+        result.put("unmatchedDrawings", List.of());
+        result.put("skippedFiles", List.of());
+        addDrawingFolderResult(result, drawingFolder);
+        log.info("Order supplement drawing folder completed rfqId={} folderFileCount={} boundCount={} restoredUnpricedCount={}",
+                order.getId(), drawingFolder.fileCount(), boundItems.size(), restoredUnpricedCount);
+        return result;
+    }
+
+    private Map<String, Object> replaceDrawingFolder(
+            OrderRfq order,
+            List<MultipartFile> drawingFolderFiles,
+            String drawingFolderName) {
+        BusinessFileService.DrawingFolderSaveResult drawingFolder = saveRfqDrawingFolder(
+                order,
+                drawingFolderFiles,
+                drawingFolderName,
+                "ORDER_DRAWING_REPLACE_FOLDER");
+        List<ItemQuoteVersion> items = listItems(order.getId());
+        List<Map<String, Object>> replacedItems = new ArrayList<>();
+        for (ItemQuoteVersion item : items) {
+            item.setDrawingUrl(drawingFolder.folderUrl());
+            if (itemMapper.updateById(item) <= 0) {
+                throw new RuntimeException("询价订单图纸文件夹替换保存失败，请刷新后重试");
+            }
+            replacedItems.add(buildItemResult(item, drawingFolder.folderName(), "已绑定文件夹"));
+        }
+
+        if (!replacedItems.isEmpty()) {
+            Map<String, Object> auditSummary = new LinkedHashMap<>();
+            auditSummary.put("rfqId", order.getId());
+            auditSummary.put("uploadCount", drawingFolder.fileCount());
+            auditSummary.put("uploadedDrawingCount", 0);
+            auditSummary.put("versionUploadedDrawingCount", 0);
+            auditSummary.put("replacedCount", replacedItems.size());
+            auditSummary.put("unmatchedCount", 0);
+            auditSummary.put("skippedCount", 0);
+            addDrawingFolderAuditSummary(auditSummary, drawingFolder);
+            auditOrderSuccess("ORDER_DRAWING_REPLACE", order, auditSummary);
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("success", true);
+        result.put("message", "替换图纸文件夹处理完成，成功绑定 " + replacedItems.size() + " 个零件。");
+        result.put("replacedCount", replacedItems.size());
+        result.put("boundCount", replacedItems.size());
+        result.put("alreadyBoundCount", 0);
+        result.put("unmatchedCount", 0);
+        result.put("skippedCount", 0);
+        result.put("replacedItems", replacedItems);
+        result.put("boundItems", replacedItems);
+        result.put("alreadyBoundItems", List.of());
+        result.put("unmatchedDrawings", List.of());
+        result.put("skippedFiles", List.of());
+        addDrawingFolderResult(result, drawingFolder);
+        log.info("Order drawings folder replace completed rfqId={} folderFileCount={} replacedCount={}",
+                order.getId(), drawingFolder.fileCount(), replacedItems.size());
+        return result;
+    }
+
+    private BusinessFileService.DrawingFolderSaveResult saveRfqDrawingFolder(
+            OrderRfq order,
+            List<MultipartFile> drawingFolderFiles,
+            String drawingFolderName,
+            String bizType) {
+        BusinessFileService.DrawingFolderSaveResult drawingFolder = businessFileService.saveDrawingFolderFiles(
+                "RFQ",
+                String.valueOf(order.getId()),
+                drawingFolderName,
+                drawingFolderFiles,
+                bizType,
+                String.valueOf(order.getId()));
+        order.setDrawingFolderUrl(drawingFolder.folderUrl());
+        order.setDrawingFolderName(drawingFolder.folderName());
+        order.setDrawingFolderFileCount(drawingFolder.fileCount());
+        if (orderMapper.updateById(order) <= 0) {
+            throw new RuntimeException("询价订单图纸文件夹保存失败，请刷新后重试");
+        }
+        return drawingFolder;
+    }
+
+    private void addDrawingFolderResult(
+            Map<String, Object> result,
+            BusinessFileService.DrawingFolderSaveResult drawingFolder) {
+        if (drawingFolder == null) {
+            return;
+        }
+        result.put("drawingFolderMode", true);
+        result.put("drawingFolderName", drawingFolder.folderName());
+        result.put("drawingFolderFileCount", drawingFolder.fileCount());
+    }
+
+    private void addDrawingFolderAuditSummary(
+            Map<String, Object> summary,
+            BusinessFileService.DrawingFolderSaveResult drawingFolder) {
+        if (drawingFolder == null) {
+            return;
+        }
+        summary.put("drawingFolderMode", true);
+        summary.put("drawingFolderFileCount", drawingFolder.fileCount());
     }
 
     public Map<String, Object> previewItemDataReplacement(Integer rfqId, MultipartFile excelFile) {
@@ -1574,17 +1790,16 @@ public class OrderManagementService {
 
         List<Map<String, Object>> rows = new ArrayList<>();
         for (OrderItemDataReplacementExcelRowDTO excelRow : safeList(parsed.getRows())) {
-            rows.add(previewReplacementRow(excelRow, order, itemsById, candidatesByKey, ticketedQtyByItemId));
+            rows.addAll(previewReplacementRows(excelRow, order, itemsById, candidatesByKey, ticketedQtyByItemId));
         }
-        Map<String, Object> summary = summarizeReplacementRows(rows);
+        Map<String, Object> summary = summarizeReplacementRows(rows, safeList(parsed.getRows()).size());
 
         Map<String, Object> preview = new LinkedHashMap<>();
         preview.put("success", true);
         preview.put("recognizedFields", safeList(parsed.getRecognizedFields()));
         preview.put("rows", rows);
         preview.put("summary", summary);
-        preview.put("canConfirm", numberValue(summary.get("errorCount")).intValue() == 0
-                && numberValue(summary.get("changedCount")).intValue() > 0);
+        preview.put("canConfirm", numberValue(summary.get("changedCount")).intValue() > 0);
         preview.put("previewFingerprint", replacementFingerprint(order, parsed, rows, itemsById, ticketedQtyByItemId));
         return preview;
     }
@@ -1598,7 +1813,7 @@ public class OrderManagementService {
         return grouped;
     }
 
-    private Map<String, Object> previewReplacementRow(
+    private List<Map<String, Object>> previewReplacementRows(
             OrderItemDataReplacementExcelRowDTO excelRow,
             OrderRfq order,
             Map<Integer, ItemQuoteVersion> itemsById,
@@ -1616,17 +1831,17 @@ public class OrderManagementService {
                     .map(OrderItemDataReplacementExcelErrorDTO::getMessage)
                     .filter(Objects::nonNull)
                     .collect(Collectors.joining("；")));
-            return row;
+            return List.of(row);
         }
 
-        ItemQuoteVersion item = null;
         if (excelRow.getItemId() != null) {
-            item = itemsById.get(excelRow.getItemId());
+            ItemQuoteVersion item = itemsById.get(excelRow.getItemId());
             if (item == null) {
                 row.put("status", "UNMATCHED");
                 row.put("reason", "当前询价订单未找到该零件ID");
-                return row;
+                return List.of(row);
             }
+            return List.of(previewMatchedReplacementRow(excelRow, order, item, ticketedQtyByItemId));
         } else {
             List<ItemQuoteVersion> candidates = candidatesByKey.getOrDefault(
                     itemKey(excelRow.getNormalizedPartNo(), excelRow.getNormalizedVersion()),
@@ -1634,16 +1849,26 @@ public class OrderManagementService {
             if (candidates.isEmpty()) {
                 row.put("status", "UNMATCHED");
                 row.put("reason", "当前询价订单未找到对应图号和版本的零件");
-                return row;
+                return List.of(row);
             }
-            if (candidates.size() > 1) {
-                row.put("status", "ERROR");
-                row.put("reason", "当前询价订单存在多个相同图号和版本的零件，请使用零件ID匹配");
-                return row;
+            List<Map<String, Object>> matchedRows = new ArrayList<>();
+            for (ItemQuoteVersion item : candidates) {
+                matchedRows.add(previewMatchedReplacementRow(excelRow, order, item, ticketedQtyByItemId));
             }
-            item = candidates.get(0);
+            return matchedRows;
         }
 
+    }
+
+    private Map<String, Object> previewMatchedReplacementRow(
+            OrderItemDataReplacementExcelRowDTO excelRow,
+            OrderRfq order,
+            ItemQuoteVersion item,
+            Map<Integer, Integer> ticketedQtyByItemId) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("excelRowNumber", excelRow.getExcelRowNumber());
+        row.put("partNo", excelRow.getPartNo());
+        row.put("version", excelRow.getVersion());
         row.put("rfqId", item.getRfqId());
         row.put("rfqNo", order.getRfqNo());
         row.put("itemId", item.getId());
@@ -1756,9 +1981,9 @@ public class OrderManagementService {
                 .orElse(field);
     }
 
-    private Map<String, Object> summarizeReplacementRows(List<Map<String, Object>> rows) {
+    private Map<String, Object> summarizeReplacementRows(List<Map<String, Object>> rows, int importedCount) {
         Map<String, Object> summary = new LinkedHashMap<>();
-        summary.put("importedCount", rows.size());
+        summary.put("importedCount", importedCount);
         summary.put("matchedCount", 0);
         summary.put("changedCount", 0);
         summary.put("quantityOnlyCount", 0);

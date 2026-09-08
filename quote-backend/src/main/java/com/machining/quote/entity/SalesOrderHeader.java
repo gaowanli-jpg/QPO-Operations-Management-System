@@ -21,6 +21,9 @@ public class SalesOrderHeader {
     private String customerCode;
     private String customerShortName;
     private String customerName;
+    private String drawingFolderUrl;
+    private String drawingFolderName;
+    private Integer drawingFolderFileCount;
     private String sourceType;
     private String sourceReleaseBatchKey;
     private String sourceReleaseRequestHash;

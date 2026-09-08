@@ -76,8 +76,8 @@ class MesMaterialClientTest {
                     .contains("\"items\":[")
                     .contains("\"drawingNo\":\"P-100\"")
                     .contains("\"drawingVersion\":\"A\"")
-                    .contains("\"drawingUrls\":[\"http://qpo.local/drawing.pdf\"]")
                     .contains("\"internalProjectNo\":\"IP-9\"")
+                    .doesNotContain("\"drawingUrls\"")
                     .doesNotContain("\"mesRequestId\"")
                     .doesNotContain("\"partNo\"")
                     .doesNotContain("\"version\"")
@@ -349,7 +349,6 @@ class MesMaterialClientTest {
         MesMaterialResolveReq.Item item = new MesMaterialResolveReq.Item();
         item.setDrawingNo("P-100");
         item.setDrawingVersion("A");
-        item.setDrawingUrls(List.of("http://qpo.local/drawing.pdf"));
         item.setRemark("remark");
         req.setItems(List.of(item));
         return req;

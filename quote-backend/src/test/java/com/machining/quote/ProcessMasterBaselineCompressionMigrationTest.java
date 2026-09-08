@@ -115,6 +115,7 @@ class ProcessMasterBaselineCompressionMigrationTest {
                 assertPermissionParent(connection, schema, "market:production-item:view", "market:production-item:discard");
                 assertPermissionParent(connection, schema, "market:production-item:view", "market:production-item:restore");
                 assertPermissionParent(connection, schema, "market:sales-order:view", "market:sales-order:production-task-notice-export");
+                assertPermissionParent(connection, schema, "market:sales-order:view", "market:sales-order:update");
             } finally {
                 dropTestSchema(connection, schema);
             }

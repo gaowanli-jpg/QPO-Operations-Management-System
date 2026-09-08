@@ -38,6 +38,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
@@ -62,7 +63,9 @@ class SalesOrderQpoImportDefaultsTest {
                 eq("SO01"),
                 any(SalesOrderQpoImportDefaultsDTO.class),
                 same(drawings),
-                same(versionDrawings)
+                same(versionDrawings),
+                isNull(),
+                isNull()
         )).thenReturn(new SalesOrderQpoImportResp());
 
         controller.importQpo(
@@ -76,7 +79,9 @@ class SalesOrderQpoImportDefaultsTest {
                 " IP-001 ",
                 excel,
                 drawings,
-                versionDrawings);
+                versionDrawings,
+                null,
+                null);
 
         var defaultsCaptor = org.mockito.ArgumentCaptor.forClass(SalesOrderQpoImportDefaultsDTO.class);
         verify(service).importQpo(
@@ -85,7 +90,9 @@ class SalesOrderQpoImportDefaultsTest {
                 eq("SO01"),
                 defaultsCaptor.capture(),
                 same(drawings),
-                same(versionDrawings));
+                same(versionDrawings),
+                isNull(),
+                isNull());
 
         SalesOrderQpoImportDefaultsDTO defaults = defaultsCaptor.getValue();
         assertThat(defaults.getSalesOrderDate()).isEqualTo(LocalDate.of(2026, 7, 1));
@@ -115,7 +122,9 @@ class SalesOrderQpoImportDefaultsTest {
                 "IP-001",
                 excel,
                 drawings,
-                versionDrawings))
+                versionDrawings,
+                null,
+                null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("请填写下单日期");
         assertThatThrownBy(() -> controller.importQpo(
@@ -129,7 +138,9 @@ class SalesOrderQpoImportDefaultsTest {
                 "IP-001",
                 excel,
                 drawings,
-                versionDrawings))
+                versionDrawings,
+                null,
+                null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("请填写客户订单号");
         assertThatThrownBy(() -> controller.importQpo(
@@ -143,7 +154,9 @@ class SalesOrderQpoImportDefaultsTest {
                 "IP-001",
                 excel,
                 drawings,
-                versionDrawings))
+                versionDrawings,
+                null,
+                null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("请填写订单类型");
         assertThatThrownBy(() -> controller.importQpo(
@@ -157,7 +170,9 @@ class SalesOrderQpoImportDefaultsTest {
                 " ",
                 excel,
                 drawings,
-                versionDrawings))
+                versionDrawings,
+                null,
+                null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("请填写内部项目号");
     }

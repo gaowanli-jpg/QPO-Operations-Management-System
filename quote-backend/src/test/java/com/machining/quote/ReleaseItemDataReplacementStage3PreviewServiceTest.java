@@ -150,7 +150,7 @@ class ReleaseItemDataReplacementStage3PreviewServiceTest {
                 List.of(ReleaseOrderSource.rfq(101)),
                 new ByteArrayInputStream(new byte[]{1}));
 
-        assertThat(result.isCanConfirm()).isFalse();
+        assertThat(result.isCanConfirm()).isTrue();
         assertThat(result.getRows()).extracting(ReleaseItemDataReplacementRowDTO::getStatus)
                 .containsExactly(ReleaseItemDataReplacementRowStatus.ERROR, ReleaseItemDataReplacementRowStatus.QUANTITY_ONLY);
         assertThat(result.getRows().get(0).getReason()).contains("第2行第3列").contains("下单日期");
@@ -162,7 +162,7 @@ class ReleaseItemDataReplacementStage3PreviewServiceTest {
     }
 
     @Test
-    void duplicateDatabasePartVersionIsAnErrorAndCannotSelectAnArbitraryItem() {
+    void duplicateDatabasePartVersionExpandsToAllMatchingItems() {
         ReleaseItemDataReplacementExcelParseResult parsed = parseResult(
                 List.of("materialName"),
                 excelRow(2, "P-001", "A", values("materialName", "new")));
@@ -178,12 +178,16 @@ class ReleaseItemDataReplacementStage3PreviewServiceTest {
                 List.of(ReleaseOrderSource.rfq(101)),
                 new ByteArrayInputStream(new byte[]{1}));
 
-        assertThat(result.isCanConfirm()).isFalse();
-        assertThat(result.getRows()).singleElement().satisfies(row -> {
-            assertThat(row.getStatus()).isEqualTo(ReleaseItemDataReplacementRowStatus.ERROR);
-            assertThat(row.getItemId()).isNull();
-            assertThat(row.getReason()).contains("存在多个相同图号和版本的零件");
-        });
+        assertThat(result.isCanConfirm()).isTrue();
+        assertThat(result.getRows()).hasSize(2);
+        assertThat(result.getRows()).extracting(ReleaseItemDataReplacementRowDTO::getItemId)
+                .containsExactly(201, 202);
+        assertThat(result.getRows()).extracting(ReleaseItemDataReplacementRowDTO::getStatus)
+                .containsExactly(ReleaseItemDataReplacementRowStatus.CHANGED, ReleaseItemDataReplacementRowStatus.CHANGED);
+        assertThat(result.getSummary().getImportedCount()).isEqualTo(1);
+        assertThat(result.getSummary().getMatchedCount()).isEqualTo(2);
+        assertThat(result.getSummary().getChangedCount()).isEqualTo(2);
+        assertThat(result.getSummary().getErrorCount()).isZero();
     }
 
     @Test

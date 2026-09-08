@@ -37,6 +37,7 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
@@ -276,6 +277,65 @@ class OrderItemMaintenanceServiceTest {
 
     @Test
     @SuppressWarnings("unchecked")
+    void replaceDrawingsWithFolderOverwritesEveryItemAndStoresOrderFolderMetadata() {
+        Fixture fixture = fixture();
+        OrderRfq order = order(908, "RFQ-908", QuoteStatusWorkflow.PRICED);
+        ItemQuoteVersion versionA = item(1010, 908, "P-FOLDER", "A", 1);
+        ItemQuoteVersion versionB = item(1011, 908, "P-FOLDER", "B", 1);
+        versionB.setDrawingUrl("/old/P-FOLDER_B.pdf");
+        MockMultipartFile folderDrawing = drawing("folder/P-FOLDER-pack.pdf");
+        BusinessFileService.DrawingFolderSaveResult folderResult = drawingFolderResult(
+                "/uploads/drawing-folders/RFQ/908/folder-908/",
+                "RFQ-908图纸",
+                folderDrawing);
+
+        when(fixture.orderMapper.selectByIdForUpdate(908)).thenReturn(order);
+        when(fixture.itemMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(versionA, versionB));
+        when(fixture.businessFileService.saveDrawingFolderFiles(
+                eq("RFQ"), eq("908"), eq("RFQ-908图纸"), eq(List.of(folderDrawing)), eq("ORDER_DRAWING_REPLACE_FOLDER"), eq("908")))
+                .thenReturn(folderResult);
+        when(fixture.orderMapper.updateById(order)).thenReturn(1);
+        when(fixture.itemMapper.updateById(any(ItemQuoteVersion.class))).thenReturn(1);
+
+        Map<String, Object> result = fixture.service.replaceDrawings(
+                908,
+                List.<MultipartFile>of(),
+                List.<MultipartFile>of(),
+                List.<MultipartFile>of(folderDrawing),
+                "RFQ-908图纸");
+
+        assertThat(result)
+                .containsEntry("success", true)
+                .containsEntry("replacedCount", 2)
+                .containsEntry("drawingFolderFileCount", 1);
+        assertThat(order.getDrawingFolderUrl()).isEqualTo(folderResult.folderUrl());
+        assertThat(order.getDrawingFolderName()).isEqualTo("RFQ-908图纸");
+        assertThat(order.getDrawingFolderFileCount()).isEqualTo(1);
+        assertThat(versionA.getDrawingUrl()).isEqualTo(folderResult.folderUrl());
+        assertThat(versionB.getDrawingUrl()).isEqualTo(folderResult.folderUrl());
+
+        ArgumentCaptor<Object> afterData = ArgumentCaptor.forClass(Object.class);
+        verify(fixture.auditService).record(
+                eq("ORDER_DRAWING_REPLACE"),
+                eq("order_rfq"),
+                eq(908),
+                isNull(),
+                afterData.capture(),
+                eq("ORDER"),
+                eq("SUCCESS"),
+                eq(AuditService.labelForAction("ORDER_DRAWING_REPLACE")),
+                isNull()
+        );
+        Map<String, Object> summary = (Map<String, Object>) afterData.getValue();
+        assertThat(summary)
+                .containsEntry("drawingFolderMode", true)
+                .containsEntry("drawingFolderFileCount", 1)
+                .containsEntry("replacedCount", 2);
+        assertThat(String.valueOf(summary)).doesNotContain(folderResult.folderUrl());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
     void confirmItemDataReplacementUpdatesRequestedEditableFields() throws Exception {
         Fixture fixture = fixture();
         OrderRfq order = order(904, "RFQ-904", QuoteStatusWorkflow.PRICED);
@@ -327,6 +387,100 @@ class OrderItemMaintenanceServiceTest {
                 .containsEntry("matchedCount", 1);
         assertThat((Map<String, Integer>) auditSummary.get("changedFieldCounts"))
                 .containsEntry("materialName", 1);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void itemDataReplacementWithoutItemIdUpdatesAllMatchingPartVersionRows() throws Exception {
+        Fixture fixture = fixture();
+        OrderRfq order = order(908, "RFQ-908", QuoteStatusWorkflow.PRICED);
+        ItemQuoteVersion first = item(1009, 908, "P-DUP", "A", 10);
+        first.setRemark("old first");
+        ItemQuoteVersion second = item(1010, 908, " p-dup ", " a ", 12);
+        second.setRemark("old second");
+        MockMultipartFile workbook = orderReplacementWorkbook(
+                List.of("图号", "版本", "备注"),
+                List.of(row("P-DUP", "A", "bulk remark")));
+
+        when(fixture.orderMapper.selectById(908)).thenReturn(order);
+        when(fixture.orderMapper.selectByIdForUpdate(908)).thenReturn(order);
+        when(fixture.itemMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(first, second));
+        when(fixture.ticketMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of());
+        when(fixture.itemMapper.selectByIdForUpdate(1009)).thenReturn(first);
+        when(fixture.itemMapper.selectByIdForUpdate(1010)).thenReturn(second);
+        when(fixture.itemMapper.updateById(any(ItemQuoteVersion.class))).thenReturn(1);
+
+        Map<String, Object> preview = fixture.service.previewItemDataReplacement(908, workbook);
+
+        assertThat(preview).containsEntry("canConfirm", true);
+        assertThat((List<Map<String, Object>>) preview.get("rows"))
+                .extracting(row -> row.get("itemId"))
+                .containsExactly(1009, 1010);
+        assertThat((Map<String, Object>) preview.get("summary"))
+                .containsEntry("importedCount", 1)
+                .containsEntry("matchedCount", 2)
+                .containsEntry("changedCount", 2)
+                .containsEntry("errorCount", 0);
+
+        Map<String, Object> result = fixture.service.confirmItemDataReplacement(
+                908,
+                workbook,
+                String.valueOf(preview.get("previewFingerprint")));
+
+        assertThat(result).containsEntry("success", true);
+        assertThat((Map<String, Object>) result.get("summary"))
+                .containsEntry("updatedItemCount", 2)
+                .containsEntry("changedCount", 2);
+        assertThat(first.getRemark()).isEqualTo("bulk remark");
+        assertThat(second.getRemark()).isEqualTo("bulk remark");
+        verify(fixture.itemMapper).updateById(argThat(item -> item.getId().equals(1009)));
+        verify(fixture.itemMapper).updateById(argThat(item -> item.getId().equals(1010)));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void itemDataReplacementSkipsErrorRowsAndAppliesValidRows() throws Exception {
+        Fixture fixture = fixture();
+        OrderRfq order = order(909, "RFQ-909", QuoteStatusWorkflow.PRICED);
+        ItemQuoteVersion invalid = item(1011, 909, "P-ERR", "A", 10);
+        invalid.setRemark("old invalid");
+        ItemQuoteVersion valid = item(1012, 909, "P-OK", "A", 10);
+        valid.setRemark("old valid");
+        MockMultipartFile workbook = orderReplacementWorkbook(
+                List.of("图号", "版本", "下单日期", "备注"),
+                List.of(
+                        row("P-ERR", "A", "not-a-date", "bad remark"),
+                        row("P-OK", "A", "", "good remark")));
+
+        when(fixture.orderMapper.selectById(909)).thenReturn(order);
+        when(fixture.orderMapper.selectByIdForUpdate(909)).thenReturn(order);
+        when(fixture.itemMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(invalid, valid));
+        when(fixture.ticketMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of());
+        when(fixture.itemMapper.selectByIdForUpdate(1012)).thenReturn(valid);
+        when(fixture.itemMapper.updateById(any(ItemQuoteVersion.class))).thenReturn(1);
+
+        Map<String, Object> preview = fixture.service.previewItemDataReplacement(909, workbook);
+
+        assertThat(preview).containsEntry("canConfirm", true);
+        assertThat((Map<String, Object>) preview.get("summary"))
+                .containsEntry("importedCount", 2)
+                .containsEntry("changedCount", 1)
+                .containsEntry("errorCount", 1);
+
+        Map<String, Object> result = fixture.service.confirmItemDataReplacement(
+                909,
+                workbook,
+                String.valueOf(preview.get("previewFingerprint")));
+
+        assertThat(result).containsEntry("success", true);
+        assertThat((Map<String, Object>) result.get("summary"))
+                .containsEntry("updatedItemCount", 1)
+                .containsEntry("changedCount", 1)
+                .containsEntry("errorCount", 1);
+        assertThat(invalid.getRemark()).isEqualTo("old invalid");
+        assertThat(valid.getRemark()).isEqualTo("good remark");
+        verify(fixture.itemMapper, never()).updateById(argThat(item -> item.getId().equals(1011)));
+        verify(fixture.itemMapper).updateById(argThat(item -> item.getId().equals(1012)));
     }
 
     @Test
@@ -444,6 +598,67 @@ class OrderItemMaintenanceServiceTest {
         verify(fixture.orderMapper, never()).updateById(any());
     }
 
+    @Test
+    @SuppressWarnings("unchecked")
+    void appendOrderItemsWithFolderBindsNewItemsToFolderAndStoresOrderFolderMetadata() throws Exception {
+        Fixture fixture = fixture();
+        OrderRfq order = order(909, "RFQ-909", QuoteStatusWorkflow.QUOTED);
+        MockMultipartFile workbook = rfqImportWorkbook(
+                List.of("图号", "物料描述", "材料名称", "表面处理", "版本", "数量", "单位", "交货周期", "备注"),
+                List.of(row("P-APP-FOLDER", "append desc", "45#", "black", "A", 5, "pcs", "2026/10/01", "new part")));
+        MockMultipartFile folderDrawing = drawing("folder/P-APP-FOLDER.pdf");
+        BusinessFileService.DrawingFolderSaveResult folderResult = drawingFolderResult(
+                "/uploads/drawing-folders/RFQ/909/folder-909/",
+                "新增零件图纸",
+                folderDrawing);
+
+        when(fixture.orderMapper.selectByIdForUpdate(909)).thenReturn(order);
+        when(fixture.businessFileService.saveDrawingFolderFiles(
+                eq("RFQ"), eq("909"), eq("新增零件图纸"), eq(List.of(folderDrawing)), eq("ORDER_ITEM_APPEND_DRAWING_FOLDER"), eq("909")))
+                .thenReturn(folderResult);
+        when(fixture.orderMapper.updateById(order)).thenReturn(1);
+        when(fixture.itemMapper.insert(any(ItemQuoteVersion.class))).thenReturn(1);
+
+        Map<String, Object> result = fixture.service.appendOrderItems(
+                909,
+                workbook,
+                List.<MultipartFile>of(),
+                List.<MultipartFile>of(),
+                List.<MultipartFile>of(folderDrawing),
+                "新增零件图纸");
+
+        assertThat(result)
+                .containsEntry("success", true)
+                .containsEntry("insertedCount", 1)
+                .containsEntry("boundCount", 1)
+                .containsEntry("missingDrawingCount", 0)
+                .containsEntry("drawingFolderFileCount", 1);
+        assertThat(order.getDrawingFolderUrl()).isEqualTo(folderResult.folderUrl());
+        assertThat(order.getDrawingFolderFileCount()).isEqualTo(1);
+
+        ArgumentCaptor<ItemQuoteVersion> inserted = ArgumentCaptor.forClass(ItemQuoteVersion.class);
+        verify(fixture.itemMapper).insert(inserted.capture());
+        ItemQuoteVersion saved = inserted.getValue();
+        assertThat(saved.getDrawingUrl()).isEqualTo(folderResult.folderUrl());
+        assertThat(saved.getStatus()).isEqualTo(QuoteStatusWorkflow.UNPRICED);
+
+        ArgumentCaptor<Object> afterData = ArgumentCaptor.forClass(Object.class);
+        verify(fixture.auditService).record(
+                eq("ORDER_ITEM_APPEND_IMPORT"),
+                eq("order_rfq"),
+                eq(909),
+                isNull(),
+                afterData.capture(),
+                eq("ORDER"),
+                eq("SUCCESS"),
+                eq(AuditService.labelForAction("ORDER_ITEM_APPEND_IMPORT")),
+                isNull()
+        );
+        assertThat((Map<String, Object>) afterData.getValue())
+                .containsEntry("drawingFolderMode", true)
+                .containsEntry("drawingFolderFileCount", 1);
+    }
+
     private Fixture fixture() {
         Fixture fixture = new Fixture();
         fixture.service = new OrderManagementService();
@@ -521,6 +736,19 @@ class OrderItemMaintenanceServiceTest {
                 drawing.getSize(),
                 null
         );
+    }
+
+    private BusinessFileService.DrawingFolderSaveResult drawingFolderResult(
+            String folderUrl,
+            String folderName,
+            MockMultipartFile drawing) {
+        BusinessFileService.DrawingFolderFile file = new BusinessFileService.DrawingFolderFile(
+                drawing.getOriginalFilename(),
+                folderUrl + "file-1.pdf",
+                drawing.getContentType(),
+                drawing.getSize(),
+                java.time.LocalDateTime.now());
+        return new BusinessFileService.DrawingFolderSaveResult(folderUrl, folderName, 1, List.of(file));
     }
 
     private MockMultipartFile orderReplacementWorkbook(List<String> headers, List<List<Object>> rows) throws Exception {

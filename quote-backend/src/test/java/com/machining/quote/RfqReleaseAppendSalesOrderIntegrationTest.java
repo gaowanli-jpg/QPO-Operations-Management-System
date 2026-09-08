@@ -70,7 +70,7 @@ class RfqReleaseAppendSalesOrderIntegrationTest {
     private SalesOrderItemAssemblyRelationMapper salesAssemblyMapper;
 
     @Test
-    void appendsRfqReleaseLinesToExistingUnsyncedSalesOrderWithoutUsingPageDefaultsAndReplaysIdempotently() {
+    void appendsRfqReleaseLinesToExistingUnsyncedSalesOrderWithItemFieldsFirstAndReplaysIdempotently() {
         String suffix = String.valueOf(System.nanoTime());
         SalesOrderHeader target = targetSalesOrder("APPEND-CUST-" + suffix, "同步失败");
         SalesOrderItem existing = existingSalesItem(target, 5);
@@ -78,11 +78,11 @@ class RfqReleaseAppendSalesOrderIntegrationTest {
         ItemQuoteVersion parent = rfqItem(rfq, "APPEND-PARENT-" + suffix, 2, 10, true);
         ItemQuoteVersion child = rfqItem(rfq, "APPEND-CHILD-" + suffix, 4, 20, false);
         parent.setSalesOrderDate(LocalDate.of(2026, 9, 9));
-        parent.setCustomerOrderNo("ROW-PO-SHOULD-NOT-WIN");
-        parent.setCustomerProjectNo("ROW-CP-SHOULD-NOT-WIN");
-        parent.setCustomerOrderTitle("ROW-TITLE-SHOULD-NOT-WIN");
+        parent.setCustomerOrderNo("ROW-PO-SHOULD-WIN");
+        parent.setCustomerProjectNo("ROW-CP-SHOULD-WIN");
+        parent.setCustomerOrderTitle("ROW-TITLE-SHOULD-WIN");
         parent.setOrderType("预测订单");
-        parent.setInternalProjectNo("ROW-INTERNAL-SHOULD-NOT-WIN");
+        parent.setInternalProjectNo("ROW-INTERNAL-SHOULD-WIN");
         itemMapper.updateById(parent);
         assembly(rfq.getId(), parent.getId(), child.getId());
         RfqReleaseAppendSalesOrderReq req = appendRequest(target, rfq, parent, child, "append-key-" + suffix);
@@ -119,12 +119,18 @@ class RfqReleaseAppendSalesOrderIntegrationTest {
         assertThat(childSalesItem).isNotNull();
         assertThat(parentSalesItem.getSourceType()).isEqualTo("RFQ");
         assertThat(parentSalesItem.getSourceTicketId()).isNotNull();
-        assertThat(parentSalesItem.getCustomerOrderNo()).isEqualTo("TARGET-PO");
-        assertThat(parentSalesItem.getCustomerProjectNo()).isEqualTo("TARGET-CP");
-        assertThat(parentSalesItem.getCustomerOrderTitle()).isEqualTo("TARGET-TITLE");
-        assertThat(parentSalesItem.getOrderType()).isEqualTo("备货订单");
-        assertThat(parentSalesItem.getInternalProjectNo()).isEqualTo("TARGET-INTERNAL");
-        assertThat(parentSalesItem.getSalesOrderDate()).isEqualTo(LocalDate.of(2026, 8, 20));
+        assertThat(parentSalesItem.getCustomerOrderNo()).isEqualTo("ROW-PO-SHOULD-WIN");
+        assertThat(parentSalesItem.getCustomerProjectNo()).isEqualTo("ROW-CP-SHOULD-WIN");
+        assertThat(parentSalesItem.getCustomerOrderTitle()).isEqualTo("ROW-TITLE-SHOULD-WIN");
+        assertThat(parentSalesItem.getOrderType()).isEqualTo("预测订单");
+        assertThat(parentSalesItem.getInternalProjectNo()).isEqualTo("ROW-INTERNAL-SHOULD-WIN");
+        assertThat(parentSalesItem.getSalesOrderDate()).isEqualTo(LocalDate.of(2026, 9, 9));
+        assertThat(childSalesItem.getCustomerOrderNo()).isEqualTo("TARGET-PO");
+        assertThat(childSalesItem.getCustomerProjectNo()).isEqualTo("TARGET-CP");
+        assertThat(childSalesItem.getCustomerOrderTitle()).isEqualTo("TARGET-TITLE");
+        assertThat(childSalesItem.getOrderType()).isEqualTo("备货订单");
+        assertThat(childSalesItem.getInternalProjectNo()).isEqualTo("TARGET-INTERNAL");
+        assertThat(childSalesItem.getSalesOrderDate()).isEqualTo(LocalDate.of(2026, 8, 20));
         assertThat(parentSalesItem.getReleasedQty()).isEqualTo(parentSalesItem.getQty());
         assertThat(parentSalesItem.getRemainingQty()).isZero();
         assertThat(parentSalesItem.getUnshippedQty()).isEqualTo(parentSalesItem.getQty());
@@ -136,11 +142,19 @@ class RfqReleaseAppendSalesOrderIntegrationTest {
         assertThat(tickets).allSatisfy(ticket -> {
             assertThat(ticket.getSourceType()).isEqualTo("RFQ");
             assertThat(ticket.getSourceOrderId()).isEqualTo(rfq.getId().longValue());
-            assertThat(ticket.getCustomerOrderNo()).isEqualTo("TARGET-PO");
-            assertThat(ticket.getCustomerProjectNo()).isEqualTo("TARGET-CP");
-            assertThat(ticket.getOrderType()).isEqualTo("备货订单");
-            assertThat(ticket.getInternalProjectNo()).isEqualTo("TARGET-INTERNAL");
         });
+        Map<Long, OrderDeliveryTicket> ticketBySource = tickets.stream()
+                .collect(Collectors.toMap(OrderDeliveryTicket::getSourceItemId, Function.identity()));
+        OrderDeliveryTicket parentTicket = ticketBySource.get(parent.getId().longValue());
+        assertThat(parentTicket.getCustomerOrderNo()).isEqualTo("ROW-PO-SHOULD-WIN");
+        assertThat(parentTicket.getCustomerProjectNo()).isEqualTo("ROW-CP-SHOULD-WIN");
+        assertThat(parentTicket.getOrderType()).isEqualTo("预测订单");
+        assertThat(parentTicket.getInternalProjectNo()).isEqualTo("ROW-INTERNAL-SHOULD-WIN");
+        OrderDeliveryTicket childTicket = ticketBySource.get(child.getId().longValue());
+        assertThat(childTicket.getCustomerOrderNo()).isEqualTo("TARGET-PO");
+        assertThat(childTicket.getCustomerProjectNo()).isEqualTo("TARGET-CP");
+        assertThat(childTicket.getOrderType()).isEqualTo("备货订单");
+        assertThat(childTicket.getInternalProjectNo()).isEqualTo("TARGET-INTERNAL");
         assertThat(parentSalesItem.getSourceTicketId()).isIn(result.getTicketIds());
         assertThat(childSalesItem.getSourceTicketId()).isIn(result.getTicketIds());
 
@@ -165,9 +179,9 @@ class RfqReleaseAppendSalesOrderIntegrationTest {
         assertThat(ticketCount(rfq.getId())).isEqualTo(2);
 
         ItemQuoteVersion reloadedParent = itemMapper.selectById(parent.getId());
-        assertThat(reloadedParent.getCustomerOrderNo()).isEqualTo("ROW-PO-SHOULD-NOT-WIN");
+        assertThat(reloadedParent.getCustomerOrderNo()).isEqualTo("ROW-PO-SHOULD-WIN");
         assertThat(reloadedParent.getOrderType()).isEqualTo("预测订单");
-        assertThat(reloadedParent.getInternalProjectNo()).isEqualTo("ROW-INTERNAL-SHOULD-NOT-WIN");
+        assertThat(reloadedParent.getInternalProjectNo()).isEqualTo("ROW-INTERNAL-SHOULD-WIN");
         ItemQuoteVersion reloadedChild = itemMapper.selectById(child.getId());
         assertThat(reloadedChild.getCustomerOrderNo()).isNull();
         assertThat(reloadedChild.getOrderType()).isNull();

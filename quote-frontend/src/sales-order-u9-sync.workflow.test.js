@@ -17,15 +17,17 @@ describe('sales order U9 sync module', () => {
   test('places U9 sync between release and delivery documents in the market sidebar', () => {
     const app = readSource('App.vue')
 
-    expect(app).toContain("paths: ['/market', '/quote-process', '/release', '/u9-sync', '/delivery-documents'")
+    expect(app).toContain("paths: ['/market', '/quote-process', '/release', '/release-append', '/u9-sync', '/delivery-documents'")
 
     const marketGroupIndex = app.indexOf("{ key: 'market'")
     const releaseIndex = app.indexOf("'/release'", marketGroupIndex)
+    const releaseAppendIndex = app.indexOf("'/release-append'", marketGroupIndex)
     const u9SyncIndex = app.indexOf("'/u9-sync'", marketGroupIndex)
     const deliveryDocumentIndex = app.indexOf("'/delivery-documents'", marketGroupIndex)
 
     expect(releaseIndex).toBeGreaterThan(-1)
-    expect(u9SyncIndex).toBeGreaterThan(releaseIndex)
+    expect(releaseAppendIndex).toBeGreaterThan(releaseIndex)
+    expect(u9SyncIndex).toBeGreaterThan(releaseAppendIndex)
     expect(deliveryDocumentIndex).toBeGreaterThan(u9SyncIndex)
   })
 
@@ -42,8 +44,8 @@ describe('sales order U9 sync module', () => {
     expect(component).toContain('order-scope="u9-sync"')
     expect(component).toContain(':allowed-statuses="U9_SYNC_ALLOWED_STATUSES"')
     expect(component).toContain('@select="handleOrderSelected"')
-    expect(component).toContain("const U9_SYNC_ALLOWED_STATUSES = ['已生成提单']")
-    expect(component).not.toContain("const U9_SYNC_ALLOWED_STATUSES = ['部分已提单', '已生成提单']")
+    expect(component).toContain("const U9_SYNC_ALLOWED_STATUSES = ['部分已提单', '已生成提单']")
+    expect(component).not.toContain("const U9_SYNC_ALLOWED_STATUSES = ['已生成提单']")
     expect(component).toContain('class="erp-surface workflow-workspace sales-order-u9-sync-workspace"')
     expect(component).toContain('class="erp-surface sales-order-u9-sync-side-panel"')
     expect(component).toContain('class="erp-table-surface sales-order-u9-sync-main-panel"')
@@ -94,8 +96,8 @@ describe('sales order U9 sync module', () => {
     expect(component).not.toContain('v-model:current-page="orderPagination.page"')
     expect(component).not.toContain('@row-dblclick="confirmPickedOrder"')
     expect(picker).toContain("'u9-sync': 'market:u9-sync:customer-select'")
-    expect(picker).toContain("'u9-sync': ['已生成提单']")
-    expect(picker).not.toContain("'u9-sync': ['部分已提单', '已生成提单']")
+    expect(picker).toContain("'u9-sync': ['部分已提单', '已生成提单']")
+    expect(picker).not.toContain("'u9-sync': ['已生成提单']")
     expect(picker).toContain("'u9-sync': '销售订单'")
     expect(picker).toContain('orderNoText')
     expect(picker).toContain('salesOrderNo')

@@ -2,7 +2,7 @@ import { describe, expect, test } from 'vitest'
 import { existsSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
-import { collectPdfFilesFromFileList, mergePdfFiles } from './utils/drawingUpload'
+import { collectPdfFilesFromFileList, extractDrawingFolderName, mergePdfFiles } from './utils/drawingUpload'
 
 const currentDir = dirname(fileURLToPath(import.meta.url))
 
@@ -18,12 +18,17 @@ describe('drawing upload workflow parity', () => {
 
     expect(existsSync(importDrawingPanelPath)).toBe(true)
     expect(source).toContain("import ImportDrawingUploadPanel from './import/ImportDrawingUploadPanel.vue'")
-    expect(source.match(/<ImportDrawingUploadPanel/g) || []).toHaveLength(4)
+    expect(source.match(/<ImportDrawingUploadPanel/g) || []).toHaveLength(6)
     expect(source.match(/class="drawing-upload-dual-grid"/g) || []).toHaveLength(2)
+    expect(source.match(/upload-mode="folder"/g) || []).toHaveLength(2)
     expect(source).toContain('v-model="drawingFiles"')
     expect(source).toContain('v-model="versionDrawingFiles"')
+    expect(source).toContain('v-model="drawingFolderFiles"')
+    expect(source).toContain('v-model:folder-name="drawingFolderName"')
     expect(source).toContain('v-model="salesOrderDrawingFiles"')
     expect(source).toContain('v-model="salesOrderVersionDrawingFiles"')
+    expect(source).toContain('v-model="salesOrderDrawingFolderFiles"')
+    expect(source).toContain('v-model:folder-name="salesOrderDrawingFolderName"')
     expect(source).toContain('按图号+版本绑定图纸')
   })
 
@@ -44,6 +49,10 @@ describe('drawing upload workflow parity', () => {
     expect(source).toContain('flex-direction: column')
     expect(source).toContain('collectPdfFilesFromDataTransfer')
     expect(source).toContain('mergePdfFiles')
+    expect(source).toContain('extractDrawingFolderName')
+    expect(source).toContain("uploadMode: { type: String, default: 'matching' }")
+    expect(source).toContain("emit('update:folderName'")
+    expect(source).toContain('选择订单图纸文件夹')
     expect(source).toContain('emit(\'update:modelValue\'')
   })
 
@@ -73,6 +82,18 @@ describe('drawing upload workflow parity', () => {
     expect(source).toContain('permission="market:rfq:upload-drawing"')
   })
 
+  test('folder mode submits order drawing folder files without replacing legacy matching entrances', () => {
+    const marketDashboard = readComponent('MarketDashboard.vue')
+    const releaseAppend = readComponent('ReleaseAppendManage.vue')
+
+    for (const source of [marketDashboard, releaseAppend]) {
+      expect(source).toContain("formData.append('drawingFolderFiles', file)")
+      expect(source).toContain("formData.append('drawingFolderName'")
+      expect(source).toContain("formData.append('drawings', file)")
+      expect(source).toContain("formData.append('versionDrawings', file)")
+    }
+  })
+
   test('order supplement supports paired part and part-version drawing entrances', () => {
     const orderSource = readComponent('OrderManage.vue')
     const source = normalizeSource(readFileSync(supplementDrawingDialogPath, 'utf8'))
@@ -80,10 +101,16 @@ describe('drawing upload workflow parity', () => {
     expect(orderSource).toContain('<SupplementDrawingDialog')
     expect(orderSource).toContain('v-model:files="supplementFiles"')
     expect(orderSource).toContain('v-model:version-files="supplementVersionFiles"')
+    expect(orderSource).toContain('v-model:folder-files="supplementDrawingFolderFiles"')
+    expect(orderSource).toContain('v-model:folder-name="supplementDrawingFolderName"')
     expect(source).toContain('versionFiles')
     expect(source).toContain('update:versionFiles')
+    expect(source).toContain('folderFiles')
+    expect(source).toContain('update:folderFiles')
+    expect(source).toContain('update:folderName')
     expect(source).toContain('按图号补传')
     expect(source).toContain('按图号+版本补传')
+    expect(source).toContain('上传订单图纸文件夹')
     expect(source).toContain('class="supplement-upload-dual-grid"')
     expect(source).toContain('@drop.prevent="handleDrop"')
     expect(source).toContain('ref="fileInput"')
@@ -114,5 +141,12 @@ describe('drawing upload workflow parity', () => {
 
     expect(collectPdfFilesFromFileList([pdf, word, otherPdf])).toEqual([pdf, otherPdf])
     expect(mergePdfFiles([pdf], [duplicate, otherPdf, word])).toEqual([pdf, otherPdf])
+  })
+
+  test('extracts the selected folder name from browser directory selections', () => {
+    expect(extractDrawingFolderName([
+      { name: 'A.pdf', webkitRelativePath: '订单图纸/A.pdf' }
+    ])).toBe('订单图纸')
+    expect(extractDrawingFolderName([{ name: 'A.pdf' }])).toBe('')
   })
 })

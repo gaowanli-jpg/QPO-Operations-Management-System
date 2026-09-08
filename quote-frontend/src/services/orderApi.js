@@ -4,6 +4,7 @@ const CUSTOMER_ENDPOINTS = {
   'market-rfq': '/api/market/rfq/customers',
   'quote-process': '/api/market/quote-process/customers',
   release: '/api/market/release/customers',
+  'release-append': '/api/market/release-append/customers',
   'delivery-document': '/api/market/delivery-documents/customers',
   'engineer-setup': '/api/engineer/setup/customers',
   'engineer-pricing': '/api/engineer/pricing/customers',
@@ -107,6 +108,38 @@ export const listSalesOrderTickets = (salesOrderId, params = {}) => request(`/ap
 export const listSalesOrderProcessSheets = (salesOrderId, params = {}) => request(`/api/market/sales-order-management/orders/${salesOrderId}/process-sheets`, { params })
 
 export const getSalesOrderDrawingSummary = (salesOrderId) => request(`/api/market/sales-order-management/orders/${salesOrderId}/drawing-summary`)
+
+export const saveSalesOrderHeader = (salesOrderId, payload = {}) => request(`/api/market/sales-order-management/orders/${salesOrderId}`, {
+  method: 'PUT',
+  data: payload
+})
+
+export const saveSalesOrderItems = (salesOrderId, payload = {}) => request(`/api/market/sales-order-management/orders/${salesOrderId}/items/batch`, {
+  method: 'POST',
+  data: payload
+})
+
+export const discardSalesOrderItemForU9Change = (salesOrderId, itemId, payload = {}) => request(`/api/market/sales-order-management/orders/${salesOrderId}/items/${itemId}/discard`, {
+  method: 'POST',
+  data: payload
+})
+
+export const restoreSalesOrderItemForU9Change = (salesOrderId, itemId, payload = {}) => request(`/api/market/sales-order-management/orders/${salesOrderId}/items/${itemId}/restore`, {
+  method: 'POST',
+  data: payload
+})
+
+export const previewSalesOrderItemDataReplacement = (salesOrderId, formData) => request(`/api/market/sales-order-management/orders/${salesOrderId}/items/data-replacement/preview`, {
+  method: 'POST',
+  data: formData,
+  headers: { 'Content-Type': 'multipart/form-data' }
+})
+
+export const confirmSalesOrderItemDataReplacement = (salesOrderId, formData) => request(`/api/market/sales-order-management/orders/${salesOrderId}/items/data-replacement/confirm`, {
+  method: 'POST',
+  data: formData,
+  headers: { 'Content-Type': 'multipart/form-data' }
+})
 
 export const discardSalesOrder = (salesOrderId, payload = {}) => request(`/api/market/sales-order-management/orders/${salesOrderId}/discard`, {
   method: 'POST',

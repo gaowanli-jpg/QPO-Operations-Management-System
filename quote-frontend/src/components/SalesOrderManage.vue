@@ -136,6 +136,76 @@
           <el-descriptions-item label="U9状态">{{ orderDetail.orderInfo?.u9SyncStatus || '-' }}</el-descriptions-item>
         </el-descriptions>
 
+        <section class="order-maintenance-panel">
+          <div class="erp-section-title-row order-maintenance-title-row">
+            <div>
+              <h2 class="erp-section-title">订单信息维护</h2>
+              <p class="erp-section-description">仅维护本地销售订单字段，不改写历史提单快照。</p>
+            </div>
+            <el-tooltip :disabled="!salesOrderEditLocked" :content="salesOrderEditLockedReason" placement="top">
+              <span class="sales-order-action-wrap">
+                <el-button
+                  v-permission="SALES_ORDER_UPDATE_PERMISSION"
+                  type="primary"
+                  plain
+                  :loading="orderEditSaving"
+                  :disabled="salesOrderEditLocked"
+                  @click="saveSalesOrderHeaderChanges"
+                >
+                  保存订单信息
+                </el-button>
+              </span>
+            </el-tooltip>
+          </div>
+          <el-alert
+            v-if="salesOrderEditLocked"
+            class="order-maintenance-lock-alert"
+            :title="salesOrderEditLockedReason"
+            type="warning"
+            :closable="false"
+            show-icon
+          />
+          <el-form class="order-maintenance-form" :model="orderEditDraft" label-width="108px">
+            <el-form-item label="单据类型">
+              <el-input v-model="orderEditDraft.documentTypeCode" clearable :disabled="salesOrderEditLocked" placeholder="单据类型" />
+            </el-form-item>
+            <el-form-item label="下单日期">
+              <el-date-picker
+                v-model="orderEditDraft.salesOrderDate"
+                type="date"
+                format="YYYY-MM-DD"
+                value-format="YYYY-MM-DD"
+                clearable
+                :disabled="salesOrderEditLocked"
+                placeholder="下单日期"
+              />
+            </el-form-item>
+            <el-form-item label="客户订单号">
+              <el-input v-model="orderEditDraft.customerOrderNo" clearable :disabled="salesOrderEditLocked" placeholder="客户订单号" />
+            </el-form-item>
+            <el-form-item label="客户项目号">
+              <el-input v-model="orderEditDraft.customerProjectNo" clearable :disabled="salesOrderEditLocked" placeholder="客户项目号" />
+            </el-form-item>
+            <el-form-item label="客户下单抬头">
+              <el-input v-model="orderEditDraft.customerOrderTitle" clearable :disabled="salesOrderEditLocked" placeholder="客户下单抬头" />
+            </el-form-item>
+            <el-form-item label="订单类型">
+              <el-select v-model="orderEditDraft.orderType" clearable :disabled="salesOrderEditLocked" placeholder="订单类型">
+                <el-option v-for="type in SALES_ORDER_TYPES" :key="type" :label="type" :value="type" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="内部项目号">
+              <el-input v-model="orderEditDraft.internalProjectNo" clearable :disabled="salesOrderEditLocked" placeholder="内部项目号" />
+            </el-form-item>
+            <el-form-item label="订单未税总价">
+              <el-input :model-value="formatMoney(displayOrderUntaxedTotalPrice)" class="order-total-readonly" readonly />
+            </el-form-item>
+            <el-form-item label="订单含税总价">
+              <el-input :model-value="formatMoney(displayOrderTaxIncludedTotalPrice)" class="order-total-readonly" readonly />
+            </el-form-item>
+          </el-form>
+        </section>
+
         <div class="auto-release-summary">
           <div class="auto-release-summary-card">
             <span>自动提单行</span>
@@ -178,10 +248,57 @@
 
         <el-tabs v-model="activeDetailTab" class="detail-tabs" @tab-change="handleDetailTabChange">
           <el-tab-pane label="零件明细" name="items">
+            <div class="item-maintenance-actions">
+              <div class="item-maintenance-action-meta">
+                <el-tag type="info">{{ detailItemTotal }} 行</el-tag>
+                <el-tag v-if="dirtyItemCount > 0" type="warning">已修改 {{ dirtyItemCount }} 行</el-tag>
+              </div>
+              <div class="item-maintenance-action-buttons">
+                <el-tooltip :disabled="!salesOrderEditLocked" :content="salesOrderEditLockedReason" placement="top">
+                  <span class="sales-order-action-wrap">
+                    <el-button
+                      v-permission="SALES_ORDER_UPDATE_PERMISSION"
+                      type="primary"
+                      plain
+                      :loading="itemEditSaving"
+                      :disabled="salesOrderEditLocked"
+                      @click="saveSalesOrderItemChanges"
+                    >
+                      保存修改
+                    </el-button>
+                  </span>
+                </el-tooltip>
+                <el-tooltip :disabled="!salesOrderEditLocked" :content="salesOrderEditLockedReason" placement="top">
+                  <span class="sales-order-action-wrap">
+                    <el-button
+                      v-permission="SALES_ORDER_UPDATE_PERMISSION"
+                      plain
+                      :loading="itemDataReplacementBusy"
+                      :disabled="salesOrderEditLocked"
+                      @click="openSalesOrderItemDataReplacementDialog"
+                    >
+                      表格数据替换
+                    </el-button>
+                  </span>
+                </el-tooltip>
+              </div>
+            </div>
             <el-table :data="detailItemList" border stripe height="380" v-loading="detailItemsLoading">
               <el-table-column prop="partNo" label="图号" min-width="150" fixed show-overflow-tooltip />
               <el-table-column prop="lineNo" label="行号" width="80" align="center" />
-              <el-table-column prop="version" label="版本" width="80" align="center" />
+              <el-table-column prop="version" label="版本" width="110" align="center">
+                <template #default="{ row }">
+                  <el-input
+                    v-if="itemDrafts[row.id]"
+                    v-model="itemDrafts[row.id].version"
+                    class="item-edit-input"
+                    clearable
+                    :disabled="salesOrderEditLocked"
+                    placeholder="版本"
+                  />
+                  <span v-else>{{ row.version || '-' }}</span>
+                </template>
+              </el-table-column>
               <el-table-column prop="materialNo" label="物料号" min-width="130" show-overflow-tooltip />
               <el-table-column prop="materialNoStatus" label="物料号状态" width="120" show-overflow-tooltip />
               <el-table-column prop="matchStatus" label="匹配状态" width="120" align="center" show-overflow-tooltip>
@@ -192,8 +309,50 @@
               <el-table-column prop="matchMessage" label="匹配说明" min-width="180" show-overflow-tooltip>
                 <template #default="scope">{{ scope.row.matchMessage || '-' }}</template>
               </el-table-column>
-              <el-table-column prop="qty" label="数量" width="80" align="center" />
+              <el-table-column prop="qty" label="数量" width="118" align="right">
+                <template #default="{ row }">
+                  <el-input-number
+                    v-if="itemDrafts[row.id]"
+                    v-model="itemDrafts[row.id].qty"
+                    class="item-edit-input item-edit-number"
+                    :controls="false"
+                    :min="1"
+                    :precision="0"
+                    :disabled="salesOrderEditLocked"
+                  />
+                  <span v-else>{{ row.qty || 0 }}</span>
+                </template>
+              </el-table-column>
               <el-table-column prop="status" label="状态" width="110" align="center" />
+              <el-table-column label="U9/变更" width="178" align="center">
+                <template #default="{ row }">
+                  <div class="item-u9-change-exclusion-cell">
+                    <el-tooltip
+                      :content="row.u9ChangeExcluded ? '仅从 U9 同步和销售变更排除，不影响 MES 物料号、WMS 库存、已提/待产处理和 MES 生产下发' : '该零件仍参与 U9 同步和销售变更'"
+                      placement="top"
+                    >
+                      <el-tag :type="row.u9ChangeExcluded ? 'warning' : 'success'" size="small">
+                        {{ row.u9ChangeExcluded ? '已废弃' : '正常' }}
+                      </el-tag>
+                    </el-tooltip>
+                    <el-tooltip :disabled="!salesOrderItemU9ChangeExclusionLocked" :content="salesOrderItemU9ChangeExclusionLockedReason" placement="top">
+                      <span class="sales-order-action-wrap">
+                        <el-button
+                          v-permission="SALES_ORDER_UPDATE_PERMISSION"
+                          size="small"
+                          :type="row.u9ChangeExcluded ? 'success' : 'warning'"
+                          plain
+                          :loading="isItemU9ChangeExclusionPending(row)"
+                          :disabled="salesOrderItemU9ChangeExclusionLocked || isItemU9ChangeExclusionPending(row)"
+                          @click="handleSalesOrderItemU9ChangeExclusion(row)"
+                        >
+                          {{ row.u9ChangeExcluded ? '恢复' : '废弃' }}
+                        </el-button>
+                      </span>
+                    </el-tooltip>
+                  </div>
+                </template>
+              </el-table-column>
               <el-table-column label="图纸" width="90" align="center">
                 <template #default="scope">
                   <el-tag :type="scope.row.drawingUrl ? 'success' : 'warning'" size="small">
@@ -201,26 +360,163 @@
                   </el-tag>
                 </template>
               </el-table-column>
+              <el-table-column label="图纸预览" width="100" align="center">
+                <template #default="scope">
+                  <el-button
+                    v-if="scope.row.drawingUrl"
+                    type="primary"
+                    size="small"
+                    plain
+                    @click.stop="openDrawingPreview(scope.row)"
+                  >
+                    预览
+                  </el-button>
+                  <el-tag v-else type="info" size="small">无图</el-tag>
+                </template>
+              </el-table-column>
               <el-table-column prop="description" label="物料描述" min-width="180" show-overflow-tooltip />
               <el-table-column prop="orderType" label="订单类型" width="120" show-overflow-tooltip />
-              <el-table-column prop="customerOrderNo" label="客户订单号" min-width="140" show-overflow-tooltip />
-              <el-table-column prop="customerProjectNo" label="客户项目号" min-width="140" show-overflow-tooltip />
-              <el-table-column prop="internalProjectNo" label="内部项目号" min-width="140" show-overflow-tooltip />
-              <el-table-column prop="customerDeliveryDate" label="客户交期" width="120" />
-              <el-table-column prop="internalDeliveryDate" label="内部交期" width="120" />
-              <el-table-column prop="materialName" label="材料" min-width="130" show-overflow-tooltip />
-              <el-table-column prop="surfaceTreatment" label="表面处理" min-width="130" show-overflow-tooltip />
+              <el-table-column prop="customerOrderNo" label="客户订单号" min-width="160" show-overflow-tooltip>
+                <template #default="{ row }">
+                  <el-input
+                    v-if="itemDrafts[row.id]"
+                    v-model="itemDrafts[row.id].customerOrderNo"
+                    class="item-edit-input"
+                    clearable
+                    :disabled="salesOrderEditLocked"
+                    placeholder="客户订单号"
+                  />
+                  <span v-else>{{ row.customerOrderNo || '-' }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column prop="customerProjectNo" label="客户项目号" min-width="160" show-overflow-tooltip>
+                <template #default="{ row }">
+                  <el-input
+                    v-if="itemDrafts[row.id]"
+                    v-model="itemDrafts[row.id].customerProjectNo"
+                    class="item-edit-input"
+                    clearable
+                    :disabled="salesOrderEditLocked"
+                    placeholder="客户项目号"
+                  />
+                  <span v-else>{{ row.customerProjectNo || '-' }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column prop="internalProjectNo" label="内部项目号" min-width="160" show-overflow-tooltip>
+                <template #default="{ row }">
+                  <el-input
+                    v-if="itemDrafts[row.id]"
+                    v-model="itemDrafts[row.id].internalProjectNo"
+                    class="item-edit-input"
+                    clearable
+                    :disabled="salesOrderEditLocked"
+                    placeholder="内部项目号"
+                  />
+                  <span v-else>{{ row.internalProjectNo || '-' }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column prop="customerDeliveryDate" label="客户交期" width="148">
+                <template #default="{ row }">
+                  <el-date-picker
+                    v-if="itemDrafts[row.id]"
+                    v-model="itemDrafts[row.id].customerDeliveryDate"
+                    class="item-edit-input item-edit-date"
+                    type="date"
+                    format="YYYY-MM-DD"
+                    value-format="YYYY-MM-DD"
+                    clearable
+                    :disabled="salesOrderEditLocked"
+                    placeholder="客户交期"
+                  />
+                  <span v-else>{{ row.customerDeliveryDate || '-' }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column prop="internalDeliveryDate" label="内部交期" width="148">
+                <template #default="{ row }">
+                  <el-date-picker
+                    v-if="itemDrafts[row.id]"
+                    v-model="itemDrafts[row.id].internalDeliveryDate"
+                    class="item-edit-input item-edit-date"
+                    type="date"
+                    format="YYYY-MM-DD"
+                    value-format="YYYY-MM-DD"
+                    clearable
+                    :disabled="salesOrderEditLocked"
+                    placeholder="内部交期"
+                  />
+                  <span v-else>{{ row.internalDeliveryDate || '-' }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column prop="materialName" label="材料" min-width="160" show-overflow-tooltip>
+                <template #default="{ row }">
+                  <el-input
+                    v-if="itemDrafts[row.id]"
+                    v-model="itemDrafts[row.id].materialName"
+                    class="item-edit-input"
+                    clearable
+                    :disabled="salesOrderEditLocked"
+                    placeholder="材料"
+                  />
+                  <span v-else>{{ row.materialName || '-' }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column prop="surfaceTreatment" label="表面处理" min-width="160" show-overflow-tooltip>
+                <template #default="{ row }">
+                  <el-input
+                    v-if="itemDrafts[row.id]"
+                    v-model="itemDrafts[row.id].surfaceTreatment"
+                    class="item-edit-input"
+                    clearable
+                    :disabled="salesOrderEditLocked"
+                    placeholder="表面处理"
+                  />
+                  <span v-else>{{ row.surfaceTreatment || '-' }}</span>
+                </template>
+              </el-table-column>
               <el-table-column label="未税单价" width="110" align="right">
-                <template #default="scope">{{ formatMoney(scope.row.untaxedUnitPrice) }}</template>
+                <template #default="{ row }">
+                  <el-input
+                    v-if="itemDrafts[row.id]"
+                    v-model="itemDrafts[row.id].untaxedUnitPrice"
+                    class="item-edit-input item-edit-money"
+                    inputmode="decimal"
+                    :disabled="salesOrderEditLocked"
+                    placeholder="未税单价"
+                  />
+                  <span v-else>{{ formatMoney(row.untaxedUnitPrice) }}</span>
+                </template>
               </el-table-column>
               <el-table-column label="含税单价" width="110" align="right">
-                <template #default="scope">{{ formatMoney(scope.row.taxIncludedUnitPrice) }}</template>
+                <template #default="{ row }">
+                  <el-input
+                    v-if="itemDrafts[row.id]"
+                    v-model="itemDrafts[row.id].taxIncludedUnitPrice"
+                    class="item-edit-input item-edit-money"
+                    inputmode="decimal"
+                    :disabled="salesOrderEditLocked"
+                    placeholder="含税单价"
+                  />
+                  <span v-else>{{ formatMoney(row.taxIncludedUnitPrice) }}</span>
+                </template>
               </el-table-column>
               <el-table-column label="未税总价" width="120" align="right">
-                <template #default="scope">{{ formatMoney(scope.row.untaxedTotalPrice) }}</template>
+                <template #default="{ row }">{{ formatMoney(lineUntaxedTotal(row, itemDrafts[row.id])) }}</template>
               </el-table-column>
               <el-table-column label="含税总价" width="120" align="right">
-                <template #default="scope">{{ formatMoney(scope.row.taxIncludedTotalPrice) }}</template>
+                <template #default="{ row }">{{ formatMoney(lineTaxIncludedTotal(row, itemDrafts[row.id])) }}</template>
+              </el-table-column>
+              <el-table-column prop="remark" label="备注" min-width="180" show-overflow-tooltip>
+                <template #default="{ row }">
+                  <el-input
+                    v-if="itemDrafts[row.id]"
+                    v-model="itemDrafts[row.id].remark"
+                    class="item-edit-input"
+                    clearable
+                    :disabled="salesOrderEditLocked"
+                    placeholder="备注"
+                  />
+                  <span v-else>{{ row.remark || '-' }}</span>
+                </template>
               </el-table-column>
             </el-table>
             <div class="erp-pagination detail-pagination">
@@ -235,6 +531,13 @@
                 @size-change="detailItemPagination.page = 1"
               />
             </div>
+            <SalesOrderItemDataReplacementDialog
+              v-model="itemDataReplacementVisible"
+              :sales-order-id="orderDetail?.orderInfo?.id"
+              :disabled="salesOrderEditLocked"
+              @busy-change="itemDataReplacementBusy = $event"
+              @confirmed="handleSalesOrderItemDataReplacementConfirmed"
+            />
           </el-tab-pane>
 
           <el-tab-pane label="提单行" name="tickets">
@@ -298,6 +601,8 @@
       v-model="supplementVisible"
       v-model:files="supplementFiles"
       v-model:version-files="supplementVersionFiles"
+      v-model:folder-files="supplementDrawingFolderFiles"
+      v-model:folder-name="supplementDrawingFolderName"
       title="补传销售订单图纸"
       :order-label="orderDetail?.orderInfo?.salesOrderNo || '-'"
       :customer-name="orderDetail?.orderInfo?.customerName || selectedCustomer || '-'"
@@ -314,17 +619,28 @@
       customer-scope="sales-order"
       @select="handleCustomerSelected"
     />
+
+    <DrawingFolderViewer
+      v-model="folderViewerVisible"
+      :folder-url="currentDrawingFolderUrl"
+      :title="`图纸文件夹：${currentDrawingFolderTitle || '未命名图纸'}`"
+    />
   </div>
 </template>
 
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import CustomerPickerDialog from './CustomerPickerDialog.vue'
 import SupplementDrawingDialog from './order/SupplementDrawingDialog.vue'
+import SalesOrderItemDataReplacementDialog from './sales-order/SalesOrderItemDataReplacementDialog.vue'
+import DrawingFolderViewer from './common/DrawingFolderViewer.vue'
 import { usePendingAction } from '../composables/usePendingAction'
+import { isDrawingFolderUrl, openAuthenticatedFileInNewWindow } from '../api'
 import {
   discardSalesOrder,
+  discardSalesOrderItemForU9Change,
   downloadSalesOrderProductionTaskNotice,
   getSalesOrder,
   getSalesOrderDrawingSummary,
@@ -332,19 +648,52 @@ import {
   listSalesOrders,
   listSalesOrderProcessSheets,
   listSalesOrderTickets,
+  saveSalesOrderHeader,
+  saveSalesOrderItems,
   restoreSalesOrder,
+  restoreSalesOrderItemForU9Change,
   supplementSalesOrderDrawings
 } from '../services/orderApi'
 
 const { isPending, runAction } = usePendingAction()
+const route = useRoute()
 
 const SALES_ORDER_STATUSES = ['已报价', '部分已提单', '已生成提单', '废弃']
+const SALES_ORDER_TYPES = ['预测订单', '备货订单', '正式订单']
+const SALES_ORDER_UPDATE_PERMISSION = 'market:sales-order:update'
+const SALES_ORDER_EDIT_LOCKED_U9_STATUSES = ['同步中', '结果待确认', '已同步']
 const SALES_ORDER_STATUS_LOCKED_REASON = '销售订单已同步 U9，不能废弃'
 const salesOrderActionKeys = {
   statusChange: (orderId) => `sales-order:status-change:${orderId || 'none'}`,
+  headerSave: (orderId) => `sales-order:header-save:${orderId || 'none'}`,
+  itemSave: (orderId) => `sales-order:item-save:${orderId || 'none'}`,
+  itemU9ChangeExclusion: (itemId) => `sales-order:item-u9-change-exclusion:${itemId || 'none'}`,
   supplementDrawings: (orderId) => `sales-order:supplement-drawings:${orderId || 'none'}`,
   productionTaskNoticeExport: (orderId) => `sales-order:production-task-notice-export:${orderId || 'none'}`
 }
+const SALES_ORDER_HEADER_EDITABLE_FIELDS = [
+  'documentTypeCode',
+  'salesOrderDate',
+  'customerOrderNo',
+  'customerProjectNo',
+  'customerOrderTitle',
+  'orderType',
+  'internalProjectNo'
+]
+const SALES_ORDER_ITEM_EDITABLE_FIELDS = [
+  'version',
+  'qty',
+  'untaxedUnitPrice',
+  'taxIncludedUnitPrice',
+  'customerDeliveryDate',
+  'internalDeliveryDate',
+  'customerOrderNo',
+  'customerProjectNo',
+  'internalProjectNo',
+  'materialName',
+  'surfaceTreatment',
+  'remark'
+]
 const SALES_ORDER_STATUS_ACTIONS = [
   {
     status: '已生成提单',
@@ -404,12 +753,37 @@ const detailProcessSheetTotal = ref(0)
 const supplementVisible = ref(false)
 const supplementFiles = ref([])
 const supplementVersionFiles = ref([])
+const supplementDrawingFolderFiles = ref([])
+const supplementDrawingFolderName = ref('')
 const supplementResult = ref(null)
+const folderViewerVisible = ref(false)
+const currentDrawingFolderUrl = ref('')
+const currentDrawingFolderTitle = ref('')
 const customerPickerVisible = ref(false)
+const orderEditDraft = reactive({
+  documentTypeCode: '',
+  salesOrderDate: '',
+  customerOrderNo: '',
+  customerProjectNo: '',
+  customerOrderTitle: '',
+  orderType: '',
+  internalProjectNo: ''
+})
+const itemDrafts = reactive({})
+const itemDataReplacementVisible = ref(false)
+const itemDataReplacementBusy = ref(false)
+
+const orderEditSaving = computed(() => isPending(salesOrderActionKeys.headerSave(orderDetail.value?.orderInfo?.id)))
+const itemEditSaving = computed(() => isPending(salesOrderActionKeys.itemSave(orderDetail.value?.orderInfo?.id)))
 
 const missingDrawingItems = computed(() => drawingSummary.value?.missingItems || detailItemList.value.filter(item => !item.drawingUrl))
 const supplementUploadPending = computed(() => isPending(salesOrderActionKeys.supplementDrawings(orderDetail.value?.orderInfo?.id)))
 const productionTaskNoticeExportPending = computed(() => isPending(salesOrderActionKeys.productionTaskNoticeExport(orderDetail.value?.orderInfo?.id)))
+const salesOrderEditLocked = computed(() => SALES_ORDER_EDIT_LOCKED_U9_STATUSES.includes(String(orderDetail.value?.orderInfo?.u9SyncStatus || '').trim()))
+const salesOrderEditLockedReason = computed(() => salesOrderEditLocked.value ? `当前 U9 状态不允许修改销售订单：${orderDetail.value?.orderInfo?.u9SyncStatus || '-'}` : '')
+const salesOrderItemU9ChangeExclusionLocked = computed(() => ['同步中', '结果待确认'].includes(String(orderDetail.value?.orderInfo?.u9SyncStatus || '').trim()))
+const salesOrderItemU9ChangeExclusionLockedReason = computed(() => salesOrderItemU9ChangeExclusionLocked.value ? `当前 U9 状态不能废弃或恢复销售订单零件：${orderDetail.value?.orderInfo?.u9SyncStatus || '-'}` : '')
+const dirtyItemCount = computed(() => detailItemList.value.filter(row => hasItemDraftChanges(row)).length)
 const autoReleaseSummary = computed(() => {
   const summary = orderDetail.value?.summary || {}
   return {
@@ -419,6 +793,25 @@ const autoReleaseSummary = computed(() => {
     totalQuantity: numberOrZero(summary.totalQuantity),
     processSheetCount: numberOrZero(summary.processSheetCount)
   }
+})
+const currentPageOrderTotalDeltas = computed(() => detailItemList.value.reduce((deltas, row) => {
+  const draft = itemDrafts[row.id]
+  if (!draft) return deltas
+  if (itemPriceDraftChanged(row, draft, 'untaxedUnitPrice')) {
+    deltas.untaxed += lineUntaxedTotal(row, itemDrafts[row.id]) - lineUntaxedTotal(row)
+  }
+  if (itemPriceDraftChanged(row, draft, 'taxIncludedUnitPrice')) {
+    deltas.taxIncluded += lineTaxIncludedTotal(row, itemDrafts[row.id]) - lineTaxIncludedTotal(row)
+  }
+  return deltas
+}, { untaxed: 0, taxIncluded: 0 }))
+const displayOrderUntaxedTotalPrice = computed(() => {
+  const summary = orderDetail.value?.summary || {}
+  return numberOrZero(summary.orderUntaxedTotalPrice) + currentPageOrderTotalDeltas.value.untaxed
+})
+const displayOrderTaxIncludedTotalPrice = computed(() => {
+  const summary = orderDetail.value?.summary || {}
+  return numberOrZero(summary.orderTaxIncludedTotalPrice) + currentPageOrderTotalDeltas.value.taxIncluded
 })
 
 watch([page, pageSize], () => {
@@ -508,6 +901,8 @@ const handleCustomerClear = () => {
   page.value = 1
   orderDetail.value = null
   detailVisible.value = false
+  resetOrderEditDraft()
+  resetItemDrafts()
 }
 
 const resetDetailPagination = () => {
@@ -522,22 +917,51 @@ const resetDetailPagination = () => {
   detailTicketTotal.value = 0
   detailProcessSheetTotal.value = 0
   drawingSummary.value = null
+  resetItemDrafts()
 }
 
-const openDetail = async (row) => {
+const normalizeRouteSalesOrderId = (value) => {
+  const raw = Array.isArray(value) ? value[0] : value
+  const id = Number(raw)
+  return Number.isInteger(id) && id > 0 ? id : null
+}
+
+const openDetailBySalesOrderId = async (salesOrderId, options = {}) => {
+  salesOrderId = normalizeRouteSalesOrderId(salesOrderId)
+  if (!salesOrderId) return
   detailVisible.value = true
   detailLoading.value = true
   resetDetailPagination()
   try {
-    orderDetail.value = await getSalesOrder(row.id)
-    await fetchDrawingSummary(row.id)
+    orderDetail.value = await getSalesOrder(salesOrderId)
+    const orderInfo = orderDetail.value?.orderInfo || {}
+    selectedCustomer.value = orderInfo.customerName || selectedCustomer.value
+    selectedCustomerCode.value = orderInfo.customerCode || selectedCustomerCode.value
+    resetOrderEditDraft(orderInfo)
+    await fetchDrawingSummary(salesOrderId)
     await fetchCurrentDetailTab()
+    if (options.syncList) {
+      keyword.value = ''
+      statusFilter.value = ''
+      page.value = 1
+      await loadOrders()
+    }
   } catch (error) {
     console.error(error)
     ElMessage.error('销售订单详情加载失败。')
   } finally {
     detailLoading.value = false
   }
+}
+
+const openDetail = async (row) => {
+  await openDetailBySalesOrderId(row?.id)
+}
+
+const applySalesOrderDeepLink = async (value) => {
+  const salesOrderId = normalizeRouteSalesOrderId(value)
+  if (!salesOrderId || (salesOrderId === orderDetail.value?.orderInfo?.id && detailVisible.value)) return
+  await openDetailBySalesOrderId(salesOrderId, { syncList: true })
 }
 
 const fetchDrawingSummary = async (salesOrderId = orderDetail.value?.orderInfo?.id) => {
@@ -555,6 +979,7 @@ const fetchDetailItems = async () => {
       pageSize: detailItemPagination.pageSize
     })
     detailItemList.value = response.records || []
+    resetItemDrafts(detailItemList.value)
     detailItemTotal.value = Number(response.total ?? 0)
   } catch (error) {
     console.error(error)
@@ -620,7 +1045,32 @@ const openSupplementDialog = () => {
   supplementResult.value = null
   supplementFiles.value = []
   supplementVersionFiles.value = []
+  supplementDrawingFolderFiles.value = []
+  supplementDrawingFolderName.value = ''
   supplementVisible.value = true
+}
+
+const appendDrawingFolderFields = (formData, files, folderName) => {
+  if (!files?.length) return
+  files.forEach(file => {
+    formData.append('drawingFolderFiles', file)
+  })
+  formData.append('drawingFolderName', folderName || '')
+}
+
+const openDrawingPreview = async (row) => {
+  const url = row?.drawingUrl
+  if (!url) return ElMessage.warning('当前零件没有绑定图纸。')
+  if (isDrawingFolderUrl(url)) {
+    currentDrawingFolderUrl.value = url
+    currentDrawingFolderTitle.value = row?.partNo || '未命名图纸'
+    folderViewerVisible.value = true
+    return
+  }
+  const result = await openAuthenticatedFileInNewWindow(url)
+  if (!result.success) {
+    ElMessage.error(result.blocked ? '浏览器阻止了预览窗口，请允许弹窗后重试。' : (result.message || '图纸预览失败。'))
+  }
 }
 
 const handleProductionTaskNoticeExport = async () => {
@@ -646,8 +1096,192 @@ const refreshCurrentDetail = async () => {
   const currentId = orderDetail.value.orderInfo.id
   const latestDetail = await getSalesOrder(currentId)
   orderDetail.value = { ...orderDetail.value, ...latestDetail }
+  resetOrderEditDraft(orderDetail.value?.orderInfo)
   await fetchDrawingSummary(currentId)
   await fetchCurrentDetailTab()
+}
+
+const resetOrderEditDraft = (orderInfo = {}) => {
+  SALES_ORDER_HEADER_EDITABLE_FIELDS.forEach(field => {
+    orderEditDraft[field] = draftValue(orderInfo?.[field])
+  })
+}
+
+const resetItemDrafts = (rows = []) => {
+  Object.keys(itemDrafts).forEach(key => delete itemDrafts[key])
+  rows.forEach(row => {
+    if (!row?.id) return
+    itemDrafts[row.id] = buildItemDraft(row)
+  })
+}
+
+const buildItemDraft = (row = {}) => ({
+  version: draftValue(row.version),
+  qty: row.qty ?? null,
+  untaxedUnitPrice: draftValue(row.untaxedUnitPrice),
+  taxIncludedUnitPrice: draftValue(row.taxIncludedUnitPrice),
+  customerDeliveryDate: draftValue(row.customerDeliveryDate),
+  internalDeliveryDate: draftValue(row.internalDeliveryDate),
+  customerOrderNo: draftValue(row.customerOrderNo),
+  customerProjectNo: draftValue(row.customerProjectNo),
+  internalProjectNo: draftValue(row.internalProjectNo),
+  materialName: draftValue(row.materialName),
+  surfaceTreatment: draftValue(row.surfaceTreatment),
+  remark: draftValue(row.remark)
+})
+
+const buildOrderPayload = () => {
+  const source = orderDetail.value?.orderInfo || {}
+  return SALES_ORDER_HEADER_EDITABLE_FIELDS.reduce((payload, field) => {
+    if (!sameDraftValue(source[field], orderEditDraft[field])) {
+      payload[field] = payloadValue(orderEditDraft[field])
+    }
+    return payload
+  }, {})
+}
+
+const saveSalesOrderHeaderChanges = async () => {
+  const salesOrderId = orderDetail.value?.orderInfo?.id
+  if (!salesOrderId) return ElMessage.warning('请先打开销售订单详情。')
+  if (salesOrderEditLocked.value) return ElMessage.warning(salesOrderEditLockedReason.value)
+  const payload = buildOrderPayload()
+  if (Object.keys(payload).length === 0) return ElMessage.info('订单信息没有变化。')
+  return runAction(salesOrderActionKeys.headerSave(salesOrderId), async () => {
+    try {
+      const response = await saveSalesOrderHeader(salesOrderId, payload)
+      ElMessage.success(response?.message || '销售订单信息已保存。')
+      await loadOrders()
+      await refreshCurrentDetail()
+    } catch (error) {
+      console.error(error)
+      ElMessage.error(error.response?.data?.message || '销售订单信息保存失败。')
+    }
+  })
+}
+
+const itemPayload = (row) => {
+  const draft = itemDrafts[row?.id]
+  if (!draft) return null
+  const payload = { salesOrderItemId: row.id }
+  SALES_ORDER_ITEM_EDITABLE_FIELDS.forEach(field => {
+    if (!sameDraftValue(row[field], draft[field])) {
+      payload[field] = payloadValue(draft[field])
+    }
+  })
+  return Object.keys(payload).length > 1 ? payload : null
+}
+
+const saveSalesOrderItemChanges = async () => {
+  const salesOrderId = orderDetail.value?.orderInfo?.id
+  if (!salesOrderId) return ElMessage.warning('请先打开销售订单详情。')
+  if (salesOrderEditLocked.value) return ElMessage.warning(salesOrderEditLockedReason.value)
+  const items = detailItemList.value.map(itemPayload).filter(Boolean)
+  if (items.length === 0) return ElMessage.info('零件明细没有变化。')
+  return runAction(salesOrderActionKeys.itemSave(salesOrderId), async () => {
+    try {
+      const response = await saveSalesOrderItems(salesOrderId, { items })
+      ElMessage.success(response?.message || '销售订单零件信息已保存。')
+      await loadOrders()
+      await refreshCurrentDetail()
+    } catch (error) {
+      console.error(error)
+      ElMessage.error(error.response?.data?.message || '销售订单零件信息保存失败。')
+    }
+  })
+}
+
+const openSalesOrderItemDataReplacementDialog = () => {
+  if (!orderDetail.value?.orderInfo?.id) return ElMessage.warning('请先打开销售订单详情。')
+  if (salesOrderEditLocked.value) return ElMessage.warning(salesOrderEditLockedReason.value)
+  itemDataReplacementVisible.value = true
+}
+
+const isItemU9ChangeExclusionPending = (row) => isPending(salesOrderActionKeys.itemU9ChangeExclusion(row?.id))
+
+const handleSalesOrderItemU9ChangeExclusion = async (row) => {
+  const salesOrderId = orderDetail.value?.orderInfo?.id
+  if (!salesOrderId || !row?.id) return ElMessage.warning('请先打开销售订单详情。')
+  if (salesOrderItemU9ChangeExclusionLocked.value) return ElMessage.warning(salesOrderItemU9ChangeExclusionLockedReason.value)
+  const restoring = Boolean(row.u9ChangeExcluded)
+  const title = restoring ? '恢复销售订单零件' : '废弃销售订单零件'
+  const placeholder = restoring ? '请输入恢复原因' : '请输入废弃原因'
+  let reason = ''
+  try {
+    const result = await ElMessageBox.prompt(
+      `${title}：${row.partNo || row.id}${row.version ? ` / ${row.version}` : ''}。仅从 U9 同步和销售变更排除，不影响 MES 物料号、WMS 库存、已提/待产处理和 MES 生产下发。`,
+      title,
+      {
+        inputPlaceholder: placeholder,
+        inputPattern: /\S+/,
+        inputErrorMessage: '原因不能为空',
+        confirmButtonText: restoring ? '确认恢复' : '确认废弃',
+        cancelButtonText: '取消',
+        type: restoring ? 'success' : 'warning'
+      }
+    )
+    reason = result.value?.trim() || ''
+  } catch {
+    return
+  }
+  const handler = restoring ? restoreSalesOrderItemForU9Change : discardSalesOrderItemForU9Change
+  return runAction(salesOrderActionKeys.itemU9ChangeExclusion(row.id), async () => {
+    try {
+      const response = await handler(salesOrderId, row.id, { reason })
+      ElMessage.success(response?.message || (restoring ? '销售订单零件已恢复。' : '销售订单零件已废弃。'))
+      await loadOrders()
+      await refreshCurrentDetail()
+    } catch (error) {
+      console.error(error)
+      ElMessage.error(error.response?.data?.message || (restoring ? '恢复销售订单零件失败。' : '废弃销售订单零件失败。'))
+    }
+  })
+}
+
+const handleSalesOrderItemDataReplacementConfirmed = async () => {
+  itemDataReplacementVisible.value = false
+  await loadOrders()
+  await refreshCurrentDetail()
+}
+
+const hasItemDraftChanges = (row) => Boolean(itemPayload(row))
+
+const draftValue = (value) => value === null || value === undefined ? '' : String(value)
+
+const payloadValue = (value) => {
+  if (value === null || value === undefined) return null
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    return trimmed === '' ? null : trimmed
+  }
+  return value
+}
+
+const sameDraftValue = (source, draft) => draftValue(source).trim() === draftValue(draft).trim()
+
+const itemPriceDraftChanged = (row = {}, draft = {}, unitPriceField) => {
+  return !sameDraftValue(row.qty, draft.qty) || !sameDraftValue(row[unitPriceField], draft[unitPriceField])
+}
+
+const lineUntaxedTotal = (row = {}, draft = null) => {
+  if (draft && !itemPriceDraftChanged(row, draft, 'untaxedUnitPrice')) {
+    return lineUntaxedTotal(row)
+  }
+  if (!draft && row.untaxedTotalPrice !== null && row.untaxedTotalPrice !== undefined && row.untaxedTotalPrice !== '') {
+    return numberOrZero(row.untaxedTotalPrice)
+  }
+  const source = draft || row
+  return numberOrZero(source.qty) * numberOrZero(source.untaxedUnitPrice)
+}
+
+const lineTaxIncludedTotal = (row = {}, draft = null) => {
+  if (draft && !itemPriceDraftChanged(row, draft, 'taxIncludedUnitPrice')) {
+    return lineTaxIncludedTotal(row)
+  }
+  if (!draft && row.taxIncludedTotalPrice !== null && row.taxIncludedTotalPrice !== undefined && row.taxIncludedTotalPrice !== '') {
+    return numberOrZero(row.taxIncludedTotalPrice)
+  }
+  const source = draft || row
+  return numberOrZero(source.qty) * numberOrZero(source.taxIncludedUnitPrice)
 }
 
 const isOrderStatusPending = (row) => isPending(salesOrderActionKeys.statusChange(row?.id))
@@ -698,18 +1332,24 @@ const performStatusAction = async (row, action) => {
 
 const submitSupplementDrawings = async () => {
   if (!orderDetail.value?.orderInfo?.id) return ElMessage.warning('请先打开销售订单详情。')
-  if (supplementFiles.value.length === 0 && supplementVersionFiles.value.length === 0) return ElMessage.warning('请先选择需要补传的 PDF 图纸。')
+  if (supplementDrawingFolderFiles.value.length === 0 && supplementFiles.value.length === 0 && supplementVersionFiles.value.length === 0) return ElMessage.warning('请先选择需要补传的 PDF 图纸或订单图纸文件夹。')
 
   const salesOrderId = orderDetail.value.orderInfo.id
   return runAction(salesOrderActionKeys.supplementDrawings(salesOrderId), async () => {
     const formData = new FormData()
     supplementFiles.value.forEach(file => formData.append('drawings', file))
     supplementVersionFiles.value.forEach(file => formData.append('versionDrawings', file))
+    supplementDrawingFolderFiles.value.forEach(file => formData.append('drawingFolderFiles', file))
+    if (supplementDrawingFolderFiles.value.length > 0) {
+      formData.append('drawingFolderName', supplementDrawingFolderName.value || '')
+    }
     const response = await supplementSalesOrderDrawings(salesOrderId, formData)
     supplementResult.value = response
     ElMessage.success(response.message || '补传图纸处理完成。')
     supplementFiles.value = []
     supplementVersionFiles.value = []
+    supplementDrawingFolderFiles.value = []
+    supplementDrawingFolderName.value = ''
     await fetchDetailItems()
     await fetchDrawingSummary()
     await loadOrders()
@@ -790,6 +1430,12 @@ const formatCompactNumber = (value) => {
 }
 
 const formatCompactMoney = (value) => `¥${formatCompactNumber(value)}`
+
+watch(
+  () => route.query.salesOrderId,
+  applySalesOrderDeepLink,
+  { immediate: true }
+)
 </script>
 
 <style scoped>
@@ -900,6 +1546,90 @@ const formatCompactMoney = (value) => `¥${formatCompactNumber(value)}`
 .supplement-descriptions :deep(.el-descriptions__label) {
   color: var(--erp-text-secondary);
   background: #f5f7fb;
+}
+
+.order-maintenance-panel {
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid var(--erp-border-soft);
+  border-radius: 8px;
+  background: var(--erp-surface-soft);
+}
+
+.order-maintenance-title-row,
+.item-maintenance-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.order-maintenance-lock-alert {
+  margin-top: 10px;
+}
+
+.order-maintenance-form {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(220px, 1fr));
+  gap: 12px 16px;
+  margin-top: 12px;
+}
+
+.order-maintenance-form :deep(.el-form-item) {
+  margin-bottom: 0;
+}
+
+.order-maintenance-form :deep(.el-date-editor),
+.order-maintenance-form :deep(.el-select) {
+  width: 100%;
+}
+
+.order-total-readonly :deep(.el-input__wrapper) {
+  background: #f8fafc;
+  box-shadow: 0 0 0 1px var(--erp-border-soft) inset;
+}
+
+.order-total-readonly :deep(.el-input__inner) {
+  color: var(--erp-text);
+  font-weight: 600;
+  text-align: right;
+}
+
+.sales-order-action-wrap {
+  display: inline-flex;
+}
+
+.item-maintenance-actions {
+  margin-bottom: 10px;
+}
+
+.item-maintenance-action-meta,
+.item-maintenance-action-buttons {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.item-edit-input {
+  width: 100%;
+}
+
+.item-edit-number,
+.item-edit-money {
+  min-width: 96px;
+}
+
+.item-edit-date {
+  min-width: 130px;
+}
+
+.item-u9-change-exclusion-cell {
+  align-items: center;
+  display: inline-flex;
+  gap: 8px;
+  justify-content: center;
 }
 
 .auto-release-summary {
