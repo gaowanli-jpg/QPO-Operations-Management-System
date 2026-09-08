@@ -33,6 +33,29 @@ describe('sales order management editable detail', () => {
     expect(component).toContain('salesOrderEditLocked')
   })
 
+  test('order maintenance panel shows readonly order totals with current page draft deltas', () => {
+    const component = componentSource()
+    const panel = component.slice(
+      component.indexOf('<section class="order-maintenance-panel">'),
+      component.indexOf('<div class="auto-release-summary">')
+    )
+
+    expect(panel).toContain('订单未税总价')
+    expect(panel).toContain('订单含税总价')
+    expect(panel).toContain('formatMoney(displayOrderUntaxedTotalPrice)')
+    expect(panel).toContain('formatMoney(displayOrderTaxIncludedTotalPrice)')
+    expect(component).toContain('displayOrderUntaxedTotalPrice')
+    expect(component).toContain('displayOrderTaxIncludedTotalPrice')
+    expect(component).toContain('currentPageOrderTotalDeltas')
+    expect(component).toContain('summary.orderUntaxedTotalPrice')
+    expect(component).toContain('summary.orderTaxIncludedTotalPrice')
+    expect(component).toContain('lineUntaxedTotal(row, itemDrafts[row.id])')
+    expect(component).toContain('lineTaxIncludedTotal(row, itemDrafts[row.id])')
+    expect(component).toContain('untaxedUnitPrice')
+    expect(component).toContain('taxIncludedUnitPrice')
+    expect(component).toContain('qty')
+  })
+
   test('item detail table supports inline save and data replacement for the requested item fields', () => {
     const component = componentSource()
     const itemPane = component.slice(

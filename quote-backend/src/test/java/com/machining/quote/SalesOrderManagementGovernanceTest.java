@@ -24,9 +24,11 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -413,6 +415,30 @@ class SalesOrderManagementGovernanceTest {
                 .doesNotContain("multipart");
     }
 
+    @Test
+    @SuppressWarnings("unchecked")
+    void orderDetailSummaryIncludesStoredItemPriceTotalsForReadOnlyHeaderBoxes() {
+        SalesOrderHeader header = header(420L, QuoteStatusWorkflow.RELEASED);
+        Fixture fixture = fixture(header, List.of(), 0L);
+        Map<String, Object> itemStats = new LinkedHashMap<>();
+        itemStats.put("sales_order_id", 420L);
+        itemStats.put("item_count", 2L);
+        itemStats.put("total_quantity", 7L);
+        itemStats.put("released_quantity", 3L);
+        itemStats.put("drawing_missing_count", 0L);
+        itemStats.put("order_untaxed_total_price", new BigDecimal("1234.56"));
+        itemStats.put("order_tax_included_total_price", new BigDecimal("1395.05"));
+        when(fixture.itemMapper.selectMaps(any(QueryWrapper.class))).thenReturn(List.of(itemStats));
+        when(fixture.itemMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of());
+
+        Map<String, Object> detail = fixture.service.getOrderDetail(header.getId());
+
+        Map<String, Object> summary = (Map<String, Object>) detail.get("summary");
+        assertThat(summary)
+                .containsEntry("orderUntaxedTotalPrice", new BigDecimal("1234.56"))
+                .containsEntry("orderTaxIncludedTotalPrice", new BigDecimal("1395.05"));
+    }
+
     private Object invokeStatusAction(SalesOrderManageService service, String action, Long salesOrderId, String reason) throws Exception {
         Method method = SalesOrderManageService.class.getMethod(action, Long.class, OrderStatusChangeReq.class);
         OrderStatusChangeReq req = new OrderStatusChangeReq();
@@ -479,7 +505,9 @@ class SalesOrderManagementGovernanceTest {
         when(headerMapper.selectByIdForUpdate(header.getId())).thenReturn(header);
         when(headerMapper.selectById(header.getId())).thenReturn(header);
         when(itemMapper.selectList(any(QueryWrapper.class))).thenReturn(items);
+        when(itemMapper.selectMaps(any(QueryWrapper.class))).thenReturn(List.of());
         when(ticketMapper.selectCount(any(QueryWrapper.class))).thenReturn(ticketCount);
+        when(ticketMapper.selectMaps(any(QueryWrapper.class))).thenReturn(List.of());
         SalesOrderManageService service = new SalesOrderManageService();
         ReflectionTestUtils.setField(service, "salesOrderHeaderMapper", headerMapper);
         ReflectionTestUtils.setField(service, "salesOrderItemMapper", itemMapper);

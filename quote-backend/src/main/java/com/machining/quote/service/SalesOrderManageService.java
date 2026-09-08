@@ -24,6 +24,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -784,6 +785,8 @@ public class SalesOrderManageService {
         row.put("itemCount", itemStats.itemCount);
         row.put("releasedQuantity", itemStats.releasedQuantity);
         row.put("totalQuantity", itemStats.totalQuantity);
+        row.put("orderUntaxedTotalPrice", itemStats.orderUntaxedTotalPrice);
+        row.put("orderTaxIncludedTotalPrice", itemStats.orderTaxIncludedTotalPrice);
         row.put("drawingMissingCount", itemStats.drawingMissingCount);
         row.put("ticketCount", ticketStats.ticketCount);
         row.put("ticketQty", ticketStats.ticketQty);
@@ -804,6 +807,8 @@ public class SalesOrderManageService {
                 "COUNT(*) AS item_count",
                 "COALESCE(SUM(qty), 0) AS total_quantity",
                 "COALESCE(SUM(released_qty), 0) AS released_quantity",
+                "COALESCE(SUM(untaxed_total_price), 0) AS order_untaxed_total_price",
+                "COALESCE(SUM(tax_included_total_price), 0) AS order_tax_included_total_price",
                 "SUM(CASE WHEN drawing_url IS NULL OR drawing_url = '' THEN 1 ELSE 0 END) AS drawing_missing_count"
         );
         query.in("sales_order_id", orderIds);
@@ -1139,6 +1144,23 @@ public class SalesOrderManageService {
         return value instanceof Number number ? number : 0;
     }
 
+    private static BigDecimal decimalValue(Object value) {
+        if (value == null) {
+            return BigDecimal.ZERO;
+        }
+        if (value instanceof BigDecimal decimal) {
+            return decimal;
+        }
+        if (value instanceof Number number) {
+            return new BigDecimal(number.toString());
+        }
+        try {
+            return new BigDecimal(String.valueOf(value));
+        } catch (NumberFormatException ignored) {
+            return BigDecimal.ZERO;
+        }
+    }
+
     private int safeInt(Integer value) {
         return value == null ? 0 : value;
     }
@@ -1152,6 +1174,8 @@ public class SalesOrderManageService {
         private int itemCount;
         private int totalQuantity;
         private int releasedQuantity;
+        private BigDecimal orderUntaxedTotalPrice = BigDecimal.ZERO;
+        private BigDecimal orderTaxIncludedTotalPrice = BigDecimal.ZERO;
         private int drawingMissingCount;
 
         private static ItemStats from(Map<String, Object> row) {
@@ -1160,6 +1184,8 @@ public class SalesOrderManageService {
             stats.itemCount = numberValue(row.get("item_count")).intValue();
             stats.totalQuantity = numberValue(row.get("total_quantity")).intValue();
             stats.releasedQuantity = numberValue(row.get("released_quantity")).intValue();
+            stats.orderUntaxedTotalPrice = decimalValue(row.get("order_untaxed_total_price"));
+            stats.orderTaxIncludedTotalPrice = decimalValue(row.get("order_tax_included_total_price"));
             stats.drawingMissingCount = numberValue(row.get("drawing_missing_count")).intValue();
             return stats;
         }

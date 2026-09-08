@@ -197,6 +197,12 @@
             <el-form-item label="内部项目号">
               <el-input v-model="orderEditDraft.internalProjectNo" clearable :disabled="salesOrderEditLocked" placeholder="内部项目号" />
             </el-form-item>
+            <el-form-item label="订单未税总价">
+              <el-input :model-value="formatMoney(displayOrderUntaxedTotalPrice)" class="order-total-readonly" readonly />
+            </el-form-item>
+            <el-form-item label="订单含税总价">
+              <el-input :model-value="formatMoney(displayOrderTaxIncludedTotalPrice)" class="order-total-readonly" readonly />
+            </el-form-item>
           </el-form>
         </section>
 
@@ -480,10 +486,10 @@
                 </template>
               </el-table-column>
               <el-table-column label="未税总价" width="120" align="right">
-                <template #default="scope">{{ formatMoney(scope.row.untaxedTotalPrice) }}</template>
+                <template #default="{ row }">{{ formatMoney(lineUntaxedTotal(row, itemDrafts[row.id])) }}</template>
               </el-table-column>
               <el-table-column label="含税总价" width="120" align="right">
-                <template #default="scope">{{ formatMoney(scope.row.taxIncludedTotalPrice) }}</template>
+                <template #default="{ row }">{{ formatMoney(lineTaxIncludedTotal(row, itemDrafts[row.id])) }}</template>
               </el-table-column>
               <el-table-column prop="remark" label="备注" min-width="180" show-overflow-tooltip>
                 <template #default="{ row }">
@@ -758,6 +764,25 @@ const autoReleaseSummary = computed(() => {
     totalQuantity: numberOrZero(summary.totalQuantity),
     processSheetCount: numberOrZero(summary.processSheetCount)
   }
+})
+const currentPageOrderTotalDeltas = computed(() => detailItemList.value.reduce((deltas, row) => {
+  const draft = itemDrafts[row.id]
+  if (!draft) return deltas
+  if (itemPriceDraftChanged(row, draft, 'untaxedUnitPrice')) {
+    deltas.untaxed += lineUntaxedTotal(row, itemDrafts[row.id]) - lineUntaxedTotal(row)
+  }
+  if (itemPriceDraftChanged(row, draft, 'taxIncludedUnitPrice')) {
+    deltas.taxIncluded += lineTaxIncludedTotal(row, itemDrafts[row.id]) - lineTaxIncludedTotal(row)
+  }
+  return deltas
+}, { untaxed: 0, taxIncluded: 0 }))
+const displayOrderUntaxedTotalPrice = computed(() => {
+  const summary = orderDetail.value?.summary || {}
+  return numberOrZero(summary.orderUntaxedTotalPrice) + currentPageOrderTotalDeltas.value.untaxed
+})
+const displayOrderTaxIncludedTotalPrice = computed(() => {
+  const summary = orderDetail.value?.summary || {}
+  return numberOrZero(summary.orderTaxIncludedTotalPrice) + currentPageOrderTotalDeltas.value.taxIncluded
 })
 
 watch([page, pageSize], () => {
@@ -1179,6 +1204,32 @@ const payloadValue = (value) => {
 
 const sameDraftValue = (source, draft) => draftValue(source).trim() === draftValue(draft).trim()
 
+const itemPriceDraftChanged = (row = {}, draft = {}, unitPriceField) => {
+  return !sameDraftValue(row.qty, draft.qty) || !sameDraftValue(row[unitPriceField], draft[unitPriceField])
+}
+
+const lineUntaxedTotal = (row = {}, draft = null) => {
+  if (draft && !itemPriceDraftChanged(row, draft, 'untaxedUnitPrice')) {
+    return lineUntaxedTotal(row)
+  }
+  if (!draft && row.untaxedTotalPrice !== null && row.untaxedTotalPrice !== undefined && row.untaxedTotalPrice !== '') {
+    return numberOrZero(row.untaxedTotalPrice)
+  }
+  const source = draft || row
+  return numberOrZero(source.qty) * numberOrZero(source.untaxedUnitPrice)
+}
+
+const lineTaxIncludedTotal = (row = {}, draft = null) => {
+  if (draft && !itemPriceDraftChanged(row, draft, 'taxIncludedUnitPrice')) {
+    return lineTaxIncludedTotal(row)
+  }
+  if (!draft && row.taxIncludedTotalPrice !== null && row.taxIncludedTotalPrice !== undefined && row.taxIncludedTotalPrice !== '') {
+    return numberOrZero(row.taxIncludedTotalPrice)
+  }
+  const source = draft || row
+  return numberOrZero(source.qty) * numberOrZero(source.taxIncludedUnitPrice)
+}
+
 const isOrderStatusPending = (row) => isPending(salesOrderActionKeys.statusChange(row?.id))
 
 const statusActionLocked = (row) => {
@@ -1472,6 +1523,17 @@ watch(
 .order-maintenance-form :deep(.el-date-editor),
 .order-maintenance-form :deep(.el-select) {
   width: 100%;
+}
+
+.order-total-readonly :deep(.el-input__wrapper) {
+  background: #f8fafc;
+  box-shadow: 0 0 0 1px var(--erp-border-soft) inset;
+}
+
+.order-total-readonly :deep(.el-input__inner) {
+  color: var(--erp-text);
+  font-weight: 600;
+  text-align: right;
 }
 
 .sales-order-action-wrap {
