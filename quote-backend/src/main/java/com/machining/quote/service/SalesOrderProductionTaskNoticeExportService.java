@@ -1,6 +1,7 @@
 package com.machining.quote.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.machining.quote.domain.QuoteStatusWorkflow;
 import com.machining.quote.entity.SalesOrderHeader;
 import com.machining.quote.entity.SalesOrderItem;
 import com.machining.quote.mapper.SalesOrderHeaderMapper;
@@ -93,6 +94,7 @@ public class SalesOrderProductionTaskNoticeExportService {
     private List<SalesOrderItem> listItems(Long salesOrderId) {
         QueryWrapper<SalesOrderItem> query = new QueryWrapper<>();
         query.eq("sales_order_id", salesOrderId)
+                .and(wrapper -> wrapper.ne("status", QuoteStatusWorkflow.DISCARDED).or().isNull("status"))
                 .orderByAsc("line_no")
                 .orderByAsc("id");
         List<SalesOrderItem> items = salesOrderItemMapper.selectList(query);
@@ -100,6 +102,7 @@ public class SalesOrderProductionTaskNoticeExportService {
             return List.of();
         }
         return items.stream()
+                .filter(item -> !QuoteStatusWorkflow.DISCARDED.equals(item.getStatus()))
                 .sorted(Comparator
                         .comparing(SalesOrderItem::getLineNo, Comparator.nullsLast(Integer::compareTo))
                         .thenComparing(SalesOrderItem::getId, Comparator.nullsLast(Long::compareTo)))

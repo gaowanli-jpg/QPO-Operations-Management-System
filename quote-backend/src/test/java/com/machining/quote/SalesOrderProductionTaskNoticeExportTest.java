@@ -1,6 +1,7 @@
 package com.machining.quote;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.machining.quote.domain.QuoteStatusWorkflow;
 import com.machining.quote.entity.SalesOrderHeader;
 import com.machining.quote.entity.SalesOrderItem;
 import com.machining.quote.mapper.SalesOrderHeaderMapper;
@@ -35,6 +36,90 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class SalesOrderProductionTaskNoticeExportTest {
+
+    @Test
+    void exportSkipsDiscardedSalesOrderItems() throws Exception {
+        SalesOrderHeader header = new SalesOrderHeader();
+        header.setId(930L);
+        header.setSalesOrderNo("SOQPO-930");
+        header.setSalesOrderDate(LocalDate.of(2026, 9, 8));
+
+        SalesOrderItem active = item(9301L, 930L, 1, null);
+        active.setPartNo("PN-ACTIVE");
+        active.setQty(2);
+        active.setVersion("A");
+
+        SalesOrderItem discarded = item(9302L, 930L, 2, null);
+        discarded.setPartNo("PN-DISCARDED");
+        discarded.setQty(9);
+        discarded.setVersion("B");
+        discarded.setStatus(QuoteStatusWorkflow.DISCARDED);
+
+        Fixture fixture = fixture(header, List.of(active, discarded));
+
+        byte[] bytes = fixture.service.export(930L);
+
+        ArgumentCaptor<Object> afterDataCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(fixture.auditService).record(
+                eq("SALES_ORDER_PRODUCTION_TASK_NOTICE_EXPORT"),
+                eq("sales_order_header"),
+                eq(930L),
+                isNull(),
+                afterDataCaptor.capture(),
+                eq("MARKET"),
+                eq("SUCCESS"),
+                eq(AuditService.labelForAction("SALES_ORDER_PRODUCTION_TASK_NOTICE_EXPORT")),
+                isNull()
+        );
+        assertThat((Map<String, Object>) afterDataCaptor.getValue())
+                .containsEntry("rowCount", 1);
+
+        try (Workbook workbook = WorkbookFactory.create(new ByteArrayInputStream(bytes))) {
+            Sheet sheet = workbook.getSheet("StandardDocPrintTemplate");
+            assertThat(text(sheet, 12, "P")).isEqualTo("PN-ACTIVE");
+            assertThat(text(sheet, 12, "T")).isEqualTo("2");
+            assertThat(text(sheet, 13, "P")).isBlank();
+        }
+    }
+
+    @Test
+    void exportAllowsEmptyNoticeWhenAllSalesOrderItemsAreDiscarded() throws Exception {
+        SalesOrderHeader header = new SalesOrderHeader();
+        header.setId(931L);
+        header.setSalesOrderNo("SOQPO-931");
+        header.setSalesOrderDate(LocalDate.of(2026, 9, 8));
+
+        SalesOrderItem discarded = item(9311L, 931L, 1, null);
+        discarded.setPartNo("PN-DISCARDED-ONLY");
+        discarded.setQty(5);
+        discarded.setStatus(QuoteStatusWorkflow.DISCARDED);
+
+        Fixture fixture = fixture(header, List.of(discarded));
+
+        byte[] bytes = fixture.service.export(931L);
+
+        ArgumentCaptor<Object> afterDataCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(fixture.auditService).record(
+                eq("SALES_ORDER_PRODUCTION_TASK_NOTICE_EXPORT"),
+                eq("sales_order_header"),
+                eq(931L),
+                isNull(),
+                afterDataCaptor.capture(),
+                eq("MARKET"),
+                eq("SUCCESS"),
+                eq(AuditService.labelForAction("SALES_ORDER_PRODUCTION_TASK_NOTICE_EXPORT")),
+                isNull()
+        );
+        assertThat((Map<String, Object>) afterDataCaptor.getValue())
+                .containsEntry("rowCount", 0);
+
+        try (Workbook workbook = WorkbookFactory.create(new ByteArrayInputStream(bytes))) {
+            Sheet sheet = workbook.getSheet("StandardDocPrintTemplate");
+            assertThat(text(sheet, 12, "P")).isBlank();
+            assertThat(text(sheet, 12, "T")).isBlank();
+            assertThat(text(sheet, 15, "AB")).contains("SOQPO-931");
+        }
+    }
 
     @Test
     void exportFillsProductionTaskNoticeTemplateFromSalesOrderHeaderAndItems() throws Exception {
