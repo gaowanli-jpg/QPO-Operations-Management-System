@@ -237,10 +237,23 @@ class SalesOrderProductionTaskNoticeExportTest {
         try (Workbook workbook = WorkbookFactory.create(new ByteArrayInputStream(bytes))) {
             Sheet sheet = workbook.getSheet("StandardDocPrintTemplate");
             int lastDataRow = 11 + itemCount;
+            assertDataRowStyleMatches(sheet, 62, 63);
+            assertDataRowStyleMatches(sheet, 62, lastDataRow - 1);
             assertThat(text(sheet, lastDataRow, "B")).isEqualTo(String.valueOf(itemCount * 10));
             assertThat(text(sheet, lastDataRow, "P")).isEqualTo("PN-LARGE-" + itemCount);
             assertThat(text(sheet, lastDataRow, "AG")).isEqualTo("ROW-" + itemCount);
             assertThat(text(sheet, lastDataRow + 3, "AB")).isEqualTo("表单编号：SOQPO-LARGE-" + itemCount);
+        }
+    }
+
+    private void assertDataRowStyleMatches(Sheet sheet, int templateRowNumber, int actualRowNumber) {
+        Row templateRow = sheet.getRow(templateRowNumber - 1);
+        Row actualRow = sheet.getRow(actualRowNumber - 1);
+        assertThat(actualRow).as("row %s exists", actualRowNumber).isNotNull();
+        for (int columnIndex = columnIndex("B"); columnIndex <= columnIndex("AI"); columnIndex++) {
+            assertThat(actualRow.getCell(columnIndex, Row.MissingCellPolicy.CREATE_NULL_AS_BLANK).getCellStyle().getIndex())
+                    .as("row %s column %s style", actualRowNumber, columnName(columnIndex))
+                    .isEqualTo(templateRow.getCell(columnIndex, Row.MissingCellPolicy.CREATE_NULL_AS_BLANK).getCellStyle().getIndex());
         }
     }
 
@@ -287,6 +300,17 @@ class SalesOrderProductionTaskNoticeExportTest {
             result = result * 26 + (column.charAt(i) - 'A' + 1);
         }
         return result - 1;
+    }
+
+    private String columnName(int zeroBasedColumnIndex) {
+        int value = zeroBasedColumnIndex + 1;
+        StringBuilder builder = new StringBuilder();
+        while (value > 0) {
+            int remainder = (value - 1) % 26;
+            builder.insert(0, (char) ('A' + remainder));
+            value = (value - 1) / 26;
+        }
+        return builder.toString();
     }
 
     private boolean hasMergedRegion(Sheet sheet, String range) {

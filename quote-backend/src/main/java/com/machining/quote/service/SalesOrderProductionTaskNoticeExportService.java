@@ -196,8 +196,8 @@ public class SalesOrderProductionTaskNoticeExportService {
         sheet.shiftRows(FIRST_ROW_AFTER_TEMPLATE_DATA, sheet.getLastRowNum(), extraRows, true, false);
         for (int i = 0; i < extraRows; i++) {
             int rowIndex = FIRST_ROW_AFTER_TEMPLATE_DATA + i;
-            copyBlankRow(sheet, templateRow, rowIndex);
             copyMergedRegions(sheet, templateMergedRegions, TEMPLATE_DATA_END_ROW, rowIndex);
+            copyBlankRow(sheet, templateRow, rowIndex);
         }
     }
 
@@ -238,7 +238,7 @@ public class SalesOrderProductionTaskNoticeExportService {
         }
         row.setHeight(templateRow.getHeight());
         for (int col = FIRST_DATA_COLUMN; col <= LAST_DATA_COLUMN; col++) {
-            Cell sourceCell = templateRow.getCell(col, Row.MissingCellPolicy.RETURN_BLANK_AS_NULL);
+            Cell sourceCell = templateRow.getCell(col, Row.MissingCellPolicy.RETURN_NULL_AND_BLANK);
             Cell targetCell = row.getCell(col, Row.MissingCellPolicy.CREATE_NULL_AS_BLANK);
             if (sourceCell != null) {
                 targetCell.setCellStyle(sourceCell.getCellStyle());
