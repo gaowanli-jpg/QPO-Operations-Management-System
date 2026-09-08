@@ -36,13 +36,12 @@ describe('market duplicate click guards', () => {
     expect(submitBlock).toContain('await importRfq(formData)')
   })
 
-  test('market release registers pending keys for import, drawings, lead-time, version and generation actions', () => {
+  test('market release registers pending keys for import, lead-time, version and generation actions', () => {
     const source = readSource('components', 'MarketRelease.vue')
 
     expect(source).toContain("import { usePendingAction } from '../composables/usePendingAction'")
     expect(source).toContain('const { isPending, runAction } = usePendingAction()')
     expect(source).toContain("importSelection: 'market:release:import-selection'")
-    expect(source).toContain("replaceDrawings: 'market:release:replace-drawings'")
     expect(source).toContain("bulkSave: 'market:release:bulk-save-drafts'")
     expect(source).toContain("shiftInternalLeadTime: 'market:release:shift-internal-lead-time'")
     expect(source).toContain("setInternalTargetLeadTime: 'market:release:set-internal-target-lead-time'")
@@ -60,13 +59,9 @@ describe('market duplicate click guards', () => {
     const persistVersionBlock = blockBetween(source, 'const persistReleaseItemVersion = async (row) =>', 'const persistReleaseItemFields = async (row) =>')
     expect(persistVersionBlock).toContain('await updateReleaseItemVersion(row.id')
 
-    const importBlock = blockBetween(source, 'const handleSelectionExcelChange = async (uploadFile) =>', 'const openDrawingReplaceDialog')
+    const importBlock = blockBetween(source, 'const handleSelectionExcelChange = async (uploadFile) =>', 'const adjustInternalLeadTime')
     expect(importBlock).toContain('return runAction(releaseActionKeys.importSelection, async () =>')
     expect(importBlock).toContain('await parsePartSelectionBatch(formData)')
-
-    const replaceBlock = blockBetween(source, 'const submitReplacementDrawings = async () =>', 'const adjustInternalLeadTime')
-    expect(replaceBlock).toContain('return runAction(releaseActionKeys.replaceDrawings, async () =>')
-    expect(replaceBlock).toContain('await replaceReleaseDrawings(formData)')
 
     const shiftBlock = blockBetween(source, 'const adjustInternalLeadTime = async (direction) =>', 'const setInternalTargetLeadTime')
     expect(shiftBlock).toContain('return runAction(releaseActionKeys.shiftInternalLeadTime, async () =>')

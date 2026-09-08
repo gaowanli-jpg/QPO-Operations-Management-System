@@ -13,7 +13,7 @@ vi.mock('./api', () => ({
 const currentDir = dirname(fileURLToPath(import.meta.url))
 const readOptionalSource = (...segments) => {
   const path = resolve(currentDir, ...segments)
-  return existsSync(path) ? readFileSync(path, 'utf8') : ''
+  return existsSync(path) ? readFileSync(path, 'utf8').replace(/\r\n/g, '\n') : ''
 }
 
 const marketReleaseSource = readOptionalSource('components', 'MarketRelease.vue')
@@ -60,21 +60,23 @@ describe('release item data replacement stage 5 frontend', () => {
     })
   })
 
-  test('market release places the data replacement button before drawing replacement and gates it', () => {
+  test('market release exposes data replacement but hides drawing replacement', () => {
     const actionRow = blockBetween(
       marketReleaseSource,
       'class="release-table-actions import-action-row"',
       '<el-table'
     )
     const dataReplacementIndex = actionRow.indexOf('表格数据替换')
-    const drawingReplacementIndex = actionRow.indexOf('导入替换图纸')
+    const selectionImportIndex = actionRow.indexOf('导入表格选定')
 
     expect(dataReplacementIndex).toBeGreaterThanOrEqual(0)
-    expect(drawingReplacementIndex).toBeGreaterThan(dataReplacementIndex)
+    expect(selectionImportIndex).toBeGreaterThan(dataReplacementIndex)
     expect(actionRow).toContain('v-permission="\'market:release:create\'"')
     expect(actionRow).toContain('@click="openDataReplacementDialog"')
     expect(actionRow).toContain(':disabled="dataReplacementDisabled"')
     expect(actionRow).toContain(':loading="dataReplacementBusy"')
+    expect(actionRow).not.toContain('导入替换图纸')
+    expect(actionRow).not.toContain('openDrawingReplaceDialog')
   })
 
   test('market release places the bulk draft save button beside data replacement', () => {
@@ -85,11 +87,11 @@ describe('release item data replacement stage 5 frontend', () => {
     )
     const dataReplacementIndex = actionRow.indexOf('表格数据替换')
     const bulkSaveIndex = actionRow.indexOf('保存修改')
-    const drawingReplacementIndex = actionRow.indexOf('导入替换图纸')
+    const selectionImportIndex = actionRow.indexOf('导入表格选定')
 
     expect(dataReplacementIndex).toBeGreaterThanOrEqual(0)
     expect(bulkSaveIndex).toBeGreaterThan(dataReplacementIndex)
-    expect(drawingReplacementIndex).toBeGreaterThan(bulkSaveIndex)
+    expect(selectionImportIndex).toBeGreaterThan(bulkSaveIndex)
     expect(actionRow).toContain('v-permission="\'market:release:create\'"')
     expect(actionRow).toContain('@click="saveAllReleaseDraftChanges"')
     expect(actionRow).toContain(':disabled="bulkSaveDisabled"')
