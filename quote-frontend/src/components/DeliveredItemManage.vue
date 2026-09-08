@@ -371,7 +371,7 @@
     <DrawingFolderViewer
       v-model="folderViewerVisible"
       :folder-url="currentDrawingFolderUrl"
-      :title="`图纸文件夹：${currentDrawingFolderTitle || '未命名图纸'}`"
+      :title="`附件文件夹：${currentDrawingFolderTitle || '未命名文件夹'}`"
     />
   </div>
 </template>
@@ -620,7 +620,7 @@ const openDrawingPreview = async (row) => {
   }
   if (isDrawingFolderUrl(row.drawingUrl)) {
     currentDrawingFolderUrl.value = row.drawingUrl
-    currentDrawingFolderTitle.value = row.partNo || '未命名图纸'
+    currentDrawingFolderTitle.value = row.partNo || '未命名文件夹'
     folderViewerVisible.value = true
     return
   }

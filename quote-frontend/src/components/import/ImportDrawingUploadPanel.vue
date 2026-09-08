@@ -16,10 +16,10 @@
     >
       <el-icon class="el-icon--upload dropzone-icon"><UploadFilled /></el-icon>
       <div class="el-upload__text dropzone-text">
-        将 <em>{{ isFolderMode ? '订单图纸文件夹' : '图纸文件夹' }}</em> 或多个 PDF 图纸直接拖拽至此处
+        将 <em>{{ isFolderMode ? '订单附件文件夹' : '图纸文件夹' }}</em> 或多个 PDF 图纸直接拖拽至此处
       </div>
 
-      <div class="folder-select-row">{{ isFolderMode ? '或点击下方按钮选择整单图纸文件夹' : '或点击下方按钮选择多个 PDF / 图纸文件夹' }}</div>
+      <div class="folder-select-row">{{ isFolderMode ? '或点击下方按钮选择整单附件文件夹' : '或点击下方按钮选择多个 PDF / 图纸文件夹' }}</div>
       <div class="import-upload-button-stack">
         <template v-if="!isFolderMode">
           <el-button
@@ -39,7 +39,7 @@
           :disabled="disabled"
           @click="triggerFolderSelect"
         >
-          {{ isFolderMode ? '选择订单图纸文件夹' : '选择文件夹' }}
+          {{ isFolderMode ? '选择订单附件文件夹' : '选择文件夹' }}
         </el-button>
       </div>
       <input type="file" ref="fileInput" accept=".pdf" multiple class="hidden-input" @change="handleFileSelect" />
@@ -72,7 +72,7 @@
 import { computed, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { UploadFilled } from '@element-plus/icons-vue'
-import { collectPdfFilesFromDataTransfer, extractDrawingFolderName, mergePdfFiles } from '../../utils/drawingUpload'
+import { collectFilesFromDataTransfer, collectPdfFilesFromDataTransfer, extractDrawingFolderName, mergeFiles, mergePdfFiles } from '../../utils/drawingUpload'
 
 const props = defineProps({
   modelValue: {
@@ -112,7 +112,7 @@ const updateFiles = (nextFiles) => {
 }
 
 const addFiles = (incomingFiles, sourceLabel) => {
-  const nextFiles = mergePdfFiles(files.value, incomingFiles)
+  const nextFiles = isFolderMode.value ? mergeFiles(files.value, incomingFiles) : mergePdfFiles(files.value, incomingFiles)
   const addedCount = nextFiles.length - files.value.length
   updateFiles(nextFiles)
   if (isFolderMode.value) {
@@ -120,16 +120,18 @@ const addFiles = (incomingFiles, sourceLabel) => {
     emit('update:folderName', nextFolderName)
   }
   if (addedCount > 0) {
-    ElMessage.success(`成功${sourceLabel} ${addedCount} 份 PDF${isFolderMode.value ? ' 到订单图纸文件夹' : ''}！`)
+    ElMessage.success(`成功${sourceLabel} ${addedCount} ${isFolderMode.value ? '个附件到订单附件文件夹' : '份 PDF'}！`)
   } else {
-    ElMessage.warning('未找到新的 PDF 文件！')
+    ElMessage.warning(isFolderMode.value ? '未找到新的文件！' : '未找到新的 PDF 文件！')
   }
 }
 
 const handleDrop = async (event) => {
   if (props.disabled) return
-  const pdfs = await collectPdfFilesFromDataTransfer(event.dataTransfer)
-  addFiles(pdfs, '提取')
+  const selectedFiles = isFolderMode.value
+    ? await collectFilesFromDataTransfer(event.dataTransfer)
+    : await collectPdfFilesFromDataTransfer(event.dataTransfer)
+  addFiles(selectedFiles, '提取')
 }
 
 const triggerFileSelect = () => {

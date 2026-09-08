@@ -2,6 +2,12 @@ export const isPdfFile = (file) => {
   return Boolean(file?.name && file.name.toLowerCase().endsWith('.pdf'))
 }
 
+const hasFilename = (file) => Boolean(file?.name)
+
+export const collectFilesFromFileList = (fileList) => {
+  return Array.from(fileList || []).filter(hasFilename)
+}
+
 export const collectPdfFilesFromFileList = (fileList) => {
   return Array.from(fileList || []).filter(isPdfFile)
 }
@@ -14,9 +20,9 @@ export const extractDrawingFolderName = (fileList) => {
   return firstPath ? firstPath.split('/').filter(Boolean)[0] || '' : ''
 }
 
-export const mergePdfFiles = (currentFiles = [], incomingFiles = []) => {
+const mergeUniqueFiles = (currentFiles = [], incomingFiles = []) => {
   const seen = new Set()
-  return [...currentFiles, ...collectPdfFilesFromFileList(incomingFiles)].filter(file => {
+  return [...currentFiles, ...incomingFiles].filter(file => {
     const key = `${file.name || ''}|${file.size ?? ''}|${file.lastModified ?? ''}`
     if (seen.has(key)) return false
     seen.add(key)
@@ -24,8 +30,16 @@ export const mergePdfFiles = (currentFiles = [], incomingFiles = []) => {
   })
 }
 
-const readEntryFile = (entry) => new Promise((resolve) => {
-  entry.file(file => resolve(isPdfFile(file) ? file : null), () => resolve(null))
+export const mergeFiles = (currentFiles = [], incomingFiles = []) => {
+  return mergeUniqueFiles(currentFiles, collectFilesFromFileList(incomingFiles))
+}
+
+export const mergePdfFiles = (currentFiles = [], incomingFiles = []) => {
+  return mergeUniqueFiles(currentFiles, collectPdfFilesFromFileList(incomingFiles))
+}
+
+const readEntryFile = (entry, acceptFile) => new Promise((resolve) => {
+  entry.file(file => resolve(acceptFile(file) ? file : null), () => resolve(null))
 })
 
 const readDirectoryEntries = async (directoryEntry) => {
@@ -43,30 +57,38 @@ const readDirectoryEntries = async (directoryEntry) => {
   return entries
 }
 
-const collectPdfFilesFromEntry = async (entry) => {
+const collectFilesFromEntry = async (entry, acceptFile) => {
   if (!entry) return []
   if (entry.isFile) {
-    const file = await readEntryFile(entry)
+    const file = await readEntryFile(entry, acceptFile)
     return file ? [file] : []
   }
   if (entry.isDirectory) {
     const entries = await readDirectoryEntries(entry)
-    const nestedFiles = await Promise.all(entries.map(collectPdfFilesFromEntry))
+    const nestedFiles = await Promise.all(entries.map(nestedEntry => collectFilesFromEntry(nestedEntry, acceptFile)))
     return nestedFiles.flat()
   }
   return []
 }
 
-export const collectPdfFilesFromDataTransfer = async (dataTransfer) => {
+const collectAcceptedFilesFromDataTransfer = async (dataTransfer, acceptFile, fallbackCollector) => {
   const items = Array.from(dataTransfer?.items || [])
   const entries = items
     .map(item => (typeof item.webkitGetAsEntry === 'function' ? item.webkitGetAsEntry() : null))
     .filter(Boolean)
 
   if (entries.length > 0) {
-    const files = await Promise.all(entries.map(collectPdfFilesFromEntry))
+    const files = await Promise.all(entries.map(entry => collectFilesFromEntry(entry, acceptFile)))
     return files.flat()
   }
 
-  return collectPdfFilesFromFileList(dataTransfer?.files)
+  return fallbackCollector(dataTransfer?.files)
+}
+
+export const collectFilesFromDataTransfer = async (dataTransfer) => {
+  return collectAcceptedFilesFromDataTransfer(dataTransfer, hasFilename, collectFilesFromFileList)
+}
+
+export const collectPdfFilesFromDataTransfer = async (dataTransfer) => {
+  return collectAcceptedFilesFromDataTransfer(dataTransfer, isPdfFile, collectPdfFilesFromFileList)
 }

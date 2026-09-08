@@ -41,10 +41,10 @@ public class DrawingFolderAccessService {
         String folderUrl = businessFileService.normalizeDrawingFolderUrl(rawFolderUrl);
         ReferenceAccess access = referencedAndAccessible(folderUrl);
         if (!access.referenced()) {
-            throw new IllegalArgumentException("图纸文件夹不存在或未绑定订单");
+            throw new IllegalArgumentException("附件文件夹不存在或未绑定订单");
         }
         if (!access.accessible()) {
-            throw new DataScopeAccessDeniedException("当前账号无权访问该图纸文件夹");
+            throw new DataScopeAccessDeniedException("当前账号无权访问该附件文件夹");
         }
         return businessFileService.listDrawingFolderFiles(folderUrl);
     }
@@ -60,10 +60,10 @@ public class DrawingFolderAccessService {
         String folderUrl = businessFileService.normalizeDrawingFolderUrl(rawFolderUrl);
         ReferenceAccess access = referencedAndAccessible(folderUrl);
         if (!access.referenced()) {
-            throw new IllegalArgumentException("图纸文件夹不存在或未绑定订单");
+            throw new IllegalArgumentException("附件文件夹不存在或未绑定订单");
         }
         if (!access.accessible()) {
-            throw new DataScopeAccessDeniedException("当前账号无权访问该图纸文件夹");
+            throw new DataScopeAccessDeniedException("当前账号无权访问该附件文件夹");
         }
         return businessFileService.pageDrawingFolderFiles(folderUrl, keyword, page, pageSize);
     }

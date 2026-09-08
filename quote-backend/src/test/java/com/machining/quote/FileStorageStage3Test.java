@@ -2,6 +2,7 @@ package com.machining.quote;
 
 import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.entity.SystemFileObject;
+import com.machining.quote.controller.UploadFileController;
 import com.machining.quote.mapper.SystemFileObjectMapper;
 import com.machining.quote.service.BusinessFileService;
 import com.machining.quote.service.OrderFilePathService;
@@ -13,7 +14,10 @@ import com.machining.quote.storage.StoredFile;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.core.io.InputStreamResource;
+import org.springframework.http.HttpHeaders;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.io.ByteArrayInputStream;
@@ -70,7 +74,7 @@ class FileStorageStage3Test {
     }
 
     @Test
-    void businessFileServiceSavesDrawingFolderFilesUnderOneFolderPrefixAndRecordsMetadataPerPdf() throws Exception {
+    void businessFileServiceSavesDrawingFolderAttachmentsUnderOneFolderPrefixAndRecordsMetadataPerFile() throws Exception {
         OrderFilePathService pathService = pathService();
         FileStorageRouter router = mock(FileStorageRouter.class);
         SystemFileObjectMapper objectMapper = mock(SystemFileObjectMapper.class);
@@ -86,13 +90,13 @@ class FileStorageStage3Test {
         BusinessFileService service = new BusinessFileService(pathService, router, objectMapper);
         MockMultipartFile first = new MockMultipartFile("drawingFolderFiles", "A-100.pdf", "application/pdf", "pdf1".getBytes(StandardCharsets.UTF_8));
         MockMultipartFile second = new MockMultipartFile("drawingFolderFiles", "A-101.PDF", "application/pdf", "pdf2".getBytes(StandardCharsets.UTF_8));
-        MockMultipartFile skipped = new MockMultipartFile("drawingFolderFiles", "note.txt", "text/plain", "txt".getBytes(StandardCharsets.UTF_8));
+        MockMultipartFile note = new MockMultipartFile("drawingFolderFiles", "note.txt", "text/plain", "txt".getBytes(StandardCharsets.UTF_8));
 
         BusinessFileService.DrawingFolderSaveResult result = service.saveDrawingFolderFiles(
                 "RFQ",
                 "101",
                 "客户A图纸包",
-                List.of(first, second, skipped),
+                List.of(first, second, note),
                 "RFQ_DRAWING_FOLDER",
                 "101");
 
@@ -100,18 +104,42 @@ class FileStorageStage3Test {
                 .startsWith("/uploads/drawing-folders/RFQ/101/")
                 .endsWith("/");
         assertThat(result.folderName()).isEqualTo("客户A图纸包");
-        assertThat(result.fileCount()).isEqualTo(2);
+        assertThat(result.fileCount()).isEqualTo(3);
         assertThat(result.files()).extracting(BusinessFileService.DrawingFolderFile::fileName)
-                .containsExactly("A-100.pdf", "A-101.PDF");
-        assertThat(result.files()).allSatisfy(file -> assertThat(file.publicPath()).startsWith(result.folderUrl()).endsWith(".pdf"));
-        assertThat(insertedObjects).hasSize(2);
+                .containsExactly("A-100.pdf", "A-101.PDF", "note.txt");
+        assertThat(result.files()).extracting(BusinessFileService.DrawingFolderFile::contentType)
+                .containsExactly("application/pdf", "application/pdf", "text/plain");
+        assertThat(result.files()).allSatisfy(file -> assertThat(file.publicPath()).startsWith(result.folderUrl()));
+        assertThat(result.files().get(0).publicPath()).endsWith(".pdf");
+        assertThat(result.files().get(2).publicPath()).endsWith(".txt");
+        assertThat(insertedObjects).hasSize(3);
         assertThat(insertedObjects).extracting(SystemFileObject::getPublicPath)
                 .allSatisfy(path -> assertThat(path).startsWith(result.folderUrl()));
         assertThat(insertedObjects).extracting(SystemFileObject::getBizType)
-                .containsExactly("RFQ_DRAWING_FOLDER", "RFQ_DRAWING_FOLDER");
+                .containsExactly("RFQ_DRAWING_FOLDER", "RFQ_DRAWING_FOLDER", "RFQ_DRAWING_FOLDER");
         assertThat(insertedObjects).extracting(SystemFileObject::getBizId)
-                .containsExactly("101", "101");
-        verify(router, times(2)).saveActive(any(), any(), anyLong(), any(), any());
+                .containsExactly("101", "101", "101");
+        verify(router, times(3)).saveActive(any(), any(), anyLong(), any(), any());
+    }
+
+    @Test
+    void uploadControllerServesPdfsInlineButForcesOtherAttachmentsToDownload() throws Exception {
+        BusinessFileService businessFileService = mock(BusinessFileService.class);
+        UploadFileController controller = new UploadFileController(businessFileService);
+        when(businessFileService.openByPublicPath("/uploads/drawing-folders/RFQ/101/FOLDER/A.pdf"))
+                .thenReturn(Optional.of(readResult("pdf", "application/pdf", "A.pdf")));
+        when(businessFileService.openByPublicPath("/uploads/drawing-folders/RFQ/101/FOLDER/note.txt"))
+                .thenReturn(Optional.of(readResult("txt", "text/plain", "note.txt")));
+
+        MockHttpServletResponse pdfResponse = new MockHttpServletResponse();
+        controller.getUploadFile(new MockHttpServletRequest("GET", "/uploads/drawing-folders/RFQ/101/FOLDER/A.pdf"), pdfResponse);
+
+        assertThat(pdfResponse.getHeader(HttpHeaders.CONTENT_DISPOSITION)).startsWith("inline;");
+
+        MockHttpServletResponse textResponse = new MockHttpServletResponse();
+        controller.getUploadFile(new MockHttpServletRequest("GET", "/uploads/drawing-folders/RFQ/101/FOLDER/note.txt"), textResponse);
+
+        assertThat(textResponse.getHeader(HttpHeaders.CONTENT_DISPOSITION)).startsWith("attachment;");
     }
 
     @Test
@@ -227,6 +255,15 @@ class FileStorageStage3Test {
         OrderFilePathService service = new OrderFilePathService();
         ReflectionTestUtils.setField(service, "uploadDir", tempDir.toString());
         return service;
+    }
+
+    private FileReadResult readResult(String content, String contentType, String filename) {
+        byte[] bytes = content.getBytes(StandardCharsets.UTF_8);
+        return new FileReadResult(
+                new InputStreamResource(new ByteArrayInputStream(bytes)),
+                contentType,
+                bytes.length,
+                filename);
     }
 
     private OrderRfq order() {

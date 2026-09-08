@@ -84,22 +84,22 @@ public class BusinessFileService {
             String bizType,
             String bizId) {
         if (files == null || files.isEmpty()) {
-            throw new IllegalArgumentException("请至少上传一份 PDF 图纸");
+            throw new IllegalArgumentException("请至少上传一份文件");
         }
         String normalizedSourceType = isBlank(sourceType) ? "ORDER" : sourceType.trim().toUpperCase(Locale.ROOT);
         String normalizedSourceId = isBlank(sourceId) ? "unknown" : sourceId.trim();
-        String normalizedFolderName = isBlank(folderName) ? "订单图纸文件夹" : cleanFilename(folderName);
+        String normalizedFolderName = isBlank(folderName) ? "订单附件文件夹" : cleanFilename(folderName);
         String folderUrl = orderFilePathService.drawingFolderUrl(
                 normalizedSourceType,
                 normalizedSourceId,
                 UUID.randomUUID().toString());
         List<DrawingFolderFile> savedFiles = new ArrayList<>();
         for (MultipartFile file : files) {
-            if (!isPdf(file)) {
+            if (!isSavableFile(file)) {
                 continue;
             }
             String originalFilename = cleanFilename(file.getOriginalFilename());
-            String publicPath = folderUrl + UUID.randomUUID() + extension(originalFilename);
+            String publicPath = folderUrl + UUID.randomUUID() + attachmentExtension(originalFilename);
             StoredBusinessFile stored = saveDrawingAtPublicPath(publicPath, file, originalFilename, bizType, bizId);
             savedFiles.add(new DrawingFolderFile(
                     originalFilename,
@@ -109,7 +109,7 @@ public class BusinessFileService {
                     LocalDateTime.now()));
         }
         if (savedFiles.isEmpty()) {
-            throw new IllegalArgumentException("请至少上传一份 PDF 图纸");
+            throw new IllegalArgumentException("请至少上传一份文件");
         }
         return new DrawingFolderSaveResult(folderUrl, normalizedFolderName, savedFiles.size(), List.copyOf(savedFiles));
     }
@@ -428,11 +428,11 @@ public class BusinessFileService {
     public String normalizeDrawingFolderUrl(String rawFolderUrl) {
         Optional<String> normalized = normalizePublicPath(rawFolderUrl);
         if (normalized.isEmpty()) {
-            throw new IllegalArgumentException("图纸文件夹地址不正确");
+            throw new IllegalArgumentException("附件文件夹地址不正确");
         }
         String folderUrl = normalized.get();
         if (!folderUrl.startsWith(DRAWING_FOLDER_PREFIX) || !folderUrl.endsWith("/")) {
-            throw new IllegalArgumentException("图纸文件夹地址不正确");
+            throw new IllegalArgumentException("附件文件夹地址不正确");
         }
         return folderUrl;
     }
@@ -472,21 +472,25 @@ public class BusinessFileService {
         return cleaned.isBlank() ? "drawing.pdf" : cleaned;
     }
 
-    private boolean isPdf(MultipartFile file) {
-        String filename = file == null ? null : file.getOriginalFilename();
-        return file != null
-                && !file.isEmpty()
-                && filename != null
-                && filename.toLowerCase(Locale.ROOT).endsWith(".pdf");
+    private boolean isSavableFile(MultipartFile file) {
+        return file != null && !file.isEmpty() && file.getOriginalFilename() != null;
     }
 
     private String extension(String filename) {
+        return extension(filename, ".pdf");
+    }
+
+    private String attachmentExtension(String filename) {
+        return extension(filename, "");
+    }
+
+    private String extension(String filename, String defaultExtension) {
         int dotIndex = filename == null ? -1 : filename.lastIndexOf('.');
         if (dotIndex < 0 || dotIndex == filename.length() - 1) {
-            return ".pdf";
+            return defaultExtension;
         }
         String ext = filename.substring(dotIndex).toLowerCase();
-        return ext.length() > 20 ? ".pdf" : ext;
+        return ext.length() > 20 ? defaultExtension : ext;
     }
 
     private String filenameFromObject(String originalFilename, String objectKey) {

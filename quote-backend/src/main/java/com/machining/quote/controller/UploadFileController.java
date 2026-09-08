@@ -15,6 +15,7 @@ import org.springframework.util.StreamUtils;
 import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.Locale;
 import java.util.Optional;
 
 @Controller
@@ -48,7 +49,7 @@ public class UploadFileController {
             }
             response.setHeader(HttpHeaders.CACHE_CONTROL, "private, no-store");
             response.setHeader("X-Content-Type-Options", "nosniff");
-            response.setHeader(HttpHeaders.CONTENT_DISPOSITION, inlineDisposition(result.filename()));
+            response.setHeader(HttpHeaders.CONTENT_DISPOSITION, contentDisposition(result));
             StreamUtils.copy(result.resource().getInputStream(), response.getOutputStream());
         } catch (IOException e) {
             log.error("Upload file read failed path={}", request.getRequestURI(), e);
@@ -66,7 +67,27 @@ public class UploadFileController {
     }
 
     private String inlineDisposition(String filename) {
+        return disposition("inline", filename);
+    }
+
+    private String attachmentDisposition(String filename) {
+        return disposition("attachment", filename);
+    }
+
+    private String disposition(String type, String filename) {
         String encodedName = URLEncoder.encode(filename, StandardCharsets.UTF_8).replaceAll("\\+", "%20");
-        return "inline; filename*=UTF-8''" + encodedName;
+        return type + "; filename*=UTF-8''" + encodedName;
+    }
+
+    private String contentDisposition(FileReadResult result) {
+        return isPreviewablePdf(result)
+                ? inlineDisposition(result.filename())
+                : attachmentDisposition(result.filename());
+    }
+
+    private boolean isPreviewablePdf(FileReadResult result) {
+        String contentType = result.contentType() == null ? "" : result.contentType().toLowerCase(Locale.ROOT);
+        String filename = result.filename() == null ? "" : result.filename().toLowerCase(Locale.ROOT);
+        return contentType.contains(MediaType.APPLICATION_PDF_VALUE) || filename.endsWith(".pdf");
     }
 }

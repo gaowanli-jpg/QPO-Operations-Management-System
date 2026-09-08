@@ -625,7 +625,7 @@
     <DrawingFolderViewer
       v-model="folderViewerVisible"
       :folder-url="currentDrawingFolderUrl"
-      :title="`图纸文件夹：${currentDrawingFolderTitle || '未命名图纸'}`"
+      :title="`附件文件夹：${currentDrawingFolderTitle || '未命名文件夹'}`"
     />
 
     <el-dialog
@@ -1397,7 +1397,7 @@ const performStatusAction = async (row, action) => {
 
 const submitSupplementDrawings = async () => {
   if (!orderDetail.value?.orderInfo?.id) return ElMessage.warning('请先打开询价订单详情。')
-  if (supplementDrawingFolderFiles.value.length === 0 && supplementFiles.value.length === 0 && supplementVersionFiles.value.length === 0) return ElMessage.warning('请先选择需要补传的 PDF 图纸或订单图纸文件夹。')
+  if (supplementDrawingFolderFiles.value.length === 0 && supplementFiles.value.length === 0 && supplementVersionFiles.value.length === 0) return ElMessage.warning('请先选择需要补传的 PDF 图纸或订单附件文件夹。')
 
   const rfqId = orderDetail.value.orderInfo.id
   return runAction(orderActionKeys.supplementDrawings(rfqId), async () => {
@@ -1427,7 +1427,7 @@ const submitSupplementDrawings = async () => {
 
 const submitReplaceDrawings = async () => {
   if (!orderDetail.value?.orderInfo?.id) return ElMessage.warning('请先打开询价订单详情。')
-  if (replaceDrawingFolderFiles.value.length === 0 && replaceDrawingFiles.value.length === 0 && replaceVersionDrawingFiles.value.length === 0) return ElMessage.warning('请先选择需要替换的 PDF 图纸或订单图纸文件夹。')
+  if (replaceDrawingFolderFiles.value.length === 0 && replaceDrawingFiles.value.length === 0 && replaceVersionDrawingFiles.value.length === 0) return ElMessage.warning('请先选择需要替换的 PDF 图纸或订单附件文件夹。')
 
   const rfqId = orderDetail.value.orderInfo.id
   return runAction(orderActionKeys.replaceDrawings(rfqId), async () => {
@@ -1473,7 +1473,7 @@ const openPdfPreview = async (url, partNo) => {
   }
   if (isDrawingFolderUrl(url)) {
     currentDrawingFolderUrl.value = url
-    currentDrawingFolderTitle.value = partNo || '未命名图纸'
+    currentDrawingFolderTitle.value = partNo || '未命名文件夹'
     folderViewerVisible.value = true
     return
   }

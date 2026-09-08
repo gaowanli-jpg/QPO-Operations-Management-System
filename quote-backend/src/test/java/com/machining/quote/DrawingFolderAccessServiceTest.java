@@ -105,7 +105,7 @@ class DrawingFolderAccessServiceTest {
 
         assertThatThrownBy(() -> service.listFiles(FOLDER_URL))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("图纸文件夹不存在或未绑定订单");
+                .hasMessageContaining("附件文件夹不存在或未绑定订单");
         verify(businessFileService, never()).listDrawingFolderFiles(eq(FOLDER_URL));
     }
 
@@ -119,7 +119,7 @@ class DrawingFolderAccessServiceTest {
 
         assertThatThrownBy(() -> service.pageFiles(FOLDER_URL, "A", 1, 20))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("图纸文件夹不存在或未绑定订单");
+                .hasMessageContaining("附件文件夹不存在或未绑定订单");
         verify(businessFileService, never()).pageDrawingFolderFiles(eq(FOLDER_URL), any(), anyInt(), anyInt());
     }
 

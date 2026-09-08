@@ -24,13 +24,15 @@ describe('DrawingFolderViewer', () => {
     expect(viewerSource).toContain('<DrawingFolderFileBrowser')
   })
 
-  test('lists drawing folder files with preview and download actions only', () => {
+  test('lists drawing folder attachments with preview only for PDFs and download for every file', () => {
     expect(existsSync(viewerPath)).toBe(true)
     const source = readSource('components', 'common', 'DrawingFolderFileBrowser.vue')
 
     expect(source).toContain('listDrawingFolderFiles')
     expect(source).toContain('openAuthenticatedFileInNewWindow')
     expect(source).toContain('downloadFile')
+    expect(source).toContain('isPreviewablePdf(row)')
+    expect(source).toContain('当前文件不是 PDF，只支持下载。')
     expect(source).toContain('label="文件名"')
     expect(source).toContain('label="大小"')
     expect(source).toContain('label="上传时间"')

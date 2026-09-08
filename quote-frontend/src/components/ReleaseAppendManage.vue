@@ -94,7 +94,7 @@
       <div class="append-step append-step-drawings">
         <div class="section-title">
           <span class="step-index">04</span>
-          <span>上传关联图纸 / 上传订单图纸文件夹</span>
+          <span>上传关联图纸 / 上传订单附件文件夹</span>
         </div>
         <div class="drawing-folder-upload-row">
           <ImportDrawingUploadPanel
@@ -102,8 +102,8 @@
             v-model:folder-name="drawingFolderName"
             upload-mode="folder"
             permission="market:release-append:create"
-            alert-title="推荐：上传整单图纸文件夹，系统会把该文件夹绑定到目标销售订单和本次追加零件。"
-            selected-title="追加提单整单图纸文件夹待提交文件"
+            alert-title="推荐：上传整单附件文件夹，系统会把该文件夹绑定到目标销售订单和本次追加零件；PDF 可预览，其他附件仅下载。"
+            selected-title="追加提单整单附件文件夹待提交文件"
             :disabled="isPending(APPEND_ACTION_KEY)"
           />
         </div>

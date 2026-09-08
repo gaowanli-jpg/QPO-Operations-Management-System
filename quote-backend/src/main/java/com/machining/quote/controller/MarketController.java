@@ -627,7 +627,7 @@ public class MarketController {
                 newOrder.setDrawingFolderName(drawingFolder.folderName());
                 newOrder.setDrawingFolderFileCount(drawingFolder.fileCount());
                 if (orderRfqMapper.updateById(newOrder) <= 0) {
-                    throw new RuntimeException("询价订单图纸文件夹保存失败，请刷新后重试");
+                    throw new RuntimeException("询价订单附件文件夹保存失败，请刷新后重试");
                 }
             }
             log.info("RFQ import order saved rfqId={} rfqNo={} customerCode={} customerName={}",

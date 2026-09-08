@@ -25,7 +25,9 @@ describe('shared supplement drawing dialog', () => {
     expect(dialog).toContain('webkitdirectory')
     expect(dialog).toContain('选择多个 PDF')
     expect(dialog).toContain('选择文件夹')
-    expect(dialog).toContain('上传订单图纸文件夹')
+    expect(dialog).toContain('上传订单附件文件夹')
+    expect(dialog).toContain('collectFilesFromDataTransfer')
+    expect(dialog).toContain('mergeFiles')
     expect(dialog).toContain('@drop.prevent="handleDrop"')
   })
 

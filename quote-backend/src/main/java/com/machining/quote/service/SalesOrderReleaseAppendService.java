@@ -458,7 +458,7 @@ public class SalesOrderReleaseAppendService {
             update.setDrawingFolderFileCount(drawingFolder.fileCount());
             update.setUpdatedAt(LocalDateTime.now());
             if (headerMapper.updateById(update) <= 0) {
-                throw new RuntimeException("销售订单图纸文件夹保存失败，请刷新后重试");
+                throw new RuntimeException("销售订单附件文件夹保存失败，请刷新后重试");
             }
             return new DrawingBindingResult(
                     parseResult,

@@ -2,7 +2,7 @@
   <div class="drawing-folder-file-browser" :class="{ 'is-compact': compact }">
     <el-alert
       v-if="showNotice"
-      title="该零件绑定的是订单图纸文件夹，请在下方选择具体 PDF 预览或下载。"
+      title="该零件绑定的是订单附件文件夹，请在下方选择具体 PDF 预览，其他附件可下载。"
       type="info"
       show-icon
       :closable="false"
@@ -38,7 +38,7 @@
       <el-table-column label="操作" :width="compact ? 132 : 150" align="center" fixed="right">
         <template #default="{ row }">
           <div class="erp-table-actions folder-file-actions">
-            <el-button type="primary" plain size="small" @click="previewFile(row)">预览</el-button>
+            <el-button v-if="isPreviewablePdf(row)" type="primary" plain size="small" @click="previewFile(row)">预览</el-button>
             <el-button v-if="showDownload" plain size="small" @click="downloadDrawingFile(row)">下载</el-button>
           </div>
         </template>
@@ -83,7 +83,7 @@ const props = defineProps({
   showDownload: { type: Boolean, default: true },
   previewBehavior: { type: String, default: 'window' },
   tableHeight: { type: [Number, String], default: 360 },
-  emptyText: { type: String, default: '暂无图纸文件' }
+  emptyText: { type: String, default: '暂无附件文件' }
 })
 
 const emit = defineEmits(['preview'])
@@ -123,7 +123,7 @@ const loadFiles = async () => {
     pageSize.value = Number(response?.pageSize ?? pageSize.value) || pageSize.value
   } catch (loadError) {
     if (seq !== requestSeq) return
-    error.value = readActionError(loadError, '图纸文件夹加载失败。')
+    error.value = readActionError(loadError, '附件文件夹加载失败。')
   } finally {
     if (seq === requestSeq) {
       loading.value = false
@@ -165,7 +165,14 @@ const handlePageSizeChange = (nextPageSize) => {
 
 const filePath = (row) => row?.publicPath || row?.url || ''
 
+const isPreviewablePdf = (row) => {
+  const contentType = String(row?.contentType || '').toLowerCase()
+  const filename = String(row?.fileName || row?.originalFilename || '').toLowerCase()
+  return contentType.includes('application/pdf') || filename.endsWith('.pdf')
+}
+
 const previewFile = async (row) => {
+  if (!isPreviewablePdf(row)) return ElMessage.warning('当前文件不是 PDF，只支持下载。')
   if (props.previewBehavior === 'emit') {
     emit('preview', row)
     return
@@ -181,9 +188,9 @@ const previewFile = async (row) => {
 const downloadDrawingFile = async (row) => {
   const path = filePath(row)
   if (!path) return ElMessage.warning('当前文件缺少下载地址。')
-  const result = await downloadFile(path, row?.fileName || 'drawing.pdf')
+  const result = await downloadFile(path, row?.fileName || 'attachment')
   if (!result.success) {
-    ElMessage.error(result.message || '图纸下载失败。')
+    ElMessage.error(result.message || '文件下载失败。')
   }
 }
 

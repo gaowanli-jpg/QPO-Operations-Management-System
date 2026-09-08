@@ -245,7 +245,7 @@ public class SalesOrderManageService {
             throw new RuntimeException("销售订单 ID 不能为空");
         }
         if (isEmptyFiles(drawings) && isEmptyFiles(versionDrawings) && isEmptyFiles(drawingFolderFiles)) {
-            throw new RuntimeException("请至少上传一份 PDF 图纸");
+            throw new RuntimeException("请至少上传一份 PDF 图纸或订单附件文件夹");
         }
         if (businessFileService == null) {
             throw new RuntimeException("图纸文件服务不可用");
@@ -426,7 +426,7 @@ public class SalesOrderManageService {
             throw new RuntimeException("销售订单 ID 不能为空");
         }
         if (isEmptyFiles(drawings) && isEmptyFiles(versionDrawings) && isEmptyFiles(drawingFolderFiles)) {
-            throw new RuntimeException("请至少上传一份 PDF 图纸");
+            throw new RuntimeException("请至少上传一份 PDF 图纸或订单附件文件夹");
         }
         if (businessFileService == null) {
             throw new RuntimeException("图纸文件服务不可用");
@@ -632,7 +632,7 @@ public class SalesOrderManageService {
         update.setDrawingFolderFileCount(drawingFolder.fileCount());
         update.setUpdatedAt(java.time.LocalDateTime.now());
         if (salesOrderHeaderMapper.updateById(update) <= 0) {
-            throw new RuntimeException("销售订单图纸文件夹保存失败，请刷新后重试");
+            throw new RuntimeException("销售订单附件文件夹保存失败，请刷新后重试");
         }
 
         List<SalesOrderItem> items = listSalesOrderItems(order.getId());
@@ -641,14 +641,14 @@ public class SalesOrderManageService {
             item.setDrawingUrl(drawingFolder.folderUrl());
             item.setHasDrawing(true);
             if (salesOrderItemMapper.updateById(item) <= 0) {
-                throw new RuntimeException("销售订单图纸文件夹绑定失败，请刷新后重试");
+                throw new RuntimeException("销售订单附件文件夹绑定失败，请刷新后重试");
             }
             boundItems.add(buildSalesItemResult(item, drawingFolder.folderName(), "已绑定文件夹"));
         }
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("success", true);
-        result.put("message", "补传图纸文件夹处理完成，成功绑定 " + boundItems.size() + " 个零件。");
+        result.put("message", "补传附件文件夹处理完成，成功绑定 " + boundItems.size() + " 个零件。");
         result.put("boundCount", boundItems.size());
         result.put("alreadyBoundCount", 0);
         result.put("unmatchedCount", 0);
@@ -686,7 +686,7 @@ public class SalesOrderManageService {
                     null
             );
         }
-        log.info("Sales order drawing folder supplement completed salesOrderId={} folderFileCount={} boundCount={}",
+        log.info("Sales order attachment folder supplement completed salesOrderId={} folderFileCount={} boundCount={}",
                 order.getId(), drawingFolder.fileCount(), boundItems.size());
         return result;
     }
@@ -712,7 +712,7 @@ public class SalesOrderManageService {
         update.setDrawingFolderFileCount(drawingFolder.fileCount());
         update.setUpdatedAt(LocalDateTime.now());
         if (salesOrderHeaderMapper.updateById(update) <= 0) {
-            throw new RuntimeException("销售订单图纸文件夹替换保存失败，请刷新后重试");
+            throw new RuntimeException("销售订单附件文件夹替换保存失败，请刷新后重试");
         }
 
         List<SalesOrderItem> items = listSalesOrderItems(order.getId());
@@ -721,14 +721,14 @@ public class SalesOrderManageService {
             item.setDrawingUrl(drawingFolder.folderUrl());
             item.setHasDrawing(true);
             if (salesOrderItemMapper.updateById(item) <= 0) {
-                throw new RuntimeException("销售订单图纸文件夹替换绑定失败，请刷新后重试");
+                throw new RuntimeException("销售订单附件文件夹替换绑定失败，请刷新后重试");
             }
             replacedItems.add(buildSalesItemResult(item, drawingFolder.folderName(), "已绑定文件夹"));
         }
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("success", true);
-        result.put("message", "替换图纸文件夹处理完成，成功替换 " + replacedItems.size() + " 个零件。");
+        result.put("message", "替换附件文件夹处理完成，成功替换 " + replacedItems.size() + " 个零件。");
         result.put("replacedCount", replacedItems.size());
         result.put("boundCount", replacedItems.size());
         result.put("alreadyBoundCount", 0);
@@ -769,7 +769,7 @@ public class SalesOrderManageService {
                     null
             );
         }
-        log.info("Sales order drawing folder replace completed salesOrderId={} folderFileCount={} replacedCount={}",
+        log.info("Sales order attachment folder replace completed salesOrderId={} folderFileCount={} replacedCount={}",
                 order.getId(), drawingFolder.fileCount(), replacedItems.size());
         return result;
     }

@@ -40,7 +40,7 @@ describe('release append module', () => {
     expect(component).toContain('选择目标销售订单')
     expect(component).toContain('上传销售订单 Excel')
     expect(component).toContain('上传关联图纸')
-    expect(component).toContain('上传订单图纸文件夹')
+    expect(component).toContain('上传订单附件文件夹')
     expect(component).toContain('v-model="drawingFolderFiles"')
     expect(component).toContain('v-model:folder-name="drawingFolderName"')
     expect(component).toContain("formData.append('drawingFolderFiles', file)")

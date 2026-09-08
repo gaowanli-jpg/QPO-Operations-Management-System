@@ -2,7 +2,7 @@ import { describe, expect, test } from 'vitest'
 import { existsSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
-import { collectPdfFilesFromFileList, extractDrawingFolderName, mergePdfFiles } from './utils/drawingUpload'
+import { collectFilesFromFileList, collectPdfFilesFromFileList, extractDrawingFolderName, mergeFiles, mergePdfFiles } from './utils/drawingUpload'
 
 const currentDir = dirname(fileURLToPath(import.meta.url))
 
@@ -52,8 +52,10 @@ describe('drawing upload workflow parity', () => {
     expect(source).toContain('extractDrawingFolderName')
     expect(source).toContain("uploadMode: { type: String, default: 'matching' }")
     expect(source).toContain("emit('update:folderName'")
-    expect(source).toContain('选择订单图纸文件夹')
+    expect(source).toContain('选择订单附件文件夹')
     expect(source).toContain('emit(\'update:modelValue\'')
+    expect(source).toContain('collectFilesFromDataTransfer')
+    expect(source).toContain('mergeFiles')
   })
 
   test('shared drawing upload panel keeps paired entrances equal height and action buttons aligned', () => {
@@ -110,7 +112,7 @@ describe('drawing upload workflow parity', () => {
     expect(source).toContain('update:folderName')
     expect(source).toContain('按图号补传')
     expect(source).toContain('按图号+版本补传')
-    expect(source).toContain('上传订单图纸文件夹')
+    expect(source).toContain('上传订单附件文件夹')
     expect(source).toContain('class="supplement-upload-dual-grid"')
     expect(source).toContain('@drop.prevent="handleDrop"')
     expect(source).toContain('ref="fileInput"')
@@ -141,6 +143,17 @@ describe('drawing upload workflow parity', () => {
 
     expect(collectPdfFilesFromFileList([pdf, word, otherPdf])).toEqual([pdf, otherPdf])
     expect(mergePdfFiles([pdf], [duplicate, otherPdf, word])).toEqual([pdf, otherPdf])
+  })
+
+  test('order folder attachment helper keeps non-PDF files and deduplicates selections', () => {
+    const pdf = { name: 'A-100.PDF', size: 12, lastModified: 1 }
+    const duplicate = { name: 'A-100.PDF', size: 12, lastModified: 1 }
+    const word = { name: 'notes.docx', size: 4, lastModified: 3 }
+    const image = { name: 'photo.png', size: 8, lastModified: 4 }
+    const unnamed = { size: 5, lastModified: 5 }
+
+    expect(collectFilesFromFileList([pdf, word, unnamed, image])).toEqual([pdf, word, image])
+    expect(mergeFiles([pdf], [duplicate, word, image])).toEqual([pdf, word, image])
   })
 
   test('extracts the selected folder name from browser directory selections', () => {

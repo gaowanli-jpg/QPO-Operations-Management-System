@@ -806,7 +806,7 @@ const openPreview = async (url, partNo) => {
   }
   if (isDrawingFolderUrl(url)) {
     currentDrawingFolderUrl.value = url
-    currentDrawingFolderTitle.value = `图纸文件夹：${partNo || '未命名图纸'}`
+    currentDrawingFolderTitle.value = `附件文件夹：${partNo || '未命名文件夹'}`
     folderViewerVisible.value = true
     return
   }
@@ -829,7 +829,7 @@ const openDrawingInNewWindow = async (url) => {
   }
   if (isDrawingFolderUrl(url)) {
     currentDrawingFolderUrl.value = url
-    currentDrawingFolderTitle.value = previewTitle.value ? `图纸文件夹：${previewTitle.value}` : '图纸文件夹'
+    currentDrawingFolderTitle.value = previewTitle.value ? `附件文件夹：${previewTitle.value}` : '附件文件夹'
     folderViewerVisible.value = true
     return
   }

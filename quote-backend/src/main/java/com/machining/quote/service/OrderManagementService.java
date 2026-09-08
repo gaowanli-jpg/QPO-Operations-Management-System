@@ -766,7 +766,7 @@ public class OrderManagementService {
             String drawingFolderName) {
         OrderRfq order = requireOrderForUpdate(rfqId);
         if (isEmptyFiles(drawings) && isEmptyFiles(versionDrawings) && isEmptyFiles(drawingFolderFiles)) {
-            throw new RuntimeException("请至少上传一份 PDF 图纸");
+            throw new RuntimeException("请至少上传一份 PDF 图纸或订单附件文件夹");
         }
         if (!isEmptyFiles(drawingFolderFiles)) {
             return supplementDrawingFolder(order, drawingFolderFiles, drawingFolderName);
@@ -951,7 +951,7 @@ public class OrderManagementService {
             String drawingFolderName) {
         OrderRfq order = requireOrderForUpdate(rfqId);
         if (isEmptyFiles(drawings) && isEmptyFiles(versionDrawings) && isEmptyFiles(drawingFolderFiles)) {
-            throw new RuntimeException("请至少上传一份 PDF 图纸");
+            throw new RuntimeException("请至少上传一份 PDF 图纸或订单附件文件夹");
         }
         if (!isEmptyFiles(drawingFolderFiles)) {
             return replaceDrawingFolder(order, drawingFolderFiles, drawingFolderName);
@@ -1068,7 +1068,7 @@ public class OrderManagementService {
                 restoredUnpricedCount++;
             }
             if (itemMapper.updateById(item) <= 0) {
-                throw new RuntimeException("询价订单图纸文件夹保存失败，请刷新后重试");
+                throw new RuntimeException("询价订单附件文件夹保存失败，请刷新后重试");
             }
             boundItems.add(buildItemResult(item, drawingFolder.folderName(), "已绑定文件夹"));
         }
@@ -1095,7 +1095,7 @@ public class OrderManagementService {
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("success", true);
-        result.put("message", "补传图纸文件夹处理完成，成功绑定 " + boundItems.size() + " 个零件。");
+        result.put("message", "补传附件文件夹处理完成，成功绑定 " + boundItems.size() + " 个零件。");
         result.put("boundCount", boundItems.size());
         result.put("alreadyBoundCount", 0);
         result.put("unmatchedCount", 0);
@@ -1106,7 +1106,7 @@ public class OrderManagementService {
         result.put("unmatchedDrawings", List.of());
         result.put("skippedFiles", List.of());
         addDrawingFolderResult(result, drawingFolder);
-        log.info("Order supplement drawing folder completed rfqId={} folderFileCount={} boundCount={} restoredUnpricedCount={}",
+        log.info("Order supplement attachment folder completed rfqId={} folderFileCount={} boundCount={} restoredUnpricedCount={}",
                 order.getId(), drawingFolder.fileCount(), boundItems.size(), restoredUnpricedCount);
         return result;
     }
@@ -1125,7 +1125,7 @@ public class OrderManagementService {
         for (ItemQuoteVersion item : items) {
             item.setDrawingUrl(drawingFolder.folderUrl());
             if (itemMapper.updateById(item) <= 0) {
-                throw new RuntimeException("询价订单图纸文件夹替换保存失败，请刷新后重试");
+                throw new RuntimeException("询价订单附件文件夹替换保存失败，请刷新后重试");
             }
             replacedItems.add(buildItemResult(item, drawingFolder.folderName(), "已绑定文件夹"));
         }
@@ -1145,7 +1145,7 @@ public class OrderManagementService {
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("success", true);
-        result.put("message", "替换图纸文件夹处理完成，成功绑定 " + replacedItems.size() + " 个零件。");
+        result.put("message", "替换附件文件夹处理完成，成功绑定 " + replacedItems.size() + " 个零件。");
         result.put("replacedCount", replacedItems.size());
         result.put("boundCount", replacedItems.size());
         result.put("alreadyBoundCount", 0);
@@ -1157,7 +1157,7 @@ public class OrderManagementService {
         result.put("unmatchedDrawings", List.of());
         result.put("skippedFiles", List.of());
         addDrawingFolderResult(result, drawingFolder);
-        log.info("Order drawings folder replace completed rfqId={} folderFileCount={} replacedCount={}",
+        log.info("Order attachment folder replace completed rfqId={} folderFileCount={} replacedCount={}",
                 order.getId(), drawingFolder.fileCount(), replacedItems.size());
         return result;
     }
@@ -1178,7 +1178,7 @@ public class OrderManagementService {
         order.setDrawingFolderName(drawingFolder.folderName());
         order.setDrawingFolderFileCount(drawingFolder.fileCount());
         if (orderMapper.updateById(order) <= 0) {
-            throw new RuntimeException("询价订单图纸文件夹保存失败，请刷新后重试");
+            throw new RuntimeException("询价订单附件文件夹保存失败，请刷新后重试");
         }
         return drawingFolder;
     }

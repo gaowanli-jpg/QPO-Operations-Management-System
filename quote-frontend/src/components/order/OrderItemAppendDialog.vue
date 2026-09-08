@@ -36,7 +36,7 @@
 
       <div class="erp-upload-surface append-upload-surface">
         <section class="append-upload-entry append-folder-entry">
-          <div class="append-upload-title">上传订单图纸文件夹</div>
+          <div class="append-upload-title">上传订单附件文件夹</div>
           <div
             v-permission="permission"
             class="custom-dropzone append-dropzone"
@@ -44,17 +44,17 @@
             @drop.prevent="handleOrderFolderDrop"
           >
             <el-icon class="el-icon--upload append-upload-icon"><upload-filled /></el-icon>
-            <div class="el-upload__text">拖拽订单图纸文件夹到这里</div>
-            <div class="el-upload__tip">推荐入口：整单绑定文件夹，不再要求新增零件图纸按文件名匹配。</div>
-            <div class="folder-select-row">或点击下方按钮选择订单图纸文件夹</div>
+            <div class="el-upload__text">拖拽订单附件文件夹到这里</div>
+            <div class="el-upload__tip">推荐入口：整单绑定附件文件夹，PDF 可预览，其他文件仅下载。</div>
+            <div class="folder-select-row">或点击下方按钮选择订单附件文件夹</div>
             <div class="append-upload-actions import-upload-button-stack">
-              <el-button v-permission="permission" plain class="workflow-soft-button folder-select-button" :disabled="pending" @click="triggerOrderFolderSelect">选择订单图纸文件夹</el-button>
+              <el-button v-permission="permission" plain class="workflow-soft-button folder-select-button" :disabled="pending" @click="triggerOrderFolderSelect">选择订单附件文件夹</el-button>
             </div>
             <input ref="orderFolderInput" type="file" webkitdirectory directory multiple class="hidden-input" style="display: none" @change="handleOrderFolderSelect" />
           </div>
 
           <div v-if="folderFiles.length > 0" class="append-file-stats">
-            <h4>整单图纸文件夹待导入文件（{{ folderFiles.length }} 份）</h4>
+            <h4>整单附件文件夹待导入文件（{{ folderFiles.length }} 份）</h4>
             <p v-if="folderName" class="folder-name-line">文件夹：{{ folderName }}</p>
             <ul class="append-pdf-list">
               <li v-for="(file, index) in folderFiles" :key="`${file.name}-${file.size}-${index}`">
@@ -162,7 +162,7 @@
 import { defineComponent, h, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { UploadFilled } from '@element-plus/icons-vue'
-import { collectPdfFilesFromDataTransfer, extractDrawingFolderName, mergePdfFiles } from '../../utils/drawingUpload'
+import { collectFilesFromDataTransfer, collectPdfFilesFromDataTransfer, extractDrawingFolderName, mergeFiles, mergePdfFiles } from '../../utils/drawingUpload'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -227,16 +227,16 @@ const ResultList = defineComponent({
 
 const addFiles = (incomingFiles, sourceLabel, mode = 'part') => {
   const currentFiles = mode === 'folder' ? props.folderFiles : (mode === 'version' ? props.versionFiles : props.files)
-  const nextFiles = mergePdfFiles(currentFiles, incomingFiles)
+  const nextFiles = mode === 'folder' ? mergeFiles(currentFiles, incomingFiles) : mergePdfFiles(currentFiles, incomingFiles)
   const addedCount = nextFiles.length - currentFiles.length
   emit(mode === 'folder' ? 'update:folderFiles' : (mode === 'version' ? 'update:versionFiles' : 'update:files'), nextFiles)
   if (mode === 'folder') {
     emit('update:folderName', extractDrawingFolderName(incomingFiles) || props.folderName || '')
   }
   if (addedCount > 0) {
-    ElMessage.success(`成功${sourceLabel} ${addedCount} 份 PDF。`)
+    ElMessage.success(`成功${sourceLabel} ${addedCount} ${mode === 'folder' ? '个附件' : '份 PDF'}。`)
   } else {
-    ElMessage.warning('未找到新的 PDF 图纸。')
+    ElMessage.warning(mode === 'folder' ? '未找到新的文件。' : '未找到新的 PDF 图纸。')
   }
 }
 
@@ -247,7 +247,7 @@ const handlePartDrop = async (event) => {
 
 const handleOrderFolderDrop = async (event) => {
   if (props.pending) return
-  addFiles(await collectPdfFilesFromDataTransfer(event.dataTransfer), '提取到订单图纸文件夹', 'folder')
+  addFiles(await collectFilesFromDataTransfer(event.dataTransfer), '提取到订单附件文件夹', 'folder')
 }
 
 const handleVersionDrop = async (event) => {
@@ -286,7 +286,7 @@ const handlePartFolderSelect = (event) => {
 }
 
 const handleOrderFolderSelect = (event) => {
-  addFiles(event.target.files, '选择订单图纸文件夹', 'folder')
+  addFiles(event.target.files, '选择订单附件文件夹', 'folder')
   event.target.value = ''
 }
 

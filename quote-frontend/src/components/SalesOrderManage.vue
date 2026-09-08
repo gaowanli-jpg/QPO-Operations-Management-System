@@ -655,7 +655,7 @@
     <DrawingFolderViewer
       v-model="folderViewerVisible"
       :folder-url="currentDrawingFolderUrl"
-      :title="`图纸文件夹：${currentDrawingFolderTitle || '未命名图纸'}`"
+      :title="`附件文件夹：${currentDrawingFolderTitle || '未命名文件夹'}`"
     />
   </div>
 </template>
@@ -1113,7 +1113,7 @@ const openDrawingPreview = async (row) => {
   if (!url) return ElMessage.warning('当前零件没有绑定图纸。')
   if (isDrawingFolderUrl(url)) {
     currentDrawingFolderUrl.value = url
-    currentDrawingFolderTitle.value = row?.partNo || '未命名图纸'
+    currentDrawingFolderTitle.value = row?.partNo || '未命名文件夹'
     folderViewerVisible.value = true
     return
   }
@@ -1382,7 +1382,7 @@ const performStatusAction = async (row, action) => {
 
 const submitSupplementDrawings = async () => {
   if (!orderDetail.value?.orderInfo?.id) return ElMessage.warning('请先打开销售订单详情。')
-  if (supplementDrawingFolderFiles.value.length === 0 && supplementFiles.value.length === 0 && supplementVersionFiles.value.length === 0) return ElMessage.warning('请先选择需要补传的 PDF 图纸或订单图纸文件夹。')
+  if (supplementDrawingFolderFiles.value.length === 0 && supplementFiles.value.length === 0 && supplementVersionFiles.value.length === 0) return ElMessage.warning('请先选择需要补传的 PDF 图纸或订单附件文件夹。')
 
   const salesOrderId = orderDetail.value.orderInfo.id
   return runAction(salesOrderActionKeys.supplementDrawings(salesOrderId), async () => {
@@ -1413,7 +1413,7 @@ const submitSupplementDrawings = async () => {
 
 const submitReplaceSalesOrderDrawings = async () => {
   if (!orderDetail.value?.orderInfo?.id) return ElMessage.warning('请先打开销售订单详情。')
-  if (replaceSalesOrderDrawingFolderFiles.value.length === 0 && replaceSalesOrderDrawingFiles.value.length === 0 && replaceSalesOrderVersionDrawingFiles.value.length === 0) return ElMessage.warning('请先选择需要替换的 PDF 图纸或订单图纸文件夹。')
+  if (replaceSalesOrderDrawingFolderFiles.value.length === 0 && replaceSalesOrderDrawingFiles.value.length === 0 && replaceSalesOrderVersionDrawingFiles.value.length === 0) return ElMessage.warning('请先选择需要替换的 PDF 图纸或订单附件文件夹。')
 
   const salesOrderId = orderDetail.value.orderInfo.id
   return runAction(salesOrderActionKeys.salesOrderDrawingReplace(salesOrderId), async () => {

@@ -560,7 +560,7 @@
                 :compact="true"
                 preview-behavior="emit"
                 table-height="420"
-                empty-text="当前文件夹暂无 PDF 图纸"
+                empty-text="当前文件夹暂无附件文件"
                 @preview="previewFolderDrawingInPane"
               />
             </div>
@@ -1543,7 +1543,7 @@ const openPdfPreview = async (url, partNo) => {
   }
   if (isDrawingFolderUrl(url)) {
     currentDrawingFolderUrl.value = url
-    currentDrawingFolderTitle.value = `图纸文件夹：${partNo || '未命名图纸'}`
+    currentDrawingFolderTitle.value = `附件文件夹：${partNo || '未命名文件夹'}`
     folderViewerVisible.value = true
     return
   }
@@ -1566,7 +1566,7 @@ const openDrawingInNewWindow = async (url) => {
   }
   if (isDrawingFolderUrl(url)) {
     currentDrawingFolderUrl.value = url
-    currentDrawingFolderTitle.value = currentRow.value?.partNo ? `图纸文件夹：${currentRow.value.partNo}` : '图纸文件夹'
+    currentDrawingFolderTitle.value = currentRow.value?.partNo ? `附件文件夹：${currentRow.value.partNo}` : '附件文件夹'
     folderViewerVisible.value = true
     return
   }

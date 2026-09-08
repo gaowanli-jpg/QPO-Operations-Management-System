@@ -28,5 +28,5 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue'])
 
-const viewerTitle = computed(() => props.title || '图纸文件夹')
+const viewerTitle = computed(() => props.title || '订单附件文件夹')
 </script>

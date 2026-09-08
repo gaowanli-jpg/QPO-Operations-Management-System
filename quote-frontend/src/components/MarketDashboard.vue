@@ -92,7 +92,7 @@
             <div class="import-step import-step-drawings">
               <div class="section-title">
                 <span class="step-index">03</span>
-                <span>步骤 3：上传关联图纸（PDF） / 上传订单图纸文件夹</span>
+                <span>步骤 3：上传关联图纸（PDF） / 上传订单附件文件夹</span>
               </div>
               <div class="drawing-folder-upload-row">
                 <ImportDrawingUploadPanel
@@ -100,8 +100,8 @@
                   v-model:folder-name="drawingFolderName"
                   upload-mode="folder"
                   permission="market:rfq:upload-drawing"
-                  alert-title="推荐：上传整单图纸文件夹，系统会把该文件夹绑定到订单和所有零件，不再依赖图纸文件名匹配。"
-                  selected-title="整单图纸文件夹待提交文件"
+                  alert-title="推荐：上传整单附件文件夹，系统会把该文件夹绑定到订单和所有零件；PDF 可预览，其他附件仅下载。"
+                  selected-title="整单附件文件夹待提交文件"
                 />
               </div>
               <div class="drawing-upload-dual-grid">
@@ -320,7 +320,7 @@
             <div class="import-step import-step-sales-order-drawings">
               <div class="section-title">
                 <span class="step-index">04</span>
-                <span>步骤 4：上传关联图纸（PDF） / 上传订单图纸文件夹</span>
+                <span>步骤 4：上传关联图纸（PDF） / 上传订单附件文件夹</span>
               </div>
               <div class="drawing-folder-upload-row">
                 <ImportDrawingUploadPanel
@@ -329,8 +329,8 @@
                   upload-mode="folder"
                   permission="market:rfq:import-sales-order"
                   :disabled="isPending(IMPORT_SALES_ORDER_ACTION_KEY)"
-                  alert-title="推荐：上传整单图纸文件夹，系统会把该文件夹绑定到销售订单和所有零件，不再依赖图纸文件名匹配。"
-                  selected-title="销售订单整单图纸文件夹待提交文件"
+                  alert-title="推荐：上传整单附件文件夹，系统会把该文件夹绑定到销售订单和所有零件；PDF 可预览，其他附件仅下载。"
+                  selected-title="销售订单整单附件文件夹待提交文件"
                 />
               </div>
               <div class="drawing-upload-dual-grid">
@@ -638,7 +638,7 @@ const buildDrawingReportHtml = (report) => {
     <div style="font-weight: 600; color: ${hasWarning ? '#E6A23C' : '#67C23A'};">图纸匹配结果</div>
     <div style="margin-top: 6px; color: #606266;">
       Excel 零件 ${report.totalItemCount ?? 0} 个，上传 PDF ${report.uploadedDrawingCount ?? 0} 份，已绑定零件 ${report.matchedItemCount ?? 0} 个。
-      ${report.drawingFolderMode ? `整单图纸文件夹模式，文件数 ${report.drawingFolderFileCount ?? report.uploadedDrawingCount ?? 0} 份。` : ''}
+      ${report.drawingFolderMode ? `整单附件文件夹模式，文件数 ${report.drawingFolderFileCount ?? report.uploadedDrawingCount ?? 0} 份。` : ''}
     </div>
     ${missingHtml}
     ${unmatchedHtml}
