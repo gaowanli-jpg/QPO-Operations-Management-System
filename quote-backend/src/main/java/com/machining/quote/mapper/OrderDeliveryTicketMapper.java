@@ -42,6 +42,10 @@ public interface OrderDeliveryTicketMapper extends BaseMapper<OrderDeliveryTicke
                 ticket.source_type,
                 ticket.source_order_id,
                 ticket.source_item_id,
+                COALESCE(direct_sales_order.id, rfq_sales_order.id) AS sales_order_id,
+                COALESCE(direct_sales_order.sales_order_no, rfq_sales_order.sales_order_no) AS sales_order_no,
+                COALESCE(direct_sales_order.customer_code, rfq_sales_order.customer_code) AS sales_order_customer_code,
+                COALESCE(direct_sales_order.customer_name, rfq_sales_order.customer_name) AS sales_order_customer_name,
                 ticket.part_no,
                 ticket.version,
                 ticket.description,
@@ -53,15 +57,15 @@ public interface OrderDeliveryTicketMapper extends BaseMapper<OrderDeliveryTicke
                 ticket.customer_project_no,
                 ticket.project_no,
                 ticket.item_type,
-                COALESCE(ticket.material_name, item.material_name) AS material_name,
-                COALESCE(ticket.engineering_material_code, item.engineering_material_code, sales_item.engineering_material_code) AS engineering_material_code,
-                COALESCE(ticket.engineering_material_name, item.engineering_material_name) AS engineering_material_name,
-                COALESCE(ticket.engineering_material_type_code, item.engineering_material_type_code, sales_item.engineering_material_type_code) AS engineering_material_type_code,
-                COALESCE(ticket.engineering_material_type_name, item.engineering_material_type_name, sales_item.engineering_material_type_name) AS engineering_material_type_name,
-                COALESCE(ticket.engineering_material_category, item.engineering_material_category, sales_item.engineering_material_category) AS engineering_material_category,
-                COALESCE(ticket.material_shape, item.material_shape, sales_item.material_shape) AS material_shape,
-                COALESCE(ticket.surface_treatment, item.surface_treatment) AS surface_treatment,
-                COALESCE(ticket.drawing_url, sales_item.drawing_url, item.drawing_url) AS drawing_url,
+                COALESCE(ticket.material_name, item.material_name, direct_sales_item.material_name, rfq_sales_item.material_name) AS material_name,
+                COALESCE(ticket.engineering_material_code, item.engineering_material_code, direct_sales_item.engineering_material_code, rfq_sales_item.engineering_material_code) AS engineering_material_code,
+                COALESCE(ticket.engineering_material_name, item.engineering_material_name, direct_sales_item.engineering_material_name, rfq_sales_item.engineering_material_name) AS engineering_material_name,
+                COALESCE(ticket.engineering_material_type_code, item.engineering_material_type_code, direct_sales_item.engineering_material_type_code, rfq_sales_item.engineering_material_type_code) AS engineering_material_type_code,
+                COALESCE(ticket.engineering_material_type_name, item.engineering_material_type_name, direct_sales_item.engineering_material_type_name, rfq_sales_item.engineering_material_type_name) AS engineering_material_type_name,
+                COALESCE(ticket.engineering_material_category, item.engineering_material_category, direct_sales_item.engineering_material_category, rfq_sales_item.engineering_material_category) AS engineering_material_category,
+                COALESCE(ticket.material_shape, item.material_shape, direct_sales_item.material_shape, rfq_sales_item.material_shape) AS material_shape,
+                COALESCE(ticket.surface_treatment, item.surface_treatment, direct_sales_item.surface_treatment, rfq_sales_item.surface_treatment) AS surface_treatment,
+                COALESCE(ticket.drawing_url, direct_sales_item.drawing_url, rfq_sales_item.drawing_url, item.drawing_url) AS drawing_url,
                 ticket.process_route,
                 ticket.material_data,
                 ticket.material_gross_weight,
@@ -92,7 +96,12 @@ public interface OrderDeliveryTicketMapper extends BaseMapper<OrderDeliveryTicke
             FROM order_delivery_ticket ticket
             LEFT JOIN order_rfq rfq ON rfq.id = ticket.rfq_id
             LEFT JOIN item_quote_version item ON item.id = ticket.item_id
-            LEFT JOIN sales_order_item sales_item ON sales_item.id = ticket.source_item_id
+            LEFT JOIN sales_order_item direct_sales_item
+                ON ticket.source_type = 'SALES_ORDER' AND direct_sales_item.id = ticket.source_item_id
+            LEFT JOIN sales_order_header direct_sales_order
+                ON ticket.source_type = 'SALES_ORDER' AND direct_sales_order.id = ticket.source_order_id
+            LEFT JOIN sales_order_item rfq_sales_item ON rfq_sales_item.source_ticket_id = ticket.id
+            LEFT JOIN sales_order_header rfq_sales_order ON rfq_sales_order.id = rfq_sales_item.sales_order_id
             ${ew.customSqlSegment}
             ORDER BY ticket.id DESC
             LIMIT #{limit} OFFSET #{offset}
@@ -118,7 +127,12 @@ public interface OrderDeliveryTicketMapper extends BaseMapper<OrderDeliveryTicke
             FROM order_delivery_ticket ticket
             LEFT JOIN order_rfq rfq ON rfq.id = ticket.rfq_id
             LEFT JOIN item_quote_version item ON item.id = ticket.item_id
-            LEFT JOIN sales_order_item sales_item ON sales_item.id = ticket.source_item_id
+            LEFT JOIN sales_order_item direct_sales_item
+                ON ticket.source_type = 'SALES_ORDER' AND direct_sales_item.id = ticket.source_item_id
+            LEFT JOIN sales_order_header direct_sales_order
+                ON ticket.source_type = 'SALES_ORDER' AND direct_sales_order.id = ticket.source_order_id
+            LEFT JOIN sales_order_item rfq_sales_item ON rfq_sales_item.source_ticket_id = ticket.id
+            LEFT JOIN sales_order_header rfq_sales_order ON rfq_sales_order.id = rfq_sales_item.sales_order_id
             ${ew.customSqlSegment}
             </script>
             """)
@@ -146,6 +160,10 @@ public interface OrderDeliveryTicketMapper extends BaseMapper<OrderDeliveryTicke
                 ticket.source_type,
                 ticket.source_order_id,
                 ticket.source_item_id,
+                COALESCE(direct_sales_order.id, rfq_sales_order.id) AS sales_order_id,
+                COALESCE(direct_sales_order.sales_order_no, rfq_sales_order.sales_order_no) AS sales_order_no,
+                COALESCE(direct_sales_order.customer_code, rfq_sales_order.customer_code) AS sales_order_customer_code,
+                COALESCE(direct_sales_order.customer_name, rfq_sales_order.customer_name) AS sales_order_customer_name,
                 ticket.part_no,
                 ticket.version,
                 ticket.description,
@@ -157,15 +175,15 @@ public interface OrderDeliveryTicketMapper extends BaseMapper<OrderDeliveryTicke
                 ticket.customer_project_no,
                 ticket.project_no,
                 ticket.item_type,
-                COALESCE(ticket.material_name, item.material_name) AS material_name,
-                COALESCE(ticket.engineering_material_code, item.engineering_material_code, sales_item.engineering_material_code) AS engineering_material_code,
-                COALESCE(ticket.engineering_material_name, item.engineering_material_name) AS engineering_material_name,
-                COALESCE(ticket.engineering_material_type_code, item.engineering_material_type_code, sales_item.engineering_material_type_code) AS engineering_material_type_code,
-                COALESCE(ticket.engineering_material_type_name, item.engineering_material_type_name, sales_item.engineering_material_type_name) AS engineering_material_type_name,
-                COALESCE(ticket.engineering_material_category, item.engineering_material_category, sales_item.engineering_material_category) AS engineering_material_category,
-                COALESCE(ticket.material_shape, item.material_shape, sales_item.material_shape) AS material_shape,
-                COALESCE(ticket.surface_treatment, item.surface_treatment) AS surface_treatment,
-                COALESCE(ticket.drawing_url, sales_item.drawing_url, item.drawing_url) AS drawing_url,
+                COALESCE(ticket.material_name, item.material_name, direct_sales_item.material_name, rfq_sales_item.material_name) AS material_name,
+                COALESCE(ticket.engineering_material_code, item.engineering_material_code, direct_sales_item.engineering_material_code, rfq_sales_item.engineering_material_code) AS engineering_material_code,
+                COALESCE(ticket.engineering_material_name, item.engineering_material_name, direct_sales_item.engineering_material_name, rfq_sales_item.engineering_material_name) AS engineering_material_name,
+                COALESCE(ticket.engineering_material_type_code, item.engineering_material_type_code, direct_sales_item.engineering_material_type_code, rfq_sales_item.engineering_material_type_code) AS engineering_material_type_code,
+                COALESCE(ticket.engineering_material_type_name, item.engineering_material_type_name, direct_sales_item.engineering_material_type_name, rfq_sales_item.engineering_material_type_name) AS engineering_material_type_name,
+                COALESCE(ticket.engineering_material_category, item.engineering_material_category, direct_sales_item.engineering_material_category, rfq_sales_item.engineering_material_category) AS engineering_material_category,
+                COALESCE(ticket.material_shape, item.material_shape, direct_sales_item.material_shape, rfq_sales_item.material_shape) AS material_shape,
+                COALESCE(ticket.surface_treatment, item.surface_treatment, direct_sales_item.surface_treatment, rfq_sales_item.surface_treatment) AS surface_treatment,
+                COALESCE(ticket.drawing_url, direct_sales_item.drawing_url, rfq_sales_item.drawing_url, item.drawing_url) AS drawing_url,
                 ticket.process_route,
                 ticket.material_data,
                 ticket.material_gross_weight,
@@ -196,7 +214,12 @@ public interface OrderDeliveryTicketMapper extends BaseMapper<OrderDeliveryTicke
             FROM order_delivery_ticket ticket
             LEFT JOIN order_rfq rfq ON rfq.id = ticket.rfq_id
             LEFT JOIN item_quote_version item ON item.id = ticket.item_id
-            LEFT JOIN sales_order_item sales_item ON sales_item.id = ticket.source_item_id
+            LEFT JOIN sales_order_item direct_sales_item
+                ON ticket.source_type = 'SALES_ORDER' AND direct_sales_item.id = ticket.source_item_id
+            LEFT JOIN sales_order_header direct_sales_order
+                ON ticket.source_type = 'SALES_ORDER' AND direct_sales_order.id = ticket.source_order_id
+            LEFT JOIN sales_order_item rfq_sales_item ON rfq_sales_item.source_ticket_id = ticket.id
+            LEFT JOIN sales_order_header rfq_sales_order ON rfq_sales_order.id = rfq_sales_item.sales_order_id
             ${ew.customSqlSegment}
             LIMIT 1
             </script>

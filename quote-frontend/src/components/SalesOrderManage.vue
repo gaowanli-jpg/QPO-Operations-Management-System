@@ -556,6 +556,7 @@
 
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import CustomerPickerDialog from './CustomerPickerDialog.vue'
 import SupplementDrawingDialog from './order/SupplementDrawingDialog.vue'
@@ -579,6 +580,7 @@ import {
 } from '../services/orderApi'
 
 const { isPending, runAction } = usePendingAction()
+const route = useRoute()
 
 const SALES_ORDER_STATUSES = ['已报价', '部分已提单', '已生成提单', '废弃']
 const SALES_ORDER_TYPES = ['预测订单', '备货订单', '正式订单']
@@ -814,21 +816,48 @@ const resetDetailPagination = () => {
   resetItemDrafts()
 }
 
-const openDetail = async (row) => {
+const normalizeRouteSalesOrderId = (value) => {
+  const raw = Array.isArray(value) ? value[0] : value
+  const id = Number(raw)
+  return Number.isInteger(id) && id > 0 ? id : null
+}
+
+const openDetailBySalesOrderId = async (salesOrderId, options = {}) => {
+  salesOrderId = normalizeRouteSalesOrderId(salesOrderId)
+  if (!salesOrderId) return
   detailVisible.value = true
   detailLoading.value = true
   resetDetailPagination()
   try {
-    orderDetail.value = await getSalesOrder(row.id)
-    resetOrderEditDraft(orderDetail.value?.orderInfo)
-    await fetchDrawingSummary(row.id)
+    orderDetail.value = await getSalesOrder(salesOrderId)
+    const orderInfo = orderDetail.value?.orderInfo || {}
+    selectedCustomer.value = orderInfo.customerName || selectedCustomer.value
+    selectedCustomerCode.value = orderInfo.customerCode || selectedCustomerCode.value
+    resetOrderEditDraft(orderInfo)
+    await fetchDrawingSummary(salesOrderId)
     await fetchCurrentDetailTab()
+    if (options.syncList) {
+      keyword.value = ''
+      statusFilter.value = ''
+      page.value = 1
+      await loadOrders()
+    }
   } catch (error) {
     console.error(error)
     ElMessage.error('销售订单详情加载失败。')
   } finally {
     detailLoading.value = false
   }
+}
+
+const openDetail = async (row) => {
+  await openDetailBySalesOrderId(row?.id)
+}
+
+const applySalesOrderDeepLink = async (value) => {
+  const salesOrderId = normalizeRouteSalesOrderId(value)
+  if (!salesOrderId || (salesOrderId === orderDetail.value?.orderInfo?.id && detailVisible.value)) return
+  await openDetailBySalesOrderId(salesOrderId, { syncList: true })
 }
 
 const fetchDrawingSummary = async (salesOrderId = orderDetail.value?.orderInfo?.id) => {
@@ -1236,6 +1265,12 @@ const formatCompactNumber = (value) => {
 }
 
 const formatCompactMoney = (value) => `¥${formatCompactNumber(value)}`
+
+watch(
+  () => route.query.salesOrderId,
+  applySalesOrderDeepLink,
+  { immediate: true }
+)
 </script>
 
 <style scoped>

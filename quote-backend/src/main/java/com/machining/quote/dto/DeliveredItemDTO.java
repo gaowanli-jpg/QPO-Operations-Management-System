@@ -15,6 +15,10 @@ public class DeliveredItemDTO {
     private String sourceType;
     private Long sourceOrderId;
     private Long sourceItemId;
+    private Long salesOrderId;
+    private String salesOrderNo;
+    private String salesOrderCustomerCode;
+    private String salesOrderCustomerName;
     private String partNo;
     private String version;
     private String description;

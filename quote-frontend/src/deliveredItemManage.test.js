@@ -136,6 +136,32 @@ describe('DeliveredItemManage foundation page', () => {
     expect(operationColumnSource).not.toContain('@click="handleWmsAllocation(row)"')
   })
 
+  test('adds missing-drawing supplement shortcut between detail and discard actions', () => {
+    const operationColumnSource = source.slice(
+      source.indexOf('label="操作"'),
+      source.indexOf('</el-table>', source.indexOf('label="操作"'))
+    )
+
+    const detailPosition = operationColumnSource.indexOf('@click="openDetail(row)"')
+    const supplementPosition = operationColumnSource.indexOf('@click="openSalesOrderSupplement(row)"')
+    const discardPosition = operationColumnSource.indexOf('@click="handleDiscard(row)"')
+
+    expect(detailPosition).toBeGreaterThanOrEqual(0)
+    expect(supplementPosition).toBeGreaterThan(detailPosition)
+    expect(discardPosition).toBeGreaterThan(supplementPosition)
+    expect(operationColumnSource).toContain('v-if="viewMode === \'ACTIVE\' && !row.drawingUrl"')
+    expect(operationColumnSource).toContain('v-permission="SALES_ORDER_VIEW_PERMISSION"')
+    expect(operationColumnSource).toContain(':disabled="!row.salesOrderId"')
+    expect(operationColumnSource).toContain('补图')
+    expect(source).toContain("const SALES_ORDER_VIEW_PERMISSION = 'market:sales-order:view'")
+    expect(source).toContain('const openSalesOrderSupplement = (row) =>')
+    expect(source).toContain("path: '/sales-orders'")
+    expect(source).toContain("salesOrderId: String(row.salesOrderId)")
+    expect(source).toContain("from: 'delivered-item'")
+    expect(source).toContain('ticketId: String(row.id)')
+    expect(source).toContain('未关联销售订单，无法跳转补图')
+  })
+
   test('renders missing material numbers and malformed process routes safely', () => {
     expect(source).toContain('未获取')
     expect(source).toContain('formatMaterialNo')

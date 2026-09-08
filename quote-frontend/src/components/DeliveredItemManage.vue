@@ -233,10 +233,21 @@
           <el-table-column v-if="viewMode === 'DISCARDED'" prop="discardedBy" label="废弃人" width="110" align="center" show-overflow-tooltip>
             <template #default="{ row }">{{ row.discardedBy || '-' }}</template>
           </el-table-column>
-          <el-table-column label="操作" width="220" align="center" fixed="right">
+          <el-table-column label="操作" width="280" align="center" fixed="right">
             <template #default="{ row }">
               <div class="erp-table-actions delivered-row-actions">
                 <el-button size="small" @click="openDetail(row)">详情</el-button>
+                <el-button
+                  v-if="viewMode === 'ACTIVE' && !row.drawingUrl"
+                  v-permission="SALES_ORDER_VIEW_PERMISSION"
+                  size="small"
+                  type="warning"
+                  plain
+                  :disabled="!row.salesOrderId"
+                  @click="openSalesOrderSupplement(row)"
+                >
+                  补图
+                </el-button>
                 <el-button
                   v-if="viewMode === 'ACTIVE'"
                   v-permission="DELIVERED_ITEM_DISCARD_PERMISSION"
@@ -387,6 +398,7 @@ const DELIVERED_ITEM_WMS_ALLOCATE_PERMISSION = 'market:delivered-item:wms-alloca
 const DELIVERED_ITEM_DISCARD_PERMISSION = 'market:delivered-item:discard'
 const DELIVERED_ITEM_RESTORE_PERMISSION = 'market:delivered-item:restore'
 const LOCKED_ITEM_VIEW_PERMISSION = 'market:locked-item:view'
+const SALES_ORDER_VIEW_PERMISSION = 'market:sales-order:view'
 
 const deliveredActionKeys = {
   batchMesSync: () => 'delivery:mes-sync:batch',
@@ -668,6 +680,22 @@ const handleBatchWmsAllocation = async () => {
 
 const openLockedItems = (row) => {
   router.push({ path: '/locked-items', query: { ticketId: row.id } })
+}
+
+const openSalesOrderSupplement = (row) => {
+  const salesOrderId = Number(row?.salesOrderId)
+  if (!Number.isInteger(salesOrderId) || salesOrderId <= 0) {
+    ElMessage.warning('未关联销售订单，无法跳转补图。')
+    return
+  }
+  router.push({
+    path: '/sales-orders',
+    query: {
+      salesOrderId: String(row.salesOrderId),
+      from: 'delivered-item',
+      ticketId: String(row.id)
+    }
+  })
 }
 
 
