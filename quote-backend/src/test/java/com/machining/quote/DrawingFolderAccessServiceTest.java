@@ -19,6 +19,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -48,6 +49,30 @@ class DrawingFolderAccessServiceTest {
         assertThat(service.listFiles(FOLDER_URL)).containsExactly(file);
         verify(dataScopeService).assertCanAccessOrder(order);
         verify(businessFileService).listDrawingFolderFiles(FOLDER_URL);
+    }
+
+    @Test
+    void pagesFolderFilesAfterReferenceAndDataScopeAccessPasses() {
+        BusinessFileService businessFileService = mock(BusinessFileService.class);
+        OrderRfqMapper orderRfqMapper = mock(OrderRfqMapper.class);
+        DataScopeService dataScopeService = mock(DataScopeService.class);
+        DrawingFolderAccessService service = service(businessFileService, orderRfqMapper, mock(SalesOrderHeaderMapper.class),
+                mock(ItemQuoteVersionMapper.class), mock(SalesOrderItemMapper.class), mock(OrderDeliveryTicketMapper.class), dataScopeService);
+        OrderRfq order = new OrderRfq();
+        order.setId(101);
+        order.setDrawingFolderUrl(FOLDER_URL);
+        BusinessFileService.DrawingFolderFile file = new BusinessFileService.DrawingFolderFile(
+                "A-100.pdf", FOLDER_URL + "A-100.pdf", "application/pdf", 12L, LocalDateTime.now());
+        BusinessFileService.DrawingFolderFilePage page = new BusinessFileService.DrawingFolderFilePage(
+                List.of(file), 3L, 2, 20);
+
+        when(businessFileService.normalizeDrawingFolderUrl(FOLDER_URL)).thenReturn(FOLDER_URL);
+        when(orderRfqMapper.selectList(any())).thenReturn(List.of(order));
+        when(businessFileService.pageDrawingFolderFiles(FOLDER_URL, "A-100", 2, 20)).thenReturn(page);
+
+        assertThat(service.pageFiles(FOLDER_URL, "A-100", 2, 20)).isSameAs(page);
+        verify(dataScopeService).assertCanAccessOrder(order);
+        verify(businessFileService).pageDrawingFolderFiles(FOLDER_URL, "A-100", 2, 20);
     }
 
     @Test
@@ -82,6 +107,20 @@ class DrawingFolderAccessServiceTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("图纸文件夹不存在或未绑定订单");
         verify(businessFileService, never()).listDrawingFolderFiles(eq(FOLDER_URL));
+    }
+
+    @Test
+    void rejectsUnboundFolderBeforePagedListing() {
+        BusinessFileService businessFileService = mock(BusinessFileService.class);
+        DrawingFolderAccessService service = service(businessFileService, mock(OrderRfqMapper.class), mock(SalesOrderHeaderMapper.class),
+                mock(ItemQuoteVersionMapper.class), mock(SalesOrderItemMapper.class), mock(OrderDeliveryTicketMapper.class), mock(DataScopeService.class));
+
+        when(businessFileService.normalizeDrawingFolderUrl(FOLDER_URL)).thenReturn(FOLDER_URL);
+
+        assertThatThrownBy(() -> service.pageFiles(FOLDER_URL, "A", 1, 20))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("图纸文件夹不存在或未绑定订单");
+        verify(businessFileService, never()).pageDrawingFolderFiles(eq(FOLDER_URL), any(), anyInt(), anyInt());
     }
 
     private DrawingFolderAccessService service(

@@ -138,6 +138,33 @@ class FileStorageStage3Test {
     }
 
     @Test
+    void businessFileServicePagesDrawingFolderFilesByFolderPrefixAndFilenameKeyword() {
+        OrderFilePathService pathService = pathService();
+        FileStorageRouter router = mock(FileStorageRouter.class);
+        SystemFileObjectMapper objectMapper = mock(SystemFileObjectMapper.class);
+        SystemFileObject file = folderObject("/uploads/drawing-folders/RFQ/101/FOLDER/A-100.pdf", "A-100.pdf", 12L);
+        when(objectMapper.selectCount(any())).thenReturn(3L);
+        when(objectMapper.selectList(any())).thenReturn(List.of(file));
+
+        BusinessFileService service = new BusinessFileService(pathService, router, objectMapper);
+
+        BusinessFileService.DrawingFolderFilePage page = service.pageDrawingFolderFiles(
+                "/uploads/drawing-folders/RFQ/101/FOLDER/",
+                "A-100",
+                2,
+                20);
+
+        assertThat(page.records()).hasSize(1);
+        assertThat(page.records()).extracting(BusinessFileService.DrawingFolderFile::fileName)
+                .containsExactly("A-100.pdf");
+        assertThat(page.total()).isEqualTo(3L);
+        assertThat(page.page()).isEqualTo(2);
+        assertThat(page.pageSize()).isEqualTo(20);
+        verify(objectMapper).selectCount(any());
+        verify(objectMapper).selectList(any());
+    }
+
+    @Test
     void businessFileServiceReadsMetadataFilesThroughTheirOriginalStorageProvider() throws Exception {
         OrderFilePathService pathService = pathService();
         FileStorageRouter router = mock(FileStorageRouter.class);

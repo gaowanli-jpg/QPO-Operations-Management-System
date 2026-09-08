@@ -116,11 +116,45 @@ public class BusinessFileService {
 
     public List<DrawingFolderFile> listDrawingFolderFiles(String rawFolderUrl) {
         String folderUrl = normalizeDrawingFolderUrl(rawFolderUrl);
-        QueryWrapper<SystemFileObject> query = new QueryWrapper<>();
-        query.likeRight("public_path", folderUrl)
-                .orderByAsc("created_at")
+        QueryWrapper<SystemFileObject> query = drawingFolderFileQuery(folderUrl, null);
+        query.orderByAsc("created_at")
                 .orderByAsc("id");
         List<SystemFileObject> rows = fileObjectMapper.selectList(query);
+        return mapDrawingFolderFiles(rows);
+    }
+
+    public DrawingFolderFilePage pageDrawingFolderFiles(String rawFolderUrl, String keyword, int page, int pageSize) {
+        String folderUrl = normalizeDrawingFolderUrl(rawFolderUrl);
+        int safePage = normalizePage(page);
+        int safePageSize = normalizePageSize(pageSize);
+        Long totalValue = fileObjectMapper.selectCount(drawingFolderFileQuery(folderUrl, keyword));
+        long total = totalValue == null ? 0L : totalValue;
+        if (total <= 0) {
+            return new DrawingFolderFilePage(List.of(), 0L, safePage, safePageSize);
+        }
+        long offset = (long) (safePage - 1) * safePageSize;
+        QueryWrapper<SystemFileObject> query = drawingFolderFileQuery(folderUrl, keyword);
+        query.orderByAsc("created_at")
+                .orderByAsc("id")
+                .last("LIMIT " + safePageSize + " OFFSET " + offset);
+        List<SystemFileObject> rows = fileObjectMapper.selectList(query);
+        return new DrawingFolderFilePage(mapDrawingFolderFiles(rows), total, safePage, safePageSize);
+    }
+
+    private QueryWrapper<SystemFileObject> drawingFolderFileQuery(String folderUrl, String keyword) {
+        QueryWrapper<SystemFileObject> query = new QueryWrapper<>();
+        query.likeRight("public_path", folderUrl);
+        String normalizedKeyword = blankToNull(keyword);
+        if (normalizedKeyword != null) {
+            query.and(wrapper -> wrapper
+                    .like("original_filename", normalizedKeyword)
+                    .or()
+                    .like("object_key", normalizedKeyword));
+        }
+        return query;
+    }
+
+    private List<DrawingFolderFile> mapDrawingFolderFiles(List<SystemFileObject> rows) {
         if (rows == null || rows.isEmpty()) {
             return List.of();
         }
@@ -132,6 +166,14 @@ public class BusinessFileService {
                         file.getSizeBytes() == null ? -1L : file.getSizeBytes(),
                         file.getCreatedAt()))
                 .toList();
+    }
+
+    private int normalizePage(int page) {
+        return Math.max(1, page);
+    }
+
+    private int normalizePageSize(int pageSize) {
+        return pageSize == 50 || pageSize == 100 ? pageSize : 20;
     }
 
     public boolean isDrawingFolderUrl(String value) {
@@ -510,5 +552,12 @@ public class BusinessFileService {
             String contentType,
             long sizeBytes,
             LocalDateTime createdAt) {
+    }
+
+    public record DrawingFolderFilePage(
+            List<DrawingFolderFile> records,
+            long total,
+            int page,
+            int pageSize) {
     }
 }

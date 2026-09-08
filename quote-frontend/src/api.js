@@ -98,9 +98,13 @@ export const request = async (path, options = {}) => {
   }
 }
 
-export const listDrawingFolderFiles = (folderUrl) => request('/api/business-files/drawing-folder', {
-  params: { folderUrl }
-})
+export const listDrawingFolderFiles = (folderUrl, options = {}) => {
+  const params = { folderUrl }
+  if (options.keyword !== undefined) params.keyword = options.keyword
+  if (options.page !== undefined) params.page = options.page
+  if (options.pageSize !== undefined) params.pageSize = options.pageSize
+  return request('/api/business-files/drawing-folder', { params })
+}
 
 export const downloadFile = async (path, fallbackName = 'download.xlsx') => {
   try {

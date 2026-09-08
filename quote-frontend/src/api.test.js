@@ -87,22 +87,34 @@ describe('api client helpers', () => {
     expect(isDrawingFolderUrl('')).toBe(false)
   })
 
-  test('listDrawingFolderFiles queries the secured drawing folder endpoint', async () => {
+  test('listDrawingFolderFiles queries the secured drawing folder endpoint with paging and keyword', async () => {
     const files = [{ fileName: 'A.pdf', publicPath: '/uploads/drawing-folders/RFQ/12/01ABC/A.pdf' }]
     vi.spyOn(apiClient, 'request').mockResolvedValue({
       status: 200,
-      data: { success: true, files }
+      data: { success: true, records: files, total: 1, page: 2, pageSize: 50 }
     })
 
-    await expect(listDrawingFolderFiles('/uploads/drawing-folders/RFQ/12/01ABC/')).resolves.toEqual({
+    await expect(listDrawingFolderFiles('/uploads/drawing-folders/RFQ/12/01ABC/', {
+      keyword: 'A-100',
+      page: 2,
+      pageSize: 50
+    })).resolves.toEqual({
       success: true,
-      files
+      records: files,
+      total: 1,
+      page: 2,
+      pageSize: 50
     })
 
     expect(apiClient.request).toHaveBeenCalledWith({
       url: '/api/business-files/drawing-folder',
       method: 'GET',
-      params: { folderUrl: '/uploads/drawing-folders/RFQ/12/01ABC/' }
+      params: {
+        folderUrl: '/uploads/drawing-folders/RFQ/12/01ABC/',
+        keyword: 'A-100',
+        page: 2,
+        pageSize: 50
+      }
     })
   })
 })

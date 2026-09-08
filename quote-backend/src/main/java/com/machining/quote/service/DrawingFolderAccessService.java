@@ -49,6 +49,25 @@ public class DrawingFolderAccessService {
         return businessFileService.listDrawingFolderFiles(folderUrl);
     }
 
+    public BusinessFileService.DrawingFolderFilePage pageFiles(
+            String rawFolderUrl,
+            String keyword,
+            int page,
+            int pageSize) {
+        if (businessFileService == null) {
+            throw new IllegalStateException("图纸文件服务不可用");
+        }
+        String folderUrl = businessFileService.normalizeDrawingFolderUrl(rawFolderUrl);
+        ReferenceAccess access = referencedAndAccessible(folderUrl);
+        if (!access.referenced()) {
+            throw new IllegalArgumentException("图纸文件夹不存在或未绑定订单");
+        }
+        if (!access.accessible()) {
+            throw new DataScopeAccessDeniedException("当前账号无权访问该图纸文件夹");
+        }
+        return businessFileService.pageDrawingFolderFiles(folderUrl, keyword, page, pageSize);
+    }
+
     private ReferenceAccess referencedAndAccessible(String folderUrl) {
         ReferenceAccess access = ReferenceAccess.none();
         access = access.merge(checkRfqHeaders(folderUrl));

@@ -25,6 +25,19 @@ describe('DrawingFolderViewer', () => {
     expect(source).not.toContain('移动')
   })
 
+  test('loads folder files with backend paging and filename fuzzy search', () => {
+    const source = readSource('components', 'common', 'DrawingFolderViewer.vue')
+
+    expect(source).toContain('placeholder="按文件名搜索"')
+    expect(source).toContain('v-model:current-page="page"')
+    expect(source).toContain('v-model:page-size="pageSize"')
+    expect(source).toContain(':page-sizes="[20, 50, 100]"')
+    expect(source).toContain('layout="total, sizes, prev, pager, next, jumper"')
+    expect(source).toContain('keyword: searchKeyword.value.trim()')
+    expect(source).toContain('records || response?.files || []')
+    expect(source).toContain('requestSeq')
+  })
+
   test('drawing preview pages mount the shared folder viewer and branch by folder url', () => {
     for (const file of [
       'OrderManage.vue',

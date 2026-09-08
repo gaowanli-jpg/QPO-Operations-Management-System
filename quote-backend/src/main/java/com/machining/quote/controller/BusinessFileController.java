@@ -10,7 +10,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -30,11 +29,23 @@ public class BusinessFileController {
             "engineer:setup:file-preview",
             "engineer:pricing:view"
     })
-    public Map<String, Object> listDrawingFolderFiles(@RequestParam("folderUrl") String folderUrl) {
-        List<BusinessFileService.DrawingFolderFile> files = drawingFolderAccessService.listFiles(folderUrl);
+    public Map<String, Object> listDrawingFolderFiles(
+            @RequestParam("folderUrl") String folderUrl,
+            @RequestParam(value = "keyword", required = false) String keyword,
+            @RequestParam(value = "page", defaultValue = "1") Integer page,
+            @RequestParam(value = "pageSize", defaultValue = "20") Integer pageSize) {
+        BusinessFileService.DrawingFolderFilePage filePage = drawingFolderAccessService.pageFiles(
+                folderUrl,
+                keyword,
+                page == null ? 1 : page,
+                pageSize == null ? 20 : pageSize);
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("success", true);
-        result.put("files", files);
+        result.put("records", filePage.records());
+        result.put("files", filePage.records());
+        result.put("total", filePage.total());
+        result.put("page", filePage.page());
+        result.put("pageSize", filePage.pageSize());
         return result;
     }
 }

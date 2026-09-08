@@ -15,6 +15,17 @@
         :closable="false"
       />
 
+      <div class="drawing-folder-toolbar">
+        <el-input
+          v-model="searchKeyword"
+          placeholder="按文件名搜索"
+          clearable
+          class="drawing-folder-search"
+          @input="scheduleSearch"
+          @clear="handleSearchClear"
+        />
+      </div>
+
       <el-table
         :data="files"
         border
@@ -41,6 +52,18 @@
         </el-table-column>
       </el-table>
 
+      <div v-if="total > 0" class="erp-pagination drawing-folder-pagination">
+        <el-pagination
+          v-model:current-page="page"
+          v-model:page-size="pageSize"
+          :page-sizes="[20, 50, 100]"
+          :total="total"
+          layout="total, sizes, prev, pager, next, jumper"
+          @current-change="handlePageChange"
+          @size-change="handlePageSizeChange"
+        />
+      </div>
+
       <el-alert
         v-if="error"
         :title="error"
@@ -53,7 +76,7 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { downloadFile, listDrawingFolderFiles, openAuthenticatedFileInNewWindow } from '../../api'
 import { readActionError } from '../../utils/actionError'
@@ -69,7 +92,12 @@ const emit = defineEmits(['update:modelValue'])
 const files = ref([])
 const loading = ref(false)
 const error = ref('')
+const searchKeyword = ref('')
+const page = ref(1)
+const pageSize = ref(20)
+const total = ref(0)
 let requestSeq = 0
+let searchTimer = null
 
 const viewerTitle = computed(() => props.title || '图纸文件夹')
 
@@ -77,6 +105,7 @@ const loadFiles = async () => {
   const folderUrl = props.folderUrl
   if (!props.modelValue || !folderUrl) {
     files.value = []
+    total.value = 0
     error.value = ''
     return
   }
@@ -84,18 +113,57 @@ const loadFiles = async () => {
   loading.value = true
   error.value = ''
   try {
-    const response = await listDrawingFolderFiles(folderUrl)
+    const response = await listDrawingFolderFiles(folderUrl, {
+      keyword: searchKeyword.value.trim(),
+      page: page.value,
+      pageSize: pageSize.value
+    })
     if (seq !== requestSeq) return
-    files.value = response?.files || []
+    const records = response?.records || response?.files || []
+    files.value = records
+    total.value = Number(response?.total ?? records.length) || 0
+    page.value = Number(response?.page ?? page.value) || page.value
+    pageSize.value = Number(response?.pageSize ?? pageSize.value) || pageSize.value
   } catch (loadError) {
     if (seq !== requestSeq) return
     error.value = readActionError(loadError, '图纸文件夹加载失败。')
-    files.value = []
   } finally {
     if (seq === requestSeq) {
       loading.value = false
     }
   }
+}
+
+const clearSearchTimer = () => {
+  if (searchTimer) {
+    clearTimeout(searchTimer)
+    searchTimer = null
+  }
+}
+
+const scheduleSearch = () => {
+  clearSearchTimer()
+  searchTimer = setTimeout(() => {
+    page.value = 1
+    loadFiles()
+  }, 300)
+}
+
+const handleSearchClear = () => {
+  page.value = 1
+  clearSearchTimer()
+  loadFiles()
+}
+
+const handlePageChange = (nextPage) => {
+  page.value = nextPage
+  loadFiles()
+}
+
+const handlePageSizeChange = (nextPageSize) => {
+  pageSize.value = nextPageSize
+  page.value = 1
+  loadFiles()
 }
 
 const filePath = (row) => row?.publicPath || row?.url || ''
@@ -127,10 +195,36 @@ const formatSize = (value) => {
 }
 
 watch(
-  () => [props.modelValue, props.folderUrl],
-  loadFiles,
+  () => props.modelValue,
+  (visible) => {
+    clearSearchTimer()
+    if (visible) {
+      page.value = 1
+      loadFiles()
+      return
+    }
+    files.value = []
+    total.value = 0
+    error.value = ''
+    loading.value = false
+    searchKeyword.value = ''
+  },
   { immediate: true }
 )
+
+watch(
+  () => props.folderUrl,
+  () => {
+    if (!props.modelValue) return
+    clearSearchTimer()
+    searchKeyword.value = ''
+    page.value = 1
+    total.value = 0
+    loadFiles()
+  }
+)
+
+onBeforeUnmount(clearSearchTimer)
 </script>
 
 <style scoped>
@@ -142,6 +236,19 @@ watch(
 
 .drawing-folder-table {
   width: 100%;
+}
+
+.drawing-folder-toolbar {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.drawing-folder-search {
+  width: 260px;
+}
+
+.drawing-folder-pagination {
+  margin-top: 0;
 }
 
 .folder-file-actions {
