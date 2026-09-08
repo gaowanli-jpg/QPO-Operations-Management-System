@@ -25,6 +25,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -32,6 +35,7 @@ import java.util.UUID;
 public class BusinessFileService {
     private static final Logger log = LoggerFactory.getLogger(BusinessFileService.class);
     private static final String UPLOAD_PREFIX = "/uploads/";
+    private static final String DRAWING_FOLDER_PREFIX = "/uploads/drawing-folders/";
 
     private final OrderFilePathService orderFilePathService;
     private final FileStorageRouter fileStorageRouter;
@@ -70,6 +74,73 @@ public class BusinessFileService {
         String newFilename = UUID.randomUUID() + extension(originalFilename);
         String publicPath = orderFilePathService.salesOrderImportDrawingUrl(customerName, batchNo, newFilename);
         return saveDrawingAtPublicPath(publicPath, drawing, originalFilename, bizType, bizId);
+    }
+
+    public DrawingFolderSaveResult saveDrawingFolderFiles(
+            String sourceType,
+            String sourceId,
+            String folderName,
+            List<? extends MultipartFile> files,
+            String bizType,
+            String bizId) {
+        if (files == null || files.isEmpty()) {
+            throw new IllegalArgumentException("请至少上传一份 PDF 图纸");
+        }
+        String normalizedSourceType = isBlank(sourceType) ? "ORDER" : sourceType.trim().toUpperCase(Locale.ROOT);
+        String normalizedSourceId = isBlank(sourceId) ? "unknown" : sourceId.trim();
+        String normalizedFolderName = isBlank(folderName) ? "订单图纸文件夹" : cleanFilename(folderName);
+        String folderUrl = orderFilePathService.drawingFolderUrl(
+                normalizedSourceType,
+                normalizedSourceId,
+                UUID.randomUUID().toString());
+        List<DrawingFolderFile> savedFiles = new ArrayList<>();
+        for (MultipartFile file : files) {
+            if (!isPdf(file)) {
+                continue;
+            }
+            String originalFilename = cleanFilename(file.getOriginalFilename());
+            String publicPath = folderUrl + UUID.randomUUID() + extension(originalFilename);
+            StoredBusinessFile stored = saveDrawingAtPublicPath(publicPath, file, originalFilename, bizType, bizId);
+            savedFiles.add(new DrawingFolderFile(
+                    originalFilename,
+                    stored.publicPath(),
+                    stored.contentType(),
+                    stored.sizeBytes(),
+                    LocalDateTime.now()));
+        }
+        if (savedFiles.isEmpty()) {
+            throw new IllegalArgumentException("请至少上传一份 PDF 图纸");
+        }
+        return new DrawingFolderSaveResult(folderUrl, normalizedFolderName, savedFiles.size(), List.copyOf(savedFiles));
+    }
+
+    public List<DrawingFolderFile> listDrawingFolderFiles(String rawFolderUrl) {
+        String folderUrl = normalizeDrawingFolderUrl(rawFolderUrl);
+        QueryWrapper<SystemFileObject> query = new QueryWrapper<>();
+        query.likeRight("public_path", folderUrl)
+                .orderByAsc("created_at")
+                .orderByAsc("id");
+        List<SystemFileObject> rows = fileObjectMapper.selectList(query);
+        if (rows == null || rows.isEmpty()) {
+            return List.of();
+        }
+        return rows.stream()
+                .map(file -> new DrawingFolderFile(
+                        filenameFromObject(file.getOriginalFilename(), file.getObjectKey()),
+                        file.getPublicPath(),
+                        defaultContentType(file.getContentType()),
+                        file.getSizeBytes() == null ? -1L : file.getSizeBytes(),
+                        file.getCreatedAt()))
+                .toList();
+    }
+
+    public boolean isDrawingFolderUrl(String value) {
+        try {
+            normalizeDrawingFolderUrl(value);
+            return true;
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
     }
 
     private StoredBusinessFile saveDrawingAtPublicPath(
@@ -113,10 +184,10 @@ public class BusinessFileService {
                     stored.sizeBytes(),
                     stored.externalUrl());
         } catch (IOException e) {
-            log.error("Business file save failed publicPath={} originalFilename={}", publicPath, originalFilename, e);
+            log.error("Business file save failed publicPath={} originalFilename={}", publicPathForLog(publicPath), originalFilename, e);
             throw new IllegalStateException("图纸保存失败：" + originalFilename, e);
         } catch (RuntimeException e) {
-            log.error("Business file save failed publicPath={} originalFilename={}", publicPath, originalFilename, e);
+            log.error("Business file save failed publicPath={} originalFilename={}", publicPathForLog(publicPath), originalFilename, e);
             throw e;
         }
     }
@@ -207,7 +278,7 @@ public class BusinessFileService {
                     filenameFromObject(fileObject.getOriginalFilename(), fileObject.getObjectKey()));
         } catch (RuntimeException e) {
             log.error("Business file read failed publicPath={} storageType={} objectKey={}",
-                    fileObject.getPublicPath(), fileObject.getStorageType(), fileObject.getObjectKey(), e);
+                    publicPathForLog(fileObject.getPublicPath()), fileObject.getStorageType(), fileObject.getObjectKey(), e);
             throw e;
         }
     }
@@ -312,6 +383,18 @@ public class BusinessFileService {
         }
     }
 
+    public String normalizeDrawingFolderUrl(String rawFolderUrl) {
+        Optional<String> normalized = normalizePublicPath(rawFolderUrl);
+        if (normalized.isEmpty()) {
+            throw new IllegalArgumentException("图纸文件夹地址不正确");
+        }
+        String folderUrl = normalized.get();
+        if (!folderUrl.startsWith(DRAWING_FOLDER_PREFIX) || !folderUrl.endsWith("/")) {
+            throw new IllegalArgumentException("图纸文件夹地址不正确");
+        }
+        return folderUrl;
+    }
+
     private Path legacyLocalPath(String publicPath) {
         String objectKey = objectKeyFromPublicPath(publicPath);
         Path root = orderFilePathService.uploadRoot().toAbsolutePath().normalize();
@@ -347,6 +430,14 @@ public class BusinessFileService {
         return cleaned.isBlank() ? "drawing.pdf" : cleaned;
     }
 
+    private boolean isPdf(MultipartFile file) {
+        String filename = file == null ? null : file.getOriginalFilename();
+        return file != null
+                && !file.isEmpty()
+                && filename != null
+                && filename.toLowerCase(Locale.ROOT).endsWith(".pdf");
+    }
+
     private String extension(String filename) {
         int dotIndex = filename == null ? -1 : filename.lastIndexOf('.');
         if (dotIndex < 0 || dotIndex == filename.length() - 1) {
@@ -374,6 +465,16 @@ public class BusinessFileService {
         return value == null || value.trim().isEmpty() ? null : value.trim();
     }
 
+    private String publicPathForLog(String publicPath) {
+        if (isBlank(publicPath)) {
+            return "";
+        }
+        if (publicPath.startsWith(DRAWING_FOLDER_PREFIX)) {
+            return DRAWING_FOLDER_PREFIX + "[redacted]";
+        }
+        return publicPath;
+    }
+
     private boolean isBlank(String value) {
         return value == null || value.trim().isEmpty();
     }
@@ -394,5 +495,20 @@ public class BusinessFileService {
             String contentType,
             long contentLength,
             String filename) {
+    }
+
+    public record DrawingFolderSaveResult(
+            String folderUrl,
+            String folderName,
+            int fileCount,
+            List<DrawingFolderFile> files) {
+    }
+
+    public record DrawingFolderFile(
+            String fileName,
+            String publicPath,
+            String contentType,
+            long sizeBytes,
+            LocalDateTime createdAt) {
     }
 }

@@ -72,8 +72,10 @@ public class OrderManagementController {
     public Map<String, Object> replaceDrawings(
             @PathVariable Integer rfqId,
             @RequestParam(value = "drawings", required = false) List<MultipartFile> drawings,
-            @RequestParam(value = "versionDrawings", required = false) List<MultipartFile> versionDrawings) {
-        return orderManagementService.replaceDrawings(rfqId, drawings, versionDrawings);
+            @RequestParam(value = "versionDrawings", required = false) List<MultipartFile> versionDrawings,
+            @RequestParam(value = "drawingFolderFiles", required = false) List<MultipartFile> drawingFolderFiles,
+            @RequestParam(value = "drawingFolderName", required = false) String drawingFolderName) {
+        return orderManagementService.replaceDrawings(rfqId, drawings, versionDrawings, drawingFolderFiles, drawingFolderName);
     }
 
     @PostMapping("/orders/{rfqId}/items/{itemId}/discard")
@@ -98,8 +100,10 @@ public class OrderManagementController {
             @PathVariable Integer rfqId,
             @RequestParam("excelFile") MultipartFile excelFile,
             @RequestParam(value = "drawings", required = false) List<MultipartFile> drawings,
-            @RequestParam(value = "versionDrawings", required = false) List<MultipartFile> versionDrawings) {
-        return orderManagementService.appendOrderItems(rfqId, excelFile, drawings, versionDrawings);
+            @RequestParam(value = "versionDrawings", required = false) List<MultipartFile> versionDrawings,
+            @RequestParam(value = "drawingFolderFiles", required = false) List<MultipartFile> drawingFolderFiles,
+            @RequestParam(value = "drawingFolderName", required = false) String drawingFolderName) {
+        return orderManagementService.appendOrderItems(rfqId, excelFile, drawings, versionDrawings, drawingFolderFiles, drawingFolderName);
     }
 
     @PostMapping(value = "/orders/{rfqId}/item-data-replacement/preview", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -158,8 +162,10 @@ public class OrderManagementController {
     public Map<String, Object> supplementDrawings(
             @PathVariable Integer rfqId,
             @RequestParam(value = "drawings", required = false) List<MultipartFile> drawings,
-            @RequestParam(value = "versionDrawings", required = false) List<MultipartFile> versionDrawings) {
-        return orderManagementService.supplementDrawings(rfqId, drawings, versionDrawings);
+            @RequestParam(value = "versionDrawings", required = false) List<MultipartFile> versionDrawings,
+            @RequestParam(value = "drawingFolderFiles", required = false) List<MultipartFile> drawingFolderFiles,
+            @RequestParam(value = "drawingFolderName", required = false) String drawingFolderName) {
+        return orderManagementService.supplementDrawings(rfqId, drawings, versionDrawings, drawingFolderFiles, drawingFolderName);
     }
 
     @PostMapping("/orders/{rfqId}/rollback-quoted")

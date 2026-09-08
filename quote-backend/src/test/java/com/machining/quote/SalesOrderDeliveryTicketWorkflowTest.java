@@ -471,8 +471,9 @@ class SalesOrderDeliveryTicketWorkflowTest {
                         "ticket.source_type",
                         "ticket.source_order_id",
                         "ticket.source_item_id",
-                        "LEFT JOIN sales_order_item sales_item ON sales_item.id = ticket.source_item_id",
-                        "COALESCE(ticket.drawing_url, sales_item.drawing_url, item.drawing_url) AS drawing_url"
+                        "LEFT JOIN sales_order_item direct_sales_item",
+                        "LEFT JOIN sales_order_item rfq_sales_item ON rfq_sales_item.source_ticket_id = ticket.id",
+                        "COALESCE(ticket.drawing_url, direct_sales_item.drawing_url, rfq_sales_item.drawing_url, item.drawing_url) AS drawing_url"
                 );
         assertThat(allocationMapper)
                 .contains(

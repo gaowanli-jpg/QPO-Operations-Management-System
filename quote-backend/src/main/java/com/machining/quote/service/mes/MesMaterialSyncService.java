@@ -24,7 +24,6 @@ import com.machining.quote.mapper.OrderRfqMapper;
 import com.machining.quote.mapper.SalesOrderHeaderMapper;
 import com.machining.quote.mapper.SalesOrderItemMapper;
 import com.machining.quote.service.AuditService;
-import com.machining.quote.service.BusinessFileService;
 import com.machining.quote.service.SourceItemMaterialNoSyncService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -85,8 +84,6 @@ public class MesMaterialSyncService {
     private SalesOrderHeaderMapper salesOrderHeaderMapper;
     @Autowired
     private MesMaterialClient mesMaterialClient;
-    @Autowired
-    private BusinessFileService businessFileService;
     @Autowired(required = false)
     private AuditService auditService;
     @Autowired(required = false)
@@ -771,7 +768,6 @@ public class MesMaterialSyncService {
         MesMaterialResolveReq.Item item = new MesMaterialResolveReq.Item();
         item.setDrawingNo(drawingNo.trim());
         item.setDrawingVersion(drawingVersion);
-        item.setDrawingUrls(externalDrawingUrls(resolveDrawingUrl(ticket)));
         item.setRemark(trimToNull(ticket.getRemark()));
         item.setCustomerRequirements(MesCustomerRequirementsAssembler.assemble(
                 ticket.getMaterialName(),
@@ -1282,7 +1278,6 @@ public class MesMaterialSyncService {
         MesMaterialResolveReq.Item item = new MesMaterialResolveReq.Item();
         item.setDrawingNo(required(ticket.getPartNo(), "图号不能为空"));
         item.setDrawingVersion(ticket.getVersion() == null ? "" : ticket.getVersion());
-        item.setDrawingUrls(externalDrawingUrls(resolveDrawingUrl(ticket)));
         item.setRemark(trimToNull(ticket.getRemark()));
         item.setCustomerRequirements(MesCustomerRequirementsAssembler.assemble(
                 ticket.getMaterialName(),
@@ -1451,33 +1446,6 @@ public class MesMaterialSyncService {
             return SourceItemMaterialNoSyncService.MaterialNoSyncResult.empty();
         }
         return sourceItemMaterialNoSyncService.syncConfirmedMaterialNo(ticket, materialNo, message);
-    }
-
-    private String resolveDrawingUrl(OrderDeliveryTicket ticket) {
-        if (!isBlank(ticket.getDrawingUrl())) {
-            return ticket.getDrawingUrl();
-        }
-        if (ReleaseSourceType.SALES_ORDER.name().equals(ticket.getSourceType())
-                && salesOrderItemMapper != null
-                && ticket.getSourceItemId() != null) {
-            SalesOrderItem item = salesOrderItemMapper.selectById(ticket.getSourceItemId());
-            if (item != null && !isBlank(item.getDrawingUrl())) {
-                return item.getDrawingUrl();
-            }
-        }
-        if (itemMapper != null && ticket.getItemId() != null) {
-            ItemQuoteVersion item = itemMapper.selectById(ticket.getItemId());
-            return item == null ? null : item.getDrawingUrl();
-        }
-        return null;
-    }
-
-    private List<String> externalDrawingUrls(String drawingUrl) {
-        String normalized = trimToNull(drawingUrl);
-        if (normalized == null) {
-            return null;
-        }
-        return List.of(businessFileService.externalReadableUrl(normalized));
     }
 
     private void markFailed(OrderDeliveryTicket ticket, String mesRequestId, String message) {

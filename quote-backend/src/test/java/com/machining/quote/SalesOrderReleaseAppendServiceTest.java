@@ -170,6 +170,104 @@ class SalesOrderReleaseAppendServiceTest extends SalesOrderQpoImportTestSupport 
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void appendItemsWithDrawingFolderBindsOnlyNewItemsAndStoresTargetFolderMetadata() throws Exception {
+        SalesOrderQpoExcelParser parser = mock(SalesOrderQpoExcelParser.class);
+        SalesOrderHeaderMapper headerMapper = mock(SalesOrderHeaderMapper.class);
+        SalesOrderItemMapper itemMapper = mock(SalesOrderItemMapper.class);
+        DataScopeService dataScopeService = mock(DataScopeService.class);
+        SalesOrderAutoSnapshotCompletionService snapshotCompletionService = mock(SalesOrderAutoSnapshotCompletionService.class);
+        DeliveryService deliveryService = mock(DeliveryService.class);
+        AuditService auditService = mock(AuditService.class);
+        BusinessFileService fileService = mock(BusinessFileService.class);
+        SalesOrderReleaseAppendService service = service(
+                parser,
+                headerMapper,
+                itemMapper,
+                dataScopeService,
+                snapshotCompletionService,
+                deliveryService,
+                auditService,
+                fileService
+        );
+        SalesOrderHeader target = targetSalesOrder(301L, "未同步");
+        SalesOrderItem existing = existingSalesItem(701L, 7, 3, 1);
+        SalesOrderQpoExcelParseResult parsed = appendParseResult();
+        MockMultipartFile folderDrawing = new MockMultipartFile(
+                "drawingFolderFiles",
+                "folder/append-pack.pdf",
+                "application/pdf",
+                "folder-pdf".getBytes(StandardCharsets.UTF_8)
+        );
+        String folderUrl = "/uploads/drawing-folders/SALES_ORDER/301/folder-301/";
+
+        when(headerMapper.selectByIdForUpdate(301L)).thenReturn(target);
+        when(itemMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(existing));
+        when(parser.parse(any(InputStream.class), any(SalesOrderQpoImportDefaultsDTO.class))).thenReturn(parsed);
+        when(fileService.saveDrawingFolderFiles(
+                eq("SALES_ORDER"), eq("301"), eq("追加图纸"), eq(List.of(folderDrawing)), eq("SALES_ORDER_APPEND_DRAWING_FOLDER"), eq("301")))
+                .thenReturn(drawingFolderResult(folderUrl, "追加图纸", folderDrawing));
+        when(headerMapper.updateById(any(SalesOrderHeader.class))).thenReturn(1);
+        ArgumentCaptor<SalesOrderItem> insertedCaptor = ArgumentCaptor.forClass(SalesOrderItem.class);
+        AtomicLong nextInsertedId = new AtomicLong(501L);
+        org.mockito.Mockito.doAnswer(invocation -> {
+            SalesOrderItem item = invocation.getArgument(0);
+            item.setId(nextInsertedId.getAndIncrement());
+            return 1;
+        }).when(itemMapper).insert(insertedCaptor.capture());
+        when(snapshotCompletionService.completeImportedOrderItems(301L, List.of(501L, 502L)))
+                .thenReturn(matchResp(2, 0, 2, "auto unmatched 2"));
+        when(deliveryService.generateImportedSalesOrderTicketsForItems(301L, List.of(501L, 502L), "SALES_ORDER_APPEND_RELEASE"))
+                .thenReturn(List.of());
+
+        SalesOrderReleaseAppendResp resp = service.appendItems(
+                301L,
+                new MockMultipartFile(
+                        "excelFile",
+                        "append-sales-order.xlsx",
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        "xlsx".getBytes(StandardCharsets.UTF_8)
+                ),
+                List.of(),
+                List.of(),
+                List.of(folderDrawing),
+                "追加图纸");
+
+        assertThat(resp.isSuccess()).isTrue();
+        assertThat(resp.getDrawingReport())
+                .containsEntry("drawingFolderMode", true)
+                .containsEntry("drawingFolderFileCount", 1)
+                .containsEntry("matchedItemCount", 2)
+                .containsEntry("missingDrawingCount", 0);
+        assertThat(target.getDrawingFolderUrl()).isEqualTo(folderUrl);
+        assertThat(target.getDrawingFolderName()).isEqualTo("追加图纸");
+        assertThat(target.getDrawingFolderFileCount()).isEqualTo(1);
+        assertThat(insertedCaptor.getAllValues())
+                .allSatisfy(item -> {
+                    assertThat(item.getDrawingUrl()).isEqualTo(folderUrl);
+                    assertThat(item.getHasDrawing()).isTrue();
+                });
+        assertThat(existing.getDrawingUrl()).isNull();
+
+        ArgumentCaptor<Object> afterDataCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(auditService).record(
+                eq("SALES_ORDER_APPEND_RELEASE"),
+                eq("sales_order_header"),
+                eq(301L),
+                isNull(),
+                afterDataCaptor.capture(),
+                eq("MARKET"),
+                eq("SUCCESS"),
+                eq("追加销售提单"),
+                isNull()
+        );
+        assertThat((Map<String, Object>) afterDataCaptor.getValue())
+                .containsEntry("drawingFolderMode", true)
+                .containsEntry("drawingFolderFileCount", 1);
+        assertThat(String.valueOf(afterDataCaptor.getValue())).doesNotContain(folderUrl).doesNotContain("folder-pdf");
+    }
+
+    @Test
     void rejectsTargetsThatAlreadyEnteredU9SyncFlow() {
         SalesOrderReleaseAppendService service = service(
                 mock(SalesOrderQpoExcelParser.class),
@@ -300,5 +398,18 @@ class SalesOrderReleaseAppendServiceTest extends SalesOrderQpoImportTestSupport 
         ticket.setSourceItemId(sourceItemId);
         ticket.setQty(qty);
         return ticket;
+    }
+
+    private BusinessFileService.DrawingFolderSaveResult drawingFolderResult(
+            String folderUrl,
+            String folderName,
+            MockMultipartFile drawing) {
+        BusinessFileService.DrawingFolderFile file = new BusinessFileService.DrawingFolderFile(
+                drawing.getOriginalFilename(),
+                folderUrl + "file-1.pdf",
+                drawing.getContentType(),
+                drawing.getSize(),
+                java.time.LocalDateTime.now());
+        return new BusinessFileService.DrawingFolderSaveResult(folderUrl, folderName, 1, List.of(file));
     }
 }

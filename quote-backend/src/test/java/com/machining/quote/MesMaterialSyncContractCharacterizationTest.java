@@ -18,7 +18,6 @@ import com.machining.quote.mapper.OrderRfqMapper;
 import com.machining.quote.mapper.SalesOrderHeaderMapper;
 import com.machining.quote.mapper.SalesOrderItemMapper;
 import com.machining.quote.service.AuditService;
-import com.machining.quote.service.BusinessFileService;
 import com.machining.quote.service.SourceItemMaterialNoSyncService;
 import com.machining.quote.service.mes.MesMaterialClient;
 import com.machining.quote.service.mes.MesMaterialSyncService;
@@ -108,7 +107,11 @@ class MesMaterialSyncContractCharacterizationTest extends MesMaterialSyncTestSup
                         "MES material sync accepted",
                         "MES material sync failed",
                         "log.error(\"MES material sync failed ticketId={} taskId={} rfqId={} partNo={} durationMs={}\""
-                );
+                )
+                .doesNotContain(
+                        "BusinessFileService",
+                        "externalReadableUrl(",
+                        "setDrawingUrls(");
     }
 
     @Test
@@ -161,7 +164,7 @@ class MesMaterialSyncContractCharacterizationTest extends MesMaterialSyncTestSup
     }
 
     @Test
-    void mesMaterialDtosCarryTheExternalContractFields() {
+    void mesMaterialDtosOmitDrawingUrlsFromTheExternalContract() {
         MesMaterialResolveReq req = new MesMaterialResolveReq();
         req.setMesRequestId("QPO-MAT-1");
         req.setCustomerCode("GSS1");
@@ -181,8 +184,7 @@ class MesMaterialSyncContractCharacterizationTest extends MesMaterialSyncTestSup
         assertThat(payload.path("items")).hasSize(1);
         assertThat(payload.path("items").get(0).path("drawingNo").asText()).isEqualTo("P-100");
         assertThat(payload.path("items").get(0).path("drawingVersion").asText()).isEqualTo("A");
-        assertThat(payload.path("items").get(0).path("drawingUrls").get(0).asText())
-                .isEqualTo("http://qpo.local/p100.pdf");
+        assertThat(payload.path("items").get(0).has("drawingUrls")).isFalse();
         assertThat(payload.path("items").get(0).path("remark").asText()).isEqualTo("Rush");
         assertThat(payload.path("items").get(0).path("customerRequirements").asText())
                 .isEqualTo("材料名称：Bracket\n表面处理：Anodized");

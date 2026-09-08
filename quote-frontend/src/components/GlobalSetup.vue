@@ -236,6 +236,12 @@
       </template>
     </el-dialog>
 
+    <DrawingFolderViewer
+      v-model="folderViewerVisible"
+      :folder-url="currentDrawingFolderUrl"
+      :title="currentDrawingFolderTitle"
+    />
+
     <OrderPickerDialog
       v-model="orderPickerVisible"
       title="选择零件核价订单"
@@ -293,6 +299,7 @@ import { DocumentChecked } from '@element-plus/icons-vue'
 import { useRouter, useRoute } from 'vue-router'
 import EngineeringOptionPickerDialog from './EngineeringOptionPickerDialog.vue'
 import OrderPickerDialog from './OrderPickerDialog.vue'
+import DrawingFolderViewer from './common/DrawingFolderViewer.vue'
 import { getRepeatAnalysis, getSetupSummary, listPricingMaterialU9CategoryNames, listPricingProcessArrangementTree, pagePricingMaterialOptions, pagePricingProcessOptions, saveOrderConfig } from '../services/engineerApi'
 import {
   defaultBlankProcessRouteList,
@@ -310,6 +317,7 @@ import { usePendingAction } from '../composables/usePendingAction'
 import { buildMaterialSpecSelection, findPriceSpec, normalizePriceSpecs } from '../utils/materialPriceSpecs'
 import {
   createAuthenticatedObjectUrl,
+  isDrawingFolderUrl,
   openAuthenticatedFileInNewWindow,
   readFileErrorMessage,
   revokeObjectUrl
@@ -783,6 +791,9 @@ const currentPreviewUrl = ref('')
 const previewTitle = ref('')
 const iframeLoaded = ref(false)
 const previewSrc = ref('')
+const folderViewerVisible = ref(false)
+const currentDrawingFolderUrl = ref('')
+const currentDrawingFolderTitle = ref('')
 
 const cleanupPreviewSrc = () => {
   revokeObjectUrl(previewSrc.value)
@@ -792,6 +803,12 @@ const cleanupPreviewSrc = () => {
 const openPreview = async (url, partNo) => {
   if (!url) {
     return ElMessage.warning('当前零件没有绑定图纸。')
+  }
+  if (isDrawingFolderUrl(url)) {
+    currentDrawingFolderUrl.value = url
+    currentDrawingFolderTitle.value = `图纸文件夹：${partNo || '未命名图纸'}`
+    folderViewerVisible.value = true
+    return
   }
   previewTitle.value = partNo
   currentPreviewUrl.value = url
@@ -809,6 +826,12 @@ const openPreview = async (url, partNo) => {
 const openDrawingInNewWindow = async (url) => {
   if (!url) {
     return ElMessage.warning('当前零件没有绑定图纸。')
+  }
+  if (isDrawingFolderUrl(url)) {
+    currentDrawingFolderUrl.value = url
+    currentDrawingFolderTitle.value = previewTitle.value ? `图纸文件夹：${previewTitle.value}` : '图纸文件夹'
+    folderViewerVisible.value = true
+    return
   }
   const result = await openAuthenticatedFileInNewWindow(url)
   if (!result.success) {

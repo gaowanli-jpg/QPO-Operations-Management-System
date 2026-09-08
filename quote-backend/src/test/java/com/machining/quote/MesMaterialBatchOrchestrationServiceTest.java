@@ -8,7 +8,6 @@ import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
-import com.machining.quote.service.BusinessFileService;
 import com.machining.quote.service.DeliveryIntegrationBatchService;
 import com.machining.quote.service.SourceItemMaterialNoSyncService;
 import com.machining.quote.service.mes.MesMaterialClient;
@@ -114,7 +113,6 @@ class MesMaterialBatchOrchestrationServiceTest {
         assertThat(sentItem.getDrawingNo()).isEqualTo("P-NO-DRAWING");
         assertThat(sentItem.getDrawingVersion()).isEqualTo("A");
         assertThat(sentItem.getDrawingUrls()).isNull();
-        verify(fixture.businessFileService, times(0)).externalReadableUrl(anyString());
     }
 
     @Test
@@ -219,7 +217,6 @@ class MesMaterialBatchOrchestrationServiceTest {
         fixture.orderMapper = mock(OrderRfqMapper.class);
         fixture.itemMapper = mock(ItemQuoteVersionMapper.class);
         fixture.client = mock(MesMaterialClient.class);
-        fixture.businessFileService = mock(BusinessFileService.class);
         fixture.sourceSync = mock(SourceItemMaterialNoSyncService.class);
         fixture.syncService = new MesMaterialSyncService();
         fixture.batchService = new DeliveryIntegrationBatchService();
@@ -231,14 +228,10 @@ class MesMaterialBatchOrchestrationServiceTest {
         when(fixture.orderMapper.selectById(88)).thenReturn(order);
         when(fixture.ticketMapper.update(any(OrderDeliveryTicket.class), any())).thenReturn(1);
         when(fixture.ticketMapper.updateById(any(OrderDeliveryTicket.class))).thenReturn(1);
-        when(fixture.businessFileService.externalReadableUrl(anyString()))
-                .thenAnswer(invocation -> "http://qpo.test" + invocation.getArgument(0, String.class));
-
         ReflectionTestUtils.setField(fixture.syncService, "ticketMapper", fixture.ticketMapper);
         ReflectionTestUtils.setField(fixture.syncService, "orderRfqMapper", fixture.orderMapper);
         ReflectionTestUtils.setField(fixture.syncService, "itemMapper", fixture.itemMapper);
         ReflectionTestUtils.setField(fixture.syncService, "mesMaterialClient", fixture.client);
-        ReflectionTestUtils.setField(fixture.syncService, "businessFileService", fixture.businessFileService);
         ReflectionTestUtils.setField(fixture.syncService, "sourceItemMaterialNoSyncService", fixture.sourceSync);
 
         ReflectionTestUtils.setField(fixture.batchService, "ticketMapper", fixture.ticketMapper);
@@ -296,7 +289,6 @@ class MesMaterialBatchOrchestrationServiceTest {
         private OrderRfqMapper orderMapper;
         private ItemQuoteVersionMapper itemMapper;
         private MesMaterialClient client;
-        private BusinessFileService businessFileService;
         private SourceItemMaterialNoSyncService sourceSync;
         private MesMaterialSyncService syncService;
         private DeliveryIntegrationBatchService batchService;

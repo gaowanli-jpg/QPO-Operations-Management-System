@@ -51,7 +51,9 @@ public class SalesOrderReleaseAppendController {
             @PathVariable Long salesOrderId,
             @RequestParam("excelFile") MultipartFile excelFile,
             @RequestParam(value = "drawings", required = false) List<MultipartFile> drawings,
-            @RequestParam(value = "versionDrawings", required = false) List<MultipartFile> versionDrawings) {
-        return salesOrderReleaseAppendService.appendItems(salesOrderId, excelFile, drawings, versionDrawings);
+            @RequestParam(value = "versionDrawings", required = false) List<MultipartFile> versionDrawings,
+            @RequestParam(value = "drawingFolderFiles", required = false) List<MultipartFile> drawingFolderFiles,
+            @RequestParam(value = "drawingFolderName", required = false) String drawingFolderName) {
+        return salesOrderReleaseAppendService.appendItems(salesOrderId, excelFile, drawings, versionDrawings, drawingFolderFiles, drawingFolderName);
     }
 }

@@ -3,6 +3,8 @@ import {
   apiClient,
   buildRequestConfig,
   createAuthenticatedObjectUrl,
+  isDrawingFolderUrl,
+  listDrawingFolderFiles,
   openAuthenticatedFileInNewWindow,
   revokeObjectUrl,
   unwrapResponsePayload
@@ -75,5 +77,32 @@ describe('api client helpers', () => {
 
     expect(window.URL.revokeObjectURL).toHaveBeenCalledTimes(1)
     expect(window.URL.revokeObjectURL).toHaveBeenCalledWith('blob:preview')
+  })
+
+  test('isDrawingFolderUrl recognizes drawing folder public paths only', () => {
+    expect(isDrawingFolderUrl('/uploads/drawing-folders/RFQ/12/01ABC/')).toBe(true)
+    expect(isDrawingFolderUrl('http://qpo.local/uploads/drawing-folders/SALES_ORDER/7/01ABC/')).toBe(true)
+    expect(isDrawingFolderUrl('/uploads/drawings/RFQ-1.pdf')).toBe(false)
+    expect(isDrawingFolderUrl('/uploads/drawing-folders/RFQ/12/01ABC/a.pdf')).toBe(false)
+    expect(isDrawingFolderUrl('')).toBe(false)
+  })
+
+  test('listDrawingFolderFiles queries the secured drawing folder endpoint', async () => {
+    const files = [{ fileName: 'A.pdf', publicPath: '/uploads/drawing-folders/RFQ/12/01ABC/A.pdf' }]
+    vi.spyOn(apiClient, 'request').mockResolvedValue({
+      status: 200,
+      data: { success: true, files }
+    })
+
+    await expect(listDrawingFolderFiles('/uploads/drawing-folders/RFQ/12/01ABC/')).resolves.toEqual({
+      success: true,
+      files
+    })
+
+    expect(apiClient.request).toHaveBeenCalledWith({
+      url: '/api/business-files/drawing-folder',
+      method: 'GET',
+      params: { folderUrl: '/uploads/drawing-folders/RFQ/12/01ABC/' }
+    })
   })
 })

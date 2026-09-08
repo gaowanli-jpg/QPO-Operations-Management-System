@@ -18,7 +18,6 @@ import com.machining.quote.mapper.OrderRfqMapper;
 import com.machining.quote.mapper.SalesOrderHeaderMapper;
 import com.machining.quote.mapper.SalesOrderItemMapper;
 import com.machining.quote.service.AuditService;
-import com.machining.quote.service.BusinessFileService;
 import com.machining.quote.service.SourceItemMaterialNoSyncService;
 import com.machining.quote.service.mes.MesMaterialClient;
 import com.machining.quote.service.mes.MesMaterialSyncService;
@@ -40,15 +39,12 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 abstract class MesMaterialSyncTestSupport {
     protected static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
@@ -85,31 +81,11 @@ abstract class MesMaterialSyncTestSupport {
             ItemQuoteVersionMapper itemMapper,
             MesMaterialClient client,
             AuditService auditService) {
-        BusinessFileService businessFileService = mock(BusinessFileService.class);
-        when(businessFileService.externalReadableUrl(anyString())).thenAnswer(invocation -> {
-            String drawingUrl = invocation.getArgument(0);
-            if (drawingUrl.startsWith("http://") || drawingUrl.startsWith("https://")) {
-                return drawingUrl;
-            }
-            return "http://qpo.local" + (drawingUrl.startsWith("/") ? drawingUrl : "/" + drawingUrl);
-        });
-        wireSyncService(service, ticketMapper, orderMapper, itemMapper, client, auditService, businessFileService);
-    }
-
-    protected void wireSyncService(
-            MesMaterialSyncService service,
-            OrderDeliveryTicketMapper ticketMapper,
-            OrderRfqMapper orderMapper,
-            ItemQuoteVersionMapper itemMapper,
-            MesMaterialClient client,
-            AuditService auditService,
-            BusinessFileService businessFileService) {
         ReflectionTestUtils.setField(service, "ticketMapper", ticketMapper);
         ReflectionTestUtils.setField(service, "orderRfqMapper", orderMapper);
         ReflectionTestUtils.setField(service, "itemMapper", itemMapper);
         ReflectionTestUtils.setField(service, "mesMaterialClient", client);
         ReflectionTestUtils.setField(service, "auditService", auditService);
-        ReflectionTestUtils.setField(service, "businessFileService", businessFileService);
     }
 
     protected OrderDeliveryTicket ticket() {

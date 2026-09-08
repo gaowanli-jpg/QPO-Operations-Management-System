@@ -16,6 +16,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class OrderItemMaintenanceContractTest {
     private static final String UPDATE_PERMISSION = "market:order:update-item";
+    private static final String SUPPLEMENT_DRAWING_PERMISSION = "market:order:supplement-drawing";
 
     @Test
     void controllerExposesOrderScopedMaintenanceEndpointsWithUpdatePermission() throws Exception {
@@ -24,7 +25,7 @@ class OrderItemMaintenanceContractTest {
                 "/orders/{rfqId}/items/batch",
                 UPDATE_PERMISSION);
         assertMultipartEndpoint(
-                OrderManagementController.class.getDeclaredMethod("replaceDrawings", Integer.class, java.util.List.class, java.util.List.class),
+                OrderManagementController.class.getDeclaredMethod("replaceDrawings", Integer.class, java.util.List.class, java.util.List.class, java.util.List.class, String.class),
                 "/orders/{rfqId}/drawings/replace",
                 UPDATE_PERMISSION);
         assertMultipartEndpoint(
@@ -44,9 +45,13 @@ class OrderItemMaintenanceContractTest {
                 "/orders/{rfqId}/items/{itemId}/restore",
                 UPDATE_PERMISSION);
         assertMultipartEndpoint(
-                OrderManagementController.class.getDeclaredMethod("appendOrderItems", Integer.class, org.springframework.web.multipart.MultipartFile.class, java.util.List.class, java.util.List.class),
+                OrderManagementController.class.getDeclaredMethod("appendOrderItems", Integer.class, org.springframework.web.multipart.MultipartFile.class, java.util.List.class, java.util.List.class, java.util.List.class, String.class),
                 "/orders/{rfqId}/items/import",
                 UPDATE_PERMISSION);
+        assertMultipartEndpoint(
+                OrderManagementController.class.getDeclaredMethod("supplementDrawings", Integer.class, java.util.List.class, java.util.List.class, java.util.List.class, String.class),
+                "/orders/{rfqId}/supplement-drawings",
+                SUPPLEMENT_DRAWING_PERMISSION);
     }
 
     @Test

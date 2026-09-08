@@ -214,8 +214,10 @@ public class SalesOrderManageController {
     public Map<String, Object> supplementOrderDrawings(
             @PathVariable Long salesOrderId,
             @RequestParam(value = "drawings", required = false) List<MultipartFile> drawings,
-            @RequestParam(value = "versionDrawings", required = false) List<MultipartFile> versionDrawings) {
-        return salesOrderManageService.supplementOrderDrawings(salesOrderId, drawings, versionDrawings);
+            @RequestParam(value = "versionDrawings", required = false) List<MultipartFile> versionDrawings,
+            @RequestParam(value = "drawingFolderFiles", required = false) List<MultipartFile> drawingFolderFiles,
+            @RequestParam(value = "drawingFolderName", required = false) String drawingFolderName) {
+        return salesOrderManageService.supplementOrderDrawings(salesOrderId, drawings, versionDrawings, drawingFolderFiles, drawingFolderName);
     }
 
     private void validateExcelFile(MultipartFile excelFile) {

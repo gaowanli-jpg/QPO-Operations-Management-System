@@ -23,6 +23,36 @@
       </div>
 
       <div class="erp-upload-surface upload-area">
+        <section class="supplement-upload-entry supplement-folder-entry">
+          <div class="supplement-upload-title">上传订单图纸文件夹</div>
+          <div
+            v-permission="permission"
+            class="custom-dropzone supplement-dropzone"
+            @dragover.prevent
+            @drop.prevent="handleOrderFolderDrop"
+          >
+            <el-icon class="el-icon--upload"><upload-filled /></el-icon>
+            <div class="el-upload__text">拖拽订单图纸文件夹到这里</div>
+            <div class="el-upload__tip">推荐入口：整单绑定文件夹，不再要求图纸文件名与图号完全匹配。</div>
+            <div class="folder-select-row">或点击下方按钮选择订单图纸文件夹</div>
+            <div class="supplement-upload-actions import-upload-button-stack">
+              <el-button v-permission="permission" plain class="workflow-soft-button folder-select-button" :disabled="pending" @click="triggerOrderFolderSelect">选择订单图纸文件夹</el-button>
+            </div>
+            <input ref="orderFolderInput" type="file" webkitdirectory directory multiple class="hidden-input" @change="handleOrderFolderSelect" />
+          </div>
+
+          <div v-if="folderFiles.length > 0" class="supplement-file-stats">
+            <h4>整单图纸文件夹待补传文件（{{ folderFiles.length }} 份）</h4>
+            <p v-if="folderName" class="folder-name-line">文件夹：{{ folderName }}</p>
+            <ul class="supplement-pdf-list">
+              <li v-for="(file, index) in folderFiles" :key="`${file.name}-${file.size}-${index}`">
+                <span>{{ file.name }}</span>
+                <el-button v-permission="permission" link type="danger" size="small" :disabled="pending" @click="removeFolderFile(index)">移除</el-button>
+              </li>
+            </ul>
+          </div>
+        </section>
+
         <div class="supplement-upload-dual-grid">
           <section class="supplement-upload-entry">
             <div class="supplement-upload-title">{{ partUploadTitle }}</div>
@@ -114,7 +144,7 @@
           v-permission="permission"
           type="primary"
           :loading="pending"
-          :disabled="(files.length === 0 && versionFiles.length === 0) || pending"
+          :disabled="(folderFiles.length === 0 && files.length === 0 && versionFiles.length === 0) || pending"
           @click="emit('submit')"
         >
           {{ submitText }}
@@ -128,7 +158,7 @@
 import { defineComponent, h, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { UploadFilled } from '@element-plus/icons-vue'
-import { collectPdfFilesFromDataTransfer, mergePdfFiles } from '../../utils/drawingUpload'
+import { collectPdfFilesFromDataTransfer, extractDrawingFolderName, mergePdfFiles } from '../../utils/drawingUpload'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -136,6 +166,8 @@ const props = defineProps({
   orderLabel: { type: String, default: '-' },
   customerName: { type: String, default: '-' },
   missingItems: { type: Array, default: () => [] },
+  folderFiles: { type: Array, default: () => [] },
+  folderName: { type: String, default: '' },
   files: { type: Array, default: () => [] },
   versionFiles: { type: Array, default: () => [] },
   result: { type: Object, default: null },
@@ -151,9 +183,10 @@ const props = defineProps({
   alreadyBoundResultLabel: { type: String, default: '已跳过' }
 })
 
-const emit = defineEmits(['update:modelValue', 'update:files', 'update:versionFiles', 'submit'])
+const emit = defineEmits(['update:modelValue', 'update:files', 'update:versionFiles', 'update:folderFiles', 'update:folderName', 'submit'])
 const fileInput = ref(null)
 const folderInput = ref(null)
+const orderFolderInput = ref(null)
 const versionFileInput = ref(null)
 const versionFolderInput = ref(null)
 
@@ -177,15 +210,24 @@ const ResultList = defineComponent({
 })
 
 const addFiles = (incomingFiles, sourceLabel, mode = 'part') => {
-  const currentFiles = mode === 'version' ? props.versionFiles : props.files
+  const currentFiles = mode === 'folder' ? props.folderFiles : (mode === 'version' ? props.versionFiles : props.files)
   const mergedFiles = mergePdfFiles(currentFiles, incomingFiles)
   const addedCount = mergedFiles.length - currentFiles.length
-  emit(mode === 'version' ? 'update:versionFiles' : 'update:files', mergedFiles)
+  emit(mode === 'folder' ? 'update:folderFiles' : (mode === 'version' ? 'update:versionFiles' : 'update:files'), mergedFiles)
+  if (mode === 'folder') {
+    emit('update:folderName', extractDrawingFolderName(incomingFiles) || props.folderName || '')
+  }
   if (addedCount > 0) {
     ElMessage.success(`成功${sourceLabel} ${addedCount} 份 PDF。`)
   } else {
     ElMessage.warning('未找到新的 PDF 图纸。')
   }
+}
+
+const handleOrderFolderDrop = async (event) => {
+  if (props.pending) return
+  const pdfs = await collectPdfFilesFromDataTransfer(event.dataTransfer)
+  addFiles(pdfs, '提取到订单图纸文件夹', 'folder')
 }
 
 const handleDrop = async (event) => {
@@ -208,6 +250,10 @@ const triggerFolderSelect = () => {
   if (!props.pending) folderInput.value?.click()
 }
 
+const triggerOrderFolderSelect = () => {
+  if (!props.pending) orderFolderInput.value?.click()
+}
+
 const triggerVersionFileSelect = () => {
   if (!props.pending) versionFileInput.value?.click()
 }
@@ -223,6 +269,11 @@ const handleFileSelect = (event) => {
 
 const handleFolderSelect = (event) => {
   addFiles(event.target.files, '从选中的文件夹中提取')
+  event.target.value = ''
+}
+
+const handleOrderFolderSelect = (event) => {
+  addFiles(event.target.files, '选择订单图纸文件夹', 'folder')
   event.target.value = ''
 }
 
@@ -242,6 +293,14 @@ const removeFile = (index) => {
 
 const removeVersionFile = (index) => {
   emit('update:versionFiles', props.versionFiles.filter((_, currentIndex) => currentIndex !== index))
+}
+
+const removeFolderFile = (index) => {
+  const nextFiles = props.folderFiles.filter((_, currentIndex) => currentIndex !== index)
+  emit('update:folderFiles', nextFiles)
+  if (nextFiles.length === 0) {
+    emit('update:folderName', '')
+  }
 }
 </script>
 
@@ -311,6 +370,10 @@ const removeVersionFile = (index) => {
   gap: 14px;
 }
 
+.supplement-folder-entry {
+  margin-bottom: 14px;
+}
+
 .supplement-upload-entry {
   display: flex;
   flex-direction: column;
@@ -370,6 +433,12 @@ const removeVersionFile = (index) => {
 .supplement-file-stats h4 {
   margin: 0 0 8px;
   font-size: 14px;
+}
+
+.folder-name-line {
+  margin: 0 0 8px;
+  color: var(--erp-text-secondary);
+  font-size: 13px;
 }
 
 .supplement-pdf-list {

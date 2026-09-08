@@ -525,13 +525,19 @@
               新窗口打开
             </el-button>
           </div>
-          <div v-if="currentRow?.drawingUrl" v-loading="currentDrawingLoading" class="drawing-frame">
+          <div v-if="currentRow?.drawingUrl && !isDrawingFolderUrl(currentRow.drawingUrl)" v-loading="currentDrawingLoading" class="drawing-frame">
             <iframe
               :key="currentRow?.id"
               :src="currentDrawingSrc"
               class="drawing-frame-iframe"
               frameborder="0"
             ></iframe>
+          </div>
+          <div v-else-if="currentRow?.drawingUrl && isDrawingFolderUrl(currentRow.drawingUrl)" class="drawing-folder-pane">
+            <el-empty description="当前零件绑定的是订单图纸文件夹" :image-size="90" class="drawing-empty" />
+            <el-button type="primary" plain @click="openPdfPreview(currentRow.drawingUrl, currentRow.partNo)">
+              查看图纸文件夹
+            </el-button>
           </div>
           <el-empty v-else description="当前零件没有绑定图纸" :image-size="90" class="drawing-empty" />
         </aside>
@@ -714,6 +720,12 @@
       </div>
     </el-dialog>
 
+    <DrawingFolderViewer
+      v-model="folderViewerVisible"
+      :folder-url="currentDrawingFolderUrl"
+      :title="currentDrawingFolderTitle"
+    />
+
   </div>
 </template>
 
@@ -723,6 +735,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Delete, Plus, Top } from '@element-plus/icons-vue'
 import { useRoute, useRouter } from 'vue-router'
 import EngineeringOptionPickerDialog from './EngineeringOptionPickerDialog.vue'
+import DrawingFolderViewer from './common/DrawingFolderViewer.vue'
 import {
   applyRepeatQuotes,
   completeOrderQuote as completeOrderQuoteRequest,
@@ -748,6 +761,7 @@ import { useDictionaryStore } from '../stores/dictionaryStore'
 import { useGlobalConfigStore } from '../stores/globalConfigStore'
 import {
   createAuthenticatedObjectUrl,
+  isDrawingFolderUrl,
   openAuthenticatedFileInNewWindow,
   readFileErrorMessage,
   revokeObjectUrl
@@ -1438,6 +1452,9 @@ const currentPdfUrl = ref('')
 const pdfTitle = ref('')
 const pdfLoaded = ref(false)
 const currentPdfSrc = ref('')
+const folderViewerVisible = ref(false)
+const currentDrawingFolderUrl = ref('')
+const currentDrawingFolderTitle = ref('')
 
 const cleanupPdfSrc = () => {
   revokeObjectUrl(currentPdfSrc.value)
@@ -1447,6 +1464,12 @@ const cleanupPdfSrc = () => {
 const openPdfPreview = async (url, partNo) => {
   if (!url) {
     return ElMessage.warning('当前零件没有绑定图纸。')
+  }
+  if (isDrawingFolderUrl(url)) {
+    currentDrawingFolderUrl.value = url
+    currentDrawingFolderTitle.value = `图纸文件夹：${partNo || '未命名图纸'}`
+    folderViewerVisible.value = true
+    return
   }
   pdfTitle.value = partNo
   currentPdfUrl.value = url
@@ -1464,6 +1487,12 @@ const openPdfPreview = async (url, partNo) => {
 const openDrawingInNewWindow = async (url) => {
   if (!url) {
     return ElMessage.warning('当前零件没有绑定图纸。')
+  }
+  if (isDrawingFolderUrl(url)) {
+    currentDrawingFolderUrl.value = url
+    currentDrawingFolderTitle.value = currentRow.value?.partNo ? `图纸文件夹：${currentRow.value.partNo}` : '图纸文件夹'
+    folderViewerVisible.value = true
+    return
   }
   const result = await openAuthenticatedFileInNewWindow(url)
   if (!result.success) {
@@ -1510,7 +1539,7 @@ const loadCurrentDrawing = async (url) => {
   const requestSeq = currentDrawingRequestSeq
   cleanupCurrentDrawingSrc()
   currentDrawingLoading.value = false
-  if (!url) return
+  if (!url || isDrawingFolderUrl(url)) return
 
   currentDrawingLoading.value = true
   try {

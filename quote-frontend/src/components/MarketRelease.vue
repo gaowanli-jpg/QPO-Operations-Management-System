@@ -837,6 +837,12 @@
       @select="appendToSalesOrder"
     />
 
+    <DrawingFolderViewer
+      v-model="folderViewerVisible"
+      :folder-url="currentDrawingFolderUrl"
+      :title="currentDrawingFolderTitle"
+    />
+
     <el-dialog
       v-model="pdfVisible"
       :title="`图纸预览：${pdfTitle}`"
@@ -864,6 +870,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { DocumentChecked, UploadFilled } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
 import OrderPickerDialog from './OrderPickerDialog.vue'
+import DrawingFolderViewer from './common/DrawingFolderViewer.vue'
 import ReleaseItemDataReplacementDialog from './market-release/ReleaseItemDataReplacementDialog.vue'
 import { collectPdfFilesFromDataTransfer, isPdfFile, mergePdfFiles } from '../utils/drawingUpload'
 import {
@@ -887,6 +894,7 @@ import {
 } from '../utils/clientPagination'
 import {
   createAuthenticatedObjectUrl,
+  isDrawingFolderUrl,
   readFileErrorMessage,
   revokeObjectUrl
 } from '../api'
@@ -927,6 +935,9 @@ const pdfVisible = ref(false)
 const pdfTitle = ref('')
 const pdfLoaded = ref(false)
 const currentPdfSrc = ref('')
+const folderViewerVisible = ref(false)
+const currentDrawingFolderUrl = ref('')
+const currentDrawingFolderTitle = ref('')
 
 const loading = ref(false)
 let syncingReleaseItemSelection = false
@@ -1918,6 +1929,12 @@ const cleanupPdfSrc = () => {
 const openPdfPreview = async (url, partNo) => {
   if (!url) {
     return ElMessage.warning('当前零件没有绑定图纸。')
+  }
+  if (isDrawingFolderUrl(url)) {
+    currentDrawingFolderUrl.value = url
+    currentDrawingFolderTitle.value = `图纸文件夹：${partNo || '未命名图纸'}`
+    folderViewerVisible.value = true
+    return
   }
   pdfTitle.value = partNo || '未命名图纸'
   pdfLoaded.value = false

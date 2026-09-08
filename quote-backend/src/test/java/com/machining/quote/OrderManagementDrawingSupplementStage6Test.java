@@ -167,6 +167,76 @@ class OrderManagementDrawingSupplementStage6Test {
                 .containsEntry("restoredUnpricedCount", 1);
     }
 
+    @Test
+    @SuppressWarnings("unchecked")
+    void supplementDrawingFolderBindsAllItemsAndAuditsOnlyFolderCounts() {
+        OrderRfqMapper orderMapper = mock(OrderRfqMapper.class);
+        ItemQuoteVersionMapper itemMapper = mock(ItemQuoteVersionMapper.class);
+        BusinessFileService businessFileService = mock(BusinessFileService.class);
+        AuditService auditService = mock(AuditService.class);
+        OrderManagementService service = new OrderManagementService();
+        ReflectionTestUtils.setField(service, "orderMapper", orderMapper);
+        ReflectionTestUtils.setField(service, "itemMapper", itemMapper);
+        ReflectionTestUtils.setField(service, "businessFileService", businessFileService);
+        ReflectionTestUtils.setField(service, "auditService", auditService);
+
+        OrderRfq order = new OrderRfq();
+        order.setId(512);
+        order.setRfqNo("RFQ-512");
+        order.setCustomerName("ACME");
+        order.setStatus(QuoteStatusWorkflow.RELEASED);
+        ItemQuoteVersion missingNoPrice = item(830, 512, "P-400", "A", QuoteStatusWorkflow.NO_DRAWING, null);
+        ItemQuoteVersion quotedWithPrice = item(831, 512, "P-401", "A", QuoteStatusWorkflow.QUOTED, 12.5);
+        MockMultipartFile folderDrawing = drawing("folder/order-pack.pdf");
+        String folderUrl = "/uploads/drawing-folders/RFQ/512/folder-512/";
+        BusinessFileService.DrawingFolderSaveResult folderResult = drawingFolderResult(folderUrl, "整单图纸", folderDrawing);
+
+        when(orderMapper.selectByIdForUpdate(512)).thenReturn(order);
+        when(itemMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(missingNoPrice, quotedWithPrice));
+        when(businessFileService.saveDrawingFolderFiles(
+                eq("RFQ"), eq("512"), eq("整单图纸"), eq(List.of(folderDrawing)), eq("ORDER_SUPPLEMENT_DRAWING_FOLDER"), eq("512")))
+                .thenReturn(folderResult);
+        when(orderMapper.updateById(order)).thenReturn(1);
+        when(itemMapper.updateById(any(ItemQuoteVersion.class))).thenReturn(1);
+
+        Map<String, Object> result = service.supplementDrawings(
+                512,
+                List.<MultipartFile>of(),
+                List.<MultipartFile>of(),
+                List.<MultipartFile>of(folderDrawing),
+                "整单图纸"
+        );
+
+        assertThat(result)
+                .containsEntry("success", true)
+                .containsEntry("boundCount", 2)
+                .containsEntry("restoredUnpricedCount", 1)
+                .containsEntry("drawingFolderFileCount", 1);
+        assertThat(order.getDrawingFolderUrl()).isEqualTo(folderUrl);
+        assertThat(order.getDrawingFolderName()).isEqualTo("整单图纸");
+        assertThat(order.getDrawingFolderFileCount()).isEqualTo(1);
+        assertThat(missingNoPrice.getDrawingUrl()).isEqualTo(folderUrl);
+        assertThat(missingNoPrice.getStatus()).isEqualTo(QuoteStatusWorkflow.UNPRICED);
+        assertThat(quotedWithPrice.getDrawingUrl()).isEqualTo(folderUrl);
+        assertThat(quotedWithPrice.getStatus()).isEqualTo(QuoteStatusWorkflow.QUOTED);
+
+        ArgumentCaptor<Object> afterDataCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(auditService).record(
+                eq("ORDER_SUPPLEMENT_DRAWINGS"),
+                eq("order_rfq"),
+                eq(512),
+                isNull(),
+                afterDataCaptor.capture()
+        );
+        Map<String, Object> afterData = (Map<String, Object>) afterDataCaptor.getValue();
+        assertThat(afterData)
+                .containsEntry("drawingFolderMode", true)
+                .containsEntry("drawingFolderFileCount", 1)
+                .containsEntry("boundCount", 2)
+                .containsEntry("restoredUnpricedCount", 1);
+        assertThat(String.valueOf(afterData)).doesNotContain(folderUrl);
+    }
+
     private ItemQuoteVersion item(Integer id, Integer rfqId, String partNo, String version) {
         return item(id, rfqId, partNo, version, QuoteStatusWorkflow.PRICED, null);
     }
@@ -204,5 +274,18 @@ class OrderManagementDrawingSupplementStage6Test {
                 drawing.getSize(),
                 null
         );
+    }
+
+    private BusinessFileService.DrawingFolderSaveResult drawingFolderResult(
+            String folderUrl,
+            String folderName,
+            MockMultipartFile drawing) {
+        BusinessFileService.DrawingFolderFile file = new BusinessFileService.DrawingFolderFile(
+                drawing.getOriginalFilename(),
+                folderUrl + "file-1.pdf",
+                drawing.getContentType(),
+                drawing.getSize(),
+                java.time.LocalDateTime.now());
+        return new BusinessFileService.DrawingFolderSaveResult(folderUrl, folderName, 1, List.of(file));
     }
 }

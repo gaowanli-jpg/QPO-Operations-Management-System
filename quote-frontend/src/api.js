@@ -3,6 +3,24 @@ import { API_BASE_URL } from './config'
 
 export const apiUrl = (path) => `${API_BASE_URL}${path}`
 
+const DRAWING_FOLDER_PREFIX = '/uploads/drawing-folders/'
+
+export const isDrawingFolderUrl = (url) => {
+  const value = String(url || '').trim()
+  if (!value) return false
+
+  let path = value
+  try {
+    if (/^https?:\/\//i.test(value)) {
+      path = new URL(value).pathname
+    }
+  } catch {
+    return false
+  }
+
+  return path.startsWith(DRAWING_FOLDER_PREFIX) && path.endsWith('/')
+}
+
 export const apiClient = axios.create({
   baseURL: API_BASE_URL
 })
@@ -79,6 +97,10 @@ export const request = async (path, options = {}) => {
     throw await normalizeRequestError(error)
   }
 }
+
+export const listDrawingFolderFiles = (folderUrl) => request('/api/business-files/drawing-folder', {
+  params: { folderUrl }
+})
 
 export const downloadFile = async (path, fallbackName = 'download.xlsx') => {
   try {

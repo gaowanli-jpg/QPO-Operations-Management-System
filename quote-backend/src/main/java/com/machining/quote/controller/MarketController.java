@@ -468,7 +468,7 @@ public class MarketController {
             @RequestParam("customerName") String customerName,
             @RequestParam("excelFile") MultipartFile excelFile,
             @RequestParam(value = "drawings", required = false) List<MultipartFile> drawings) {
-        return importRfq(null, null, customerName, excelFile, drawings, null);
+        return importRfq(null, null, customerName, excelFile, drawings, null, null, null);
     }
 
     public Map<String, Object> importRfq(
@@ -476,7 +476,17 @@ public class MarketController {
             MultipartFile excelFile,
             List<MultipartFile> drawings,
             List<MultipartFile> versionDrawings) {
-        return importRfq(null, null, customerName, excelFile, drawings, versionDrawings);
+        return importRfq(null, null, customerName, excelFile, drawings, versionDrawings, null, null);
+    }
+
+    public Map<String, Object> importRfq(
+            String customerCode,
+            String customerShortName,
+            String customerName,
+            MultipartFile excelFile,
+            List<MultipartFile> drawings,
+            List<MultipartFile> versionDrawings) {
+        return importRfq(customerCode, customerShortName, customerName, excelFile, drawings, versionDrawings, null, null);
     }
 
     @PostMapping("/import-rfq")
@@ -488,7 +498,9 @@ public class MarketController {
             @RequestParam("customerName") String customerName,
             @RequestParam("excelFile") MultipartFile excelFile,
             @RequestParam(value = "drawings", required = false) List<MultipartFile> drawings,
-            @RequestParam(value = "versionDrawings", required = false) List<MultipartFile> versionDrawings) {
+            @RequestParam(value = "versionDrawings", required = false) List<MultipartFile> versionDrawings,
+            @RequestParam(value = "drawingFolderFiles", required = false) List<MultipartFile> drawingFolderFiles,
+            @RequestParam(value = "drawingFolderName", required = false) String drawingFolderName) {
         CustomerMaster customer = requireEnabledU9Customer(customerCode);
         String resolvedCustomerCode = cleanText(customer.getCustomerCode());
         String resolvedCustomerShortName = cleanText(customer.getCustomerShortName());
@@ -529,7 +541,8 @@ public class MarketController {
             Map<String, DrawingFileInfo> versionDrawingMap = new LinkedHashMap<>();
             List<DrawingFileInfo> uploadedDrawings = new ArrayList<>();
             int versionUploadedDrawingCount = 0;
-            if (drawings != null && !drawings.isEmpty()) {
+            boolean drawingFolderMode = hasFiles(drawingFolderFiles);
+            if (!drawingFolderMode && drawings != null && !drawings.isEmpty()) {
                 OrderRfq pathOrder = new OrderRfq();
                 pathOrder.setCustomerCode(resolvedCustomerCode);
                 pathOrder.setCustomerShortName(resolvedCustomerShortName);
@@ -556,7 +569,7 @@ public class MarketController {
                     }
                 }
             }
-            if (versionDrawings != null && !versionDrawings.isEmpty()) {
+            if (!drawingFolderMode && versionDrawings != null && !versionDrawings.isEmpty()) {
                 OrderRfq pathOrder = new OrderRfq();
                 pathOrder.setCustomerCode(resolvedCustomerCode);
                 pathOrder.setCustomerShortName(resolvedCustomerShortName);
@@ -601,6 +614,22 @@ public class MarketController {
             }
             orderRfqMapper.insert(newOrder);
             generatedRfqId = newOrder.getId();
+            BusinessFileService.DrawingFolderSaveResult drawingFolder = null;
+            if (drawingFolderMode) {
+                drawingFolder = businessFileService.saveDrawingFolderFiles(
+                        "RFQ",
+                        String.valueOf(generatedRfqId),
+                        drawingFolderName,
+                        drawingFolderFiles,
+                        "RFQ_IMPORT_DRAWING_FOLDER",
+                        String.valueOf(generatedRfqId));
+                newOrder.setDrawingFolderUrl(drawingFolder.folderUrl());
+                newOrder.setDrawingFolderName(drawingFolder.folderName());
+                newOrder.setDrawingFolderFileCount(drawingFolder.fileCount());
+                if (orderRfqMapper.updateById(newOrder) <= 0) {
+                    throw new RuntimeException("询价订单图纸文件夹保存失败，请刷新后重试");
+                }
+            }
             log.info("RFQ import order saved rfqId={} rfqNo={} customerCode={} customerName={}",
                     generatedRfqId, autoRfqNo, resolvedCustomerCode, resolvedCustomerName);
 
@@ -618,11 +647,17 @@ public class MarketController {
                 }
 
                 String partVersionKey = itemKey(safePartNo, safeVersion);
-                DrawingFileInfo matchedDrawing = versionDrawingMap.get(partVersionKey);
-                if (matchedDrawing == null) {
-                    matchedDrawing = drawingMap.get(safePartNo);
+                DrawingFileInfo matchedDrawing = null;
+                String matchedDrawingUrl;
+                if (drawingFolder != null) {
+                    matchedDrawingUrl = drawingFolder.folderUrl();
+                } else {
+                    matchedDrawing = versionDrawingMap.get(partVersionKey);
+                    if (matchedDrawing == null) {
+                        matchedDrawing = drawingMap.get(safePartNo);
+                    }
+                    matchedDrawingUrl = matchedDrawing == null ? null : matchedDrawing.url();
                 }
-                String matchedDrawingUrl = matchedDrawing == null ? null : matchedDrawing.url();
 
                 ItemQuoteVersion dbItem = new ItemQuoteVersion();
                 dbItem.setRfqId(generatedRfqId);
@@ -641,11 +676,11 @@ public class MarketController {
                     dbItem.setDrawingUrl(matchedDrawingUrl);
                     matchedItemCount++;
                     matchedDrawingPartNos.add(safePartNo);
-                    if (matchedDrawing.versionSpecific()) {
+                    if (matchedDrawing != null && matchedDrawing.versionSpecific()) {
                         matchedVersionDrawingKeys.add(partVersionKey);
                     }
-                    log.debug("RFQ import item drawing matched rfqId={} partNo={} drawingUrl={}",
-                            generatedRfqId, safePartNo, matchedDrawingUrl);
+                    log.debug("RFQ import item drawing matched rfqId={} partNo={} drawingMode={}",
+                            generatedRfqId, safePartNo, drawingFolder == null ? "file" : "folder");
                 } else {
                     missingDrawingItems.add(buildMissingDrawingItem(item, safePartNo));
                     log.debug("RFQ import item drawing missing rfqId={} partNo={}",
@@ -673,16 +708,22 @@ public class MarketController {
 
             Map<String, Object> drawingReport = new LinkedHashMap<>();
             drawingReport.put("totalItemCount", excelDataList.size());
-            drawingReport.put("uploadedDrawingCount", uploadedDrawings.size());
+            drawingReport.put("uploadedDrawingCount", drawingFolder == null ? uploadedDrawings.size() : drawingFolder.fileCount());
             drawingReport.put("matchedItemCount", matchedItemCount);
-            drawingReport.put("matchedDrawingCount", matchedDrawingPartNos.size());
-            drawingReport.put("versionUploadedDrawingCount", versionUploadedDrawingCount);
-            drawingReport.put("versionMatchedDrawingCount", matchedVersionDrawingKeys.size());
-            drawingReport.put("drawingMatchModes", drawingMatchModes(uploadedDrawings.size(), versionUploadedDrawingCount));
+            drawingReport.put("matchedDrawingCount", drawingFolder == null ? matchedDrawingPartNos.size() : matchedItemCount);
+            drawingReport.put("versionUploadedDrawingCount", drawingFolder == null ? versionUploadedDrawingCount : 0);
+            drawingReport.put("versionMatchedDrawingCount", drawingFolder == null ? matchedVersionDrawingKeys.size() : 0);
+            drawingReport.put("drawingMatchModes", drawingFolder == null
+                    ? drawingMatchModes(uploadedDrawings.size(), versionUploadedDrawingCount)
+                    : Map.of("folder", drawingFolder.fileCount(), "partNo", 0, "partNoVersion", 0));
             drawingReport.put("missingDrawingCount", missingDrawingItems.size());
             drawingReport.put("unmatchedDrawingCount", unmatchedDrawings.size());
             drawingReport.put("missingItems", missingDrawingItems);
             drawingReport.put("unmatchedDrawings", unmatchedDrawings);
+            if (drawingFolder != null) {
+                drawingReport.put("drawingFolderMode", true);
+                drawingReport.put("drawingFolderFileCount", drawingFolder.fileCount());
+            }
             log.info("RFQ import matching completed rfqId={} rfqNo={} matchedDrawingCount={} missingDrawingCount={} unmatchedDrawingCount={}",
                     generatedRfqId,
                     autoRfqNo,
@@ -767,6 +808,8 @@ public class MarketController {
                         intValue(drawingReport.get("versionUploadedDrawingCount")))));
         summary.put("missingDrawingCount", drawingReport.get("missingDrawingCount"));
         summary.put("unmatchedDrawingCount", drawingReport.get("unmatchedDrawingCount"));
+        summary.put("drawingFolderMode", drawingReport.get("drawingFolderMode"));
+        summary.put("drawingFolderFileCount", drawingReport.get("drawingFolderFileCount"));
         auditService.record(
                 "RFQ_IMPORT",
                 "order_rfq",
@@ -789,6 +832,10 @@ public class MarketController {
                 "partNo", Math.max(0, uploadedDrawingCount - versionUploadedDrawingCount),
                 "partNoVersion", Math.max(0, versionUploadedDrawingCount)
         );
+    }
+
+    private boolean hasFiles(List<MultipartFile> files) {
+        return files != null && !files.isEmpty();
     }
 
     private int intValue(Object value) {

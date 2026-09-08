@@ -439,6 +439,71 @@ class SalesOrderManagementGovernanceTest {
                 .containsEntry("orderTaxIncludedTotalPrice", new BigDecimal("1395.05"));
     }
 
+    @Test
+    @SuppressWarnings("unchecked")
+    void supplementDrawingFolderBindsAllSalesOrderItemsAndStoresHeaderMetadata() throws Exception {
+        SalesOrderHeader header = header(420L, QuoteStatusWorkflow.QUOTED);
+        SalesOrderItem itemA = item(720L, 420L, QuoteStatusWorkflow.QUOTED);
+        itemA.setPartNo("P-720");
+        SalesOrderItem itemB = item(721L, 420L, QuoteStatusWorkflow.QUOTED);
+        itemB.setPartNo("P-721");
+        itemB.setDrawingUrl("/old/P-721.pdf");
+        itemB.setHasDrawing(true);
+        Fixture fixture = fixture(header, List.of(itemA, itemB), 0L);
+        MockMultipartFile folderDrawing = new MockMultipartFile(
+                "drawingFolderFiles",
+                "folder/sales-order-pack.pdf",
+                "application/pdf",
+                "folder-pdf".getBytes(StandardCharsets.UTF_8)
+        );
+        String folderUrl = "/uploads/drawing-folders/SALES_ORDER/420/folder-420/";
+        when(fixture.businessFileService.saveDrawingFolderFiles(
+                eq("SALES_ORDER"), eq("420"), eq("销售订单图纸"), eq(List.of(folderDrawing)), eq("SALES_ORDER_DRAWING_SUPPLEMENT_FOLDER"), eq("420")))
+                .thenReturn(drawingFolderResult(folderUrl, "销售订单图纸", folderDrawing));
+        when(fixture.headerMapper.updateById(any(SalesOrderHeader.class))).thenReturn(1);
+        when(fixture.itemMapper.updateById(any(SalesOrderItem.class))).thenReturn(1);
+
+        Object result = invokeSupplement(
+                fixture.service,
+                420L,
+                List.of(),
+                List.of(),
+                List.of(folderDrawing),
+                "销售订单图纸");
+
+        assertThat((Map<String, Object>) result)
+                .containsEntry("boundCount", 2)
+                .containsEntry("alreadyBoundCount", 0)
+                .containsEntry("unmatchedCount", 0)
+                .containsEntry("skippedCount", 0)
+                .containsEntry("drawingFolderFileCount", 1);
+        assertThat(header.getDrawingFolderUrl()).isEqualTo(folderUrl);
+        assertThat(header.getDrawingFolderName()).isEqualTo("销售订单图纸");
+        assertThat(header.getDrawingFolderFileCount()).isEqualTo(1);
+        assertThat(itemA.getDrawingUrl()).isEqualTo(folderUrl);
+        assertThat(itemA.getHasDrawing()).isTrue();
+        assertThat(itemB.getDrawingUrl()).isEqualTo(folderUrl);
+        assertThat(itemB.getHasDrawing()).isTrue();
+
+        ArgumentCaptor<Object> afterDataCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(fixture.auditService).record(
+                eq("SALES_ORDER_DRAWING_SUPPLEMENT"),
+                eq("sales_order_header"),
+                eq(420L),
+                isNull(),
+                afterDataCaptor.capture(),
+                eq("MARKET"),
+                eq("SUCCESS"),
+                any(String.class),
+                isNull()
+        );
+        assertThat((Map<String, Object>) afterDataCaptor.getValue())
+                .containsEntry("drawingFolderMode", true)
+                .containsEntry("drawingFolderFileCount", 1)
+                .containsEntry("boundCount", 2);
+        assertThat(String.valueOf(afterDataCaptor.getValue())).doesNotContain(folderUrl).doesNotContain("folder-pdf");
+    }
+
     private Object invokeStatusAction(SalesOrderManageService service, String action, Long salesOrderId, String reason) throws Exception {
         Method method = SalesOrderManageService.class.getMethod(action, Long.class, OrderStatusChangeReq.class);
         OrderStatusChangeReq req = new OrderStatusChangeReq();
@@ -487,6 +552,24 @@ class SalesOrderManagementGovernanceTest {
         Method method = SalesOrderManageService.class.getMethod("supplementOrderDrawings", Long.class, List.class, List.class);
         try {
             return method.invoke(service, salesOrderId, drawings, versionDrawings);
+        } catch (InvocationTargetException e) {
+            if (e.getCause() instanceof RuntimeException runtimeException) {
+                throw runtimeException;
+            }
+            throw e;
+        }
+    }
+
+    private Object invokeSupplement(
+            SalesOrderManageService service,
+            Long salesOrderId,
+            List<MultipartFile> drawings,
+            List<MultipartFile> versionDrawings,
+            List<MultipartFile> drawingFolderFiles,
+            String drawingFolderName) throws Exception {
+        Method method = SalesOrderManageService.class.getMethod("supplementOrderDrawings", Long.class, List.class, List.class, List.class, String.class);
+        try {
+            return method.invoke(service, salesOrderId, drawings, versionDrawings, drawingFolderFiles, drawingFolderName);
         } catch (InvocationTargetException e) {
             if (e.getCause() instanceof RuntimeException runtimeException) {
                 throw runtimeException;
@@ -545,6 +628,19 @@ class SalesOrderManagementGovernanceTest {
     private String read(Path path) throws IOException {
         assertThat(Files.exists(path)).as("%s should exist", path).isTrue();
         return Files.readString(path, StandardCharsets.UTF_8);
+    }
+
+    private BusinessFileService.DrawingFolderSaveResult drawingFolderResult(
+            String folderUrl,
+            String folderName,
+            MockMultipartFile drawing) {
+        BusinessFileService.DrawingFolderFile file = new BusinessFileService.DrawingFolderFile(
+                drawing.getOriginalFilename(),
+                folderUrl + "file-1.pdf",
+                drawing.getContentType(),
+                drawing.getSize(),
+                java.time.LocalDateTime.now());
+        return new BusinessFileService.DrawingFolderSaveResult(folderUrl, folderName, 1, List.of(file));
     }
 
     private record Fixture(
