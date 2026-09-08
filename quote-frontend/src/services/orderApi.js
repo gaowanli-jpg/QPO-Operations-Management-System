@@ -157,6 +157,12 @@ export const supplementSalesOrderDrawings = (salesOrderId, formData) => request(
   headers: { 'Content-Type': 'multipart/form-data' }
 })
 
+export const replaceSalesOrderDrawings = (salesOrderId, formData) => request(`/api/market/sales-order-management/orders/${salesOrderId}/drawings/replace`, {
+  method: 'POST',
+  data: formData,
+  headers: { 'Content-Type': 'multipart/form-data' }
+})
+
 export const downloadSalesOrderProductionTaskNotice = (salesOrderId, fallbackName = `${salesOrderId}-生产任务通知单.xlsx`) => downloadFile(
   `/api/market/sales-order-management/orders/${salesOrderId}/production-task-notice/export`,
   fallbackName

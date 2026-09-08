@@ -236,6 +236,15 @@
             补传图纸
           </el-button>
           <el-button
+            v-permission="'market:sales-order:supplement-drawing'"
+            plain
+            :loading="replaceSalesOrderDrawingUploadPending"
+            :disabled="replaceSalesOrderDrawingUploadPending"
+            @click="openReplaceSalesOrderDrawingDialog"
+          >
+            导入替换图纸
+          </el-button>
+          <el-button
             v-permission="'market:sales-order:production-task-notice-export'"
             plain
             :loading="productionTaskNoticeExportPending"
@@ -612,6 +621,29 @@
       :permission="'market:sales-order:supplement-drawing'"
       @submit="submitSupplementDrawings"
     />
+    <SupplementDrawingDialog
+      v-model="replaceSalesOrderDrawingVisible"
+      v-model:files="replaceSalesOrderDrawingFiles"
+      v-model:version-files="replaceSalesOrderVersionDrawingFiles"
+      v-model:folder-files="replaceSalesOrderDrawingFolderFiles"
+      v-model:folder-name="replaceSalesOrderDrawingFolderName"
+      title="导入替换图纸"
+      submit-text="上传并替换"
+      list-title="当前销售订单零件"
+      part-upload-title="按图号替换"
+      version-upload-title="按图号+版本替换"
+      part-pending-title="按图号待替换图纸"
+      version-pending-title="按图号+版本待替换图纸"
+      bound-result-label="已替换"
+      already-bound-result-label="已跳过"
+      :order-label="orderDetail?.orderInfo?.salesOrderNo || '-'"
+      :customer-name="orderDetail?.orderInfo?.customerName || selectedCustomer || '-'"
+      :missing-items="detailItemList"
+      :result="replaceSalesOrderDrawingResult"
+      :pending="replaceSalesOrderDrawingUploadPending"
+      :permission="'market:sales-order:supplement-drawing'"
+      @submit="submitReplaceSalesOrderDrawings"
+    />
     <CustomerPickerDialog
       v-model="customerPickerVisible"
       :current-customer="selectedCustomer"
@@ -652,6 +684,7 @@ import {
   saveSalesOrderItems,
   restoreSalesOrder,
   restoreSalesOrderItemForU9Change,
+  replaceSalesOrderDrawings,
   supplementSalesOrderDrawings
 } from '../services/orderApi'
 
@@ -669,6 +702,7 @@ const salesOrderActionKeys = {
   itemSave: (orderId) => `sales-order:item-save:${orderId || 'none'}`,
   itemU9ChangeExclusion: (itemId) => `sales-order:item-u9-change-exclusion:${itemId || 'none'}`,
   supplementDrawings: (orderId) => `sales-order:supplement-drawings:${orderId || 'none'}`,
+  salesOrderDrawingReplace: (orderId) => `sales-order:drawing-replace:${orderId || 'none'}`,
   productionTaskNoticeExport: (orderId) => `sales-order:production-task-notice-export:${orderId || 'none'}`
 }
 const SALES_ORDER_HEADER_EDITABLE_FIELDS = [
@@ -756,6 +790,12 @@ const supplementVersionFiles = ref([])
 const supplementDrawingFolderFiles = ref([])
 const supplementDrawingFolderName = ref('')
 const supplementResult = ref(null)
+const replaceSalesOrderDrawingVisible = ref(false)
+const replaceSalesOrderDrawingFiles = ref([])
+const replaceSalesOrderVersionDrawingFiles = ref([])
+const replaceSalesOrderDrawingFolderFiles = ref([])
+const replaceSalesOrderDrawingFolderName = ref('')
+const replaceSalesOrderDrawingResult = ref(null)
 const folderViewerVisible = ref(false)
 const currentDrawingFolderUrl = ref('')
 const currentDrawingFolderTitle = ref('')
@@ -778,6 +818,7 @@ const itemEditSaving = computed(() => isPending(salesOrderActionKeys.itemSave(or
 
 const missingDrawingItems = computed(() => drawingSummary.value?.missingItems || detailItemList.value.filter(item => !item.drawingUrl))
 const supplementUploadPending = computed(() => isPending(salesOrderActionKeys.supplementDrawings(orderDetail.value?.orderInfo?.id)))
+const replaceSalesOrderDrawingUploadPending = computed(() => isPending(salesOrderActionKeys.salesOrderDrawingReplace(orderDetail.value?.orderInfo?.id)))
 const productionTaskNoticeExportPending = computed(() => isPending(salesOrderActionKeys.productionTaskNoticeExport(orderDetail.value?.orderInfo?.id)))
 const salesOrderEditLocked = computed(() => SALES_ORDER_EDIT_LOCKED_U9_STATUSES.includes(String(orderDetail.value?.orderInfo?.u9SyncStatus || '').trim()))
 const salesOrderEditLockedReason = computed(() => salesOrderEditLocked.value ? `当前 U9 状态不允许修改销售订单：${orderDetail.value?.orderInfo?.u9SyncStatus || '-'}` : '')
@@ -1048,6 +1089,15 @@ const openSupplementDialog = () => {
   supplementDrawingFolderFiles.value = []
   supplementDrawingFolderName.value = ''
   supplementVisible.value = true
+}
+
+const openReplaceSalesOrderDrawingDialog = () => {
+  replaceSalesOrderDrawingResult.value = null
+  replaceSalesOrderDrawingFiles.value = []
+  replaceSalesOrderVersionDrawingFiles.value = []
+  replaceSalesOrderDrawingFolderFiles.value = []
+  replaceSalesOrderDrawingFolderName.value = ''
+  replaceSalesOrderDrawingVisible.value = true
 }
 
 const appendDrawingFolderFields = (formData, files, folderName) => {
@@ -1357,6 +1407,47 @@ const submitSupplementDrawings = async () => {
     if (error) {
       console.error(error)
       ElMessage.error(error.response?.data?.message || '补传图纸失败。')
+    }
+  })
+}
+
+const submitReplaceSalesOrderDrawings = async () => {
+  if (!orderDetail.value?.orderInfo?.id) return ElMessage.warning('请先打开销售订单详情。')
+  if (replaceSalesOrderDrawingFolderFiles.value.length === 0 && replaceSalesOrderDrawingFiles.value.length === 0 && replaceSalesOrderVersionDrawingFiles.value.length === 0) return ElMessage.warning('请先选择需要替换的 PDF 图纸或订单图纸文件夹。')
+
+  const salesOrderId = orderDetail.value.orderInfo.id
+  return runAction(salesOrderActionKeys.salesOrderDrawingReplace(salesOrderId), async () => {
+    const formData = new FormData()
+    replaceSalesOrderDrawingFiles.value.forEach(file => formData.append('drawings', file))
+    replaceSalesOrderVersionDrawingFiles.value.forEach(file => formData.append('versionDrawings', file))
+    replaceSalesOrderDrawingFolderFiles.value.forEach(file => formData.append('drawingFolderFiles', file))
+    if (replaceSalesOrderDrawingFolderFiles.value.length > 0) {
+      formData.append('drawingFolderName', replaceSalesOrderDrawingFolderName.value || '')
+    }
+    const response = await replaceSalesOrderDrawings(salesOrderId, formData)
+    replaceSalesOrderDrawingResult.value = {
+      ...(response || {}),
+      boundCount: response?.replacedCount ?? response?.boundCount ?? 0,
+      boundItems: response?.replacedItems || response?.boundItems || [],
+      alreadyBoundCount: response?.alreadyBoundCount || 0,
+      alreadyBoundItems: response?.alreadyBoundItems || []
+    }
+    replaceSalesOrderDrawingFiles.value = []
+    replaceSalesOrderVersionDrawingFiles.value = []
+    replaceSalesOrderDrawingFolderFiles.value = []
+    replaceSalesOrderDrawingFolderName.value = ''
+    await fetchDetailItems()
+    await fetchDrawingSummary()
+    await loadOrders()
+    if (Number(replaceSalesOrderDrawingResult.value.unmatchedCount || 0) > 0 || Number(replaceSalesOrderDrawingResult.value.skippedCount || 0) > 0) {
+      ElMessage.warning(response?.message || '图纸替换处理完成，存在未匹配或跳过文件。')
+    } else {
+      ElMessage.success(response?.message || '图纸替换处理完成。')
+    }
+  }).catch((error) => {
+    if (error) {
+      console.error(error)
+      ElMessage.error(error.response?.data?.message || '图纸替换失败。')
     }
   })
 }

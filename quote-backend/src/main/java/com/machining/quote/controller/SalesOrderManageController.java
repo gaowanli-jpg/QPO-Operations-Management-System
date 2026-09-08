@@ -220,6 +220,17 @@ public class SalesOrderManageController {
         return salesOrderManageService.supplementOrderDrawings(salesOrderId, drawings, versionDrawings, drawingFolderFiles, drawingFolderName);
     }
 
+    @PostMapping(value = "/orders/{salesOrderId}/drawings/replace", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @RequirePermission("market:sales-order:supplement-drawing")
+    public Map<String, Object> replaceOrderDrawings(
+            @PathVariable Long salesOrderId,
+            @RequestParam(value = "drawings", required = false) List<MultipartFile> drawings,
+            @RequestParam(value = "versionDrawings", required = false) List<MultipartFile> versionDrawings,
+            @RequestParam(value = "drawingFolderFiles", required = false) List<MultipartFile> drawingFolderFiles,
+            @RequestParam(value = "drawingFolderName", required = false) String drawingFolderName) {
+        return salesOrderManageService.replaceOrderDrawings(salesOrderId, drawings, versionDrawings, drawingFolderFiles, drawingFolderName);
+    }
+
     private void validateExcelFile(MultipartFile excelFile) {
         if (excelFile == null || excelFile.isEmpty()) {
             throw new IllegalArgumentException("销售订单表格数据替换文件不能为空");

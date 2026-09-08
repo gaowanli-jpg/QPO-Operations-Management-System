@@ -239,6 +239,7 @@ class AuditActionCatalogCharacterizationTest {
 
     @Test
     void salesOrderProductionTaskNoticeExportAuditActionExposesStableChineseLabel() {
+        assertThat(AuditService.labelForAction("SALES_ORDER_DRAWING_REPLACE")).isEqualTo("替换销售订单图纸");
         assertThat(AuditService.labelForAction("SALES_ORDER_PRODUCTION_TASK_NOTICE_EXPORT")).isEqualTo("导出生产任务通知单");
     }
 

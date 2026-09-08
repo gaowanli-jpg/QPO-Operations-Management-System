@@ -23,6 +23,7 @@ describe('sales order management governance and drawings', () => {
       'discardSalesOrderItemForU9Change',
       'restoreSalesOrderItemForU9Change',
       'supplementSalesOrderDrawings',
+      'replaceSalesOrderDrawings',
       'downloadSalesOrderProductionTaskNotice'
     ]) {
       expect(orderApi).toContain(`export const ${apiName}`)
@@ -30,6 +31,7 @@ describe('sales order management governance and drawings', () => {
     }
     expect(orderApi).toContain('/api/market/sales-order-management/orders')
     expect(orderApi).toContain('/api/market/sales-order-management/orders/${salesOrderId}/supplement-drawings')
+    expect(orderApi).toContain('/api/market/sales-order-management/orders/${salesOrderId}/drawings/replace')
     expect(orderApi).toContain('/api/market/sales-order-management/orders/${salesOrderId}/production-task-notice/export')
     expect(orderApi).not.toContain('/api/market/sales-order-management/items/${itemId}/drawings')
   })
@@ -75,6 +77,23 @@ describe('sales order management governance and drawings', () => {
     expect(salesOrderManage).toContain('downloadSalesOrderProductionTaskNotice')
     expect(salesOrderManage).toContain('handleProductionTaskNoticeExport')
     expect(salesOrderManage).toContain('runAction(salesOrderActionKeys.productionTaskNoticeExport(salesOrderId)')
+  })
+
+  test('detail view exposes sales order drawing replacement between supplement and production export', () => {
+    expect(salesOrderManage).toContain('导入替换图纸')
+    expect(salesOrderManage).toContain('replaceSalesOrderDrawings')
+    expect(salesOrderManage).toContain('replaceSalesOrderDrawingVisible')
+    expect(salesOrderManage).toContain('submitReplaceSalesOrderDrawings')
+    expect(salesOrderManage).toContain('salesOrderDrawingReplace: (orderId) => `sales-order:drawing-replace:${orderId || \'none\'}`')
+    expect(salesOrderManage).toContain('replaceSalesOrderDrawingUploadPending')
+    expect(salesOrderManage).toContain(':permission="\'market:sales-order:supplement-drawing\'"')
+    expect(salesOrderManage).toContain('submit-text="上传并替换"')
+    expect(salesOrderManage).toContain('bound-result-label="已替换"')
+    expect(salesOrderManage).toContain('replaceSalesOrderDrawingFiles.value.forEach(file => formData.append(\'drawings\', file))')
+    expect(salesOrderManage).toContain('replaceSalesOrderVersionDrawingFiles.value.forEach(file => formData.append(\'versionDrawings\', file))')
+    expect(salesOrderManage).toContain('replaceSalesOrderDrawingFolderFiles.value.forEach(file => formData.append(\'drawingFolderFiles\', file))')
+    expect(salesOrderManage.indexOf('补传图纸')).toBeLessThan(salesOrderManage.indexOf('导入替换图纸'))
+    expect(salesOrderManage.indexOf('导入替换图纸')).toBeLessThan(salesOrderManage.indexOf('导出生产任务通知单'))
   })
 
   test('detail view uses backend pagination for independent sales order tabs', () => {

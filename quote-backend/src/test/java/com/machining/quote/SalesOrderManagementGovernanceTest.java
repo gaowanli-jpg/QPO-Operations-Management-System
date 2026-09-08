@@ -54,7 +54,9 @@ class SalesOrderManagementGovernanceTest {
                         "@PostMapping(\"/orders/{salesOrderId}/restore\")",
                         "@RequirePermission(\"market:sales-order:restore\")",
                         "@PostMapping(value = \"/orders/{salesOrderId}/supplement-drawings\", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)",
-                        "@RequirePermission(\"market:sales-order:supplement-drawing\")"
+                        "@PostMapping(value = \"/orders/{salesOrderId}/drawings/replace\", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)",
+                        "@RequirePermission(\"market:sales-order:supplement-drawing\")",
+                        "replaceOrderDrawings"
                 )
                 .doesNotContain("/items/{itemId}/drawings")
                 .doesNotContain("@DeleteMapping")
@@ -137,9 +139,11 @@ class SalesOrderManagementGovernanceTest {
                         "SALES_ORDER_DISCARD",
                         "SALES_ORDER_RESTORE",
                         "SALES_ORDER_DRAWING_SUPPLEMENT",
+                        "SALES_ORDER_DRAWING_REPLACE",
                         "Sales order status change started",
                         "Sales order status change completed",
                         "Sales order drawing supplement completed",
+                        "Sales order drawing replace completed",
                         "saveSalesOrderImportDrawing",
                         "DrawingPartNoResolver",
                         "sales_order_header"
@@ -504,6 +508,120 @@ class SalesOrderManagementGovernanceTest {
         assertThat(String.valueOf(afterDataCaptor.getValue())).doesNotContain(folderUrl).doesNotContain("folder-pdf");
     }
 
+    @Test
+    @SuppressWarnings("unchecked")
+    void replaceDrawingFolderOverwritesAllSalesOrderItemsAndStoresHeaderMetadata() throws Exception {
+        SalesOrderHeader header = header(421L, QuoteStatusWorkflow.QUOTED);
+        SalesOrderItem itemA = item(722L, 421L, QuoteStatusWorkflow.QUOTED);
+        itemA.setPartNo("P-722");
+        itemA.setDrawingUrl("/old/P-722.pdf");
+        itemA.setHasDrawing(true);
+        SalesOrderItem itemB = item(723L, 421L, QuoteStatusWorkflow.QUOTED);
+        itemB.setPartNo("P-723");
+        Fixture fixture = fixture(header, List.of(itemA, itemB), 0L);
+        MockMultipartFile folderDrawing = new MockMultipartFile(
+                "drawingFolderFiles",
+                "new-folder/sales-order-pack.pdf",
+                "application/pdf",
+                "folder-pdf".getBytes(StandardCharsets.UTF_8)
+        );
+        String folderUrl = "/uploads/drawing-folders/SALES_ORDER/421/folder-421/";
+        when(fixture.businessFileService.saveDrawingFolderFiles(
+                eq("SALES_ORDER"), eq("421"), eq("新销售订单图纸"), eq(List.of(folderDrawing)), eq("SALES_ORDER_DRAWING_REPLACE_FOLDER"), eq("421")))
+                .thenReturn(drawingFolderResult(folderUrl, "新销售订单图纸", folderDrawing));
+        when(fixture.headerMapper.updateById(any(SalesOrderHeader.class))).thenReturn(1);
+        when(fixture.itemMapper.updateById(any(SalesOrderItem.class))).thenReturn(1);
+
+        Object result = invokeReplace(
+                fixture.service,
+                421L,
+                List.of(),
+                List.of(),
+                List.of(folderDrawing),
+                "新销售订单图纸");
+
+        assertThat((Map<String, Object>) result)
+                .containsEntry("replacedCount", 2)
+                .containsEntry("boundCount", 2)
+                .containsEntry("alreadyBoundCount", 0)
+                .containsEntry("drawingFolderMode", true)
+                .containsEntry("drawingFolderFileCount", 1);
+        assertThat(header.getDrawingFolderUrl()).isEqualTo(folderUrl);
+        assertThat(header.getDrawingFolderName()).isEqualTo("新销售订单图纸");
+        assertThat(header.getDrawingFolderFileCount()).isEqualTo(1);
+        assertThat(itemA.getDrawingUrl()).isEqualTo(folderUrl);
+        assertThat(itemB.getDrawingUrl()).isEqualTo(folderUrl);
+        assertThat(itemA.getHasDrawing()).isTrue();
+        assertThat(itemB.getHasDrawing()).isTrue();
+
+        ArgumentCaptor<Object> afterDataCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(fixture.auditService).record(
+                eq("SALES_ORDER_DRAWING_REPLACE"),
+                eq("sales_order_header"),
+                eq(421L),
+                isNull(),
+                afterDataCaptor.capture(),
+                eq("MARKET"),
+                eq("SUCCESS"),
+                any(String.class),
+                isNull()
+        );
+        assertThat((Map<String, Object>) afterDataCaptor.getValue())
+                .containsEntry("drawingFolderMode", true)
+                .containsEntry("drawingFolderFileCount", 1)
+                .containsEntry("replacedCount", 2);
+        assertThat(String.valueOf(afterDataCaptor.getValue())).doesNotContain(folderUrl).doesNotContain("folder-pdf");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void replaceDrawingsOverwritesAlreadyBoundSalesOrderItemsByPartNoAndVersion() throws Exception {
+        SalesOrderHeader header = header(430L, QuoteStatusWorkflow.QUOTED);
+        SalesOrderItem itemA = item(730L, 430L, QuoteStatusWorkflow.QUOTED);
+        itemA.setPartNo("P-730");
+        itemA.setVersion("A");
+        itemA.setDrawingUrl("/old/P-730-A.pdf");
+        itemA.setHasDrawing(true);
+        SalesOrderItem itemB = item(731L, 430L, QuoteStatusWorkflow.QUOTED);
+        itemB.setPartNo("P-731");
+        itemB.setVersion("B");
+        itemB.setDrawingUrl("/old/P-731-B.pdf");
+        itemB.setHasDrawing(true);
+        Fixture fixture = fixture(header, List.of(itemA, itemB), 0L);
+        when(fixture.businessFileService.saveSalesOrderImportDrawing(eq("客户A"), eq("SO-430"), any(), eq("SALES_ORDER_DRAWING_REPLACE"), eq("430")))
+                .thenReturn(new BusinessFileService.StoredBusinessFile(
+                        "/uploads/客户A/SO-430/replaced.pdf",
+                        StorageType.LOCAL,
+                        1L,
+                        "客户A/SO-430/replaced.pdf",
+                        "replaced.pdf",
+                        "application/pdf",
+                        5L,
+                        null
+                ));
+        when(fixture.itemMapper.updateById(any(SalesOrderItem.class))).thenReturn(1);
+        MockMultipartFile versionDrawing = new MockMultipartFile("versionDrawings", "P-730_A.pdf", "application/pdf", "dummy".getBytes(StandardCharsets.UTF_8));
+        MockMultipartFile partDrawing = new MockMultipartFile("drawings", "P-731.pdf", "application/pdf", "dummy".getBytes(StandardCharsets.UTF_8));
+
+        Object result = invokeReplace(fixture.service, 430L, List.of(partDrawing), List.of(versionDrawing), List.of(), "");
+
+        assertThat((Map<String, Object>) result)
+                .containsEntry("replacedCount", 2)
+                .containsEntry("alreadyBoundCount", 0)
+                .containsEntry("unmatchedCount", 0)
+                .containsEntry("skippedCount", 0);
+        ArgumentCaptor<SalesOrderItem> itemCaptor = ArgumentCaptor.forClass(SalesOrderItem.class);
+        verify(fixture.itemMapper, times(2)).updateById(itemCaptor.capture());
+        assertThat(itemCaptor.getAllValues())
+                .extracting(SalesOrderItem::getId)
+                .containsExactlyInAnyOrder(730L, 731L);
+        assertThat(itemCaptor.getAllValues()).allSatisfy(updated -> {
+            assertThat(updated.getDrawingUrl()).isEqualTo("/uploads/客户A/SO-430/replaced.pdf");
+            assertThat(updated.getHasDrawing()).isTrue();
+        });
+        verify(fixture.auditService).record(eq("SALES_ORDER_DRAWING_REPLACE"), eq("sales_order_header"), eq(430L), isNull(), any(), eq("MARKET"), eq("SUCCESS"), any(), isNull());
+    }
+
     private Object invokeStatusAction(SalesOrderManageService service, String action, Long salesOrderId, String reason) throws Exception {
         Method method = SalesOrderManageService.class.getMethod(action, Long.class, OrderStatusChangeReq.class);
         OrderStatusChangeReq req = new OrderStatusChangeReq();
@@ -552,6 +670,24 @@ class SalesOrderManagementGovernanceTest {
         Method method = SalesOrderManageService.class.getMethod("supplementOrderDrawings", Long.class, List.class, List.class);
         try {
             return method.invoke(service, salesOrderId, drawings, versionDrawings);
+        } catch (InvocationTargetException e) {
+            if (e.getCause() instanceof RuntimeException runtimeException) {
+                throw runtimeException;
+            }
+            throw e;
+        }
+    }
+
+    private Object invokeReplace(
+            SalesOrderManageService service,
+            Long salesOrderId,
+            List<MultipartFile> drawings,
+            List<MultipartFile> versionDrawings,
+            List<MultipartFile> drawingFolderFiles,
+            String drawingFolderName) throws Exception {
+        Method method = SalesOrderManageService.class.getMethod("replaceOrderDrawings", Long.class, List.class, List.class, List.class, String.class);
+        try {
+            return method.invoke(service, salesOrderId, drawings, versionDrawings, drawingFolderFiles, drawingFolderName);
         } catch (InvocationTargetException e) {
             if (e.getCause() instanceof RuntimeException runtimeException) {
                 throw runtimeException;

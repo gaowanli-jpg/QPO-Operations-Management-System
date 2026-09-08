@@ -47,6 +47,7 @@ public class SalesOrderManageService {
     private static final String ACTION_ITEM_EXCLUDE = "SALES_ORDER_ITEM_U9_CHANGE_EXCLUDE";
     private static final String ACTION_ITEM_RESTORE = "SALES_ORDER_ITEM_U9_CHANGE_RESTORE";
     private static final String ACTION_DRAWING_SUPPLEMENT = "SALES_ORDER_DRAWING_SUPPLEMENT";
+    private static final String ACTION_DRAWING_REPLACE = "SALES_ORDER_DRAWING_REPLACE";
     private static final String U9_STATUS_SYNCED = "已同步";
     private static final String U9_STATUS_SYNCING = "同步中";
     private static final String U9_STATUS_PENDING_CONFIRMATION = "结果待确认";
@@ -414,6 +415,202 @@ public class SalesOrderManageService {
         return result;
     }
 
+    @Transactional
+    public Map<String, Object> replaceOrderDrawings(
+            Long salesOrderId,
+            List<MultipartFile> drawings,
+            List<MultipartFile> versionDrawings,
+            List<MultipartFile> drawingFolderFiles,
+            String drawingFolderName) {
+        if (salesOrderId == null) {
+            throw new RuntimeException("销售订单 ID 不能为空");
+        }
+        if (isEmptyFiles(drawings) && isEmptyFiles(versionDrawings) && isEmptyFiles(drawingFolderFiles)) {
+            throw new RuntimeException("请至少上传一份 PDF 图纸");
+        }
+        if (businessFileService == null) {
+            throw new RuntimeException("图纸文件服务不可用");
+        }
+
+        SalesOrderHeader order = salesOrderHeaderMapper.selectByIdForUpdate(salesOrderId);
+        if (order == null) {
+            throw new RuntimeException("销售订单不存在");
+        }
+        assertSalesOrderDataScope(order);
+        if (!isEmptyFiles(drawingFolderFiles)) {
+            return replaceOrderDrawingFolder(order, drawingFolderFiles, drawingFolderName);
+        }
+
+        List<SalesOrderItem> items = listSalesOrderItems(salesOrderId);
+        Map<String, List<SalesOrderItem>> itemMapByPartNo = new HashMap<>();
+        Map<String, List<SalesOrderItem>> itemMapByPartNoVersion = new HashMap<>();
+        Set<DrawingPartNoResolver.DrawingIdentity> itemIdentities = new HashSet<>();
+        for (SalesOrderItem item : items) {
+            String normalizedPartNo = DrawingPartNoResolver.normalizePartNo(item.getPartNo());
+            if (!normalizedPartNo.isEmpty()) {
+                itemMapByPartNo.computeIfAbsent(normalizedPartNo, key -> new ArrayList<>()).add(item);
+            }
+            String normalizedVersion = DrawingPartNoResolver.normalizeVersion(item.getVersion());
+            if (!normalizedPartNo.isEmpty() && !normalizedVersion.isEmpty()) {
+                itemMapByPartNoVersion
+                        .computeIfAbsent(itemKey(normalizedPartNo, normalizedVersion), key -> new ArrayList<>())
+                        .add(item);
+                itemIdentities.add(new DrawingPartNoResolver.DrawingIdentity(normalizedPartNo, normalizedVersion));
+            }
+        }
+
+        List<Map<String, Object>> replacedItems = new ArrayList<>();
+        List<Map<String, Object>> protectedSkippedItems = new ArrayList<>();
+        List<Map<String, Object>> unmatchedDrawings = new ArrayList<>();
+        List<Map<String, Object>> skippedFiles = new ArrayList<>();
+        Set<String> versionProtectedItemKeys = new HashSet<>();
+
+        if (versionDrawings != null) {
+            for (MultipartFile drawing : versionDrawings) {
+                replaceSalesOrderDrawing(
+                        order,
+                        drawing,
+                        true,
+                        itemMapByPartNo,
+                        itemMapByPartNoVersion,
+                        itemIdentities,
+                        versionProtectedItemKeys,
+                        replacedItems,
+                        protectedSkippedItems,
+                        unmatchedDrawings,
+                        skippedFiles);
+            }
+        }
+        if (drawings != null) {
+            for (MultipartFile drawing : drawings) {
+                replaceSalesOrderDrawing(
+                        order,
+                        drawing,
+                        false,
+                        itemMapByPartNo,
+                        itemMapByPartNoVersion,
+                        itemIdentities,
+                        versionProtectedItemKeys,
+                        replacedItems,
+                        protectedSkippedItems,
+                        unmatchedDrawings,
+                        skippedFiles);
+            }
+        }
+
+        if (auditService != null && !replacedItems.isEmpty()) {
+            auditService.record(
+                    ACTION_DRAWING_REPLACE,
+                    "sales_order_header",
+                    salesOrderId,
+                    null,
+                    buildReplaceDrawingAuditSummary(
+                            order,
+                            drawings,
+                            versionDrawings,
+                            replacedItems,
+                            protectedSkippedItems,
+                            unmatchedDrawings,
+                            skippedFiles),
+                    "MARKET",
+                    "SUCCESS",
+                    AuditService.labelForAction(ACTION_DRAWING_REPLACE),
+                    null
+            );
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("success", true);
+        result.put("message", "替换图纸处理完成，成功替换 " + replacedItems.size() + " 项。");
+        result.put("replacedCount", replacedItems.size());
+        result.put("boundCount", replacedItems.size());
+        result.put("alreadyBoundCount", protectedSkippedItems.size());
+        result.put("unmatchedCount", unmatchedDrawings.size());
+        result.put("skippedCount", skippedFiles.size());
+        result.put("replacedItems", replacedItems);
+        result.put("boundItems", replacedItems);
+        result.put("alreadyBoundItems", protectedSkippedItems);
+        result.put("unmatchedDrawings", unmatchedDrawings);
+        result.put("skippedFiles", skippedFiles);
+        log.info("Sales order drawing replace completed salesOrderId={} uploadCount={} replacedCount={} skippedExistingCount={} unmatchedCount={} skippedCount={}",
+                order.getId(), fileCount(drawings) + fileCount(versionDrawings), replacedItems.size(), protectedSkippedItems.size(), unmatchedDrawings.size(), skippedFiles.size());
+        if (!unmatchedDrawings.isEmpty() || !skippedFiles.isEmpty()) {
+            log.warn("Sales order drawing replace completed with warnings salesOrderId={} unmatchedCount={} skippedCount={}",
+                    order.getId(), unmatchedDrawings.size(), skippedFiles.size());
+        }
+        return result;
+    }
+
+    private void replaceSalesOrderDrawing(
+            SalesOrderHeader order,
+            MultipartFile drawing,
+            boolean versionMatch,
+            Map<String, List<SalesOrderItem>> itemMapByPartNo,
+            Map<String, List<SalesOrderItem>> itemMapByPartNoVersion,
+            Set<DrawingPartNoResolver.DrawingIdentity> itemIdentities,
+            Set<String> versionProtectedItemKeys,
+            List<Map<String, Object>> replacedItems,
+            List<Map<String, Object>> protectedSkippedItems,
+            List<Map<String, Object>> unmatchedDrawings,
+            List<Map<String, Object>> skippedFiles) {
+        String cleanFileName = cleanFilename(drawing == null ? null : drawing.getOriginalFilename());
+        if (isBlank(cleanFileName) || !cleanFileName.toLowerCase().endsWith(".pdf")) {
+            skippedFiles.add(buildFileResult(cleanFileName, "", "非 PDF 文件"));
+            return;
+        }
+
+        String partNoFromFileName;
+        List<SalesOrderItem> matchedItems;
+        if (versionMatch) {
+            DrawingPartNoResolver.DrawingIdentity identity =
+                    DrawingPartNoResolver.extractPartNoVersion(cleanFileName, itemIdentities);
+            partNoFromFileName = identity == null
+                    ? DrawingPartNoResolver.extractPartNo(cleanFileName, itemMapByPartNo.keySet())
+                    : identity.partNo();
+            matchedItems = identity == null ? List.of() : itemMapByPartNoVersion.get(itemKey(identity.partNo(), identity.version()));
+        } else {
+            partNoFromFileName = DrawingPartNoResolver.extractPartNo(cleanFileName, itemMapByPartNo.keySet());
+            matchedItems = itemMapByPartNo.get(partNoFromFileName);
+        }
+        if (matchedItems == null || matchedItems.isEmpty()) {
+            unmatchedDrawings.add(buildFileResult(cleanFileName, partNoFromFileName, "未找到该销售订单对应零件"));
+            return;
+        }
+
+        List<SalesOrderItem> replaceTargets = new ArrayList<>();
+        for (SalesOrderItem item : matchedItems) {
+            String key = itemKey(item.getPartNo(), item.getVersion());
+            if (!versionMatch && versionProtectedItemKeys.contains(key)) {
+                protectedSkippedItems.add(buildSalesItemResult(item, cleanFileName, "已有图号+版本图纸替换，未被图号图纸覆盖"));
+                continue;
+            }
+            replaceTargets.add(item);
+        }
+        if (replaceTargets.isEmpty()) {
+            return;
+        }
+
+        String orderNo = firstNonBlank(order.getSalesOrderNo(), order.getDocumentNo(), String.valueOf(order.getId()));
+        BusinessFileService.StoredBusinessFile storedFile = businessFileService.saveSalesOrderImportDrawing(
+                order.getCustomerName(),
+                orderNo,
+                drawing,
+                ACTION_DRAWING_REPLACE,
+                String.valueOf(order.getId())
+        );
+        for (SalesOrderItem item : replaceTargets) {
+            item.setDrawingUrl(storedFile.publicPath());
+            item.setHasDrawing(true);
+            if (salesOrderItemMapper.updateById(item) <= 0) {
+                throw new RuntimeException("销售订单图纸替换保存失败，请刷新后重试");
+            }
+            if (versionMatch) {
+                versionProtectedItemKeys.add(itemKey(item.getPartNo(), item.getVersion()));
+            }
+            replacedItems.add(buildSalesItemResult(item, cleanFileName, "已替换"));
+        }
+    }
+
     private Map<String, Object> supplementOrderDrawingFolder(
             SalesOrderHeader order,
             List<MultipartFile> drawingFolderFiles,
@@ -491,6 +688,89 @@ public class SalesOrderManageService {
         }
         log.info("Sales order drawing folder supplement completed salesOrderId={} folderFileCount={} boundCount={}",
                 order.getId(), drawingFolder.fileCount(), boundItems.size());
+        return result;
+    }
+
+    private Map<String, Object> replaceOrderDrawingFolder(
+            SalesOrderHeader order,
+            List<MultipartFile> drawingFolderFiles,
+            String drawingFolderName) {
+        BusinessFileService.DrawingFolderSaveResult drawingFolder = businessFileService.saveDrawingFolderFiles(
+                "SALES_ORDER",
+                String.valueOf(order.getId()),
+                drawingFolderName,
+                drawingFolderFiles,
+                ACTION_DRAWING_REPLACE + "_FOLDER",
+                String.valueOf(order.getId()));
+        order.setDrawingFolderUrl(drawingFolder.folderUrl());
+        order.setDrawingFolderName(drawingFolder.folderName());
+        order.setDrawingFolderFileCount(drawingFolder.fileCount());
+        SalesOrderHeader update = new SalesOrderHeader();
+        update.setId(order.getId());
+        update.setDrawingFolderUrl(drawingFolder.folderUrl());
+        update.setDrawingFolderName(drawingFolder.folderName());
+        update.setDrawingFolderFileCount(drawingFolder.fileCount());
+        update.setUpdatedAt(LocalDateTime.now());
+        if (salesOrderHeaderMapper.updateById(update) <= 0) {
+            throw new RuntimeException("销售订单图纸文件夹替换保存失败，请刷新后重试");
+        }
+
+        List<SalesOrderItem> items = listSalesOrderItems(order.getId());
+        List<Map<String, Object>> replacedItems = new ArrayList<>();
+        for (SalesOrderItem item : items) {
+            item.setDrawingUrl(drawingFolder.folderUrl());
+            item.setHasDrawing(true);
+            if (salesOrderItemMapper.updateById(item) <= 0) {
+                throw new RuntimeException("销售订单图纸文件夹替换绑定失败，请刷新后重试");
+            }
+            replacedItems.add(buildSalesItemResult(item, drawingFolder.folderName(), "已绑定文件夹"));
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("success", true);
+        result.put("message", "替换图纸文件夹处理完成，成功替换 " + replacedItems.size() + " 个零件。");
+        result.put("replacedCount", replacedItems.size());
+        result.put("boundCount", replacedItems.size());
+        result.put("alreadyBoundCount", 0);
+        result.put("unmatchedCount", 0);
+        result.put("skippedCount", 0);
+        result.put("replacedItems", replacedItems);
+        result.put("boundItems", replacedItems);
+        result.put("alreadyBoundItems", List.of());
+        result.put("unmatchedDrawings", List.of());
+        result.put("skippedFiles", List.of());
+        result.put("drawingFolderMode", true);
+        result.put("drawingFolderName", drawingFolder.folderName());
+        result.put("drawingFolderFileCount", drawingFolder.fileCount());
+
+        if (auditService != null && !replacedItems.isEmpty()) {
+            Map<String, Object> summary = new LinkedHashMap<>();
+            summary.put("salesOrderId", order.getId());
+            summary.put("salesOrderNo", firstNonBlank(order.getSalesOrderNo(), order.getDocumentNo()));
+            summary.put("uploadCount", drawingFolder.fileCount());
+            summary.put("uploadedDrawingCount", 0);
+            summary.put("versionUploadedDrawingCount", 0);
+            summary.put("replacedCount", replacedItems.size());
+            summary.put("boundCount", replacedItems.size());
+            summary.put("alreadyBoundCount", 0);
+            summary.put("unmatchedCount", 0);
+            summary.put("skippedCount", 0);
+            summary.put("drawingFolderMode", true);
+            summary.put("drawingFolderFileCount", drawingFolder.fileCount());
+            auditService.record(
+                    ACTION_DRAWING_REPLACE,
+                    "sales_order_header",
+                    order.getId(),
+                    null,
+                    summary,
+                    "MARKET",
+                    "SUCCESS",
+                    AuditService.labelForAction(ACTION_DRAWING_REPLACE),
+                    null
+            );
+        }
+        log.info("Sales order drawing folder replace completed salesOrderId={} folderFileCount={} replacedCount={}",
+                order.getId(), drawingFolder.fileCount(), replacedItems.size());
         return result;
     }
 
@@ -1171,6 +1451,33 @@ public class SalesOrderManageService {
         summary.put("versionUploadedDrawingCount", versionUploadedDrawingCount);
         summary.put("boundCount", boundItems.size());
         summary.put("alreadyBoundCount", alreadyBoundItems.size());
+        summary.put("unmatchedCount", unmatchedDrawings.size());
+        summary.put("skippedCount", skippedFiles.size());
+        summary.put("drawingMatchModes", Map.of(
+                "partNo", uploadedDrawingCount,
+                "partNoVersion", versionUploadedDrawingCount
+        ));
+        return summary;
+    }
+
+    private Map<String, Object> buildReplaceDrawingAuditSummary(
+            SalesOrderHeader order,
+            List<MultipartFile> drawings,
+            List<MultipartFile> versionDrawings,
+            List<Map<String, Object>> replacedItems,
+            List<Map<String, Object>> protectedSkippedItems,
+            List<Map<String, Object>> unmatchedDrawings,
+            List<Map<String, Object>> skippedFiles) {
+        int uploadedDrawingCount = fileCount(drawings);
+        int versionUploadedDrawingCount = fileCount(versionDrawings);
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("salesOrderId", order == null ? null : order.getId());
+        summary.put("salesOrderNo", order == null ? "" : firstNonBlank(order.getSalesOrderNo(), order.getDocumentNo()));
+        summary.put("uploadCount", uploadedDrawingCount + versionUploadedDrawingCount);
+        summary.put("uploadedDrawingCount", uploadedDrawingCount);
+        summary.put("versionUploadedDrawingCount", versionUploadedDrawingCount);
+        summary.put("replacedCount", replacedItems.size());
+        summary.put("alreadyBoundCount", protectedSkippedItems.size());
         summary.put("unmatchedCount", unmatchedDrawings.size());
         summary.put("skippedCount", skippedFiles.size());
         summary.put("drawingMatchModes", Map.of(

@@ -220,6 +220,7 @@ public class AuditService {
         if ("SALES_ORDER_DISCARD".equalsIgnoreCase(action)) return "MARKET";
         if ("SALES_ORDER_RESTORE".equalsIgnoreCase(action)) return "MARKET";
         if ("SALES_ORDER_DRAWING_SUPPLEMENT".equalsIgnoreCase(action)) return "MARKET";
+        if ("SALES_ORDER_DRAWING_REPLACE".equalsIgnoreCase(action)) return "MARKET";
         if ("SALES_ORDER_PRODUCTION_TASK_NOTICE_EXPORT".equalsIgnoreCase(action)) return "MARKET";
         if ("SALES_ORDER_APPEND_RELEASE".equalsIgnoreCase(action)) return "MARKET";
         if ("SALES_ORDER_ITEM_U9_CHANGE_EXCLUDE".equalsIgnoreCase(action)) return "MARKET";
@@ -337,6 +338,7 @@ public class AuditService {
             case "SALES_ORDER_DISCARD" -> "废弃销售订单";
             case "SALES_ORDER_RESTORE" -> "恢复销售订单";
             case "SALES_ORDER_DRAWING_SUPPLEMENT" -> "补传销售订单图纸";
+            case "SALES_ORDER_DRAWING_REPLACE" -> "替换销售订单图纸";
             case "SALES_ORDER_PRODUCTION_TASK_NOTICE_EXPORT" -> "导出生产任务通知单";
             case "SALES_ORDER_APPEND_RELEASE" -> "追加销售提单";
             case "SALES_ORDER_ITEM_U9_CHANGE_EXCLUDE" -> "销售订单零件排除U9与销售变更";
