@@ -95,6 +95,7 @@ public class SalesOrderProductionTaskNoticeExportService {
         QueryWrapper<SalesOrderItem> query = new QueryWrapper<>();
         query.eq("sales_order_id", salesOrderId)
                 .and(wrapper -> wrapper.ne("status", QuoteStatusWorkflow.DISCARDED).or().isNull("status"))
+                .and(wrapper -> wrapper.eq("u9_change_excluded", false).or().isNull("u9_change_excluded"))
                 .orderByAsc("line_no")
                 .orderByAsc("id");
         List<SalesOrderItem> items = salesOrderItemMapper.selectList(query);
@@ -103,6 +104,7 @@ public class SalesOrderProductionTaskNoticeExportService {
         }
         return items.stream()
                 .filter(item -> !QuoteStatusWorkflow.DISCARDED.equals(item.getStatus()))
+                .filter(item -> !Boolean.TRUE.equals(item.getU9ChangeExcluded()))
                 .sorted(Comparator
                         .comparing(SalesOrderItem::getLineNo, Comparator.nullsLast(Integer::compareTo))
                         .thenComparing(SalesOrderItem::getId, Comparator.nullsLast(Long::compareTo)))
