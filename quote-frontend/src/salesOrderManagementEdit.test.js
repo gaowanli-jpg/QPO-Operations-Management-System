@@ -44,6 +44,7 @@ describe('sales order management editable detail', () => {
     expect(itemPane).toContain('保存修改')
     expect(itemPane).toContain('SalesOrderItemDataReplacementDialog')
     expect(itemPane).toContain('itemDrafts[row.id]')
+    expect(itemPane).toContain('itemDrafts[row.id].version')
     expect(itemPane).toContain('itemDrafts[row.id].qty')
     expect(itemPane).toContain('itemDrafts[row.id].untaxedUnitPrice')
     expect(itemPane).toContain('itemDrafts[row.id].taxIncludedUnitPrice')
@@ -52,7 +53,10 @@ describe('sales order management editable detail', () => {
     expect(itemPane).toContain('itemDrafts[row.id].customerOrderNo')
     expect(itemPane).toContain('itemDrafts[row.id].customerProjectNo')
     expect(itemPane).toContain('itemDrafts[row.id].internalProjectNo')
+    expect(itemPane).toContain('itemDrafts[row.id].materialName')
+    expect(itemPane).toContain('itemDrafts[row.id].surfaceTreatment')
     expect(itemPane).toContain('itemDrafts[row.id].remark')
+    expect(component).toContain("'version'")
     expect(component).toContain("'qty'")
     expect(component).toContain("'untaxedUnitPrice'")
     expect(component).toContain("'taxIncludedUnitPrice'")
@@ -61,6 +65,8 @@ describe('sales order management editable detail', () => {
     expect(component).toContain("'customerOrderNo'")
     expect(component).toContain("'customerProjectNo'")
     expect(component).toContain("'internalProjectNo'")
+    expect(component).toContain("'materialName'")
+    expect(component).toContain("'surfaceTreatment'")
     expect(component).toContain("'remark'")
     expect(component).toContain('saveSalesOrderItemChanges')
     expect(component).toContain('openSalesOrderItemDataReplacementDialog')
@@ -75,6 +81,14 @@ describe('sales order management editable detail', () => {
     expect(component).toContain("const SALES_ORDER_EDIT_LOCKED_U9_STATUSES = ['同步中', '结果待确认', '已同步']")
     expect(component).toContain('当前 U9 状态不允许修改销售订单')
     expect(component).toContain(':disabled="salesOrderEditLocked"')
+  })
+
+  test('sales order item data replacement advertises material and surface treatment without replacing version', () => {
+    const replacementDialog = replacementDialogSource()
+
+    expect(replacementDialog).toContain('材料')
+    expect(replacementDialog).toContain('表面处理')
+    expect(replacementDialog).not.toContain('版本可替换')
   })
 
   test('order api exposes sales order management maintenance endpoints without using u9 sync paths', () => {

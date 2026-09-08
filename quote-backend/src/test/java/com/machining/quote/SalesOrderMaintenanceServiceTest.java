@@ -10,6 +10,7 @@ import com.machining.quote.dto.SalesOrderItemUpdateReq;
 import com.machining.quote.dto.SalesOrderMaintenanceOrderUpdateReq;
 import com.machining.quote.dto.SalesOrderMaintenanceUpdateResp;
 import com.machining.quote.dto.SalesOrderU9ItemDataReplacementPreviewDTO;
+import com.machining.quote.dto.SalesOrderU9ItemDataReplacementRowStatus;
 import com.machining.quote.entity.SalesOrderHeader;
 import com.machining.quote.entity.SalesOrderItem;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
@@ -144,6 +145,9 @@ class SalesOrderMaintenanceServiceTest {
         line.setSalesOrderItemId(item.getId());
         line.setQty(3);
         line.setUntaxedUnitPrice(new BigDecimal("200.00"));
+        line.setVersion(" B ");
+        line.setMaterialName(" 6061-T6 ");
+        line.setSurfaceTreatment(" Anodized ");
         line.setCustomerDeliveryDate(LocalDate.of(2026, 10, 1));
         line.setInternalDeliveryDate(LocalDate.of(2026, 9, 25));
         line.setCustomerOrderNo(" PO-ITEM ");
@@ -159,6 +163,9 @@ class SalesOrderMaintenanceServiceTest {
         assertThat(result.getChangedFields()).containsExactlyInAnyOrder(
                 "qty",
                 "untaxedUnitPrice",
+                "version",
+                "materialName",
+                "surfaceTreatment",
                 "customerDeliveryDate",
                 "internalDeliveryDate",
                 "customerOrderNo",
@@ -168,6 +175,9 @@ class SalesOrderMaintenanceServiceTest {
         assertThat(item.getQty()).isEqualTo(3);
         assertThat(item.getUntaxedUnitPrice()).isEqualByComparingTo("200.00");
         assertThat(item.getTaxIncludedUnitPrice()).isEqualByComparingTo("113.00");
+        assertThat(item.getVersion()).isEqualTo("B");
+        assertThat(item.getMaterialName()).isEqualTo("6061-T6");
+        assertThat(item.getSurfaceTreatment()).isEqualTo("Anodized");
         assertThat(item.getUntaxedTotalPrice()).isEqualByComparingTo("600.00");
         assertThat(item.getTaxIncludedTotalPrice()).isEqualByComparingTo("339.00");
         assertThat(item.getRemainingQty()).isEqualTo(2);
@@ -278,6 +288,101 @@ class SalesOrderMaintenanceServiceTest {
         assertThat(item.getTaxIncludedUnitPrice()).isEqualByComparingTo("150.00");
         verify(fixture.ticketMapper, never()).update(any(), any());
         verifyAudit(fixture.auditService, "SALES_ORDER_ITEM_DATA_REPLACEMENT", header.getId());
+    }
+
+    @Test
+    void dataReplacementUpdatesMaterialNameAndSurfaceTreatment() throws Exception {
+        Fixture fixture = fixture();
+        SalesOrderHeader header = header(16L, "NOT_SYNCED");
+        SalesOrderItem item = item(401L, 16L);
+        item.setMaterialName("old material");
+        item.setSurfaceTreatment("old surface");
+        fixture.withOrder(header, List.of(item));
+        byte[] excel = excel(
+                List.of("图号", "版本", "行号", "材料名称", "表面处理"),
+                List.of(item.getPartNo(), item.getVersion(), item.getLineNo(), "new material", "new surface"));
+
+        SalesOrderU9ItemDataReplacementPreviewDTO preview = fixture.replacementService.preview(
+                header.getId(), new ByteArrayInputStream(excel));
+        SalesOrderItemDataReplacementConfirmResp result = fixture.replacementService.confirm(
+                header.getId(), new ByteArrayInputStream(excel), preview.getPreviewFingerprint());
+
+        assertThat(preview.getRecognizedFields()).contains("materialName", "surfaceTreatment");
+        assertThat(result.getUpdatedCount()).isEqualTo(1);
+        assertThat(result.getChangedFields()).containsExactlyInAnyOrder("materialName", "surfaceTreatment");
+        assertThat(item.getMaterialName()).isEqualTo("new material");
+        assertThat(item.getSurfaceTreatment()).isEqualTo("new surface");
+    }
+
+    @Test
+    void dataReplacementAppliesOneExcelRowToAllItemsWithSamePartAndVersionWhenLineNoIsBlank() throws Exception {
+        Fixture fixture = fixture();
+        SalesOrderHeader header = header(17L, "NOT_SYNCED");
+        SalesOrderItem first = item(501L, 17L);
+        first.setLineNo(10);
+        first.setMaterialName("old first");
+        first.setSurfaceTreatment("old first surface");
+        SalesOrderItem second = item(502L, 17L);
+        second.setLineNo(20);
+        second.setPartNo(first.getPartNo());
+        second.setVersion(first.getVersion());
+        second.setMaterialName("old second");
+        second.setSurfaceTreatment("old second surface");
+        fixture.withOrder(header, List.of(first, second));
+        byte[] excel = excel(
+                List.of("图号", "版本", "材料", "表面处理"),
+                List.of(first.getPartNo(), first.getVersion(), "shared material", "shared surface"));
+
+        SalesOrderU9ItemDataReplacementPreviewDTO preview = fixture.replacementService.preview(
+                header.getId(), new ByteArrayInputStream(excel));
+
+        assertThat(preview.getSummary().getImportedCount()).isEqualTo(1);
+        assertThat(preview.getSummary().getMatchedCount()).isEqualTo(2);
+        assertThat(preview.getSummary().getChangedCount()).isEqualTo(2);
+        assertThat(preview.getSummary().getErrorCount()).isZero();
+        assertThat(preview.getRows()).hasSize(2);
+        assertThat(preview.getRows()).extracting("salesOrderItemId").containsExactly(501L, 502L);
+        assertThat(preview.getRows()).extracting("status").containsOnly(SalesOrderU9ItemDataReplacementRowStatus.CHANGED);
+
+        SalesOrderItemDataReplacementConfirmResp result = fixture.replacementService.confirm(
+                header.getId(), new ByteArrayInputStream(excel), preview.getPreviewFingerprint());
+
+        assertThat(result.getUpdatedCount()).isEqualTo(2);
+        assertThat(result.getSummary().getImportedCount()).isEqualTo(1);
+        assertThat(result.getChangedFields()).containsExactlyInAnyOrder("materialName", "surfaceTreatment");
+        assertThat(first.getMaterialName()).isEqualTo("shared material");
+        assertThat(first.getSurfaceTreatment()).isEqualTo("shared surface");
+        assertThat(second.getMaterialName()).isEqualTo("shared material");
+        assertThat(second.getSurfaceTreatment()).isEqualTo("shared surface");
+    }
+
+    @Test
+    void dataReplacementLineNoNarrowsSamePartAndVersionMatchesToOneSalesOrderItem() throws Exception {
+        Fixture fixture = fixture();
+        SalesOrderHeader header = header(18L, "NOT_SYNCED");
+        SalesOrderItem first = item(601L, 18L);
+        first.setLineNo(10);
+        first.setMaterialName("first material");
+        SalesOrderItem second = item(602L, 18L);
+        second.setLineNo(20);
+        second.setPartNo(first.getPartNo());
+        second.setVersion(first.getVersion());
+        second.setMaterialName("second material");
+        fixture.withOrder(header, List.of(first, second));
+        byte[] excel = excel(
+                List.of("图号", "版本", "行号", "材料"),
+                List.of(first.getPartNo(), first.getVersion(), second.getLineNo(), "line material"));
+
+        SalesOrderU9ItemDataReplacementPreviewDTO preview = fixture.replacementService.preview(
+                header.getId(), new ByteArrayInputStream(excel));
+        SalesOrderItemDataReplacementConfirmResp result = fixture.replacementService.confirm(
+                header.getId(), new ByteArrayInputStream(excel), preview.getPreviewFingerprint());
+
+        assertThat(preview.getRows()).hasSize(1);
+        assertThat(preview.getRows().get(0).getSalesOrderItemId()).isEqualTo(second.getId());
+        assertThat(result.getUpdatedCount()).isEqualTo(1);
+        assertThat(first.getMaterialName()).isEqualTo("first material");
+        assertThat(second.getMaterialName()).isEqualTo("line material");
     }
 
     @Test

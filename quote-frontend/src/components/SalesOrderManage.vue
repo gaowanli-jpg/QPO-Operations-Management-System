@@ -280,7 +280,19 @@
             <el-table :data="detailItemList" border stripe height="380" v-loading="detailItemsLoading">
               <el-table-column prop="partNo" label="图号" min-width="150" fixed show-overflow-tooltip />
               <el-table-column prop="lineNo" label="行号" width="80" align="center" />
-              <el-table-column prop="version" label="版本" width="80" align="center" />
+              <el-table-column prop="version" label="版本" width="110" align="center">
+                <template #default="{ row }">
+                  <el-input
+                    v-if="itemDrafts[row.id]"
+                    v-model="itemDrafts[row.id].version"
+                    class="item-edit-input"
+                    clearable
+                    :disabled="salesOrderEditLocked"
+                    placeholder="版本"
+                  />
+                  <span v-else>{{ row.version || '-' }}</span>
+                </template>
+              </el-table-column>
               <el-table-column prop="materialNo" label="物料号" min-width="130" show-overflow-tooltip />
               <el-table-column prop="materialNoStatus" label="物料号状态" width="120" show-overflow-tooltip />
               <el-table-column prop="matchStatus" label="匹配状态" width="120" align="center" show-overflow-tooltip>
@@ -415,8 +427,32 @@
                   <span v-else>{{ row.internalDeliveryDate || '-' }}</span>
                 </template>
               </el-table-column>
-              <el-table-column prop="materialName" label="材料" min-width="130" show-overflow-tooltip />
-              <el-table-column prop="surfaceTreatment" label="表面处理" min-width="130" show-overflow-tooltip />
+              <el-table-column prop="materialName" label="材料" min-width="160" show-overflow-tooltip>
+                <template #default="{ row }">
+                  <el-input
+                    v-if="itemDrafts[row.id]"
+                    v-model="itemDrafts[row.id].materialName"
+                    class="item-edit-input"
+                    clearable
+                    :disabled="salesOrderEditLocked"
+                    placeholder="材料"
+                  />
+                  <span v-else>{{ row.materialName || '-' }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column prop="surfaceTreatment" label="表面处理" min-width="160" show-overflow-tooltip>
+                <template #default="{ row }">
+                  <el-input
+                    v-if="itemDrafts[row.id]"
+                    v-model="itemDrafts[row.id].surfaceTreatment"
+                    class="item-edit-input"
+                    clearable
+                    :disabled="salesOrderEditLocked"
+                    placeholder="表面处理"
+                  />
+                  <span v-else>{{ row.surfaceTreatment || '-' }}</span>
+                </template>
+              </el-table-column>
               <el-table-column label="未税单价" width="110" align="right">
                 <template #default="{ row }">
                   <el-input
@@ -615,6 +651,7 @@ const SALES_ORDER_HEADER_EDITABLE_FIELDS = [
   'internalProjectNo'
 ]
 const SALES_ORDER_ITEM_EDITABLE_FIELDS = [
+  'version',
   'qty',
   'untaxedUnitPrice',
   'taxIncludedUnitPrice',
@@ -623,6 +660,8 @@ const SALES_ORDER_ITEM_EDITABLE_FIELDS = [
   'customerOrderNo',
   'customerProjectNo',
   'internalProjectNo',
+  'materialName',
+  'surfaceTreatment',
   'remark'
 ]
 const SALES_ORDER_STATUS_ACTIONS = [
@@ -998,6 +1037,7 @@ const resetItemDrafts = (rows = []) => {
 }
 
 const buildItemDraft = (row = {}) => ({
+  version: draftValue(row.version),
   qty: row.qty ?? null,
   untaxedUnitPrice: draftValue(row.untaxedUnitPrice),
   taxIncludedUnitPrice: draftValue(row.taxIncludedUnitPrice),
@@ -1006,6 +1046,8 @@ const buildItemDraft = (row = {}) => ({
   customerOrderNo: draftValue(row.customerOrderNo),
   customerProjectNo: draftValue(row.customerProjectNo),
   internalProjectNo: draftValue(row.internalProjectNo),
+  materialName: draftValue(row.materialName),
+  surfaceTreatment: draftValue(row.surfaceTreatment),
   remark: draftValue(row.remark)
 })
 

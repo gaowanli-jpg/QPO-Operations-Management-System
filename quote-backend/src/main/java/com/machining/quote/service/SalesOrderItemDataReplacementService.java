@@ -115,21 +115,21 @@ public class SalesOrderItemDataReplacementService {
         boolean locked = isLocked(header);
         List<SalesOrderU9ItemDataReplacementRowDTO> rows = new ArrayList<>();
         for (SalesOrderU9ItemDataReplacementExcelRowDTO excelRow : safeList(parsed.getRows())) {
-            rows.add(previewRow(excelRow, candidatesByKey, locked, header.getU9SyncStatus()));
+            rows.addAll(previewRows(excelRow, candidatesByKey, locked, header.getU9SyncStatus()));
         }
 
         SalesOrderU9ItemDataReplacementPreviewDTO preview = new SalesOrderU9ItemDataReplacementPreviewDTO();
         preview.setSuccess(true);
         preview.setRecognizedFields(new ArrayList<>(safeList(parsed.getRecognizedFields())));
         preview.setRows(rows);
-        preview.setSummary(summarize(rows));
+        preview.setSummary(summarize(rows, safeList(parsed.getRows()).size()));
         preview.setCanConfirm(preview.getSummary().getErrorCount() == 0
                 && preview.getSummary().getChangedCount() > 0);
         preview.setPreviewFingerprint(fingerprint(header, parsed, rows, items));
         return preview;
     }
 
-    private SalesOrderU9ItemDataReplacementRowDTO previewRow(
+    private List<SalesOrderU9ItemDataReplacementRowDTO> previewRows(
             SalesOrderU9ItemDataReplacementExcelRowDTO excelRow,
             Map<ItemKey, List<SalesOrderItem>> candidatesByKey,
             boolean locked,
@@ -141,7 +141,7 @@ public class SalesOrderItemDataReplacementService {
                     .map(SalesOrderU9ItemDataReplacementExcelErrorDTO::getMessage)
                     .filter(Objects::nonNull)
                     .collect(Collectors.joining("；")));
-            return row;
+            return List.of(row);
         }
         List<SalesOrderItem> candidates = candidatesByKey.getOrDefault(
                 new ItemKey(excelRow.getNormalizedPartNo(), excelRow.getNormalizedVersion()),
@@ -154,14 +154,21 @@ public class SalesOrderItemDataReplacementService {
         if (candidates.isEmpty()) {
             row.setStatus(SalesOrderU9ItemDataReplacementRowStatus.UNMATCHED);
             row.setReason("当前销售订单内未找到对应零件");
-            return row;
+            return List.of(row);
         }
-        if (candidates.size() > 1) {
-            row.setStatus(SalesOrderU9ItemDataReplacementRowStatus.ERROR);
-            row.setReason("当前销售订单内存在多个相同图号和版本的零件，请提供行号");
-            return row;
+        List<SalesOrderU9ItemDataReplacementRowDTO> rows = new ArrayList<>();
+        for (SalesOrderItem item : candidates) {
+            rows.add(previewMatchedRow(excelRow, item, locked, u9SyncStatus));
         }
-        SalesOrderItem item = candidates.get(0);
+        return rows;
+    }
+
+    private SalesOrderU9ItemDataReplacementRowDTO previewMatchedRow(
+            SalesOrderU9ItemDataReplacementExcelRowDTO excelRow,
+            SalesOrderItem item,
+            boolean locked,
+            String u9SyncStatus) {
+        SalesOrderU9ItemDataReplacementRowDTO row = baseRow(excelRow);
         row.setSalesOrderItemId(item.getId());
         row.setLineNo(item.getLineNo());
         if (locked) {
@@ -242,6 +249,8 @@ public class SalesOrderItemDataReplacementService {
             case "internalDeliveryDate" -> line.setInternalDeliveryDate((LocalDate) value);
             case "untaxedUnitPrice" -> line.setUntaxedUnitPrice((BigDecimal) value);
             case "taxIncludedUnitPrice" -> line.setTaxIncludedUnitPrice((BigDecimal) value);
+            case "materialName" -> line.setMaterialName(stringValue(value));
+            case "surfaceTreatment" -> line.setSurfaceTreatment(stringValue(value));
             case "customerOrderNo" -> line.setCustomerOrderNo(stringValue(value));
             case "customerProjectNo" -> line.setCustomerProjectNo(stringValue(value));
             case "internalProjectNo" -> line.setInternalProjectNo(stringValue(value));
@@ -296,6 +305,8 @@ public class SalesOrderItemDataReplacementService {
             case INTERNAL_DELIVERY_DATE -> item.getInternalDeliveryDate();
             case UNTAXED_UNIT_PRICE -> item.getUntaxedUnitPrice();
             case TAX_INCLUDED_UNIT_PRICE -> item.getTaxIncludedUnitPrice();
+            case MATERIAL_NAME -> item.getMaterialName();
+            case SURFACE_TREATMENT -> item.getSurfaceTreatment();
             case CUSTOMER_ORDER_NO -> item.getCustomerOrderNo();
             case CUSTOMER_PROJECT_NO -> item.getCustomerProjectNo();
             case INTERNAL_PROJECT_NO -> item.getInternalProjectNo();
@@ -304,9 +315,11 @@ public class SalesOrderItemDataReplacementService {
         };
     }
 
-    private SalesOrderU9ItemDataReplacementSummaryDTO summarize(List<SalesOrderU9ItemDataReplacementRowDTO> rows) {
+    private SalesOrderU9ItemDataReplacementSummaryDTO summarize(
+            List<SalesOrderU9ItemDataReplacementRowDTO> rows,
+            int importedCount) {
         SalesOrderU9ItemDataReplacementSummaryDTO summary = new SalesOrderU9ItemDataReplacementSummaryDTO();
-        summary.setImportedCount(rows.size());
+        summary.setImportedCount(importedCount);
         for (SalesOrderU9ItemDataReplacementRowDTO row : rows) {
             if (row.getSalesOrderItemId() != null) {
                 summary.setMatchedCount(summary.getMatchedCount() + 1);

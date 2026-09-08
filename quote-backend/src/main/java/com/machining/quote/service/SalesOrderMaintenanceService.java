@@ -37,7 +37,9 @@ public class SalesOrderMaintenanceService {
     static final String STATUS_SYNCED = "已同步";
 
     private static final Set<String> ORDER_TYPES = Set.of("预测订单", "备货订单", "正式订单");
+    private static final int TEXT_50 = 50;
     private static final int TEXT_120 = 120;
+    private static final int TEXT_255 = 255;
     private static final int TEXT_200 = 200;
     private static final int TEXT_500 = 500;
 
@@ -161,6 +163,12 @@ public class SalesOrderMaintenanceService {
                 changed.add(SalesOrderItemUpdateLineReq.FIELD_TAX_INCLUDED_UNIT_PRICE);
             }
         }
+        applyText(item.getVersion(), line.getVersion(), TEXT_50,
+                SalesOrderItemUpdateLineReq.FIELD_VERSION, changed, line, item::setVersion);
+        applyText(item.getMaterialName(), line.getMaterialName(), TEXT_255,
+                SalesOrderItemUpdateLineReq.FIELD_MATERIAL_NAME, changed, line, item::setMaterialName);
+        applyText(item.getSurfaceTreatment(), line.getSurfaceTreatment(), TEXT_255,
+                SalesOrderItemUpdateLineReq.FIELD_SURFACE_TREATMENT, changed, line, item::setSurfaceTreatment);
         applyText(item.getCustomerOrderNo(), line.getCustomerOrderNo(), TEXT_120,
                 SalesOrderItemUpdateLineReq.FIELD_CUSTOMER_ORDER_NO, changed, line, item::setCustomerOrderNo);
         applyText(item.getCustomerProjectNo(), line.getCustomerProjectNo(), TEXT_120,
@@ -432,6 +440,9 @@ public class SalesOrderMaintenanceService {
                 .set("internal_delivery_date", item.getInternalDeliveryDate())
                 .set("untaxed_unit_price", item.getUntaxedUnitPrice())
                 .set("tax_included_unit_price", item.getTaxIncludedUnitPrice())
+                .set("version", item.getVersion())
+                .set("material_name", item.getMaterialName())
+                .set("surface_treatment", item.getSurfaceTreatment())
                 .set("customer_order_no", item.getCustomerOrderNo())
                 .set("customer_project_no", item.getCustomerProjectNo())
                 .set("internal_project_no", item.getInternalProjectNo())
@@ -554,6 +565,15 @@ public class SalesOrderMaintenanceService {
         }
         if (SalesOrderMaintenanceOrderUpdateReq.FIELD_CUSTOMER_ORDER_TITLE.equals(field)) {
             return "客户下单抬头";
+        }
+        if (SalesOrderItemUpdateLineReq.FIELD_VERSION.equals(field)) {
+            return "版本";
+        }
+        if (SalesOrderItemUpdateLineReq.FIELD_MATERIAL_NAME.equals(field)) {
+            return "材料";
+        }
+        if (SalesOrderItemUpdateLineReq.FIELD_SURFACE_TREATMENT.equals(field)) {
+            return "表面处理";
         }
         if (SalesOrderItemUpdateLineReq.FIELD_CUSTOMER_ORDER_NO.equals(field)) {
             return "客户订单号";

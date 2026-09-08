@@ -136,7 +136,16 @@ describe('orderApi', () => {
 
   test('exposes sales order management maintenance endpoints', async () => {
     const payload = { customerOrderNo: 'PO-100' }
-    const itemPayload = { items: [{ salesOrderItemId: 21, qty: 3, untaxedUnitPrice: '12.50' }] }
+    const itemPayload = {
+      items: [{
+        salesOrderItemId: 21,
+        version: 'B',
+        qty: 3,
+        untaxedUnitPrice: '12.50',
+        materialName: '6061-T6',
+        surfaceTreatment: 'Anodized'
+      }]
+    }
     const formData = new FormData()
 
     await orderApi.saveSalesOrderHeader(901, payload)

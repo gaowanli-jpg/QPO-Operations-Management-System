@@ -12,6 +12,9 @@ public class SalesOrderItemUpdateLineReq {
     public static final String FIELD_INTERNAL_DELIVERY_DATE = "internalDeliveryDate";
     public static final String FIELD_UNTAXED_UNIT_PRICE = "untaxedUnitPrice";
     public static final String FIELD_TAX_INCLUDED_UNIT_PRICE = "taxIncludedUnitPrice";
+    public static final String FIELD_VERSION = "version";
+    public static final String FIELD_MATERIAL_NAME = "materialName";
+    public static final String FIELD_SURFACE_TREATMENT = "surfaceTreatment";
     public static final String FIELD_CUSTOMER_ORDER_NO = "customerOrderNo";
     public static final String FIELD_CUSTOMER_PROJECT_NO = "customerProjectNo";
     public static final String FIELD_INTERNAL_PROJECT_NO = "internalProjectNo";
@@ -23,6 +26,9 @@ public class SalesOrderItemUpdateLineReq {
     private LocalDate internalDeliveryDate;
     private BigDecimal untaxedUnitPrice;
     private BigDecimal taxIncludedUnitPrice;
+    private String version;
+    private String materialName;
+    private String surfaceTreatment;
     private String customerOrderNo;
     private String customerProjectNo;
     private String internalProjectNo;
@@ -80,6 +86,33 @@ public class SalesOrderItemUpdateLineReq {
     public void setTaxIncludedUnitPrice(BigDecimal taxIncludedUnitPrice) {
         this.taxIncludedUnitPrice = taxIncludedUnitPrice;
         providedFields.add(FIELD_TAX_INCLUDED_UNIT_PRICE);
+    }
+
+    public String getVersion() {
+        return version;
+    }
+
+    public void setVersion(String version) {
+        this.version = version;
+        providedFields.add(FIELD_VERSION);
+    }
+
+    public String getMaterialName() {
+        return materialName;
+    }
+
+    public void setMaterialName(String materialName) {
+        this.materialName = materialName;
+        providedFields.add(FIELD_MATERIAL_NAME);
+    }
+
+    public String getSurfaceTreatment() {
+        return surfaceTreatment;
+    }
+
+    public void setSurfaceTreatment(String surfaceTreatment) {
+        this.surfaceTreatment = surfaceTreatment;
+        providedFields.add(FIELD_SURFACE_TREATMENT);
     }
 
     public String getCustomerOrderNo() {
