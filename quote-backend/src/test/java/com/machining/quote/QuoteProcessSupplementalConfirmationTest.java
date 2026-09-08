@@ -121,6 +121,24 @@ class QuoteProcessSupplementalConfirmationTest extends CoreWorkflowIntegrationTe
     }
 
     @Test
+    void supplementalQuoteSaveAllowsMissingInquiryAndQuoteLeadTimes() {
+        String customerName = "补充报价无交期客户-" + System.nanoTime();
+        OrderRfq order = createOrder(customerName, "SUP-QP-NO-LT", QuoteStatusWorkflow.QUOTED);
+        ItemQuoteVersion supplemental = createQuoteItem(order, "SUP-QP-NO-LT-P", QuoteStatusWorkflow.PRICED, true, 22.0);
+        supplemental.setLeadTime(null);
+        supplemental.setQuoteLeadTime(null);
+        itemMapper.updateById(supplemental);
+
+        Map<String, Object> result = quoteProcessService.saveSupplementalQuoteSheet(order.getId());
+
+        assertThat(result)
+                .containsEntry("success", true)
+                .containsEntry("supplemental", true)
+                .containsEntry("orderStatusAfter", QuoteStatusWorkflow.QUOTED);
+        assertThat(itemMapper.selectById(supplemental.getId()).getStatus()).isEqualTo(QuoteStatusWorkflow.QUOTED);
+    }
+
+    @Test
     void supplementalQuoteLeadTimeCannotModifyHistoricalRows() {
         String customerName = "补充报价锁定客户-" + System.nanoTime();
         OrderRfq order = createOrder(customerName, "SUP-QP-LOCK", QuoteStatusWorkflow.RELEASED);

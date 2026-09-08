@@ -419,16 +419,7 @@ public class QuoteProcessService {
                 throw new RuntimeException("订单存在未核价零件，不能保存报价单：" + String.join("、", unpricedItems));
             }
 
-            List<String> missingLeadTimes = items.stream()
-                    .filter(item -> !QuoteStatusWorkflow.DISCARDED.equals(item.getStatus()))
-                    .filter(item -> isBlank(leadTimeService.effectiveLeadTime(item)))
-                    .map(this::itemLabel)
-                    .toList();
-            if (!missingLeadTimes.isEmpty()) {
-                throw new RuntimeException("以下零件缺少报价交期，不能保存报价单：" + String.join("、", missingLeadTimes));
-            }
-
-            Map<String, Object> before = quoteSheetSummary(order, items, missingLeadTimes.size(), 0);
+            Map<String, Object> before = quoteSheetSummary(order, items, 0, 0);
             order.setStatus(QuoteStatusWorkflow.nextAfterMarketSaveQuote(order.getStatus()));
             orderRfqMapper.updateById(order);
             int itemStatusUpdatedCount = markPricedItemsAsQuoted(items);
@@ -481,16 +472,7 @@ public class QuoteProcessService {
                 throw new RuntimeException("没有补充报价待确认零件，不能保存补充报价单");
             }
 
-            List<String> missingLeadTimes = items.stream()
-                    .filter(item -> !QuoteStatusWorkflow.DISCARDED.equals(item.getStatus()))
-                    .filter(item -> isBlank(leadTimeService.effectiveLeadTime(item)))
-                    .map(this::itemLabel)
-                    .toList();
-            if (!missingLeadTimes.isEmpty()) {
-                throw new RuntimeException("以下补图零件缺少报价交期，不能保存补充报价单：" + String.join("、", missingLeadTimes));
-            }
-
-            Map<String, Object> before = supplementalQuoteSheetSummary(order, items, missingLeadTimes.size(), 0);
+            Map<String, Object> before = supplementalQuoteSheetSummary(order, items, 0, 0);
             int itemStatusUpdatedCount = markSupplementalItemsAsQuoted(items);
             OrderRfq savedOrder = QuoteStatusWorkflow.isReleasedOrderStatus(order.getStatus())
                     ? refreshReleasedOrderStatus(order.getId())

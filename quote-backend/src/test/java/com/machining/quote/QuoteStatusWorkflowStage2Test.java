@@ -130,7 +130,7 @@ class QuoteStatusWorkflowStage2Test {
     }
 
     @Test
-    void saveQuoteSheetRequiresPricedOrderAndCompleteQuoteLeadTimes() {
+    void saveQuoteSheetRequiresPricedOrderAndAllowsMissingLeadTimes() {
         OrderRfq unpricedOrder = createOrder(QuoteStatusWorkflow.UNPRICED);
         createQuotedItem(unpricedOrder, "S2-B", "2026-03-20");
         assertThatThrownBy(() -> quoteProcessService.saveQuoteSheet(unpricedOrder.getId()))
@@ -141,9 +141,11 @@ class QuoteStatusWorkflowStage2Test {
         ItemQuoteVersion missingLeadTimeItem = createQuotedItem(pricedOrder, "S2-C", null);
         missingLeadTimeItem.setLeadTime(null);
         itemMapper.updateById(missingLeadTimeItem);
-        assertThatThrownBy(() -> quoteProcessService.saveQuoteSheet(pricedOrder.getId()))
-                .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("报价交期");
+        Map<String, Object> result = quoteProcessService.saveQuoteSheet(pricedOrder.getId());
+
+        assertThat(result).containsEntry("success", true);
+        assertThat(orderMapper.selectById(pricedOrder.getId()).getStatus()).isEqualTo(QuoteStatusWorkflow.QUOTED);
+        assertThat(itemMapper.selectById(missingLeadTimeItem.getId()).getStatus()).isEqualTo(QuoteStatusWorkflow.QUOTED);
     }
 
     @Test
