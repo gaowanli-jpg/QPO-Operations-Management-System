@@ -108,8 +108,8 @@ class RfqReleaseSalesOrderIntegrationTest {
         assertThat(result.getDocumentNo()).isEqualTo(result.getSalesOrderNo());
         assertThat(result.getSourceRfqIds()).containsExactly(firstOrder.getId(), secondOrder.getId());
         assertThat(result.getTicketCount()).isEqualTo(3);
-        assertThat(result.getConfirmedMaterialCount()).isEqualTo(1);
-        assertThat(result.getPendingMaterialCount()).isEqualTo(2);
+        assertThat(result.getConfirmedMaterialCount()).isZero();
+        assertThat(result.getPendingMaterialCount()).isEqualTo(3);
 
         SalesOrderHeader header = headerMapper.selectById(result.getSalesOrderId());
         assertThat(header.getDocumentNo()).isEqualTo(header.getSalesOrderNo());
@@ -160,9 +160,9 @@ class RfqReleaseSalesOrderIntegrationTest {
         assertThat(parentSalesItem.getCustomerOrderTitle()).isEqualTo("ITEM-TITLE");
         assertThat(parentSalesItem.getOrderType()).isEqualTo("备货订单");
         assertThat(parentSalesItem.getInternalProjectNo()).isEqualTo("ITEM-INTERNAL");
-        assertThat(parentSalesItem.getMaterialNo()).isEqualTo("MES-STAGE4-001");
-        assertThat(parentSalesItem.getMaterialNoStatus()).isEqualTo("已确认");
-        assertThat(parentSalesItem.getMaterialNoSource()).isEqualTo("MES");
+        assertThat(parentSalesItem.getMaterialNo()).isNull();
+        assertThat(parentSalesItem.getMaterialNoStatus()).isEqualTo("未确认");
+        assertThat(parentSalesItem.getMaterialNoSource()).isNull();
         assertThat(parentSalesItem.getTaxIncludedTotalPrice()).isEqualByComparingTo("24.00");
         assertStandardProcessRoute(parentSalesItem.getProcessRoute());
 
@@ -195,8 +195,8 @@ class RfqReleaseSalesOrderIntegrationTest {
         assertThat(parentTicket.getCustomerProjectNo()).isEqualTo("ITEM-CUSTOMER-PROJECT");
         assertThat(parentTicket.getOrderType()).isEqualTo("备货订单");
         assertThat(parentTicket.getInternalProjectNo()).isEqualTo("ITEM-INTERNAL");
-        assertThat(parentTicket.getMaterialNo()).isEqualTo("MES-STAGE4-001");
-        assertThat(parentTicket.getMesSyncStatus()).isEqualTo("SUCCESS");
+        assertThat(parentTicket.getMaterialNo()).isNull();
+        assertThat(parentTicket.getMesSyncStatus()).isEqualTo("PENDING");
         assertThat(parentTicket.getProcessRoute()).isEqualTo(parentSalesItem.getProcessRoute());
         assertStandardProcessRoute(parentTicket.getProcessRoute());
         assertThat(ticketBySource.get(child.getId().longValue()).getMesSyncStatus()).isEqualTo("PENDING");

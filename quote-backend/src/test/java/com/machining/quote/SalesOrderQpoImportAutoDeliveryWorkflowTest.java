@@ -448,7 +448,7 @@ class SalesOrderQpoImportAutoDeliveryWorkflowTest extends SalesOrderQpoImportTes
         assertThat(matchedItem.getProcessRoute()).isEqualTo(releasedSource.getProcessRoute()).isNotSameAs(releasedSource.getProcessRoute());
         assertThat(matchedItem.getFeeData()).isEqualTo(releasedSource.getFeeData()).isNotSameAs(releasedSource.getFeeData());
         assertThat(matchedItem.getMatchStatus()).isEqualTo("已匹配");
-        assertThat(matchedItem.getMaterialNo()).isEqualTo("MAT-HIST-001");
+        assertThat(matchedItem.getMaterialNo()).isNull();
         assertThat(matchedItem.getStatus()).isEqualTo(QuoteStatusWorkflow.RELEASED);
 
         OrderDeliveryTicket matchedTicket = insertedTickets.stream()
@@ -464,7 +464,7 @@ class SalesOrderQpoImportAutoDeliveryWorkflowTest extends SalesOrderQpoImportTes
         assertThat(matchedTicket.getDeliveryDate()).isEqualTo(LocalDate.of(2026, 9, 18));
         assertThat(matchedTicket.getMaterialData()).isEqualTo(matchedItem.getMaterialData()).isNotSameAs(matchedItem.getMaterialData());
         assertThat(matchedTicket.getProcessRoute()).isEqualTo(matchedItem.getProcessRoute()).isNotSameAs(matchedItem.getProcessRoute());
-        assertThat(matchedTicket.getMesSyncStatus()).isEqualTo("SUCCESS");
+        assertThat(matchedTicket.getMesSyncStatus()).isEqualTo("PENDING");
 
         OrderDeliveryTicket unmatchedTicket = insertedTickets.stream()
                 .filter(ticket -> "P-NO-HISTORY".equals(ticket.getPartNo()))

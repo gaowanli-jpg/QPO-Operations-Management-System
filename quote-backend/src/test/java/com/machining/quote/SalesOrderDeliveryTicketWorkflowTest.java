@@ -148,7 +148,7 @@ class SalesOrderDeliveryTicketWorkflowTest {
         assertThat(partialTicket.getItemId()).isNull();
         assertThat(partialTicket.getCustomerName()).isEqualTo("ACME");
         assertThat(partialTicket.getRfqNo()).isEqualTo("SO-QPO-001");
-        assertThat(partialTicket.getMaterialNo()).isEqualTo("MAT-1001");
+        assertThat(partialTicket.getMaterialNo()).isNull();
         assertThat(partialTicket.getMaterialName()).isEqualTo("6061");
         assertSnapshot(partialTicket, "getEngineeringMaterialCode", "EMC-1001");
         assertSnapshot(partialTicket, "getEngineeringMaterialTypeCode", "RAW_MATERIAL");
@@ -420,8 +420,8 @@ class SalesOrderDeliveryTicketWorkflowTest {
                 .orElseThrow();
         assertThat(confirmedTicket.getMaterialData()).isEqualTo(materialSnapshot).isNotSameAs(materialSnapshot);
         assertThat(confirmedTicket.getProcessRoute()).isEqualTo(routeSnapshot).isNotSameAs(routeSnapshot);
-        assertThat(confirmedTicket.getMesSyncStatus()).isEqualTo("SUCCESS");
-        assertThat(confirmedTicket.getMaterialNo()).isEqualTo("MAT-4001");
+        assertThat(confirmedTicket.getMesSyncStatus()).isEqualTo("PENDING");
+        assertThat(confirmedTicket.getMaterialNo()).isNull();
         @SuppressWarnings("unchecked")
         Map<String, Object> copiedMaterial = (Map<String, Object>) confirmedTicket.getMaterialData();
         @SuppressWarnings("unchecked")

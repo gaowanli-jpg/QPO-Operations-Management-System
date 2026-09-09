@@ -59,7 +59,6 @@ public class RfqReleaseSalesOrderService {
     private static final String SOURCE_RFQ_RELEASE = "RFQ_RELEASE";
     private static final String SOURCE_RFQ = "RFQ";
     private static final String HEADER_RELEASED = "已生成提单";
-    private static final String MATERIAL_CONFIRMED = "已确认";
     private static final String MATERIAL_UNCONFIRMED = "未确认";
     private static final String MES_SUCCESS = "SUCCESS";
     private static final String MES_PENDING = "PENDING";
@@ -68,7 +67,6 @@ public class RfqReleaseSalesOrderService {
     private static final String U9_SYNCING = "同步中";
     private static final String U9_SYNCED = "已同步";
     private static final String U9_PENDING_CONFIRMATION = "结果待确认";
-    private static final String CONFIRMED_MATERIAL_MESSAGE = "前置匹配复用已确认 MES 物料号";
     private static final String ITEM_TYPE_ASSEMBLY = "组合件";
     private static final String ITEM_TYPE_NORMAL = "普通件";
     private static final String RELATION_SPECIFIED = "已指定父子关系";
@@ -533,15 +531,6 @@ public class RfqReleaseSalesOrderService {
     }
 
     private void copyConfirmedMaterial(ItemQuoteVersion source, SalesOrderItem target) {
-        if (!isBlank(source.getMaterialNo()) && MATERIAL_CONFIRMED.equals(trim(source.getMaterialNoStatus()))) {
-            target.setMaterialNo(source.getMaterialNo().trim());
-            target.setMaterialNoStatus(MATERIAL_CONFIRMED);
-            target.setMaterialNoSource(source.getMaterialNoSource());
-            target.setMaterialNoSourceTicketId(source.getMaterialNoSourceTicketId());
-            target.setMaterialNoSyncedAt(source.getMaterialNoSyncedAt());
-            target.setMaterialNoMessage(source.getMaterialNoMessage());
-            return;
-        }
         target.setMaterialNo(null);
         target.setMaterialNoStatus(MATERIAL_UNCONFIRMED);
     }
@@ -571,15 +560,10 @@ public class RfqReleaseSalesOrderService {
     }
 
     private void initializeTicketMaterial(OrderDeliveryTicket ticket, ItemQuoteVersion source) {
-        if (!isBlank(source.getMaterialNo()) && MATERIAL_CONFIRMED.equals(trim(source.getMaterialNoStatus()))) {
-            ticket.setMaterialNo(source.getMaterialNo().trim());
-            ticket.setMesSyncStatus(MES_SUCCESS);
-            ticket.setMesSyncMessage(CONFIRMED_MATERIAL_MESSAGE);
-            ticket.setMesSyncedAt(source.getMaterialNoSyncedAt());
-            return;
-        }
         ticket.setMaterialNo(null);
         ticket.setMesSyncStatus(MES_PENDING);
+        ticket.setMesSyncMessage(null);
+        ticket.setMesSyncedAt(null);
     }
 
     private List<ItemAssemblyRelation> selectedAssemblyRelations(List<ReleaseLine> releaseLines) {

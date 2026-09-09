@@ -59,7 +59,7 @@ class RepeatQuoteMaterialNoWorkflowTest extends CoreWorkflowIntegrationTestSuppo
 
     @Test
     @SuppressWarnings("unchecked")
-    void repeatQuoteCopiesConfirmedMaterialNoToRfqMainItem() {
+    void repeatQuoteDoesNotCopyConfirmedMaterialNoToRfqMainItem() {
         OrderRfq historicalOrder = new OrderRfq();
         historicalOrder.setRfqNo("HIST-MATERIAL-NO-" + System.nanoTime());
         historicalOrder.setCustomerName("历史物料号客户");
@@ -83,20 +83,20 @@ class RepeatQuoteMaterialNoWorkflowTest extends CoreWorkflowIntegrationTestSuppo
 
         ItemQuoteVersion saved = itemMapper.selectById(currentItem.getId());
         assertThat(result.get("appliedCount")).isEqualTo(1);
-        assertThat(result.get("materialNoCopiedCount")).isEqualTo(1);
-        assertThat(result.get("materialNoSkippedCount")).isEqualTo(0);
+        assertThat(result.get("materialNoCopiedCount")).isEqualTo(0);
+        assertThat(result.get("materialNoSkippedCount")).isEqualTo(1);
         assertThat(result.get("materialNoConflictCount")).isEqualTo(0);
-        assertThat(saved.getMaterialNo()).isEqualTo("MES-RFQ-001");
-        assertThat(saved.getMaterialNoStatus()).isEqualTo("已确认");
-        assertThat(saved.getMaterialNoSource()).isEqualTo("MES_TICKET");
-        assertThat(saved.getMaterialNoSourceTicketId()).isEqualTo(7001L);
+        assertThat(saved.getMaterialNo()).isNull();
+        assertThat(saved.getMaterialNoStatus()).isEqualTo("未确认");
+        assertThat(saved.getMaterialNoSource()).isNull();
+        assertThat(saved.getMaterialNoSourceTicketId()).isNull();
         List<Map<String, Object>> appliedItems = (List<Map<String, Object>>) result.get("appliedItems");
         assertThat(appliedItems).singleElement()
-                .satisfies(row -> assertThat(row.get("materialNoReuseStatus")).isEqualTo("COPIED"));
+                .satisfies(row -> assertThat(row.get("materialNoReuseStatus")).isEqualTo("NOT_APPLICABLE"));
     }
 
     @Test
-    void repeatQuoteKeepsExistingRfqMaterialNoWhenHistoricalMaterialNoConflicts() {
+    void repeatQuoteLeavesExistingRfqMaterialNoForMesWithoutConflict() {
         OrderRfq historicalOrder = new OrderRfq();
         historicalOrder.setRfqNo("HIST-CONFLICT-MATERIAL-" + System.nanoTime());
         historicalOrder.setCustomerName("冲突物料号客户");
@@ -122,8 +122,8 @@ class RepeatQuoteMaterialNoWorkflowTest extends CoreWorkflowIntegrationTestSuppo
         ItemQuoteVersion saved = itemMapper.selectById(currentItem.getId());
         assertThat(result.get("appliedCount")).isEqualTo(1);
         assertThat(result.get("materialNoCopiedCount")).isEqualTo(0);
-        assertThat(result.get("materialNoSkippedCount")).isEqualTo(0);
-        assertThat(result.get("materialNoConflictCount")).isEqualTo(1);
+        assertThat(result.get("materialNoSkippedCount")).isEqualTo(1);
+        assertThat(result.get("materialNoConflictCount")).isEqualTo(0);
         assertThat(saved.getMaterialNo()).isEqualTo("MES-RFQ-CURRENT");
         assertThat(saved.getMaterialNoStatus()).isEqualTo("已确认");
         assertThat(saved.getTaxIncludedUnitPrice()).isNotNull();

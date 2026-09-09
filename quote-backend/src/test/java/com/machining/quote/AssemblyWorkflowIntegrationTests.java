@@ -432,16 +432,16 @@ class AssemblyWorkflowIntegrationTests {
         ItemQuoteVersion savedChild = itemMapper.selectById(currentChild.getId());
         ItemQuoteVersion savedParent = itemMapper.selectById(currentParent.getId());
         assertThat(result.get("appliedCount")).isEqualTo(2);
-        assertThat(result.get("materialNoCopiedCount")).isEqualTo(2);
-        assertThat(result.get("materialNoSkippedCount")).isEqualTo(0);
+        assertThat(result.get("materialNoCopiedCount")).isEqualTo(0);
+        assertThat(result.get("materialNoSkippedCount")).isEqualTo(2);
         assertThat(result.get("materialNoConflictCount")).isEqualTo(0);
         assertThat(savedChild.getTaxIncludedUnitPrice()).isNotNull();
-        assertThat(savedChild.getMaterialNo()).isEqualTo("MES-ASSY-CHILD");
-        assertThat(savedChild.getMaterialNoStatus()).isEqualTo("已确认");
+        assertThat(savedChild.getMaterialNo()).isNull();
+        assertThat(savedChild.getMaterialNoStatus()).isEqualTo("未确认");
         assertThat(savedParent.getQuoteMode()).isEqualTo("ASSEMBLY");
         assertThat(savedParent.getAssemblyFee()).isEqualTo(25.0);
-        assertThat(savedParent.getMaterialNo()).isEqualTo("MES-ASSY-PARENT");
-        assertThat(savedParent.getMaterialNoStatus()).isEqualTo("已确认");
+        assertThat(savedParent.getMaterialNo()).isNull();
+        assertThat(savedParent.getMaterialNoStatus()).isEqualTo("未确认");
 
         QueryWrapper<ItemAssemblyRelation> relationQw = new QueryWrapper<>();
         relationQw.eq("parent_item_id", currentParent.getId());

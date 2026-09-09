@@ -41,10 +41,8 @@ import java.util.UUID;
 @Service
 public class DeliveryService {
     private static final Logger log = LoggerFactory.getLogger(DeliveryService.class);
-    private static final String MATERIAL_CONFIRMED = "已确认";
     private static final String MES_SUCCESS = "SUCCESS";
     private static final String MES_PENDING = "PENDING";
-    private static final String CONFIRMED_MATERIAL_REUSE_MESSAGE = "前置匹配复用已确认 MES 物料号";
     private static final int DEFAULT_PAGE = 1;
     private static final int DEFAULT_PAGE_SIZE = 50;
     private static final int MAX_PAGE_SIZE = 100;
@@ -857,14 +855,6 @@ public class DeliveryService {
             String materialNo,
             String materialNoStatus,
             LocalDateTime materialNoSyncedAt) {
-        if (!isBlank(materialNo)
-                && MATERIAL_CONFIRMED.equals(materialNoStatus == null ? null : materialNoStatus.trim())) {
-            ticket.setMaterialNo(materialNo.trim());
-            ticket.setMesSyncStatus(MES_SUCCESS);
-            ticket.setMesSyncMessage(CONFIRMED_MATERIAL_REUSE_MESSAGE);
-            ticket.setMesSyncedAt(materialNoSyncedAt);
-            return;
-        }
         ticket.setMaterialNo(null);
         ticket.setMesSyncStatus(MES_PENDING);
         ticket.setMesSyncMessage(null);

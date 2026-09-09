@@ -26,7 +26,7 @@ import static org.mockito.Mockito.when;
 class DeliveryMaterialNoInheritanceStage4Test {
 
     @Test
-    void salesOrderTicketInheritsConfirmedMaterialNoAndStartsMesSuccess() {
+    void salesOrderTicketDoesNotInheritConfirmedMaterialNoAndStartsMesPending() {
         DeliveryService service = new DeliveryService();
         SalesOrderHeaderMapper headerMapper = mock(SalesOrderHeaderMapper.class);
         SalesOrderItemMapper itemMapper = mock(SalesOrderItemMapper.class);
@@ -45,10 +45,10 @@ class DeliveryMaterialNoInheritanceStage4Test {
 
         OrderDeliveryTicket ticket = service.generateImportedSalesOrderTickets(1101L).get(0);
 
-        assertThat(ticket.getMaterialNo()).isEqualTo("SO-MES-001");
-        assertThat(ticket.getMesSyncStatus()).isEqualTo("SUCCESS");
-        assertThat(ticket.getMesSyncMessage()).isEqualTo("前置匹配复用已确认 MES 物料号");
-        assertThat(ticket.getMesSyncedAt()).isEqualTo(syncedAt);
+        assertThat(ticket.getMaterialNo()).isNull();
+        assertThat(ticket.getMesSyncStatus()).isEqualTo("PENDING");
+        assertThat(ticket.getMesSyncMessage()).isNull();
+        assertThat(ticket.getMesSyncedAt()).isNull();
     }
 
     @Test

@@ -18,51 +18,52 @@ class ConfirmedMaterialNoReuseServiceTest {
     private final ConfirmedMaterialNoReuseService service = new ConfirmedMaterialNoReuseService();
 
     @Test
-    void confirmedTupleCanBeCopiedToRfqTarget() {
+    void confirmedTupleIsNotCopiedToRfqTarget() {
         ItemQuoteVersion source = confirmedSource();
         ItemQuoteVersion target = new ItemQuoteVersion();
         target.setId(101);
 
         MaterialNoReuseResult result = service.copyToRfqItem(target, source);
 
-        assertThat(result.status()).isEqualTo(MaterialNoReuseResult.Status.COPIED);
-        assertThat(target.getMaterialNo()).isEqualTo("MES-001");
-        assertThat(target.getMaterialNoStatus()).isEqualTo(CONFIRMED);
-        assertThat(target.getMaterialNoSource()).isEqualTo("MES_TICKET");
-        assertThat(target.getMaterialNoSourceTicketId()).isEqualTo(9001L);
-        assertThat(target.getMaterialNoSyncedAt()).isEqualTo(source.getMaterialNoSyncedAt());
-        assertThat(target.getMaterialNoMessage()).isEqualTo("confirmed by MES");
+        assertThat(result.status()).isEqualTo(MaterialNoReuseResult.Status.NOT_APPLICABLE);
+        assertThat(target.getMaterialNo()).isNull();
+        assertThat(target.getMaterialNoStatus()).isNull();
+        assertThat(target.getMaterialNoSource()).isNull();
+        assertThat(target.getMaterialNoSourceTicketId()).isNull();
+        assertThat(target.getMaterialNoSyncedAt()).isNull();
+        assertThat(target.getMaterialNoMessage()).isNull();
     }
 
     @Test
-    void confirmedTupleCanBeCopiedToSalesOrderTarget() {
+    void confirmedTupleIsNotCopiedToSalesOrderTarget() {
         SalesOrderItem target = new SalesOrderItem();
         target.setId(201L);
 
         MaterialNoReuseResult result = service.copyToSalesOrderItem(target, confirmedSource());
 
-        assertThat(result.status()).isEqualTo(MaterialNoReuseResult.Status.COPIED);
-        assertThat(target.getMaterialNo()).isEqualTo("MES-001");
-        assertThat(target.getMaterialNoStatus()).isEqualTo(CONFIRMED);
-        assertThat(target.getMaterialNoSource()).isEqualTo("MES_TICKET");
-        assertThat(target.getMaterialNoSourceTicketId()).isEqualTo(9001L);
-        assertThat(target.getMaterialNoSyncedAt()).isNotNull();
-        assertThat(target.getMaterialNoMessage()).isEqualTo("confirmed by MES");
+        assertThat(result.status()).isEqualTo(MaterialNoReuseResult.Status.NOT_APPLICABLE);
+        assertThat(target.getMaterialNo()).isNull();
+        assertThat(target.getMaterialNoStatus()).isNull();
+        assertThat(target.getMaterialNoSource()).isNull();
+        assertThat(target.getMaterialNoSourceTicketId()).isNull();
+        assertThat(target.getMaterialNoSyncedAt()).isNull();
+        assertThat(target.getMaterialNoMessage()).isNull();
     }
 
     @Test
-    void sameMaterialNoIsIdempotentAndFillsMissingConfirmationMetadata() {
+    void sameMaterialNoIsLeftForMesInsteadOfMarkingIdempotent() {
         ItemQuoteVersion target = new ItemQuoteVersion();
         target.setMaterialNo("MES-001");
         target.setMaterialNoStatus(UNCONFIRMED);
 
         MaterialNoReuseResult result = service.copyToRfqItem(target, confirmedSource());
 
-        assertThat(result.status()).isEqualTo(MaterialNoReuseResult.Status.IDEMPOTENT);
-        assertThat(target.getMaterialNoStatus()).isEqualTo(CONFIRMED);
-        assertThat(target.getMaterialNoSource()).isEqualTo("MES_TICKET");
-        assertThat(target.getMaterialNoSourceTicketId()).isEqualTo(9001L);
-        assertThat(target.getMaterialNoMessage()).isEqualTo("confirmed by MES");
+        assertThat(result.status()).isEqualTo(MaterialNoReuseResult.Status.NOT_APPLICABLE);
+        assertThat(target.getMaterialNo()).isEqualTo("MES-001");
+        assertThat(target.getMaterialNoStatus()).isEqualTo(UNCONFIRMED);
+        assertThat(target.getMaterialNoSource()).isNull();
+        assertThat(target.getMaterialNoSourceTicketId()).isNull();
+        assertThat(target.getMaterialNoMessage()).isNull();
     }
 
     @Test
@@ -82,9 +83,9 @@ class ConfirmedMaterialNoReuseServiceTest {
 
         MaterialNoReuseResult result = service.copyToRfqItem(target, source);
 
-        assertThat(result.status()).isEqualTo(MaterialNoReuseResult.Status.IDEMPOTENT);
+        assertThat(result.status()).isEqualTo(MaterialNoReuseResult.Status.NOT_APPLICABLE);
         assertThat(target.getMaterialNo()).isEqualTo("MES-001");
-        assertThat(target.getMaterialNoStatus()).isEqualTo(CONFIRMED);
+        assertThat(target.getMaterialNoStatus()).isEqualTo(UNCONFIRMED);
         assertThat(target.getMaterialNoSource()).isEqualTo("EXISTING_SOURCE");
         assertThat(target.getMaterialNoSourceTicketId()).isEqualTo(7001L);
         assertThat(target.getMaterialNoSyncedAt()).isNull();
@@ -92,13 +93,14 @@ class ConfirmedMaterialNoReuseServiceTest {
     }
 
     @Test
-    void differentMaterialNoCannotBeOverwritten() {
+    void differentMaterialNoIsNotConsideredAReuseConflict() {
         ItemQuoteVersion target = new ItemQuoteVersion();
         target.setMaterialNo("MES-OLD");
         target.setMaterialNoStatus(UNCONFIRMED);
 
-        assertThatThrownBy(() -> service.copyToRfqItem(target, confirmedSource()))
-                .isInstanceOf(ConfirmedMaterialNoReuseService.MaterialNoConflictException.class);
+        MaterialNoReuseResult result = service.copyToRfqItem(target, confirmedSource());
+
+        assertThat(result.status()).isEqualTo(MaterialNoReuseResult.Status.NOT_APPLICABLE);
         assertThat(target.getMaterialNo()).isEqualTo("MES-OLD");
         assertThat(target.getMaterialNoStatus()).isEqualTo(UNCONFIRMED);
     }

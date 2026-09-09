@@ -134,8 +134,8 @@ class RfqReleaseAppendSalesOrderIntegrationTest {
         assertThat(parentSalesItem.getReleasedQty()).isEqualTo(parentSalesItem.getQty());
         assertThat(parentSalesItem.getRemainingQty()).isZero();
         assertThat(parentSalesItem.getUnshippedQty()).isEqualTo(parentSalesItem.getQty());
-        assertThat(parentSalesItem.getMaterialNo()).isEqualTo("MES-APPEND-001");
-        assertThat(parentSalesItem.getMaterialNoStatus()).isEqualTo("已确认");
+        assertThat(parentSalesItem.getMaterialNo()).isNull();
+        assertThat(parentSalesItem.getMaterialNoStatus()).isEqualTo("未确认");
 
         List<OrderDeliveryTicket> tickets = ticketMapper.selectBatchIds(result.getTicketIds());
         assertThat(tickets).hasSize(2);
@@ -150,6 +150,8 @@ class RfqReleaseAppendSalesOrderIntegrationTest {
         assertThat(parentTicket.getCustomerProjectNo()).isEqualTo("ROW-CP-SHOULD-WIN");
         assertThat(parentTicket.getOrderType()).isEqualTo("预测订单");
         assertThat(parentTicket.getInternalProjectNo()).isEqualTo("ROW-INTERNAL-SHOULD-WIN");
+        assertThat(parentTicket.getMaterialNo()).isNull();
+        assertThat(parentTicket.getMesSyncStatus()).isEqualTo("PENDING");
         OrderDeliveryTicket childTicket = ticketBySource.get(child.getId().longValue());
         assertThat(childTicket.getCustomerOrderNo()).isEqualTo("TARGET-PO");
         assertThat(childTicket.getCustomerProjectNo()).isEqualTo("TARGET-CP");
