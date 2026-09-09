@@ -155,6 +155,19 @@ describe('sales order import panel', () => {
     expect(submitBlock).toContain('销售订单导入成功')
   })
 
+  test('sales order import automatically exports production task notice for created sales orders', () => {
+    const submitBlock = marketDashboard.slice(
+      marketDashboard.indexOf('const submitSalesOrderImport'),
+      marketDashboard.indexOf('// 提交询价单和图纸')
+    )
+
+    expect(marketDashboard).toContain("import { downloadSalesOrderProductionTaskNotice } from '../services/orderApi'")
+    expect(marketDashboard).toContain('autoExportImportedSalesOrderProductionTaskNotices')
+    expect(submitBlock).toContain('await autoExportImportedSalesOrderProductionTaskNotices(response)')
+    expect(marketDashboard).toContain('downloadSalesOrderProductionTaskNotice(salesOrderId, `${salesOrderNo}-生产任务通知单.xlsx`)')
+    expect(marketDashboard).toContain('生产任务通知单已开始导出')
+  })
+
   test('RFQ import submits old and part-version drawing entrances independently', () => {
     const submitBlock = marketDashboard.slice(
       marketDashboard.indexOf('const submitRfqPackage'),

@@ -459,6 +459,7 @@ import {
   importRfq,
   importSalesOrderToQpo
 } from '../services/marketApi'
+import { downloadSalesOrderProductionTaskNotice } from '../services/orderApi'
 import { usePendingAction } from '../composables/usePendingAction'
 import { readActionError } from '../utils/actionError'
 
@@ -654,6 +655,47 @@ const appendDrawingFolderFields = (formData, files, folderName) => {
   formData.append('drawingFolderName', folderName || '')
 }
 
+const autoExportImportedSalesOrderProductionTaskNotices = async (response) => {
+  const rows = Array.isArray(response?.rows) ? response.rows : []
+  const targets = rows
+    .filter(row => row?.success !== false)
+    .map(row => {
+      const salesOrderId = Number(row?.salesOrderId)
+      if (!Number.isInteger(salesOrderId) || salesOrderId <= 0) return null
+      return {
+        salesOrderId,
+        salesOrderNo: row?.salesOrderNo || row?.customerOrderNo || salesOrderId
+      }
+    })
+    .filter(Boolean)
+
+  if (!targets.length) {
+    ElMessage.warning('销售订单已导入，但缺少销售订单 ID，未自动导出生产任务通知单。')
+    return { success: false, successCount: 0, failedCount: 0 }
+  }
+
+  let successCount = 0
+  let failedCount = 0
+  for (const target of targets) {
+    try {
+      const { salesOrderId, salesOrderNo } = target
+      const result = await downloadSalesOrderProductionTaskNotice(salesOrderId, `${salesOrderNo}-生产任务通知单.xlsx`)
+      if (result?.success) {
+        successCount += 1
+      } else {
+        failedCount += 1
+        ElMessage.warning(result?.message || '生产任务通知单导出失败，请在销售订单详情中手动导出。')
+      }
+    } catch (error) {
+      console.error(error)
+      failedCount += 1
+      ElMessage.warning(error?.message || '生产任务通知单导出失败，请在销售订单详情中手动导出。')
+    }
+  }
+
+  return { success: failedCount === 0, successCount, failedCount }
+}
+
 const submitSalesOrderImport = async () => {
   if (!salesOrderForm.customerId || !salesOrderForm.customerCode) return ElMessage.warning('请选择销售订单客户！')
   const documentTypeCode = salesOrderForm.documentTypeCode.trim()
@@ -690,10 +732,15 @@ const submitSalesOrderImport = async () => {
       salesOrderImportResult.value = response
 
       if (response?.success) {
+        const noticeExportResult = await autoExportImportedSalesOrderProductionTaskNotices(response)
         const drawingReportHtml = buildDrawingReportHtml(response.drawingReport)
         salesOrderForm.documentTypeCode = documentTypeCode
+        const noticeExportHtml = noticeExportResult?.success
+          ? `<div style="color: #67C23A; margin-top: 10px;">生产任务通知单已开始导出${noticeExportResult.successCount > 1 ? ` ${noticeExportResult.successCount} 份` : ''}。</div>`
+          : '<div style="color: #E6A23C; margin-top: 10px;">销售订单已导入，生产任务通知单请在销售订单详情中手动导出。</div>'
         ElMessageBox.alert(
           `<div style="font-size: 15px; line-height: 1.5;">销售订单已导入独立主表，成功 ${response.successOrderCount || 0} 单。</div>
+           ${noticeExportHtml}
            ${drawingReportHtml}`,
           '销售订单导入成功',
           {
