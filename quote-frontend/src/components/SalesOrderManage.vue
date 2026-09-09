@@ -3,7 +3,7 @@
     <header class="erp-page-header">
       <div>
         <h1 class="erp-page-title">销售订单</h1>
-        <p class="erp-page-description">先选择客户，再查看该客户下的销售订单、零件、提单行、工艺表行和图纸绑定状态。</p>
+        <p class="erp-page-description">默认显示全部客户销售订单，可选择客户进一步筛选订单、零件、提单行、工艺表行和图纸绑定状态。</p>
       </div>
     </header>
 
@@ -13,9 +13,9 @@
           <span class="customer-picker-content">
             <span
               :class="selectedCustomer ? 'customer-picker-text' : 'customer-picker-placeholder'"
-              :title="selectedCustomer || '先选择客户'"
+              :title="selectedCustomer || '全部客户'"
             >
-              {{ selectedCustomer || '先选择客户' }}
+              {{ selectedCustomer || '全部客户' }}
             </span>
             <span class="customer-picker-action">选择客户</span>
           </span>
@@ -24,7 +24,6 @@
         <el-select
           v-model="statusFilter"
           clearable
-          :disabled="!selectedCustomer"
           placeholder="全部状态"
           class="status-filter"
           @change="handleSearch"
@@ -36,25 +35,19 @@
         <el-input
           v-model="keyword"
           clearable
-          :disabled="!selectedCustomer"
           placeholder="搜索销售订单号 / 客户订单号 / 内部项目号"
           class="search-input"
           @keyup.enter="handleSearch"
           @clear="handleSearch"
         />
-        <el-button :disabled="!selectedCustomer" @click="handleSearch">搜索</el-button>
-        <el-button type="primary" :loading="loading" :disabled="!selectedCustomer" @click="refreshOrders">刷新</el-button>
+        <el-button @click="handleSearch">搜索</el-button>
+        <el-button type="primary" :loading="loading" @click="refreshOrders">刷新</el-button>
       </div>
     </section>
 
     <section class="erp-table-surface sales-order-table-surface">
-      <div v-if="!selectedCustomer" class="erp-empty-state sales-order-empty-state">
-        <el-empty description="请先选择客户查看销售订单" />
-      </div>
-
-      <template v-else>
-        <div class="erp-table-body">
-          <el-table :data="orders" border stripe height="600" v-loading="loading">
+      <div class="erp-table-body">
+        <el-table :data="orders" border stripe height="600" v-loading="loading">
             <el-table-column prop="salesOrderNo" label="销售订单号" min-width="170" fixed show-overflow-tooltip />
             <el-table-column prop="customerOrderNo" label="客户订单号" min-width="150" show-overflow-tooltip />
             <el-table-column prop="customerProjectNo" label="客户项目号" min-width="140" show-overflow-tooltip />
@@ -104,21 +97,20 @@
                 </div>
               </template>
             </el-table-column>
-          </el-table>
-        </div>
-        <div class="erp-pagination">
-          <el-pagination
-            v-model:current-page="page"
-            v-model:page-size="pageSize"
-            :page-sizes="[20, 50, 100]"
-            layout="total, sizes, prev, pager, next, jumper"
-            :pager-count="7"
-            :total="total"
-            background
-            @size-change="page = 1"
-          />
-        </div>
-      </template>
+        </el-table>
+      </div>
+      <div class="erp-pagination">
+        <el-pagination
+          v-model:current-page="page"
+          v-model:page-size="pageSize"
+          :page-sizes="[20, 50, 100]"
+          layout="total, sizes, prev, pager, next, jumper"
+          :pager-count="7"
+          :total="total"
+          background
+          @size-change="page = 1"
+        />
+      </div>
     </section>
 
     <el-drawer v-model="detailVisible" title="销售订单详情" size="76%">
@@ -780,7 +772,7 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import CustomerPickerDialog from './CustomerPickerDialog.vue'
@@ -1010,9 +1002,7 @@ const displayOrderTaxIncludedTotalPrice = computed(() => {
 })
 
 watch([page, pageSize], () => {
-  if (selectedCustomer.value) {
-    loadOrders()
-  }
+  loadOrders()
 })
 
 watch(() => [detailItemPagination.page, detailItemPagination.pageSize], () => {
@@ -1034,16 +1024,11 @@ watch(() => [detailProcessSheetPagination.page, detailProcessSheetPagination.pag
 })
 
 const loadOrders = async () => {
-  if (!selectedCustomer.value) {
-    orders.value = []
-    total.value = 0
-    return
-  }
   loading.value = true
   try {
     const response = await listSalesOrders({
       customerCode: selectedCustomerCode.value || undefined,
-      customerName: selectedCustomer.value,
+      customerName: selectedCustomer.value || undefined,
       keyword: keyword.value.trim() || undefined,
       status: statusFilter.value || undefined,
       page: page.value,
@@ -1086,18 +1071,17 @@ const handleCustomerSelected = async (customer) => {
   await handleCustomerChange()
 }
 
-const handleCustomerClear = () => {
+const handleCustomerClear = async () => {
   selectedCustomer.value = ''
   selectedCustomerCode.value = ''
   keyword.value = ''
   statusFilter.value = ''
-  orders.value = []
-  total.value = 0
   page.value = 1
   orderDetail.value = null
   detailVisible.value = false
   resetOrderEditDraft()
   resetItemDrafts()
+  await loadOrders()
 }
 
 const resetDetailPagination = () => {
@@ -1756,6 +1740,12 @@ watch(
   applySalesOrderDeepLink,
   { immediate: true }
 )
+
+onMounted(() => {
+  if (!normalizeRouteSalesOrderId(route.query.salesOrderId)) {
+    loadOrders()
+  }
+})
 </script>
 
 <style scoped>

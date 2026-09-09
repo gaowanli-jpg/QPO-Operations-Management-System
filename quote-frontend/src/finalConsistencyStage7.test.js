@@ -88,22 +88,24 @@ describe('QPO Stage 7 final consistency pass', () => {
     expect(userSource).toContain('erp-dialog-footer')
     expect(userSource).toContain('erp-table-actions')
     expect(salesOrderSource).toContain('erp-table-actions')
-    expect(salesOrderSource).toContain('erp-empty-state')
+    expect(salesOrderSource).toContain('sales-order-table-surface')
   })
 
   test('aligns inquiry and sales order list chrome while keeping sales order actions separate', () => {
     const orderSource = readComponent('OrderManage.vue')
     const salesOrderSource = readComponent('SalesOrderManage.vue')
-    const disabledRefreshButton = ':loading="loading" :disabled="!selectedCustomer" @click="refreshOrders"'
+    const refreshButton = ':loading="loading" @click="refreshOrders"'
 
     expect(salesOrderSource).toContain('<header class="erp-page-header">')
     expect(salesOrderSource).not.toContain('history-page-actions')
 
     const salesOrderToolbarIndex = salesOrderSource.indexOf('class="erp-toolbar-group sales-order-filter-group"')
-    const salesOrderRefreshIndex = salesOrderSource.indexOf(disabledRefreshButton)
+    const salesOrderRefreshIndex = salesOrderSource.indexOf(refreshButton)
     expect(salesOrderToolbarIndex).toBeGreaterThan(-1)
     expect(salesOrderRefreshIndex).toBeGreaterThan(salesOrderToolbarIndex)
-    expect(orderSource).toContain(disabledRefreshButton)
+    expect(orderSource).toContain(refreshButton)
+    expect(orderSource).toContain('全部客户')
+    expect(salesOrderSource).toContain('全部客户')
 
     expect(salesOrderSource).not.toContain('彻底删除')
     expect(salesOrderSource).toContain('查看销售订单')
