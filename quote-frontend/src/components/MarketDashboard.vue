@@ -265,7 +265,7 @@
               </div>
               <div class="upload-box step-panel">
                 <el-alert
-                  title="销售订单 Excel 需包含表头：图号、订单数量、版本；可选表头：序号、下单日期、客户订单号、客户项目号、客户下单抬头、订单类型、内部项目号、客户交期、内部交期(给生产的交期)、描述、材料、表面处理、VAT单价-含税、未税单价(CNY)、（未税）金额、备注。订单级字段以下方“订单默认信息”为准；Excel 行内同名字段仅作为零件级覆盖值，行内为空时继承订单默认信息。价格允许为空，但 U9 同步前必须补齐。日期字段（下单日期、客户交期、内部交期）支持具体日期（如 2026-03-08、2026-3-8、2026.03.08、2026.3.8、2026/3/8、2026年3月8日）或 Excel 日期序列号（如 46089）；订单数量必须为正整数；（未税）金额为空且未税单价存在时按未税单价×订单数量计算。客户和单据类型在前两步选择。"
+                  title="销售订单 Excel 需包含表头：图号、订单数量、版本；可选表头：下单日期、客户订单号、客户项目号、客户下单抬头、订单类型、内部项目号、客户交期、内部交期(给生产的交期)、描述、材料、表面处理、VAT单价-含税、未税单价(CNY)、（未税）金额、备注。订单级字段以下方“订单默认信息”为准；Excel 行内同名字段仅作为零件级覆盖值，行内为空时继承订单默认信息。价格允许为空，但 U9 同步前必须补齐。日期字段（下单日期、客户交期、内部交期）支持具体日期（如 2026-03-08、2026-3-8、2026.03.08、2026.3.8、2026/3/8、2026年3月8日）或 Excel 日期序列号（如 46089）；订单数量必须为正整数；（未税）金额为空且未税单价存在时按未税单价×订单数量计算。客户和单据类型在前两步选择。"
                   type="info"
                   show-icon
                   :closable="false"
@@ -459,6 +459,7 @@ import {
   importRfq,
   importSalesOrderToQpo
 } from '../services/marketApi'
+import { downloadSalesOrderProductionTaskNotice } from '../services/orderApi'
 import { usePendingAction } from '../composables/usePendingAction'
 import { readActionError } from '../utils/actionError'
 
@@ -654,6 +655,47 @@ const appendDrawingFolderFields = (formData, files, folderName) => {
   formData.append('drawingFolderName', folderName || '')
 }
 
+const autoExportImportedSalesOrderProductionTaskNotices = async (response) => {
+  const rows = Array.isArray(response?.rows) ? response.rows : []
+  const targets = rows
+    .filter(row => row?.success !== false)
+    .map(row => {
+      const salesOrderId = Number(row?.salesOrderId)
+      if (!Number.isInteger(salesOrderId) || salesOrderId <= 0) return null
+      return {
+        salesOrderId,
+        salesOrderNo: row?.salesOrderNo || row?.customerOrderNo || salesOrderId
+      }
+    })
+    .filter(Boolean)
+
+  if (!targets.length) {
+    ElMessage.warning('销售订单已导入，但缺少销售订单 ID，未自动导出生产任务通知单。')
+    return { success: false, successCount: 0, failedCount: 0 }
+  }
+
+  let successCount = 0
+  let failedCount = 0
+  for (const target of targets) {
+    try {
+      const { salesOrderId, salesOrderNo } = target
+      const result = await downloadSalesOrderProductionTaskNotice(salesOrderId, `${salesOrderNo}-生产任务通知单.xlsx`)
+      if (result?.success) {
+        successCount += 1
+      } else {
+        failedCount += 1
+        ElMessage.warning(result?.message || '生产任务通知单导出失败，请在销售订单详情中手动导出。')
+      }
+    } catch (error) {
+      console.error(error)
+      failedCount += 1
+      ElMessage.warning(error?.message || '生产任务通知单导出失败，请在销售订单详情中手动导出。')
+    }
+  }
+
+  return { success: failedCount === 0, successCount, failedCount }
+}
+
 const submitSalesOrderImport = async () => {
   if (!salesOrderForm.customerId || !salesOrderForm.customerCode) return ElMessage.warning('请选择销售订单客户！')
   const documentTypeCode = salesOrderForm.documentTypeCode.trim()
@@ -690,10 +732,15 @@ const submitSalesOrderImport = async () => {
       salesOrderImportResult.value = response
 
       if (response?.success) {
+        const noticeExportResult = await autoExportImportedSalesOrderProductionTaskNotices(response)
         const drawingReportHtml = buildDrawingReportHtml(response.drawingReport)
         salesOrderForm.documentTypeCode = documentTypeCode
+        const noticeExportHtml = noticeExportResult?.success
+          ? `<div style="color: #67C23A; margin-top: 10px;">生产任务通知单已开始导出${noticeExportResult.successCount > 1 ? ` ${noticeExportResult.successCount} 份` : ''}。</div>`
+          : '<div style="color: #E6A23C; margin-top: 10px;">销售订单已导入，生产任务通知单请在销售订单详情中手动导出。</div>'
         ElMessageBox.alert(
           `<div style="font-size: 15px; line-height: 1.5;">销售订单已导入独立主表，成功 ${response.successOrderCount || 0} 单。</div>
+           ${noticeExportHtml}
            ${drawingReportHtml}`,
           '销售订单导入成功',
           {

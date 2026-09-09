@@ -11,6 +11,7 @@ import com.machining.quote.dto.LockedItemDTO;
 import com.machining.quote.dto.LockedItemMesProductionBatchReq;
 import com.machining.quote.dto.LockedItemPageDTO;
 import com.machining.quote.dto.LockedItemQueryReq;
+import com.machining.quote.dto.LockedItemStockPickingBatchReq;
 import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.ProductionItemQueryReq;
 import com.machining.quote.entity.SystemTask;
@@ -114,6 +115,34 @@ public class OrderDeliveryController {
             @RequestParam(value = "page", required = false) Integer page,
             @RequestParam(value = "pageSize", required = false) Integer pageSize) {
         return lockedItemService.pageCustomerOptions(field, keyword, page, pageSize);
+    }
+
+    @PostMapping("/locked-items/{allocationId}/discard")
+    @RequirePermission("market:locked-item:discard")
+    public Map<String, Object> discardLockedItem(
+            @PathVariable Integer allocationId,
+            @RequestBody(required = false) DeliveryItemDiscardReq req) {
+        if (req == null) {
+            req = new DeliveryItemDiscardReq();
+        }
+        return lockedItemService.discardAllocation(allocationId, req);
+    }
+
+    @PostMapping("/locked-items/{allocationId}/restore")
+    @RequirePermission("market:locked-item:restore")
+    public Map<String, Object> restoreLockedItem(
+            @PathVariable Integer allocationId,
+            @RequestBody(required = false) DeliveryItemRestoreReq req) {
+        if (req == null) {
+            req = new DeliveryItemRestoreReq();
+        }
+        return lockedItemService.restoreAllocation(allocationId, req);
+    }
+
+    @PostMapping("/locked-items/stock-picking-orders")
+    @RequirePermission("market:locked-item:stock-picking-submit")
+    public SystemTask submitStockPickingOrders(@RequestBody LockedItemStockPickingBatchReq req) {
+        return systemTaskService.submitLockedStockPickingOrderBatchTask(req == null ? null : req.getAllocationIds());
     }
 
     @GetMapping("/production-items")

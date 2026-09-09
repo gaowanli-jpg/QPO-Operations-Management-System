@@ -123,7 +123,12 @@ class SalesOrderIntegrationGovernanceTest {
         assertThat(sql)
                 .contains("sales_order_item")
                 .contains("line_no IS NULL")
-                .contains("NULLIF(BTRIM(soi.material_no), '') IS NULL")
+                .contains("line_no <= 0")
+                .contains("ROW_NUMBER() OVER")
+                .contains("PARTITION BY soi.sales_order_id")
+                .contains("ORDER BY soi.id")
+                .contains("numbered.line_no <> numbered.expected_line_no")
+                .contains("NULLIF(BTRIM(numbered.material_no), '') IS NULL")
                 .contains("sales_order_id")
                 .contains("阻断上线")
                 .contains("补齐 line_no 和 material_no");

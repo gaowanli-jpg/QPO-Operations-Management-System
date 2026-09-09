@@ -31,14 +31,14 @@ describe('sales order management regression coverage', () => {
     expect(appVue).not.toContain("market:history-order:view', icon: Files")
   })
 
-  test('loads sales order rows from selected customer and backend paging parameters', () => {
+  test('loads sales order rows with optional customer filter and backend paging parameters', () => {
     expect(salesOrderManage).toContain('customer-scope="sales-order"')
     expect(salesOrderManage).toContain('@select="handleCustomerSelected"')
     expect(salesOrderManage).toContain('selectedCustomer.value = resolveCustomerName(customer)')
     expect(salesOrderManage).toContain('await handleCustomerChange()')
     expect(salesOrderManage).toContain('const loadOrders = async () =>')
     expect(salesOrderManage).toContain('listSalesOrders({')
-    expect(salesOrderManage).toContain('customerName: selectedCustomer.value')
+    expect(salesOrderManage).toContain('customerName: selectedCustomer.value || undefined')
     expect(salesOrderManage).toContain('page: page.value')
     expect(salesOrderManage).toContain('pageSize: pageSize.value')
     expect(orderApi).toContain("export const listSalesOrders = (params = {}) => request('/api/market/sales-order-management/orders', { params })")

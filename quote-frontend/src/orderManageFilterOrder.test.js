@@ -12,7 +12,7 @@ describe('order manage filter layout', () => {
     const source = readComponent('OrderManage.vue')
     const toolbar = source.slice(
       source.indexOf('class="erp-toolbar-group order-filter-group"'),
-      source.indexOf('<el-button :disabled="!selectedCustomer" @click="handleSearch">搜索</el-button>')
+      source.indexOf('<el-button @click="handleSearch">搜索</el-button>')
     )
 
     expect(toolbar.indexOf('v-model="statusFilter"')).toBeGreaterThan(-1)

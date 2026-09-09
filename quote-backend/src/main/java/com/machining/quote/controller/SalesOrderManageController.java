@@ -7,6 +7,7 @@ import com.machining.quote.dto.OrderStatusChangeResult;
 import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.ProcessSheetDTO;
 import com.machining.quote.dto.SalesOrderItemDataReplacementConfirmResp;
+import com.machining.quote.dto.SalesOrderItemFieldReplacementReq;
 import com.machining.quote.dto.SalesOrderItemUpdateReq;
 import com.machining.quote.dto.SalesOrderMaintenanceOrderUpdateReq;
 import com.machining.quote.dto.SalesOrderMaintenanceUpdateResp;
@@ -124,6 +125,26 @@ public class SalesOrderManageController {
             @PathVariable Long salesOrderId,
             @RequestBody(required = false) SalesOrderItemUpdateReq req) {
         return salesOrderMaintenanceService.saveItems(salesOrderId, req);
+    }
+
+    @PostMapping("/orders/{salesOrderId}/items/field-replacement")
+    @RequirePermission("market:sales-order:update")
+    public SalesOrderMaintenanceUpdateResp replaceItemField(
+            @PathVariable Long salesOrderId,
+            @RequestBody(required = false) SalesOrderItemFieldReplacementReq req) {
+        return salesOrderMaintenanceService.replaceItemField(salesOrderId, req);
+    }
+
+    @PostMapping("/orders/{salesOrderId}/items/convert-untaxed-to-tax-included")
+    @RequirePermission("market:sales-order:update")
+    public SalesOrderMaintenanceUpdateResp convertUntaxedToTaxIncluded(@PathVariable Long salesOrderId) {
+        return salesOrderMaintenanceService.convertUntaxedToTaxIncluded(salesOrderId);
+    }
+
+    @PostMapping("/orders/{salesOrderId}/items/convert-tax-included-to-untaxed")
+    @RequirePermission("market:sales-order:update")
+    public SalesOrderMaintenanceUpdateResp convertTaxIncludedToUntaxed(@PathVariable Long salesOrderId) {
+        return salesOrderMaintenanceService.convertTaxIncludedToUntaxed(salesOrderId);
     }
 
     @PostMapping("/orders/{salesOrderId}/items/{itemId}/discard")

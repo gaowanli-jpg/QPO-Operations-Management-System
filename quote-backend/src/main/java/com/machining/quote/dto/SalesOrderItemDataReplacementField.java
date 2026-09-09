@@ -20,7 +20,11 @@ public enum SalesOrderItemDataReplacementField {
     SURFACE_TREATMENT("表面处理", "surfaceTreatment", ValueType.TEXT, 255, true),
     CUSTOMER_ORDER_NO("客户订单号", "customerOrderNo", ValueType.TEXT, 120, true, "客户采购订单号"),
     CUSTOMER_PROJECT_NO("客户项目号", "customerProjectNo", ValueType.TEXT, 120, true),
+    CUSTOMER_ORDER_TITLE("客户下单抬头", "customerOrderTitle", ValueType.TEXT, 255, true),
     INTERNAL_PROJECT_NO("内部项目号", "internalProjectNo", ValueType.TEXT, 120, true),
+    ORDER_TYPE("订单类型", "orderType", ValueType.ORDER_TYPE, 20, true),
+    DESCRIPTION("物料描述", "description", ValueType.TEXT, 500, true, "描述"),
+    STATUS("订单状态", "status", ValueType.TEXT, 50, true, "状态"),
     REMARK("备注", "remark", ValueType.TEXT, 500, true);
 
     private static final List<SalesOrderItemDataReplacementField> REQUIRED_MATCH_KEYS = List.of(PART_NO, VERSION);
@@ -102,6 +106,7 @@ public enum SalesOrderItemDataReplacementField {
         TEXT,
         DATE,
         POSITIVE_INTEGER,
-        NON_NEGATIVE_DECIMAL
+        NON_NEGATIVE_DECIMAL,
+        ORDER_TYPE
     }
 }

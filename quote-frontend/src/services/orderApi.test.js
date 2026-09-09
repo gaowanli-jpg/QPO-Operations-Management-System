@@ -152,6 +152,7 @@ describe('orderApi', () => {
     await orderApi.saveSalesOrderItems(901, itemPayload)
     await orderApi.previewSalesOrderItemDataReplacement(901, formData)
     await orderApi.confirmSalesOrderItemDataReplacement(901, formData)
+    await orderApi.replaceSalesOrderItemField(901, { field: 'customerOrderNo', value: 'PO-BULK' })
     await orderApi.discardSalesOrderItemForU9Change(901, 21, { reason: '不参与 U9' })
     await orderApi.restoreSalesOrderItemForU9Change(901, 21, { reason: '恢复参与 U9' })
 
@@ -173,13 +174,29 @@ describe('orderApi', () => {
       data: formData,
       headers: { 'Content-Type': 'multipart/form-data' }
     })
-    expect(request).toHaveBeenNthCalledWith(5, '/api/market/sales-order-management/orders/901/items/21/discard', {
+    expect(request).toHaveBeenNthCalledWith(5, '/api/market/sales-order-management/orders/901/items/field-replacement', {
+      method: 'POST',
+      data: { field: 'customerOrderNo', value: 'PO-BULK' }
+    })
+    expect(request).toHaveBeenNthCalledWith(6, '/api/market/sales-order-management/orders/901/items/21/discard', {
       method: 'POST',
       data: { reason: '不参与 U9' }
     })
-    expect(request).toHaveBeenNthCalledWith(6, '/api/market/sales-order-management/orders/901/items/21/restore', {
+    expect(request).toHaveBeenNthCalledWith(7, '/api/market/sales-order-management/orders/901/items/21/restore', {
       method: 'POST',
       data: { reason: '恢复参与 U9' }
+    })
+  })
+
+  test('exposes sales order management item price conversion endpoints', async () => {
+    await orderApi.convertSalesOrderUntaxedToTaxIncluded(901)
+    await orderApi.convertSalesOrderTaxIncludedToUntaxed(901)
+
+    expect(request).toHaveBeenNthCalledWith(1, '/api/market/sales-order-management/orders/901/items/convert-untaxed-to-tax-included', {
+      method: 'POST'
+    })
+    expect(request).toHaveBeenNthCalledWith(2, '/api/market/sales-order-management/orders/901/items/convert-tax-included-to-untaxed', {
+      method: 'POST'
     })
   })
 

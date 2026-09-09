@@ -16,6 +16,7 @@ public class DataCenterEndpointRegistry {
     public static final String U9_SALES_ORDER_SYNC = "U9_SALES_ORDER_SYNC";
     public static final String U9_COMMON_ENTITY_QUERY = "U9_COMMON_ENTITY_QUERY";
     public static final String MES_PRODUCTION_DISPATCH = "MES_PRODUCTION_DISPATCH";
+    public static final String MES_STOCK_PICKING_ORDER_CREATE = "MES_STOCK_PICKING_ORDER_CREATE";
     public static final String MES_PROCESS_TYPE_LIST = "MES_PROCESS_TYPE_LIST";
     public static final String MES_MATERIAL_PAGE = "MES_MATERIAL_PAGE";
 
@@ -70,6 +71,16 @@ public class DataCenterEndpointRegistry {
                     "MES_PRODUCTION_DISPATCH_RESPONSE_V1",
                     60000
             ),
+            MES_STOCK_PICKING_ORDER_CREATE,
+            new EndpointDefinition(
+                    MES_STOCK_PICKING_ORDER_CREATE,
+                    "MES提库存工单创建",
+                    "MES",
+                    "POST",
+                    "MES_PRODUCTION_ORDER_CREATE_V1",
+                    "MES_PRODUCTION_ORDER_CREATE_RESPONSE_V1",
+                    60000
+            ),
             MES_PROCESS_TYPE_LIST,
             new EndpointDefinition(
                     MES_PROCESS_TYPE_LIST,
@@ -99,6 +110,7 @@ public class DataCenterEndpointRegistry {
                 definitions.get(U9_SALES_ORDER_SYNC),
                 definitions.get(U9_COMMON_ENTITY_QUERY),
                 definitions.get(MES_PRODUCTION_DISPATCH),
+                definitions.get(MES_STOCK_PICKING_ORDER_CREATE),
                 definitions.get(MES_PROCESS_TYPE_LIST),
                 definitions.get(MES_MATERIAL_PAGE)
         );
@@ -149,6 +161,7 @@ public class DataCenterEndpointRegistry {
             case U9_SALES_ORDER_SYNC -> trimToNull(properties.getU9SalesOrderSyncPath());
             case U9_COMMON_ENTITY_QUERY -> trimToNull(properties.getU9CommonEntityQueryPath());
             case MES_PRODUCTION_DISPATCH -> trimToNull(properties.getMesProductionDispatchPath());
+            case MES_STOCK_PICKING_ORDER_CREATE -> trimToNull(properties.getMesStockPickingOrderCreatePath());
             case MES_PROCESS_TYPE_LIST -> trimToNull(properties.getMesProcessTypeListPath());
             case MES_MATERIAL_PAGE -> trimToNull(properties.getMesMaterialPagePath());
             default -> null;

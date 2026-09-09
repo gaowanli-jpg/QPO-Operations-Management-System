@@ -3,7 +3,7 @@
     <header class="erp-page-header">
       <div>
         <h1 class="erp-page-title">询价订单</h1>
-        <p class="erp-page-description">先选择客户，再管理该客户下的询价订单、零件、图纸文件、提单和工艺表数据。</p>
+        <p class="erp-page-description">默认显示全部客户询价订单，可选择客户进一步筛选订单、零件、图纸文件、提单和工艺表数据。</p>
       </div>
     </header>
 
@@ -13,9 +13,9 @@
           <span class="customer-picker-content">
             <span
               :class="selectedCustomer ? 'customer-picker-text' : 'customer-picker-placeholder'"
-              :title="selectedCustomer || '先选择客户'"
+              :title="selectedCustomer || '全部客户'"
             >
-              {{ selectedCustomer || '先选择客户' }}
+              {{ selectedCustomer || '全部客户' }}
             </span>
             <span class="customer-picker-action">选择客户</span>
           </span>
@@ -24,7 +24,6 @@
         <el-select
           v-model="statusFilter"
           clearable
-          :disabled="!selectedCustomer"
           placeholder="全部状态"
           class="status-select"
           @change="handleSearch"
@@ -41,25 +40,19 @@
         <el-input
           v-model="keyword"
           clearable
-          :disabled="!selectedCustomer"
           placeholder="搜索 RFQ 号"
           class="search-input"
           @keyup.enter="handleSearch"
           @clear="handleSearch"
         />
-        <el-button :disabled="!selectedCustomer" @click="handleSearch">搜索</el-button>
-        <el-button type="primary" :loading="loading" :disabled="!selectedCustomer" @click="refreshOrders">刷新</el-button>
+        <el-button @click="handleSearch">搜索</el-button>
+        <el-button type="primary" :loading="loading" @click="refreshOrders">刷新</el-button>
       </div>
     </section>
 
     <section class="erp-table-surface order-table-surface">
-      <div v-if="!selectedCustomer" class="erp-empty-state">
-        <el-empty description="请先选择客户查看询价订单" />
-      </div>
-
-      <template v-else>
-        <div class="erp-table-body">
-          <el-table :data="orders" border stripe height="600" v-loading="loading">
+      <div class="erp-table-body">
+        <el-table :data="orders" border stripe height="600" v-loading="loading">
           <el-table-column prop="rfqNo" label="RFQ号" min-width="170" fixed show-overflow-tooltip />
           <el-table-column prop="status" label="状态" width="120" align="center">
             <template #default="scope">
@@ -116,21 +109,20 @@
               </div>
             </template>
           </el-table-column>
-          </el-table>
-        </div>
-        <div class="erp-pagination">
-          <el-pagination
-            v-model:current-page="page"
-            v-model:page-size="pageSize"
-            :page-sizes="[20, 50, 100]"
-            layout="total, sizes, prev, pager, next, jumper"
-            :pager-count="7"
-            :total="total"
-            background
-            @size-change="page = 1"
-          />
-        </div>
-      </template>
+        </el-table>
+      </div>
+      <div class="erp-pagination">
+        <el-pagination
+          v-model:current-page="page"
+          v-model:page-size="pageSize"
+          :page-sizes="[20, 50, 100]"
+          layout="total, sizes, prev, pager, next, jumper"
+          :pager-count="7"
+          :total="total"
+          background
+          @size-change="page = 1"
+        />
+      </div>
     </section>
 
     <el-drawer v-model="detailVisible" title="询价订单详情" size="72%">
@@ -650,7 +642,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import CustomerPickerDialog from './CustomerPickerDialog.vue'
 import OrderItemAppendDialog from './order/OrderItemAppendDialog.vue'
@@ -890,9 +882,7 @@ const isOrderStatusPending = (row) => isPending(orderActionKeys.statusChange(row
 const orderItemStatusPending = (row) => isPending(orderActionKeys.itemStatus(orderDetail.value?.orderInfo?.id, row?.itemId ?? row?.id))
 
 watch([page, pageSize], () => {
-  if (selectedCustomer.value) {
-    loadOrders()
-  }
+  loadOrders()
 })
 
 watch(() => [detailItemPagination.page, detailItemPagination.pageSize], () => {
@@ -914,15 +904,11 @@ watch(() => [detailProcessSheetPagination.page, detailProcessSheetPagination.pag
 })
 
 const loadOrders = async () => {
-  if (!selectedCustomer.value) {
-    orders.value = []
-    return
-  }
   loading.value = true
   try {
     const response = await listOrders({
       customerCode: selectedCustomerCode.value || undefined,
-      customerName: selectedCustomer.value,
+      customerName: selectedCustomer.value || undefined,
       keyword: keyword.value.trim() || undefined,
       status: statusFilter.value || undefined,
       page: page.value,
@@ -965,17 +951,18 @@ const handleCustomerSelected = async (customer) => {
   await handleCustomerChange()
 }
 
-const handleCustomerClear = () => {
+const handleCustomerClear = async () => {
   selectedCustomer.value = ''
   selectedCustomerCode.value = ''
   keyword.value = ''
   statusFilter.value = ''
-  orders.value = []
-  total.value = 0
   page.value = 1
   orderDetail.value = null
   detailVisible.value = false
+  await loadOrders()
 }
+
+onMounted(loadOrders)
 
 const draftKey = (row) => String(row?.itemId ?? row?.id ?? '')
 

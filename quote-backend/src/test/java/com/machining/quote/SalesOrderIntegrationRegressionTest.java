@@ -96,8 +96,8 @@ class SalesOrderIntegrationRegressionTest {
                 order(3L, "SO-20260814-003", LocalDateTime.of(2026, 8, 14, 9, 10))
         ));
         when(mapper.selectItemsByOrderIds(eq(List.of(1L, 2L)), eq(req))).thenReturn(List.of(
-                item(1L, "SO-20260814-001", 10, "P-001", "A", "MAT-001"),
-                item(2L, "SO-20260814-002", 20, "P-002", "B", "MAT-002")
+                item(1L, "SO-20260814-001", 1, "P-001", "A", "MAT-001"),
+                item(2L, "SO-20260814-002", 1, "P-002", "B", "MAT-002")
         ));
 
         SalesOrderSyncResp resp = service.query(req);
@@ -110,7 +110,7 @@ class SalesOrderIntegrationRegressionTest {
         assertThat(firstOrder.getCustomerCode()).isEqualTo("C02058");
         assertThat(firstOrder.getSupplierCode()).isEqualTo("SUP-C02058");
         assertThat(firstOrder.getOrderType()).isEqualTo("正式订单");
-        assertThat(firstItem.getSaleOrderItemNo()).isEqualTo("10");
+        assertThat(firstItem.getSaleOrderItemNo()).isEqualTo("1");
         assertThat(firstItem.getMaterialNo()).isEqualTo("MAT-001");
         assertThat(firstItem.getReleasedQty()).isEqualTo(2);
         assertThat(firstItem.getDescription()).isEqualTo("MES production demand item");
@@ -135,7 +135,7 @@ class SalesOrderIntegrationRegressionTest {
         order.setSupplierCode(null);
         when(mapper.selectOrderPage(eq(req), eq(null), eq(null), eq(101))).thenReturn(List.of(order));
         when(mapper.selectItemsByOrderIds(eq(List.of(1L)), eq(req))).thenReturn(List.of(
-                item(1L, "SO-20260814-001", 10, "P-001", "A", "MAT-001")
+                item(1L, "SO-20260814-001", 1, "P-001", "A", "MAT-001")
         ));
 
         SalesOrderSyncResp resp = service.query(req);
@@ -183,13 +183,13 @@ class SalesOrderIntegrationRegressionTest {
         when(mapper.selectOrderPage(eq(req), eq(null), eq(null), eq(101)))
                 .thenReturn(List.of(order(1L, "SO-20260814-001", LocalDateTime.of(2026, 8, 14, 10, 0))));
         when(mapper.selectItemsByOrderIds(eq(List.of(1L)), eq(req)))
-                .thenReturn(List.of(item(1L, "SO-20260814-001", 10, "P-ONLY", "B", "MAT-ONLY")));
+                .thenReturn(List.of(item(1L, "SO-20260814-001", 1, "P-ONLY", "B", "MAT-ONLY")));
 
         SalesOrderSyncResp resp = service.query(req);
 
         assertThat(resp.getData().getRecords()).hasSize(1);
         assertThat(resp.getData().getRecords().get(0).getItems()).hasSize(1);
-        assertThat(resp.getData().getRecords().get(0).getItems().get(0).getSaleOrderItemNo()).isEqualTo("10");
+        assertThat(resp.getData().getRecords().get(0).getItems().get(0).getSaleOrderItemNo()).isEqualTo("1");
         verify(mapper).selectOrderPage(eq(req), eq(null), eq(null), eq(101));
         verify(mapper).selectItemsByOrderIds(eq(List.of(1L)), eq(req));
     }

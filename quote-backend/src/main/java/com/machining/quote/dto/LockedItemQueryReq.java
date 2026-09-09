@@ -20,6 +20,8 @@ public class LockedItemQueryReq {
     private String itemType;
     private String allocationType;
     private String mesProductionStatus;
+    private String stockPickingStatus;
+    private Boolean discarded;
     private LocalDate dateFrom;
     private LocalDate dateTo;
 }

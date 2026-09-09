@@ -506,7 +506,7 @@ POST /api/v1/mes/openapi/demand/create
   "items": [
     {
       "saleOrderNo": "QPO-MES-E2E-SO-20260812-001",
-      "saleOrderItemNo": "10",
+      "saleOrderItemNo": "1",
       "productCode": "SY100399000001",
       "demandQty": 5,
       "makeQty": 5,
@@ -539,7 +539,7 @@ POST /api/v1/mes/openapi/demand/create
 | `customerName` | 否 | `sales_order_header.customer_name` 快照 | 空时不发送 |
 | `internalProjectNo` | 否 | allocation 快照 | 同一批次必须一致 |
 | `items[].saleOrderNo` | 是 | 按第 4.3 节解析出的 `sales_order_header.document_no`，兼容回退 `sales_order_no` | 禁止用 RFQ 编号或数据库 ID 伪造 |
-| `items[].saleOrderItemNo` | 是 | 按第 4.3 节解析出的 `sales_order_item.line_no` | 转字符串；禁止用 allocation ID 代替 |
+| `items[].saleOrderItemNo` | 是 | QPO 系统生成的 `sales_order_item.line_no` | 转字符串；订单内从 1 连续递增；禁止用客户 Excel 原始“序号”或 allocation ID 代替 |
 | `items[].productCode` | 是 | allocation 已确认 `material_no` | 必须非空且物料状态已确认 |
 | `items[].demandQty` | 是 | `allocation.qty` | 正整数 |
 | `items[].makeQty` | 是 | `allocation.qty` | 因本页只包含 `PRODUCTION_REQUIRED` |

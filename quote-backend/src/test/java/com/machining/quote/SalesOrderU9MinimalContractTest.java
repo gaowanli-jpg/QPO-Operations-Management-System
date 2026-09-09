@@ -105,6 +105,20 @@ class SalesOrderU9MinimalContractTest {
     }
 
     @Test
+    void assemblerRenumbersNonContiguousLineNumbersBeforeSendingU9() {
+        U9SalesOrderRequestAssembler assembler = new U9SalesOrderRequestAssembler();
+        SalesOrderHeader header = header();
+        SalesOrderItem first = item(501L, 10, "MAT-100201", 2, "100.00");
+        SalesOrderItem second = item(502L, 20, "MAT-100202", 3, "88.50");
+
+        U9SalesOrderHeadDTO request = assembler.assemble(header, List.of(first, second));
+
+        assertThat(request.getSOLineDTOList().stream()
+                .map(line -> line.getDocLineNo())
+                .toList()).containsExactly(1, 2);
+    }
+
+    @Test
     void validatorBlocksMissingUntaxedPriceAndOnlyWarnsForBlankDeliveryDates() {
         U9SalesOrderContractValidator validator = new U9SalesOrderContractValidator();
         SalesOrderItem item = item(501L, 1, "MAT-100201", 2, null);

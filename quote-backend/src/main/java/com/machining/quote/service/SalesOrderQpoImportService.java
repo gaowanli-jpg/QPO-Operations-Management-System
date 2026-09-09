@@ -438,8 +438,9 @@ public class SalesOrderQpoImportService {
         header.setImportRecordId(record.getId());
 
         int missingPriceCount = 0;
+        int lineNo = 1;
         for (SalesOrderQpoExcelLineDTO line : group.getLines()) {
-            SalesOrderItem item = toItem(header, line, now);
+            SalesOrderItem item = toItem(header, line, lineNo++, now);
             applyDrawingBinding(item, line, drawingBinding);
             itemMapper.insert(item);
             if (isMissingPrice(line)) {
@@ -583,11 +584,11 @@ public class SalesOrderQpoImportService {
         return record;
     }
 
-    private SalesOrderItem toItem(SalesOrderHeader header, SalesOrderQpoExcelLineDTO line, LocalDateTime now) {
+    private SalesOrderItem toItem(SalesOrderHeader header, SalesOrderQpoExcelLineDTO line, int lineNo, LocalDateTime now) {
         SalesOrderItem item = new SalesOrderItem();
         item.setSalesOrderId(header.getId());
         item.setSalesOrderDate(line.getSalesOrderDate());
-        item.setLineNo(line.getSalesOrderLineNo());
+        item.setLineNo(lineNo);
         item.setPartNo(line.getPartNo());
         item.setDescription(line.getDescription());
         item.setQty(line.getQty());

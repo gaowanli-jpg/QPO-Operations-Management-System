@@ -26,7 +26,6 @@ import java.util.Map;
 
 @Service
 public class SalesOrderQpoExcelParser {
-    private static final String LINE_NO = "\u5e8f\u53f7";
     private static final String SALES_ORDER_DATE = "\u4e0b\u5355\u65e5\u671f";
     private static final String CUSTOMER_ORDER_NO = "\u5ba2\u6237\u8ba2\u5355\u53f7";
     private static final String CUSTOMER_PROJECT_NO = "\u5ba2\u6237\u9879\u76ee\u53f7";
@@ -143,7 +142,6 @@ public class SalesOrderQpoExcelParser {
 
         SalesOrderQpoExcelLineDTO line = new SalesOrderQpoExcelLineDTO();
         line.setSourceRowNumber(excelRowNumber);
-        line.setSalesOrderLineNo(optionalInteger(row, headerIndexes, LINE_NO, formatter, evaluator, excelRowNumber, null));
         line.setSalesOrderDate(fallbackDate(row, headerIndexes, SALES_ORDER_DATE, formatter, evaluator, excelRowNumber,
                 defaults == null ? null : defaults.getSalesOrderDate()));
         line.setCustomerOrderNo(fallbackText(row, headerIndexes, CUSTOMER_ORDER_NO, formatter, evaluator,

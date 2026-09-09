@@ -108,12 +108,12 @@ class SalesOrderIntegrationContractTest {
         LocalDateTime changedAt = LocalDateTime.of(2026, 8, 14, 10, 30);
         when(mapper.selectOrderPage(eq(req), eq(null), eq(null), eq(101)))
                 .thenReturn(List.of(order(1L, "SO-20260814-001", "FORMAL", changedAt)));
-        SalesOrderSyncItemRow inheritedTypeItem = item(1L, "SO-20260814-001", 10, "P-001", "A", "MAT-001", null);
+        SalesOrderSyncItemRow inheritedTypeItem = item(1L, "SO-20260814-001", 1, "P-001", "A", "MAT-001", null);
         setMesDemandItemFields(inheritedTypeItem);
         when(mapper.selectItemsByOrderIds(eq(List.of(1L)), eq(req)))
                 .thenReturn(List.of(
                         inheritedTypeItem,
-                        item(1L, "SO-20260814-001", 20, "P-002", "B", "MAT-002", "STOCK")
+                        item(1L, "SO-20260814-001", 2, "P-002", "B", "MAT-002", "STOCK")
                 ));
 
         SalesOrderSyncResp resp = service.query(req);
@@ -130,7 +130,7 @@ class SalesOrderIntegrationContractTest {
 
         assertThat(order.getItems()).hasSize(2);
         SalesOrderSyncItemDTO firstItem = order.getItems().get(0);
-        assertThat(firstItem.getSaleOrderItemNo()).isEqualTo("10");
+        assertThat(firstItem.getSaleOrderItemNo()).isEqualTo("1");
         assertThat(firstItem.getMaterialNo()).isEqualTo("MAT-001");
         assertThat(firstItem.getReleasedQty()).isEqualTo(1);
         assertThat(firstItem.getDescription()).isEqualTo("Part description");
@@ -147,7 +147,7 @@ class SalesOrderIntegrationContractTest {
                 .contains("\"customerProjectNo\":\"CP-001\"");
 
         SalesOrderSyncItemDTO secondItem = order.getItems().get(1);
-        assertThat(secondItem.getSaleOrderItemNo()).isEqualTo("20");
+        assertThat(secondItem.getSaleOrderItemNo()).isEqualTo("2");
 
         String json = objectMapper.writeValueAsString(resp);
         assertThat(json).doesNotContain(FORBIDDEN_RESPONSE_FIELDS.toArray(String[]::new));
@@ -182,7 +182,7 @@ class SalesOrderIntegrationContractTest {
         when(mapper.selectOrderPage(eq(req), eq(null), eq(null), eq(101)))
                 .thenReturn(List.of(order(1L, "SO-20260814-001", "FORECAST", LocalDateTime.of(2026, 8, 14, 10, 30))));
         when(mapper.selectItemsByOrderIds(eq(List.of(1L)), eq(req)))
-                .thenReturn(List.of(item(1L, "SO-20260814-001", 10, "P-001", "A", "MAT-001", "FORECAST")));
+                .thenReturn(List.of(item(1L, "SO-20260814-001", 1, "P-001", "A", "MAT-001", "FORECAST")));
 
         String json = objectMapper.writeValueAsString(service.query(req));
 
@@ -217,13 +217,29 @@ class SalesOrderIntegrationContractTest {
     }
 
     @Test
+    void queryRejectsNonPositiveLineNoInsteadOfInventingSaleOrderItemNo() {
+        SalesOrderIntegrationMapper mapper = mock(SalesOrderIntegrationMapper.class);
+        SalesOrderIntegrationSyncService service = service(mapper);
+        SalesOrderSyncQueryReq req = req(100);
+        when(mapper.selectOrderPage(eq(req), eq(null), eq(null), eq(101)))
+                .thenReturn(List.of(order(1L, "SO-20260814-001", "FORMAL", LocalDateTime.of(2026, 8, 14, 10, 30))));
+        SalesOrderSyncItemRow item = item(1L, "SO-20260814-001", 0, "P-001", "A", "MAT-001", "FORMAL");
+        when(mapper.selectItemsByOrderIds(eq(List.of(1L)), eq(req)))
+                .thenReturn(List.of(item));
+
+        assertThatThrownBy(() -> service.query(req))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("sales_order_item.line_no");
+    }
+
+    @Test
     void queryAllowsItemRowsWithoutMaterialNoBecauseMaterialMayBeAssignedLater() {
         SalesOrderIntegrationMapper mapper = mock(SalesOrderIntegrationMapper.class);
         SalesOrderIntegrationSyncService service = service(mapper);
         SalesOrderSyncQueryReq req = req(100);
         when(mapper.selectOrderPage(eq(req), eq(null), eq(null), eq(101)))
                 .thenReturn(List.of(order(1L, "SO-20260814-001", "FORMAL", LocalDateTime.of(2026, 8, 14, 10, 30))));
-        SalesOrderSyncItemRow item = item(1L, "SO-20260814-001", 10, "P-001", "A", null, "FORMAL");
+        SalesOrderSyncItemRow item = item(1L, "SO-20260814-001", 1, "P-001", "A", null, "FORMAL");
         when(mapper.selectItemsByOrderIds(eq(List.of(1L)), eq(req)))
                 .thenReturn(List.of(item));
 
@@ -232,7 +248,7 @@ class SalesOrderIntegrationContractTest {
         assertThat(resp.isSuccess()).isTrue();
         assertThat(resp.getData().getRecords()).hasSize(1);
         SalesOrderSyncItemDTO returnedItem = resp.getData().getRecords().get(0).getItems().get(0);
-        assertThat(returnedItem.getSaleOrderItemNo()).isEqualTo("10");
+        assertThat(returnedItem.getSaleOrderItemNo()).isEqualTo("1");
         assertThat(returnedItem.getMaterialNo()).isNull();
     }
 
@@ -246,7 +262,7 @@ class SalesOrderIntegrationContractTest {
         order.setSupplierCode(null);
         when(mapper.selectOrderPage(eq(req), eq(null), eq(null), eq(101)))
                 .thenReturn(List.of(order));
-        SalesOrderSyncItemRow item = item(1L, "SO-20260814-001", 10, "P-001", "A", null, null);
+        SalesOrderSyncItemRow item = item(1L, "SO-20260814-001", 1, "P-001", "A", null, null);
         item.setDescription(null);
         item.setSurfaceTreatment(null);
         item.setRemark(null);

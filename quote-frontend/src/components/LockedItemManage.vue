@@ -11,6 +11,9 @@
       <div class="locked-toolbar-main">
         <div class="erp-toolbar-group locked-primary-filters">
           <el-tag v-if="route.query.ticketId" type="info" effect="plain">提单ID：{{ route.query.ticketId }}</el-tag>
+          <el-radio-group v-model="viewMode" size="small">
+            <el-radio-button v-for="option in viewModeOptions" :key="option.value" :label="option.value">{{ option.label }}</el-radio-button>
+          </el-radio-group>
           <el-button v-permission="'market:locked-item:customer-select'" class="customer-picker-trigger" @click="customerPickerVisible = true">
             <span class="customer-picker-content">
               <span
@@ -28,12 +31,28 @@
           <el-select v-model="filters.allocationType" clearable placeholder="分配类型" class="filter-select allocation-type-select" @change="handleSearch" @clear="handleSearch">
             <el-option v-for="option in allocationTypeOptions" :key="option.value" :label="option.label" :value="option.value" />
           </el-select>
+          <el-select v-model="filters.stockPickingStatus" clearable placeholder="提库存状态" class="filter-select stock-picking-status-select" @change="handleSearch" @clear="handleSearch">
+            <el-option v-for="option in stockPickingStatusOptions" :key="option.value" :label="option.label" :value="option.value" />
+          </el-select>
           <el-button @click="handleSearch">搜索</el-button>
           <el-button @click="handleResetFilters">重置</el-button>
           <el-button plain @click="advancedFiltersVisible = !advancedFiltersVisible">
             {{ advancedFiltersVisible ? '收起筛选' : '高级筛选' }}
           </el-button>
           <el-button v-if="route.query.ticketId" @click="showAllItems">查看全部</el-button>
+        </div>
+
+        <div v-if="viewMode === 'ACTIVE'" class="erp-toolbar-group locked-batch-actions">
+          <el-button
+            v-permission="LOCKED_ITEM_STOCK_PICKING_SUBMIT_PERMISSION"
+            type="primary"
+            plain
+            :disabled="selectedAllocationIds.length === 0 || isStockPickingDispatchPending"
+            :loading="isStockPickingDispatchPending"
+            @click="handleStockPickingDispatch"
+          >
+            下发提库存工单
+          </el-button>
         </div>
       </div>
 
@@ -57,6 +76,35 @@
       </div>
     </section>
 
+    <section v-if="stockPickingResult" class="erp-table-surface stock-picking-result-surface">
+      <div class="erp-table-header stock-picking-result-header">
+        <div>
+          <h3>提库存工单下发结果</h3>
+          <p>只下发锁库行；失败和结果待核对行可以重新选择后重试。</p>
+        </div>
+        <div class="stock-picking-result-actions">
+          <el-button text @click="closeStockPickingResult">关闭结果</el-button>
+        </div>
+      </div>
+      <div class="stock-picking-result-stats">
+        <div v-for="stat in stockPickingStats" :key="stat.label" class="stock-picking-result-stat">
+          <span>{{ stat.label }}</span>
+          <strong>{{ stat.value }}</strong>
+        </div>
+      </div>
+      <div v-if="stockPickingRows.length" class="stock-picking-result-details">
+        <div v-for="row in stockPickingRows" :key="`stock-picking-${row.allocationId || row.message}`" class="stock-picking-result-row">
+          <span>分配ID：{{ row.allocationId || row.result?.allocationId || '-' }}</span>
+          <span class="result-row-code">bizId：{{ stockPickingRowBizId(row) }}</span>
+          <span class="result-row-code">工单号：{{ stockPickingRowExternalId(row) }}</span>
+          <el-tag :type="stockPickingRowTagType(row.status)" size="small">{{ stockPickingRowStatusText(row.status) }}</el-tag>
+          <el-tooltip :content="row.message || row.result?.errorMessage || '-'" placement="top">
+            <span class="stock-picking-result-message">{{ row.message || row.result?.errorMessage || '-' }}</span>
+          </el-tooltip>
+        </div>
+      </div>
+    </section>
+
     <section class="erp-table-surface locked-table-surface">
       <div class="erp-table-body">
         <el-table
@@ -65,7 +113,9 @@
           stripe
           height="600"
           v-loading="loading"
+          @selection-change="handleSelectionChange"
         >
+          <el-table-column v-if="viewMode === 'ACTIVE'" type="selection" width="46" fixed align="center" />
           <el-table-column prop="id" label="分配ID" width="96" fixed align="center" show-overflow-tooltip />
           <el-table-column prop="ticketId" label="提单ID" width="96" fixed align="center" show-overflow-tooltip />
           <el-table-column prop="partNo" label="图号" min-width="150" fixed show-overflow-tooltip />
@@ -82,6 +132,13 @@
             <template #default="{ row }">
               <el-tag :type="allocationTypeMeta(row.allocationType).type" size="small">
                 {{ allocationTypeMeta(row.allocationType).label }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="提库存状态" width="130" align="center">
+            <template #default="{ row }">
+              <el-tag :type="stockPickingStatusMeta(row.stockPickingStatus).type" size="small">
+                {{ stockPickingStatusMeta(row.stockPickingStatus).label }}
               </el-tag>
             </template>
           </el-table-column>
@@ -133,17 +190,48 @@
           <el-table-column prop="remark" label="备注" min-width="180" show-overflow-tooltip>
             <template #default="{ row }">{{ formatDash(row.remark) }}</template>
           </el-table-column>
-          <el-table-column label="操作" width="120" align="center" fixed="right">
+          <el-table-column v-if="viewMode === 'DISCARDED'" prop="discardReason" label="废弃原因" min-width="180" show-overflow-tooltip>
+            <template #default="{ row }">{{ formatDash(row.discardReason) }}</template>
+          </el-table-column>
+          <el-table-column v-if="viewMode === 'DISCARDED'" prop="discardedAt" label="废弃时间" width="160" show-overflow-tooltip>
+            <template #default="{ row }">{{ formatDateTime(row.discardedAt) }}</template>
+          </el-table-column>
+          <el-table-column v-if="viewMode === 'DISCARDED'" prop="discardedBy" label="废弃人" width="110" align="center" show-overflow-tooltip>
+            <template #default="{ row }">{{ formatDash(row.discardedBy) }}</template>
+          </el-table-column>
+          <el-table-column label="操作" width="180" align="center" fixed="right">
             <template #default="{ row }">
-              <el-button
-                v-permission="DELIVERED_ITEM_VIEW_PERMISSION"
-                size="small"
-                type="primary"
-                plain
-                @click="openTicketDetail(row)"
-              >
-                查看提单行
-              </el-button>
+              <div class="erp-table-actions locked-row-actions">
+                <el-button
+                  v-permission="DELIVERED_ITEM_VIEW_PERMISSION"
+                  size="small"
+                  type="primary"
+                  plain
+                  @click="openTicketDetail(row)"
+                >
+                  查看提单行
+                </el-button>
+                <el-button
+                  v-if="viewMode === 'ACTIVE'"
+                  v-permission="LOCKED_ITEM_DISCARD_PERMISSION"
+                  size="small"
+                  type="danger"
+                  plain
+                  @click="handleDiscard(row)"
+                >
+                  废弃
+                </el-button>
+                <el-button
+                  v-if="viewMode === 'DISCARDED'"
+                  v-permission="LOCKED_ITEM_RESTORE_PERMISSION"
+                  size="small"
+                  type="success"
+                  plain
+                  @click="handleRestore(row)"
+                >
+                  恢复
+                </el-button>
+              </div>
             </template>
           </el-table-column>
         </el-table>
@@ -206,22 +294,36 @@
 </template>
 
 <script setup>
-import { onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import CustomerPickerDialog from './CustomerPickerDialog.vue'
 import {
+  discardLockedItem,
   getDeliveredItem,
+  getDeliveryIntegrationTask,
   listLockedItems,
-  listTicketAllocations
+  listTicketAllocations,
+  restoreLockedItem,
+  submitLockedStockPickingOrderBatch
 } from '../services/deliveredItemApi'
+import { usePendingAction } from '../composables/usePendingAction'
 import { formatProcessRouteSnapshot } from '../utils/processRouteFormatter'
 
 const LOCKED_ITEM_VIEW_PERMISSION = 'market:locked-item:view'
+const LOCKED_ITEM_STOCK_PICKING_SUBMIT_PERMISSION = 'market:locked-item:stock-picking-submit'
+const LOCKED_ITEM_DISCARD_PERMISSION = 'market:locked-item:discard'
+const LOCKED_ITEM_RESTORE_PERMISSION = 'market:locked-item:restore'
 const DELIVERED_ITEM_VIEW_PERMISSION = 'market:delivered-item:view'
 
 const route = useRoute()
 const router = useRouter()
+const { isPending, runAction } = usePendingAction()
+
+const lockedActionKeys = {
+  stockPickingDispatch: () => 'locked-item:stock-picking:batch'
+}
+
 const filters = reactive({
   customerName: '',
   customerCode: '',
@@ -233,6 +335,7 @@ const filters = reactive({
   customerOrderNo: '',
   customerProjectNo: '',
   allocationType: '',
+  stockPickingStatus: '',
   dateRange: []
 })
 
@@ -240,8 +343,21 @@ const allocationTypeOptions = [
   { value: 'IN_STOCK_LOCK', label: '已入库库存锁定', type: 'success' },
   { value: 'IN_PRODUCTION_LOCK', label: '在产覆盖', type: 'warning' }
 ]
+const stockPickingStatusOptions = [
+  { value: 'PENDING', label: '待下发', type: 'info' },
+  { value: 'PROCESSING', label: '下发中', type: 'warning' },
+  { value: 'RESULT_UNKNOWN', label: '结果待核对', type: 'warning' },
+  { value: 'SUCCESS', label: '已下发', type: 'success' },
+  { value: 'FAILED', label: '下发失败', type: 'danger' }
+]
+const viewModeOptions = [
+  { label: '待处理', value: 'ACTIVE' },
+  { label: '已废弃', value: 'DISCARDED' }
+]
 
 const items = ref([])
+const selectedRows = ref([])
+const selectedAllocationIds = computed(() => selectedRows.value.map(row => row.id).filter(Boolean))
 const loading = ref(false)
 const page = ref(1)
 const pageSize = ref(20)
@@ -250,9 +366,16 @@ const customerPickerVisible = ref(false)
 const ticketDetailVisible = ref(false)
 const selectedTicketDetail = ref(null)
 const advancedFiltersVisible = ref(false)
+const stockPickingResult = ref(null)
+const viewMode = ref('ACTIVE')
 
 watch([page, pageSize], () => loadItems())
 watch(() => route.query.ticketId, () => loadItems())
+watch(viewMode, async () => {
+  selectedRows.value = []
+  page.value = 1
+  await loadItems()
+})
 
 const buildParams = () => {
   const params = Object.fromEntries(Object.entries(filters)
@@ -260,6 +383,7 @@ const buildParams = () => {
   const [dateFrom, dateTo] = filters.dateRange || []
   if (dateFrom) params.dateFrom = dateFrom
   if (dateTo) params.dateTo = dateTo
+  params.discarded = viewMode.value === 'DISCARDED'
   return {
     ...params,
     page: page.value,
@@ -304,6 +428,7 @@ const handleResetFilters = async () => {
     customerOrderNo: '',
     customerProjectNo: '',
     allocationType: '',
+    stockPickingStatus: '',
     dateRange: []
   })
   await handleSearch()
@@ -326,6 +451,231 @@ const handleCustomerClear = async () => {
 
 const filterLockedRows = (records) => (Array.isArray(records) ? records : [])
   .filter(row => ['IN_STOCK_LOCK', 'IN_PRODUCTION_LOCK'].includes(row?.allocationType))
+  .filter(row => Boolean(row?.discarded) === (viewMode.value === 'DISCARDED'))
+  .filter(row => String(row?.stockPickingStatus || 'PENDING').toUpperCase() !== 'SUCCESS')
+
+const handleSelectionChange = (rows) => {
+  selectedRows.value = rows || []
+}
+
+const handleDiscard = async (row) => {
+  try {
+    const { value } = await ElMessageBox.prompt('请输入废弃原因', '废弃锁库零件', {
+      confirmButtonText: '确认废弃',
+      cancelButtonText: '取消',
+      inputPlaceholder: '废弃原因',
+      inputValidator: (value) => String(value || '').trim() ? true : '废弃原因不能为空'
+    })
+    await discardLockedItem(row.id, { reason: String(value || '').trim() })
+    ElMessage.success('锁库零件已废弃')
+    selectedRows.value = []
+    await loadItems()
+  } catch (error) {
+    if (error === 'cancel' || error === 'close') return
+    console.error(error)
+    ElMessage.error(error.response?.data?.message || error.message || '锁库零件废弃失败。')
+  }
+}
+
+const handleRestore = async (row) => {
+  try {
+    const { value } = await ElMessageBox.prompt('请输入恢复原因（可选）', '恢复锁库零件', {
+      confirmButtonText: '确认恢复',
+      cancelButtonText: '取消',
+      inputPlaceholder: '恢复原因（可选）'
+    })
+    await restoreLockedItem(row.id, { reason: String(value || '').trim() })
+    ElMessage.success('锁库零件已恢复')
+    await loadItems()
+  } catch (error) {
+    if (error === 'cancel' || error === 'close') return
+    console.error(error)
+    ElMessage.error(error.response?.data?.message || error.message || '锁库零件恢复失败。')
+  }
+}
+
+const isStockPickingDispatchPending = computed(() => isPending(lockedActionKeys.stockPickingDispatch()))
+
+const stockPickingDispatchPreview = computed(() => {
+  const rows = selectedRows.value || []
+  const blockedReasons = new Map()
+  let sendableCount = 0
+  let totalQty = 0
+  const batchKeys = new Set()
+  const addBlocked = (reason) => blockedReasons.set(reason, (blockedReasons.get(reason) || 0) + 1)
+
+  rows.forEach(row => {
+    const status = String(row?.stockPickingStatus || 'PENDING').toUpperCase()
+    if (!['IN_STOCK_LOCK', 'IN_PRODUCTION_LOCK'].includes(row?.allocationType)) {
+      addBlocked('非锁库行')
+      return
+    }
+    if (row?.discarded) {
+      addBlocked('已废弃')
+      return
+    }
+    if (status === 'SUCCESS') {
+      addBlocked('已下发成功')
+      return
+    }
+    if (status === 'PROCESSING') {
+      addBlocked('正在下发')
+      return
+    }
+    if (!row?.materialNo) {
+      addBlocked('缺少物料号')
+      return
+    }
+    if (!row?.deliveryDate) {
+      addBlocked('缺少内部目标交期')
+      return
+    }
+    const qty = Number(row?.qty || 0)
+    if (!Number.isFinite(qty) || qty <= 0) {
+      addBlocked('数量无效')
+      return
+    }
+    sendableCount += 1
+    totalQty += qty
+    batchKeys.add(row.stockPickingBizId || 'NEW')
+  })
+
+  return {
+    selectedCount: rows.length,
+    sendableCount,
+    estimatedBatchCount: batchKeys.size,
+    totalQty,
+    blockedReasonText: Array.from(blockedReasons.entries())
+      .map(([reason, count]) => `${reason} ${count} 行`)
+      .join('；') || '无'
+  }
+})
+
+const stockPickingDispatchConfirmMessage = () => {
+  const preview = stockPickingDispatchPreview.value
+  return [
+    `已选行数：${preview.selectedCount}`,
+    `将实际发送：${preview.sendableCount}`,
+    `预计 MES 批次：${preview.estimatedBatchCount}`,
+    `提库存总数量：${preview.totalQty}`,
+    `被阻断或跳过：${preview.blockedReasonText}`,
+    '实际拆批和最终校验以后端为准；非锁库行会自动跳过，失败和结果待核对行允许重试。'
+  ].join('\n')
+}
+
+const handleStockPickingDispatch = async () => {
+  if (selectedAllocationIds.value.length === 0) {
+    return ElMessage.warning('请先选择需要下发提库存工单的锁库零件。')
+  }
+  stockPickingResult.value = null
+  try {
+    await ElMessageBox.confirm(stockPickingDispatchConfirmMessage(), '确认提交提库存工单', {
+      confirmButtonText: '确认提交',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+  } catch {
+    return
+  }
+
+  return runAction(lockedActionKeys.stockPickingDispatch(), async () => {
+    try {
+      const task = await submitLockedStockPickingOrderBatch(selectedAllocationIds.value)
+      const taskId = taskIdOf(task)
+      ElMessage.success(taskId ? `提库存工单任务已提交，任务ID：${taskId}` : '提库存工单任务已提交')
+      stockPickingResult.value = stockPickingResultOf(task) || await waitStockPickingTaskResult(taskId)
+      selectedRows.value = []
+      await loadItems()
+    } catch (error) {
+      console.error(error)
+      ElMessage.error(error.response?.data?.message || error.message || '提库存工单任务提交失败。')
+    }
+  })
+}
+
+const taskIdOf = (task) => task?.id || task?.taskId || task?.task?.id
+
+const stockPickingResultOf = (task) => {
+  const result = task?.resultJson || task?.result || task?.task?.resultJson
+  if (!result) return null
+  if (typeof result === 'object') return result
+  if (typeof result === 'string') {
+    try {
+      const parsed = JSON.parse(result)
+      return parsed && typeof parsed === 'object' ? parsed : null
+    } catch {
+      return null
+    }
+  }
+  return null
+}
+
+const waitFor = (milliseconds) => new Promise(resolve => globalThis.setTimeout(resolve, milliseconds))
+
+const waitStockPickingTaskResult = async (taskId) => {
+  if (!taskId) return null
+  const delays = [300, 700, 1000, 1200, 1500]
+  for (const delayMs of delays) {
+    await waitFor(delayMs)
+    try {
+      const latestTask = await getDeliveryIntegrationTask(taskId)
+      const result = stockPickingResultOf(latestTask)
+      if (result) return result
+      if (['SUCCESS', 'FAILED'].includes(String(latestTask?.status || '').toUpperCase())) {
+        return null
+      }
+    } catch (error) {
+      console.warn('Stock picking order task result polling failed', error)
+      return null
+    }
+  }
+  return null
+}
+
+const resultRowsOf = (result) => {
+  const rows = result?.rows || result?.results || []
+  return Array.isArray(rows) ? rows : []
+}
+
+const stockPickingRows = computed(() => resultRowsOf(stockPickingResult.value))
+
+const numberCount = (value) => Number.isFinite(Number(value)) ? Number(value) : 0
+
+const stockPickingStats = computed(() => {
+  const result = stockPickingResult.value || {}
+  return [
+    { label: 'MES 批次数', value: numberCount(result.batchCount) },
+    { label: '逐行结果', value: numberCount(result.totalCount) || stockPickingRows.value.length },
+    { label: '成功', value: numberCount(result.successCount) },
+    { label: '失败', value: numberCount(result.failedCount) },
+    { label: '结果待核对', value: numberCount(result.unknownCount) || numberCount(result.resultUnknownCount) },
+    { label: '跳过', value: numberCount(result.skippedCount) }
+  ]
+})
+
+const resultObjectOf = (row) => row?.result && typeof row.result === 'object' ? row.result : {}
+
+const stockPickingRowBizId = (row) => resultObjectOf(row).bizId || row?.bizId || '-'
+
+const stockPickingRowExternalId = (row) => resultObjectOf(row).externalId || row?.externalId || '-'
+
+const stockPickingRowStatusText = (value) => ({
+  SUCCESS: '成功',
+  FAILED: '失败',
+  SKIPPED: '跳过',
+  RESULT_UNKNOWN: '结果待核对'
+}[value] || formatDash(value))
+
+const stockPickingRowTagType = (value) => ({
+  SUCCESS: 'success',
+  FAILED: 'danger',
+  SKIPPED: 'info',
+  RESULT_UNKNOWN: 'warning'
+}[value] || 'info')
+
+const closeStockPickingResult = () => {
+  stockPickingResult.value = null
+}
 
 const showAllItems = () => {
   router.push({ path: '/locked-items' })
@@ -356,9 +706,23 @@ const statusText = (value) => ({
   PENDING: '未处理',
   PROCESSING: '处理中',
   CALLBACK_PENDING: '待MES回调',
+  RESULT_UNKNOWN: '结果待核对',
   SUCCESS: '成功',
   FAILED: '失败'
 }[value] || formatDash(value))
+
+const stockPickingStatusMeta = (value) => {
+  const normalized = String(value || 'PENDING').toUpperCase()
+  return stockPickingStatusOptions.find(option => option.value === normalized) || {
+    label: value || '-',
+    type: 'info'
+  }
+}
+
+const formatDateTime = (value) => {
+  if (!value) return '-'
+  return String(value).replace('T', ' ').replace(/\.\d+$/, '').replace(/Z$/, '')
+}
 
 const normalizeObject = (value) => {
   if (!value) return {}
@@ -432,6 +796,18 @@ onMounted(() => loadItems())
   justify-content: flex-start;
   row-gap: 8px;
   column-gap: 10px;
+  box-sizing: border-box;
+}
+
+.locked-batch-actions {
+  flex: 0 0 auto;
+  align-self: stretch;
+  justify-content: flex-end;
+  align-content: flex-start;
+  row-gap: 8px;
+  column-gap: 8px;
+  padding-left: 12px;
+  border-left: 1px solid var(--erp-border-soft);
   box-sizing: border-box;
 }
 
@@ -515,6 +891,10 @@ onMounted(() => loadItems())
   flex-basis: 150px;
 }
 
+.stock-picking-status-select {
+  width: 150px;
+  flex-basis: 150px;
+}
 
 .filter-date-range {
   width: 250px;
@@ -523,6 +903,99 @@ onMounted(() => loadItems())
 
 .locked-table-surface .erp-table-body {
   padding: var(--erp-space-3);
+}
+
+.stock-picking-result-surface {
+  margin-bottom: 12px;
+}
+
+.stock-picking-result-header {
+  align-items: center;
+  gap: 12px;
+}
+
+.stock-picking-result-header h3 {
+  margin: 0 0 4px;
+  color: var(--erp-text-primary);
+  font-size: var(--erp-font-size-base);
+  font-weight: 600;
+}
+
+.stock-picking-result-header p {
+  margin: 0;
+  color: var(--erp-text-secondary);
+  font-size: var(--erp-font-size-sm);
+}
+
+.stock-picking-result-actions,
+.stock-picking-result-stats,
+.stock-picking-result-details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.stock-picking-result-actions {
+  justify-content: flex-end;
+}
+
+.stock-picking-result-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  padding: 0 var(--erp-space-3) var(--erp-space-3);
+}
+
+.stock-picking-result-stat {
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--erp-border-light);
+  border-radius: var(--erp-radius-sm);
+  background: var(--erp-bg-soft);
+}
+
+.stock-picking-result-stat span {
+  display: block;
+  color: var(--erp-text-secondary);
+  font-size: var(--erp-font-size-sm);
+}
+
+.stock-picking-result-stat strong {
+  display: block;
+  margin-top: 4px;
+  color: var(--erp-text-primary);
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+.stock-picking-result-details {
+  display: grid;
+  gap: 8px;
+  max-width: 100%;
+  padding: 0 var(--erp-space-3) var(--erp-space-3);
+  overflow-x: auto;
+}
+
+.stock-picking-result-row {
+  display: grid;
+  grid-template-columns: minmax(88px, 0.8fr) minmax(170px, 1.4fr) minmax(130px, 1fr) auto minmax(260px, 2fr);
+  min-width: 760px;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--erp-border-light);
+  border-radius: var(--erp-radius-sm);
+  background: var(--erp-bg-soft);
+  color: var(--erp-text-secondary);
+  font-size: var(--erp-font-size-sm);
+}
+
+.stock-picking-result-message,
+.result-row-code {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  word-break: break-word;
 }
 
 
@@ -558,6 +1031,18 @@ onMounted(() => loadItems())
   .locked-primary-filters {
     justify-content: flex-start;
   }
+
+  .locked-batch-actions,
+  .stock-picking-result-header,
+  .stock-picking-result-actions {
+    justify-content: flex-start;
+  }
+
+  .locked-batch-actions {
+    width: 100%;
+    padding-left: 0;
+    border-left: 0;
+  }
 }
 
 @media (max-width: 720px) {
@@ -574,6 +1059,17 @@ onMounted(() => loadItems())
   .filter-date-range {
     width: 100%;
     flex: 1 1 100%;
+  }
+
+  .stock-picking-result-row {
+    grid-template-columns: 1fr;
+    min-width: 0;
+    align-items: flex-start;
+  }
+
+  .stock-picking-result-message,
+  .result-row-code {
+    white-space: normal;
   }
 }
 </style>

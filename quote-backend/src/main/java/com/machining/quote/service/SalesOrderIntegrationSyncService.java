@@ -107,8 +107,8 @@ public class SalesOrderIntegrationSyncService {
     }
 
     private SalesOrderSyncItemDTO toItemRecord(SalesOrderSyncItemRow item) {
-        if (item.getLineNo() == null) {
-            throw new IllegalArgumentException("sales_order_item.line_no is required for external sales order sync");
+        if (item.getLineNo() == null || item.getLineNo() <= 0) {
+            throw new IllegalArgumentException("sales_order_item.line_no must be a positive system sequence for external sales order sync");
         }
         SalesOrderSyncItemDTO record = new SalesOrderSyncItemDTO();
         record.setSaleOrderItemNo(String.valueOf(item.getLineNo()));

@@ -36,6 +36,11 @@ describe('sales order import panel', () => {
     expect(marketDashboard).toContain("v-permission=\"'market:rfq:import'\"")
   })
 
+  test('sales order import copy no longer exposes customer Excel sequence as an import field', () => {
+    expect(salesOrderPane).toContain('可选表头：下单日期')
+    expect(salesOrderPane).not.toContain('可选表头：序号')
+  })
+
   test('sales order mode requires customer master selection and defaults document type to SO06', () => {
     expect(marketDashboard).toContain('salesOrderForm')
     expect(marketDashboard).toContain("documentTypeCode: 'SO06'")
@@ -155,6 +160,19 @@ describe('sales order import panel', () => {
     expect(submitBlock).toContain('销售订单导入成功')
   })
 
+  test('sales order import automatically exports production task notice for created sales orders', () => {
+    const submitBlock = marketDashboard.slice(
+      marketDashboard.indexOf('const submitSalesOrderImport'),
+      marketDashboard.indexOf('// 提交询价单和图纸')
+    )
+
+    expect(marketDashboard).toContain("import { downloadSalesOrderProductionTaskNotice } from '../services/orderApi'")
+    expect(marketDashboard).toContain('autoExportImportedSalesOrderProductionTaskNotices')
+    expect(submitBlock).toContain('await autoExportImportedSalesOrderProductionTaskNotices(response)')
+    expect(marketDashboard).toContain('downloadSalesOrderProductionTaskNotice(salesOrderId, `${salesOrderNo}-生产任务通知单.xlsx`)')
+    expect(marketDashboard).toContain('生产任务通知单已开始导出')
+  })
+
   test('RFQ import submits old and part-version drawing entrances independently', () => {
     const submitBlock = marketDashboard.slice(
       marketDashboard.indexOf('const submitRfqPackage'),
@@ -215,7 +233,7 @@ describe('sales order import panel', () => {
   test('sales order upload instructions follow the new market template', () => {
     expect(salesOrderPane).toContain('销售订单 Excel 需包含表头')
     expect(salesOrderPane).toContain('图号、订单数量、版本')
-    expect(salesOrderPane).toContain('可选表头：序号、下单日期、客户订单号、客户项目号、客户下单抬头、订单类型、内部项目号')
+    expect(salesOrderPane).toContain('可选表头：下单日期、客户订单号、客户项目号、客户下单抬头、订单类型、内部项目号')
     expect(salesOrderPane).toContain('订单级字段以下方“订单默认信息”为准')
     expect(salesOrderPane).toContain('Excel 行内同名字段仅作为零件级覆盖值')
     expect(salesOrderPane).toContain('价格允许为空，但 U9 同步前必须补齐')

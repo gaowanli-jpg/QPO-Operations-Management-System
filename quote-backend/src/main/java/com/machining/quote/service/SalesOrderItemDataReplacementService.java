@@ -252,7 +252,11 @@ public class SalesOrderItemDataReplacementService {
             case "surfaceTreatment" -> line.setSurfaceTreatment(stringValue(value));
             case "customerOrderNo" -> line.setCustomerOrderNo(stringValue(value));
             case "customerProjectNo" -> line.setCustomerProjectNo(stringValue(value));
+            case "customerOrderTitle" -> line.setCustomerOrderTitle(stringValue(value));
             case "internalProjectNo" -> line.setInternalProjectNo(stringValue(value));
+            case "orderType" -> line.setOrderType(stringValue(value));
+            case "description" -> line.setDescription(stringValue(value));
+            case "status" -> line.setStatus(stringValue(value));
             case "remark" -> line.setRemark(stringValue(value));
             default -> throw new IllegalArgumentException("存在不支持的销售订单表格替换字段");
         }
@@ -308,7 +312,11 @@ public class SalesOrderItemDataReplacementService {
             case SURFACE_TREATMENT -> item.getSurfaceTreatment();
             case CUSTOMER_ORDER_NO -> item.getCustomerOrderNo();
             case CUSTOMER_PROJECT_NO -> item.getCustomerProjectNo();
+            case CUSTOMER_ORDER_TITLE -> item.getCustomerOrderTitle();
             case INTERNAL_PROJECT_NO -> item.getInternalProjectNo();
+            case ORDER_TYPE -> item.getOrderType();
+            case DESCRIPTION -> item.getDescription();
+            case STATUS -> item.getStatus();
             case REMARK -> item.getRemark();
             default -> null;
         };

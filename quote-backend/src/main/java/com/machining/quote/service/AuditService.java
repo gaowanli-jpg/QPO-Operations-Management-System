@@ -433,6 +433,12 @@ public class AuditService {
             case "PRODUCTION_ITEM_MES_PRODUCTION_SUBMIT", "LOCKED_ITEM_MES_PRODUCTION_SUBMIT" -> "提交MES生产下发";
             case "PRODUCTION_ITEM_MES_PRODUCTION_SUCCESS", "LOCKED_ITEM_MES_PRODUCTION_SUCCESS" -> "MES生产下发成功";
             case "PRODUCTION_ITEM_MES_PRODUCTION_FAILED", "LOCKED_ITEM_MES_PRODUCTION_FAILED" -> "MES生产下发失败";
+            case "LOCKED_ITEM_STOCK_PICKING_SUBMIT" -> "提交提库存工单";
+            case "LOCKED_ITEM_STOCK_PICKING_SUCCESS" -> "提库存工单下发成功";
+            case "LOCKED_ITEM_STOCK_PICKING_FAILED" -> "提库存工单下发失败";
+            case "LOCKED_ITEM_STOCK_PICKING_RESULT_UNKNOWN" -> "提库存工单结果待核对";
+            case "LOCKED_ITEM_DISCARD" -> "废弃锁库零件";
+            case "LOCKED_ITEM_RESTORE" -> "恢复锁库零件";
             case "PRODUCTION_ITEM_DISCARD" -> "废弃待产零件";
             case "PRODUCTION_ITEM_RESTORE" -> "恢复待产零件";
             case "ORDER_SUPPLEMENT_DRAWINGS" -> "补传图纸";

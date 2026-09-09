@@ -48,6 +48,11 @@ public class LockedItemDTO {
     private String mesProductionExternalId;
     private LocalDateTime mesProductionSyncedAt;
     private String mesProductionMessage;
+    private String stockPickingStatus;
+    private String stockPickingBizId;
+    private String stockPickingExternalId;
+    private LocalDateTime stockPickingSyncedAt;
+    private String stockPickingMessage;
     private String status;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

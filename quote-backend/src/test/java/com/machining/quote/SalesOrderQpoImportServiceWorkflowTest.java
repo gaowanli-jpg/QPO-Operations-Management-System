@@ -235,6 +235,64 @@ class SalesOrderQpoImportServiceWorkflowTest extends SalesOrderQpoImportTestSupp
     }
 
     @Test
+    void serviceStoresSystemSequentialLineNumbersInsteadOfCustomerExcelSequence() throws Exception {
+        SalesOrderQpoExcelParser parser = mock(SalesOrderQpoExcelParser.class);
+        CustomerMasterMapper customerMapper = mock(CustomerMasterMapper.class);
+        SalesOrderImportBatchMapper batchMapper = mock(SalesOrderImportBatchMapper.class);
+        SalesOrderImportRecordMapper recordMapper = mock(SalesOrderImportRecordMapper.class);
+        SalesOrderHeaderMapper headerMapper = mock(SalesOrderHeaderMapper.class);
+        SalesOrderItemMapper itemMapper = mock(SalesOrderItemMapper.class);
+        SalesOrderQpoImportService service = service(
+                parser,
+                customerMapper,
+                batchMapper,
+                recordMapper,
+                headerMapper,
+                itemMapper,
+                mock(DataScopeService.class),
+                mock(AuditService.class)
+        );
+        when(customerMapper.selectById(7L)).thenReturn(customer());
+        when(parser.parse(any(InputStream.class))).thenReturn(parseResultWithCustomerExcelSequence());
+        when(headerMapper.selectCount(any())).thenReturn(0L);
+        doAnswer(invocation -> {
+            SalesOrderImportBatch batch = invocation.getArgument(0);
+            batch.setId(2201L);
+            return 1;
+        }).when(batchMapper).insert(any(SalesOrderImportBatch.class));
+        doAnswer(invocation -> {
+            SalesOrderHeader header = invocation.getArgument(0);
+            header.setId(2301L);
+            return 1;
+        }).when(headerMapper).insert(any(SalesOrderHeader.class));
+        doAnswer(invocation -> {
+            SalesOrderImportRecord record = invocation.getArgument(0);
+            record.setId(2401L);
+            return 1;
+        }).when(recordMapper).insert(any(SalesOrderImportRecord.class));
+
+        service.importQpo(
+                new MockMultipartFile(
+                        "excelFile",
+                        "sales-order.xlsx",
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        "xlsx".getBytes(StandardCharsets.UTF_8)
+                ),
+                7L,
+                "SO06"
+        );
+
+        ArgumentCaptor<SalesOrderItem> itemCaptor = ArgumentCaptor.forClass(SalesOrderItem.class);
+        verify(itemMapper, org.mockito.Mockito.times(3)).insert(itemCaptor.capture());
+        assertThat(itemCaptor.getAllValues())
+                .extracting(SalesOrderItem::getLineNo)
+                .containsExactly(1, 2, 3);
+        assertThat(itemCaptor.getAllValues())
+                .extracting(SalesOrderItem::getPartNo)
+                .containsExactly("P-SEQ-1", "P-SEQ-2", "P-SEQ-3");
+    }
+
+    @Test
     void serviceAllowsBlankPricesAndReportsMissingPriceCount() throws Exception {
         SalesOrderQpoExcelParser parser = mock(SalesOrderQpoExcelParser.class);
         CustomerMasterMapper customerMapper = mock(CustomerMasterMapper.class);
@@ -420,5 +478,36 @@ class SalesOrderQpoImportServiceWorkflowTest extends SalesOrderQpoImportTestSupp
                 .containsEntry("matchedItemCount", 1)
                 .containsEntry("unmatchedItemCount", 2)
                 .containsEntry("autoMatchTrigger", "IMPORT_AUTO");
+    }
+
+    private SalesOrderQpoExcelParseResult parseResultWithCustomerExcelSequence() {
+        SalesOrderQpoExcelLineDTO first = line(1, "P-SEQ-1", "A", "", 1);
+        first.setSalesOrderLineNo(10);
+        SalesOrderQpoExcelLineDTO second = line(2, "P-SEQ-2", "A", "", 1);
+        second.setSalesOrderLineNo(10);
+        SalesOrderQpoExcelLineDTO third = line(4, "P-SEQ-3", "A", "", 1);
+        third.setSalesOrderLineNo(99);
+        third.setCustomerOrderNo("PO-001");
+        third.setCustomerProjectNo("CP-001");
+        third.setCustomerOrderTitle("GSQ1");
+        third.setOrderType("样品订单");
+        third.setInternalProjectNo("IP-001");
+
+        SalesOrderQpoOrderGroupDTO group = new SalesOrderQpoOrderGroupDTO();
+        group.setGroupKey("PO-001|IP-001");
+        group.setSalesOrderDate(LocalDate.of(2026, 7, 1));
+        group.setCustomerOrderNo("PO-001");
+        group.setCustomerProjectNo("CP-001");
+        group.setCustomerOrderTitle("GSQ1");
+        group.setOrderType("样品订单");
+        group.setInternalProjectNo("IP-001");
+        group.setLines(new ArrayList<>(List.of(first, second, third)));
+
+        SalesOrderQpoExcelParseResult result = new SalesOrderQpoExcelParseResult();
+        result.setOrders(List.of(group));
+        result.setOrderCount(1);
+        result.setLineCount(3);
+        result.setSourceRowCount(3);
+        return result;
     }
 }
