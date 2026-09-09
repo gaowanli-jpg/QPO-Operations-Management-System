@@ -69,6 +69,9 @@ class SalesOrderMaintenanceServiceTest {
                 PostMapping.class, "/orders/{salesOrderId}/items/convert-untaxed-to-tax-included", "market:sales-order:update");
         assertRoute("convertTaxIncludedToUntaxed", new Class<?>[]{Long.class},
                 PostMapping.class, "/orders/{salesOrderId}/items/convert-tax-included-to-untaxed", "market:sales-order:update");
+        assertRoute("replaceItemField", new Class<?>[]{Long.class,
+                        Class.forName("com.machining.quote.dto.SalesOrderItemFieldReplacementReq")},
+                PostMapping.class, "/orders/{salesOrderId}/items/field-replacement", "market:sales-order:update");
     }
 
     @Test
@@ -138,12 +141,13 @@ class SalesOrderMaintenanceServiceTest {
     }
 
     @Test
-    void saveItemsUpdatesEditableFieldsWithoutDerivingTaxIncludedPriceFromUntaxedPrice() {
+    void saveItemsUpdatesEditableFieldsWithoutDerivingTaxIncludedPriceFromUntaxedPrice() throws Exception {
         Fixture fixture = fixture();
         SalesOrderHeader header = header(11L, "未同步");
         SalesOrderItem item = item(201L, 11L);
         item.setUntaxedUnitPrice(new BigDecimal("100.00"));
         item.setTaxIncludedUnitPrice(new BigDecimal("113.00"));
+        item.setOrderType("预测订单");
         fixture.withOrder(header, List.of(item));
 
         SalesOrderItemUpdateReq req = new SalesOrderItemUpdateReq();
@@ -160,6 +164,7 @@ class SalesOrderMaintenanceServiceTest {
         line.setCustomerProjectNo(" CP-ITEM ");
         line.setCustomerOrderTitle(" Title-ITEM ");
         line.setInternalProjectNo(" IP-ITEM ");
+        setLineOrderType(line, "正式订单");
         line.setDescription(" Updated description ");
         line.setStatus("已生成提单");
         line.setRemark(" urgent ");
@@ -181,6 +186,7 @@ class SalesOrderMaintenanceServiceTest {
                 "customerProjectNo",
                 "customerOrderTitle",
                 "internalProjectNo",
+                "orderType",
                 "description",
                 "status",
                 "remark");
@@ -200,6 +206,7 @@ class SalesOrderMaintenanceServiceTest {
         assertThat(item.getCustomerProjectNo()).isEqualTo("CP-ITEM");
         assertThat(item.getCustomerOrderTitle()).isEqualTo("Title-ITEM");
         assertThat(item.getInternalProjectNo()).isEqualTo("IP-ITEM");
+        assertThat(item.getOrderType()).isEqualTo("正式订单");
         assertThat(item.getDescription()).isEqualTo("Updated description");
         assertThat(item.getStatus()).isEqualTo("已生成提单");
         assertThat(item.getRemark()).isEqualTo("urgent");
@@ -237,6 +244,43 @@ class SalesOrderMaintenanceServiceTest {
     }
 
     @Test
+    void replaceItemFieldUpdatesAllItemsInSalesOrderWithOneAuditEntry() throws Exception {
+        Fixture fixture = fixture();
+        SalesOrderHeader header = header(13L, "未同步");
+        SalesOrderItem first = item(203L, 13L);
+        first.setCustomerOrderNo("PO-OLD-1");
+        SalesOrderItem second = item(204L, 13L);
+        second.setCustomerOrderNo("PO-OLD-2");
+        fixture.withOrder(header, List.of(first, second));
+
+        SalesOrderMaintenanceUpdateResp result = replaceItemField(
+                fixture, header.getId(), "customerOrderNo", " PO-BULK ");
+
+        assertThat(result.getSuccess()).isTrue();
+        assertThat(result.getUpdatedCount()).isEqualTo(2);
+        assertThat(result.getChangedFields()).containsExactly("customerOrderNo");
+        assertThat(first.getCustomerOrderNo()).isEqualTo("PO-BULK");
+        assertThat(second.getCustomerOrderNo()).isEqualTo("PO-BULK");
+        verify(fixture.itemMapper, times(2)).update(isNull(), any(UpdateWrapper.class));
+        verifyAudit(fixture.auditService, "SALES_ORDER_ITEM_UPDATE", header.getId());
+    }
+
+    @Test
+    void replaceItemFieldRejectsInvalidOrderTypeBeforeUpdatingRows() throws Exception {
+        Fixture fixture = fixture();
+        SalesOrderHeader header = header(14L, "未同步");
+        SalesOrderItem item = item(205L, 14L);
+        item.setOrderType("预测订单");
+        fixture.withOrder(header, List.of(item));
+
+        assertThatThrownBy(() -> replaceItemField(fixture, header.getId(), "orderType", "临时订单"))
+                .hasRootCauseMessage("订单类型必须为预测订单、备货订单或正式订单");
+
+        assertThat(item.getOrderType()).isEqualTo("预测订单");
+        verify(fixture.itemMapper, never()).update(any(), any());
+    }
+
+    @Test
     void convertUntaxedToTaxIncludedUsesEnabledNormalTaxRateForWholeSalesOrder() {
         Fixture fixture = fixture();
         DictPricingMarkupFeeMapper pricingMarkupFeeMapper = mock(DictPricingMarkupFeeMapper.class);
@@ -244,13 +288,13 @@ class SalesOrderMaintenanceServiceTest {
         when(pricingMarkupFeeMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(
                 pricingFee(1L, "NORMAL", "TAX", "Tax 10", "10.00", true, 1),
                 pricingFee(2L, "NORMAL", "TAX", "Tax 3", "3.00", true, 2)));
-        SalesOrderHeader header = header(13L, "NOT_SYNCED");
-        SalesOrderItem first = item(203L, 13L);
+        SalesOrderHeader header = header(16L, "NOT_SYNCED");
+        SalesOrderItem first = item(206L, 16L);
         first.setLineNo(10);
         first.setQty(2);
         first.setUntaxedUnitPrice(new BigDecimal("100.00"));
         first.setTaxIncludedUnitPrice(new BigDecimal("1.00"));
-        SalesOrderItem second = item(204L, 13L);
+        SalesOrderItem second = item(207L, 16L);
         second.setLineNo(20);
         second.setQty(3);
         second.setUntaxedUnitPrice(new BigDecimal("12.3456"));
@@ -279,8 +323,8 @@ class SalesOrderMaintenanceServiceTest {
         ReflectionTestUtils.setField(fixture.maintenanceService, "pricingMarkupFeeMapper", pricingMarkupFeeMapper);
         when(pricingMarkupFeeMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(
                 pricingFee(1L, "NORMAL", "TAX", "Tax", "13.00", true, 1)));
-        SalesOrderHeader header = header(14L, "NOT_SYNCED");
-        SalesOrderItem item = item(205L, 14L);
+        SalesOrderHeader header = header(17L, "NOT_SYNCED");
+        SalesOrderItem item = item(208L, 17L);
         item.setQty(4);
         item.setUntaxedUnitPrice(new BigDecimal("1.00"));
         item.setTaxIncludedUnitPrice(new BigDecimal("113.00"));
@@ -304,8 +348,8 @@ class SalesOrderMaintenanceServiceTest {
         ReflectionTestUtils.setField(fixture.maintenanceService, "pricingMarkupFeeMapper", pricingMarkupFeeMapper);
         when(pricingMarkupFeeMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(
                 pricingFee(1L, "NORMAL", "TAX", "Tax", "13.00", true, 1)));
-        SalesOrderHeader header = header(15L, "NOT_SYNCED");
-        SalesOrderItem item = item(206L, 15L);
+        SalesOrderHeader header = header(18L, "NOT_SYNCED");
+        SalesOrderItem item = item(209L, 18L);
         item.setLineNo(10);
         item.setUntaxedUnitPrice(null);
         fixture.withOrder(header, List.of(item));
@@ -321,8 +365,8 @@ class SalesOrderMaintenanceServiceTest {
     void maintenanceWritesRejectLockedU9Statuses() {
         for (String status : List.of("同步中", "结果待确认", "已同步")) {
             Fixture fixture = fixture();
-            SalesOrderHeader header = header(14L, status);
-            SalesOrderItem item = item(204L, 14L);
+            SalesOrderHeader header = header(19L, status);
+            SalesOrderItem item = item(210L, 19L);
             fixture.withOrder(header, List.of(item));
 
             SalesOrderMaintenanceOrderUpdateReq orderReq = new SalesOrderMaintenanceOrderUpdateReq();
@@ -354,10 +398,11 @@ class SalesOrderMaintenanceServiceTest {
         SalesOrderItem item = item(301L, 15L);
         item.setUntaxedUnitPrice(new BigDecimal("100.00"));
         item.setTaxIncludedUnitPrice(new BigDecimal("113.00"));
+        item.setOrderType("预测订单");
         fixture.withOrder(header, List.of(item));
         byte[] excel = excel(
-                List.of("图号", "版本", "行号", "数量", "客户交期", "内部交期", "未税单价", "含税单价", "客户订单号", "客户项目号", "客户下单抬头", "内部项目号", "物料描述", "订单状态", "备注"),
-                List.of(item.getPartNo(), item.getVersion(), item.getLineNo(), 4, "2026-10-11", "2026-10-02", "120.00", "150.00", "PO-X", "CP-X", "TITLE-X", "IP-X", "replacement description", "已生成提单", "note"));
+                List.of("图号", "版本", "行号", "数量", "客户交期", "内部交期", "未税单价", "含税单价", "客户订单号", "客户项目号", "客户下单抬头", "内部项目号", "订单类型", "物料描述", "订单状态", "备注"),
+                List.of(item.getPartNo(), item.getVersion(), item.getLineNo(), 4, "2026-10-11", "2026-10-02", "120.00", "150.00", "PO-X", "CP-X", "TITLE-X", "IP-X", "正式订单", "replacement description", "已生成提单", "note"));
 
         SalesOrderU9ItemDataReplacementPreviewDTO preview = fixture.replacementService.preview(
                 header.getId(), new ByteArrayInputStream(excel));
@@ -379,6 +424,7 @@ class SalesOrderMaintenanceServiceTest {
                 "customerProjectNo",
                 "customerOrderTitle",
                 "internalProjectNo",
+                "orderType",
                 "description",
                 "status",
                 "remark");
@@ -387,6 +433,7 @@ class SalesOrderMaintenanceServiceTest {
         assertThat(item.getTaxIncludedUnitPrice()).isEqualByComparingTo("150.00");
         assertThat(item.getCustomerOrderTitle()).isEqualTo("TITLE-X");
         assertThat(item.getInternalProjectNo()).isEqualTo("IP-X");
+        assertThat(item.getOrderType()).isEqualTo("正式订单");
         assertThat(item.getDescription()).isEqualTo("replacement description");
         assertThat(item.getStatus()).isEqualTo("已生成提单");
         verify(fixture.ticketMapper, never()).update(any(), any());
@@ -561,6 +608,23 @@ class SalesOrderMaintenanceServiceTest {
         } else {
             throw new IllegalArgumentException("Unsupported mapping type " + mappingType);
         }
+    }
+
+    private static void setLineOrderType(SalesOrderItemUpdateLineReq line, String orderType) throws Exception {
+        SalesOrderItemUpdateLineReq.class.getMethod("setOrderType", String.class).invoke(line, orderType);
+    }
+
+    private static SalesOrderMaintenanceUpdateResp replaceItemField(
+            Fixture fixture,
+            Long salesOrderId,
+            String field,
+            String value) throws Exception {
+        Class<?> reqType = Class.forName("com.machining.quote.dto.SalesOrderItemFieldReplacementReq");
+        Object req = reqType.getDeclaredConstructor().newInstance();
+        ReflectionTestUtils.setField(req, "field", field);
+        ReflectionTestUtils.setField(req, "value", value);
+        Method method = SalesOrderMaintenanceService.class.getMethod("replaceItemField", Long.class, reqType);
+        return (SalesOrderMaintenanceUpdateResp) method.invoke(fixture.maintenanceService, salesOrderId, req);
     }
 
     @SuppressWarnings("unchecked")

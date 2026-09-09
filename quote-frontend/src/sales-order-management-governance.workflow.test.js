@@ -22,6 +22,7 @@ describe('sales order management governance and drawings', () => {
       'restoreSalesOrder',
       'discardSalesOrderItemForU9Change',
       'restoreSalesOrderItemForU9Change',
+      'replaceSalesOrderItemField',
       'supplementSalesOrderDrawings',
       'replaceSalesOrderDrawings',
       'downloadSalesOrderProductionTaskNotice'
@@ -82,7 +83,7 @@ describe('sales order management governance and drawings', () => {
   test('detail item table makes title description and item status editable and replaceable', () => {
     const itemTableSource = salesOrderManage.slice(
       salesOrderManage.indexOf('<el-table-column prop="lineNo"'),
-      salesOrderManage.indexOf('<el-table-column prop="orderType"')
+      salesOrderManage.indexOf('<el-table-column prop="customerDeliveryDate"')
     )
     const editableFieldsSource = salesOrderManage.slice(
       salesOrderManage.indexOf('const SALES_ORDER_ITEM_EDITABLE_FIELDS = ['),
@@ -101,12 +102,38 @@ describe('sales order management governance and drawings', () => {
     expect(itemTableSource).toContain('v-model="itemDrafts[row.id].customerOrderTitle"')
     expect(itemTableSource).toContain('v-model="itemDrafts[row.id].description"')
     expect(itemTableSource).toContain('v-model="itemDrafts[row.id].status"')
+    expect(itemTableSource).toContain('v-model="itemDrafts[row.id].orderType"')
+    expect(itemTableSource).toContain('<el-option v-for="type in SALES_ORDER_TYPES"')
 
-    for (const field of ['customerOrderTitle', 'description', 'status']) {
+    for (const field of ['customerOrderTitle', 'description', 'status', 'orderType']) {
       expect(editableFieldsSource).toContain(`'${field}'`)
       expect(draftSource).toContain(`${field}: draftValue(row.${field})`)
     }
-    expect(replacementDialog).toContain('客户下单抬头、物料描述、订单状态')
+    expect(replacementDialog).toContain('客户下单抬头、订单类型、物料描述、订单状态')
+  })
+
+  test('detail item tab exposes whole-order field replacement row above the item table', () => {
+    const replacementSource = salesOrderManage.slice(
+      salesOrderManage.indexOf('class="item-field-replacement-row"'),
+      salesOrderManage.indexOf('<el-table :data="detailItemList"')
+    )
+
+    expect(orderApi).toContain('export const replaceSalesOrderItemField')
+    expect(orderApi).toContain('/api/market/sales-order-management/orders/${salesOrderId}/items/field-replacement')
+    expect(replacementSource).toContain('整单零件字段替换')
+    expect(replacementSource).toContain('SALES_ORDER_ITEM_FIELD_REPLACEMENTS')
+    expect(replacementSource).toContain('itemFieldReplacementDrafts[field.key]')
+    expect(replacementSource).toContain('saveSalesOrderItemFieldReplacement(field)')
+    expect(replacementSource).toContain('isItemFieldReplacementPending(field.key)')
+    expect(replacementSource).toContain('v-permission="SALES_ORDER_UPDATE_PERMISSION"')
+    for (const label of ['客户下单抬头', '客户订单号', '客户项目号', '内部项目号', '订单类型']) {
+      expect(salesOrderManage).toContain(`label: '${label}'`)
+    }
+    for (const field of ['customerOrderTitle', 'customerOrderNo', 'customerProjectNo', 'internalProjectNo', 'orderType']) {
+      expect(salesOrderManage).toContain(`key: '${field}'`)
+    }
+    expect(salesOrderManage).toContain('replaceSalesOrderItemField(salesOrderId, {')
+    expect(salesOrderManage).toContain('dirtyItemCount.value > 0')
   })
 
   test('detail item toolbar exposes whole-order price conversion before saving row edits', () => {

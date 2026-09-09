@@ -254,6 +254,7 @@ public class SalesOrderItemDataReplacementService {
             case "customerProjectNo" -> line.setCustomerProjectNo(stringValue(value));
             case "customerOrderTitle" -> line.setCustomerOrderTitle(stringValue(value));
             case "internalProjectNo" -> line.setInternalProjectNo(stringValue(value));
+            case "orderType" -> line.setOrderType(stringValue(value));
             case "description" -> line.setDescription(stringValue(value));
             case "status" -> line.setStatus(stringValue(value));
             case "remark" -> line.setRemark(stringValue(value));
@@ -313,6 +314,7 @@ public class SalesOrderItemDataReplacementService {
             case CUSTOMER_PROJECT_NO -> item.getCustomerProjectNo();
             case CUSTOMER_ORDER_TITLE -> item.getCustomerOrderTitle();
             case INTERNAL_PROJECT_NO -> item.getInternalProjectNo();
+            case ORDER_TYPE -> item.getOrderType();
             case DESCRIPTION -> item.getDescription();
             case STATUS -> item.getStatus();
             case REMARK -> item.getRemark();

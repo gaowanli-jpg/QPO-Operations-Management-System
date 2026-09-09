@@ -119,6 +119,11 @@ export const saveSalesOrderItems = (salesOrderId, payload = {}) => request(`/api
   data: payload
 })
 
+export const replaceSalesOrderItemField = (salesOrderId, payload = {}) => request(`/api/market/sales-order-management/orders/${salesOrderId}/items/field-replacement`, {
+  method: 'POST',
+  data: payload
+})
+
 export const convertSalesOrderUntaxedToTaxIncluded = (salesOrderId) => request(`/api/market/sales-order-management/orders/${salesOrderId}/items/convert-untaxed-to-tax-included`, {
   method: 'POST'
 })

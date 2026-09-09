@@ -21,6 +21,7 @@ public class SalesOrderItemUpdateLineReq {
     public static final String FIELD_INTERNAL_PROJECT_NO = "internalProjectNo";
     public static final String FIELD_DESCRIPTION = "description";
     public static final String FIELD_STATUS = "status";
+    public static final String FIELD_ORDER_TYPE = "orderType";
     public static final String FIELD_REMARK = "remark";
 
     private Long salesOrderItemId;
@@ -38,6 +39,7 @@ public class SalesOrderItemUpdateLineReq {
     private String internalProjectNo;
     private String description;
     private String status;
+    private String orderType;
     private String remark;
     private final Set<String> providedFields = new LinkedHashSet<>();
 
@@ -173,6 +175,15 @@ public class SalesOrderItemUpdateLineReq {
     public void setStatus(String status) {
         this.status = status;
         providedFields.add(FIELD_STATUS);
+    }
+
+    public String getOrderType() {
+        return orderType;
+    }
+
+    public void setOrderType(String orderType) {
+        this.orderType = orderType;
+        providedFields.add(FIELD_ORDER_TYPE);
     }
 
     public String getRemark() {

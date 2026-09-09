@@ -320,6 +320,46 @@
                 </el-tooltip>
               </div>
             </div>
+            <div class="item-field-replacement-row">
+              <div class="item-field-replacement-title">整单零件字段替换</div>
+              <div
+                v-for="field in SALES_ORDER_ITEM_FIELD_REPLACEMENTS"
+                :key="field.key"
+                class="item-field-replacement-control"
+              >
+                <label>{{ field.label }}</label>
+                <el-input
+                  v-if="field.type !== 'select'"
+                  v-model="itemFieldReplacementDrafts[field.key]"
+                  clearable
+                  :disabled="salesOrderEditLocked || isItemFieldReplacementPending(field.key)"
+                  :placeholder="`${field.label}，留空保存可清空`"
+                />
+                <el-select
+                  v-else
+                  v-model="itemFieldReplacementDrafts[field.key]"
+                  clearable
+                  :disabled="salesOrderEditLocked || isItemFieldReplacementPending(field.key)"
+                  placeholder="订单类型"
+                >
+                  <el-option v-for="type in SALES_ORDER_TYPES" :key="type" :label="type" :value="type" />
+                </el-select>
+                <el-tooltip :disabled="!salesOrderEditLocked" :content="salesOrderEditLockedReason" placement="top">
+                  <span class="sales-order-action-wrap">
+                    <el-button
+                      v-permission="SALES_ORDER_UPDATE_PERMISSION"
+                      type="primary"
+                      plain
+                      :loading="isItemFieldReplacementPending(field.key)"
+                      :disabled="salesOrderEditLocked || isItemFieldReplacementPending(field.key)"
+                      @click="saveSalesOrderItemFieldReplacement(field)"
+                    >
+                      保存
+                    </el-button>
+                  </span>
+                </el-tooltip>
+              </div>
+            </div>
             <el-table :data="detailItemList" border stripe height="380" v-loading="detailItemsLoading">
               <el-table-column prop="partNo" label="图号" min-width="150" fixed show-overflow-tooltip />
               <el-table-column prop="lineNo" label="行号" width="80" align="center" />
@@ -449,7 +489,21 @@
                   <span v-else>{{ row.description || '-' }}</span>
                 </template>
               </el-table-column>
-              <el-table-column prop="orderType" label="订单类型" width="120" show-overflow-tooltip />
+              <el-table-column prop="orderType" label="订单类型" width="140" show-overflow-tooltip>
+                <template #default="{ row }">
+                  <el-select
+                    v-if="itemDrafts[row.id]"
+                    v-model="itemDrafts[row.id].orderType"
+                    class="item-edit-input"
+                    clearable
+                    :disabled="salesOrderEditLocked"
+                    placeholder="订单类型"
+                  >
+                    <el-option v-for="type in SALES_ORDER_TYPES" :key="type" :label="type" :value="type" />
+                  </el-select>
+                  <span v-else>{{ row.orderType || '-' }}</span>
+                </template>
+              </el-table-column>
               <el-table-column prop="customerOrderNo" label="客户订单号" min-width="160" show-overflow-tooltip>
                 <template #default="{ row }">
                   <el-input
@@ -749,6 +803,7 @@ import {
   listSalesOrderTickets,
   saveSalesOrderHeader,
   saveSalesOrderItems,
+  replaceSalesOrderItemField,
   restoreSalesOrder,
   restoreSalesOrderItemForU9Change,
   replaceSalesOrderDrawings,
@@ -781,6 +836,7 @@ const salesOrderActionKeys = {
   statusChange: (orderId) => `sales-order:status-change:${orderId || 'none'}`,
   headerSave: (orderId) => `sales-order:header-save:${orderId || 'none'}`,
   itemSave: (orderId) => `sales-order:item-save:${orderId || 'none'}`,
+  itemFieldReplacement: (orderId, field) => `sales-order:item-field-replacement:${field || 'none'}:${orderId || 'none'}`,
   itemPriceConversion: (orderId, direction) => `sales-order:item-price-conversion:${direction}:${orderId || 'none'}`,
   itemU9ChangeExclusion: (itemId) => `sales-order:item-u9-change-exclusion:${itemId || 'none'}`,
   supplementDrawings: (orderId) => `sales-order:supplement-drawings:${orderId || 'none'}`,
@@ -808,10 +864,18 @@ const SALES_ORDER_ITEM_EDITABLE_FIELDS = [
   'customerProjectNo',
   'customerOrderTitle',
   'internalProjectNo',
+  'orderType',
   'description',
   'materialName',
   'surfaceTreatment',
   'remark'
+]
+const SALES_ORDER_ITEM_FIELD_REPLACEMENTS = [
+  { key: 'customerOrderTitle', label: '客户下单抬头', type: 'text' },
+  { key: 'customerOrderNo', label: '客户订单号', type: 'text' },
+  { key: 'customerProjectNo', label: '客户项目号', type: 'text' },
+  { key: 'internalProjectNo', label: '内部项目号', type: 'text' },
+  { key: 'orderType', label: '订单类型', type: 'select' }
 ]
 const SALES_ORDER_STATUS_ACTIONS = [
   {
@@ -895,11 +959,15 @@ const orderEditDraft = reactive({
   internalProjectNo: ''
 })
 const itemDrafts = reactive({})
+const itemFieldReplacementDrafts = reactive(Object.fromEntries(
+  SALES_ORDER_ITEM_FIELD_REPLACEMENTS.map(field => [field.key, ''])
+))
 const itemDataReplacementVisible = ref(false)
 const itemDataReplacementBusy = ref(false)
 
 const orderEditSaving = computed(() => isPending(salesOrderActionKeys.headerSave(orderDetail.value?.orderInfo?.id)))
 const itemEditSaving = computed(() => isPending(salesOrderActionKeys.itemSave(orderDetail.value?.orderInfo?.id)))
+const isItemFieldReplacementPending = (field) => isPending(salesOrderActionKeys.itemFieldReplacement(orderDetail.value?.orderInfo?.id, field))
 const itemPriceConversionPending = (direction) => isPending(salesOrderActionKeys.itemPriceConversion(orderDetail.value?.orderInfo?.id, direction))
 
 const missingDrawingItems = computed(() => drawingSummary.value?.missingItems || detailItemList.value.filter(item => !item.drawingUrl))
@@ -1263,6 +1331,7 @@ const buildItemDraft = (row = {}) => ({
   customerProjectNo: draftValue(row.customerProjectNo),
   customerOrderTitle: draftValue(row.customerOrderTitle),
   internalProjectNo: draftValue(row.internalProjectNo),
+  orderType: draftValue(row.orderType),
   description: draftValue(row.description),
   materialName: draftValue(row.materialName),
   surfaceTreatment: draftValue(row.surfaceTreatment),
@@ -1325,6 +1394,42 @@ const saveSalesOrderItemChanges = async () => {
     } catch (error) {
       console.error(error)
       ElMessage.error(error.response?.data?.message || '销售订单零件信息保存失败。')
+    }
+  })
+}
+
+const saveSalesOrderItemFieldReplacement = async (field) => {
+  const salesOrderId = orderDetail.value?.orderInfo?.id
+  if (!salesOrderId) return ElMessage.warning('请先打开销售订单详情。')
+  if (!field?.key) return ElMessage.warning('请选择需要整单替换的字段。')
+  if (salesOrderEditLocked.value) return ElMessage.warning(salesOrderEditLockedReason.value)
+  if (dirtyItemCount.value > 0) {
+    return ElMessage.warning('当前页有未保存修改，请先保存修改或刷新后再进行整单字段替换。')
+  }
+  const value = payloadValue(itemFieldReplacementDrafts[field.key])
+  const displayValue = value === null ? '空值' : `“${value}”`
+  try {
+    await ElMessageBox.confirm(
+      `确认将整单所有零件的${field.label}替换为${displayValue}吗？`,
+      `整单替换${field.label}`,
+      {
+        type: 'warning',
+        confirmButtonText: '确认替换',
+        cancelButtonText: '取消'
+      }
+    )
+  } catch {
+    return
+  }
+  return runAction(salesOrderActionKeys.itemFieldReplacement(salesOrderId, field.key), async () => {
+    try {
+      const response = await replaceSalesOrderItemField(salesOrderId, { field: field.key, value })
+      ElMessage.success(response?.message || `${field.label}已整单替换。`)
+      await loadOrders()
+      await refreshCurrentDetail()
+    } catch (error) {
+      console.error(error)
+      ElMessage.error(error.response?.data?.message || `${field.label}整单替换失败。`)
     }
   })
 }
@@ -1819,6 +1924,48 @@ watch(
   margin-bottom: 10px;
 }
 
+.item-field-replacement-row {
+  display: grid;
+  grid-template-columns: 120px repeat(auto-fit, minmax(210px, 1fr));
+  gap: 8px;
+  align-items: end;
+  margin-bottom: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--erp-border-soft);
+  border-bottom: 0;
+  border-radius: 8px 8px 0 0;
+  background: #f8fafc;
+}
+
+.item-field-replacement-title {
+  align-self: center;
+  color: var(--erp-text);
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.item-field-replacement-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+}
+
+.item-field-replacement-control label {
+  grid-column: 1 / -1;
+  color: var(--erp-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.item-field-replacement-control :deep(.el-input),
+.item-field-replacement-control :deep(.el-select) {
+  width: 100%;
+}
+
 .item-maintenance-action-meta,
 .item-maintenance-action-buttons {
   display: flex;
@@ -2030,6 +2177,14 @@ watch(
   .auto-release-summary {
     grid-template-columns: repeat(2, minmax(120px, 1fr));
   }
+
+  .item-field-replacement-row {
+    grid-template-columns: repeat(2, minmax(260px, 1fr));
+  }
+
+  .item-field-replacement-title {
+    grid-column: 1 / -1;
+  }
 }
 
 @media (max-width: 760px) {
@@ -2041,6 +2196,10 @@ watch(
   }
 
   .auto-release-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .item-field-replacement-row {
     grid-template-columns: 1fr;
   }
 }

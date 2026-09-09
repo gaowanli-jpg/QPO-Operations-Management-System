@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.machining.quote.dto.SalesOrderItemUpdateLineReq;
 import com.machining.quote.dto.SalesOrderItemUpdateReq;
+import com.machining.quote.dto.SalesOrderItemFieldReplacementReq;
 import com.machining.quote.dto.SalesOrderMaintenanceOrderUpdateReq;
 import com.machining.quote.dto.SalesOrderMaintenanceUpdateResp;
 import com.machining.quote.entity.DictPricingMarkupFee;
@@ -40,6 +41,12 @@ public class SalesOrderMaintenanceService {
     static final String STATUS_SYNCED = "已同步";
 
     private static final Set<String> ORDER_TYPES = Set.of("预测订单", "备货订单", "正式订单");
+    private static final Set<String> ITEM_FIELD_REPLACEMENT_FIELDS = Set.of(
+            SalesOrderItemUpdateLineReq.FIELD_CUSTOMER_ORDER_TITLE,
+            SalesOrderItemUpdateLineReq.FIELD_CUSTOMER_ORDER_NO,
+            SalesOrderItemUpdateLineReq.FIELD_CUSTOMER_PROJECT_NO,
+            SalesOrderItemUpdateLineReq.FIELD_INTERNAL_PROJECT_NO,
+            SalesOrderItemUpdateLineReq.FIELD_ORDER_TYPE);
     private static final int TEXT_50 = 50;
     private static final int TEXT_120 = 120;
     private static final int TEXT_255 = 255;
@@ -116,6 +123,37 @@ public class SalesOrderMaintenanceService {
         auditSuccess(ACTION_ITEM_UPDATE, header, null, itemAuditSummary(header, updatedCount, changedFields), changedFields,
                 System.currentTimeMillis() - startedAt);
         return response(header, updatedCount, changedFields, "销售订单零件信息已保存。");
+    }
+
+    @Transactional
+    public SalesOrderMaintenanceUpdateResp replaceItemField(Long salesOrderId, SalesOrderItemFieldReplacementReq req) {
+        long startedAt = System.currentTimeMillis();
+        SalesOrderHeader header = lockEditableHeader(salesOrderId);
+        String field = normalizeReplacementField(req);
+        String value = validateReplacementValue(field, req.getValue());
+        List<SalesOrderItem> items = listItems(salesOrderId);
+        if (items.isEmpty()) {
+            throw new RuntimeException("销售订单没有可替换的零件行");
+        }
+
+        int updatedCount = 0;
+        Set<String> changedFields = new LinkedHashSet<>();
+        LocalDateTime now = LocalDateTime.now();
+        for (SalesOrderItem listed : items) {
+            SalesOrderItem item = lockItem(header, listed.getId());
+            SalesOrderItemUpdateLineReq line = new SalesOrderItemUpdateLineReq();
+            line.setSalesOrderItemId(item.getId());
+            applyReplacementValue(line, field, value);
+            Set<String> rowChanged = applyItemLine(header, item, line, now);
+            if (rowChanged.isEmpty()) {
+                continue;
+            }
+            changedFields.addAll(rowChanged);
+            updatedCount++;
+        }
+        auditSuccess(ACTION_ITEM_UPDATE, header, null, itemAuditSummary(header, updatedCount, changedFields), changedFields,
+                System.currentTimeMillis() - startedAt);
+        return response(header, updatedCount, changedFields, "销售订单零件字段已整单替换。");
     }
 
     @Transactional
@@ -251,6 +289,13 @@ public class SalesOrderMaintenanceService {
                 SalesOrderItemUpdateLineReq.FIELD_DESCRIPTION, changed, line, item::setDescription);
         applyText(item.getStatus(), line.getStatus(), TEXT_50,
                 SalesOrderItemUpdateLineReq.FIELD_STATUS, changed, line, item::setStatus);
+        if (line.hasField(SalesOrderItemUpdateLineReq.FIELD_ORDER_TYPE)) {
+            String orderType = validateOrderType(line.getOrderType());
+            if (!Objects.equals(trimToNull(item.getOrderType()), orderType)) {
+                changed.add(SalesOrderItemUpdateLineReq.FIELD_ORDER_TYPE);
+            }
+            item.setOrderType(orderType);
+        }
         applyText(item.getRemark(), line.getRemark(), TEXT_500,
                 SalesOrderItemUpdateLineReq.FIELD_REMARK, changed, line, item::setRemark);
 
@@ -279,10 +324,7 @@ public class SalesOrderMaintenanceService {
         applyOrderText(header.getCustomerOrderTitle(), req.getCustomerOrderTitle(), TEXT_200,
                 SalesOrderMaintenanceOrderUpdateReq.FIELD_CUSTOMER_ORDER_TITLE, changed, req, header::setCustomerOrderTitle);
         if (req.hasField(SalesOrderMaintenanceOrderUpdateReq.FIELD_ORDER_TYPE)) {
-            String orderType = trimToNull(req.getOrderType());
-            if (orderType != null && !ORDER_TYPES.contains(orderType)) {
-                throw new RuntimeException("订单类型必须为预测订单、备货订单或正式订单");
-            }
+            String orderType = validateOrderType(req.getOrderType());
             if (!Objects.equals(trimToNull(header.getOrderType()), orderType)) {
                 changed.add(SalesOrderMaintenanceOrderUpdateReq.FIELD_ORDER_TYPE);
             }
@@ -435,6 +477,50 @@ public class SalesOrderMaintenanceService {
         return value;
     }
 
+    private String validateOrderType(String raw) {
+        String orderType = trimToNull(raw);
+        if (orderType != null && !ORDER_TYPES.contains(orderType)) {
+            throw new RuntimeException("订单类型必须为预测订单、备货订单或正式订单");
+        }
+        return orderType;
+    }
+
+    private String normalizeReplacementField(SalesOrderItemFieldReplacementReq req) {
+        if (req == null || isBlank(req.getField())) {
+            throw new RuntimeException("请选择需要整单替换的销售订单零件字段");
+        }
+        String field = req.getField().trim();
+        if (!ITEM_FIELD_REPLACEMENT_FIELDS.contains(field)) {
+            throw new RuntimeException("不支持整单替换字段：" + field);
+        }
+        return field;
+    }
+
+    private String validateReplacementValue(String field, String raw) {
+        if (SalesOrderItemUpdateLineReq.FIELD_ORDER_TYPE.equals(field)) {
+            return validateOrderType(raw);
+        }
+        int maxLength = switch (field) {
+            case SalesOrderItemUpdateLineReq.FIELD_CUSTOMER_ORDER_TITLE -> TEXT_255;
+            case SalesOrderItemUpdateLineReq.FIELD_CUSTOMER_ORDER_NO,
+                 SalesOrderItemUpdateLineReq.FIELD_CUSTOMER_PROJECT_NO,
+                 SalesOrderItemUpdateLineReq.FIELD_INTERNAL_PROJECT_NO -> TEXT_120;
+            default -> TEXT_255;
+        };
+        return validateText(raw, maxLength, label(field));
+    }
+
+    private void applyReplacementValue(SalesOrderItemUpdateLineReq line, String field, String value) {
+        switch (field) {
+            case SalesOrderItemUpdateLineReq.FIELD_CUSTOMER_ORDER_TITLE -> line.setCustomerOrderTitle(value);
+            case SalesOrderItemUpdateLineReq.FIELD_CUSTOMER_ORDER_NO -> line.setCustomerOrderNo(value);
+            case SalesOrderItemUpdateLineReq.FIELD_CUSTOMER_PROJECT_NO -> line.setCustomerProjectNo(value);
+            case SalesOrderItemUpdateLineReq.FIELD_INTERNAL_PROJECT_NO -> line.setInternalProjectNo(value);
+            case SalesOrderItemUpdateLineReq.FIELD_ORDER_TYPE -> line.setOrderType(value);
+            default -> throw new RuntimeException("不支持整单替换字段：" + field);
+        }
+    }
+
     private void changedIfDate(LocalDate current, LocalDate value, Set<String> changed, String field) {
         if (!Objects.equals(current, value)) {
             changed.add(field);
@@ -578,6 +664,7 @@ public class SalesOrderMaintenanceService {
                 .set("customer_project_no", item.getCustomerProjectNo())
                 .set("customer_order_title", item.getCustomerOrderTitle())
                 .set("internal_project_no", item.getInternalProjectNo())
+                .set("order_type", item.getOrderType())
                 .set("description", item.getDescription())
                 .set("status", item.getStatus())
                 .set("remark", item.getRemark())
@@ -726,6 +813,9 @@ public class SalesOrderMaintenanceService {
         }
         if (SalesOrderItemUpdateLineReq.FIELD_STATUS.equals(field)) {
             return "订单状态";
+        }
+        if (SalesOrderItemUpdateLineReq.FIELD_ORDER_TYPE.equals(field)) {
+            return "订单类型";
         }
         if (SalesOrderItemUpdateLineReq.FIELD_REMARK.equals(field)) {
             return "备注";

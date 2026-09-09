@@ -22,12 +22,14 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
 public class SalesOrderItemDataReplacementExcelParser {
     private static final int HEADER_SCAN_ROW_LIMIT = 20;
     private static final int EFFECTIVE_ROW_LIMIT = 10_000;
+    private static final Set<String> ORDER_TYPES = Set.of("预测订单", "备货订单", "正式订单");
 
     public SalesOrderU9ItemDataReplacementExcelParseResult parse(InputStream inputStream) {
         if (inputStream == null) {
@@ -203,6 +205,7 @@ public class SalesOrderItemDataReplacementExcelParser {
                 case DATE -> parseDate(cell, formatter, evaluator);
                 case POSITIVE_INTEGER -> parsePositiveInteger(cell, formatter, evaluator);
                 case NON_NEGATIVE_DECIMAL -> parseNonNegativeDecimal(cell, formatter, evaluator);
+                case ORDER_TYPE -> parseOrderType(cellText(cell, formatter, evaluator));
                 case TEXT -> parseText(field, cellText(cell, formatter, evaluator));
             };
             if (value != null) {
@@ -251,6 +254,13 @@ public class SalesOrderItemDataReplacementExcelParser {
         Integer maxLength = field.getMaxLength();
         if (maxLength != null && value.length() > maxLength) {
             throw new IllegalArgumentException("长度不能超过 " + maxLength + " 个字符");
+        }
+        return value;
+    }
+
+    private String parseOrderType(String value) {
+        if (!ORDER_TYPES.contains(value)) {
+            throw new IllegalArgumentException("只能是 预测订单 / 备货订单 / 正式订单");
         }
         return value;
     }
