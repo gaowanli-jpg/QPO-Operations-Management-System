@@ -55,6 +55,17 @@ describe('sales order import panel', () => {
     expect(marketDashboard).toContain("formData.append('documentTypeCode'")
   })
 
+  test('sales order import defaults order date to local today and still allows manual picking', () => {
+    expect(marketDashboard).toContain('const todayLocalDate = () => {')
+    expect(marketDashboard).toContain('date.getFullYear()')
+    expect(marketDashboard).toContain('salesOrderDate: todayLocalDate()')
+    expect(salesOrderPane).toContain('v-model="salesOrderForm.salesOrderDate"')
+    expect(salesOrderPane).toContain('type="date"')
+    expect(salesOrderPane).toContain('placeholder="请选择下单日期"')
+    expect(marketDashboard).toContain('salesOrderForm.salesOrderDate = todayLocalDate()')
+    expect(marketDashboard).not.toContain("salesOrderForm.salesOrderDate = ''")
+  })
+
   test('sales order mode follows RFQ step rhythm with document type and order defaults separated', () => {
     expect(salesOrderPane).toContain('步骤 1：客户基础信息')
     expect(salesOrderPane).toContain('步骤 2：单据类型与订单信息')
