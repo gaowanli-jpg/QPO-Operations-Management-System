@@ -67,6 +67,7 @@ class SalesOrderU9ItemEditServiceTest {
         line.setCustomerDeliveryDate(LocalDate.of(2026, 9, 30));
         line.setInternalDeliveryDate(LocalDate.of(2026, 9, 25));
         line.setUntaxedUnitPrice(new BigDecimal("12.50"));
+        line.setTaxIncludedUnitPrice(new BigDecimal("16.00"));
         line.setCustomerOrderNo(" PO-900 ");
         line.setCustomerProjectNo(" CP-900 ");
         line.setInternalProjectNo(" IP-900 ");
@@ -84,6 +85,7 @@ class SalesOrderU9ItemEditServiceTest {
                 "customerDeliveryDate",
                 "internalDeliveryDate",
                 "untaxedUnitPrice",
+                "taxIncludedUnitPrice",
                 "customerOrderNo",
                 "customerProjectNo",
                 "internalProjectNo",
@@ -94,8 +96,9 @@ class SalesOrderU9ItemEditServiceTest {
         assertThat(item.getCustomerDeliveryDate()).isEqualTo(LocalDate.of(2026, 9, 30));
         assertThat(item.getInternalDeliveryDate()).isEqualTo(LocalDate.of(2026, 9, 25));
         assertThat(item.getUntaxedUnitPrice()).isEqualByComparingTo("12.50");
+        assertThat(item.getTaxIncludedUnitPrice()).isEqualByComparingTo("16.00");
         assertThat(item.getUntaxedTotalPrice()).isEqualByComparingTo("100.00");
-        assertThat(item.getTaxIncludedTotalPrice()).isEqualByComparingTo("120.00");
+        assertThat(item.getTaxIncludedTotalPrice()).isEqualByComparingTo("128.00");
         assertThat(item.getRemainingQty()).isEqualTo(5);
         assertThat(item.getUnshippedQty()).isEqualTo(6);
         assertThat(item.getCustomerOrderNo()).isEqualTo("PO-900");

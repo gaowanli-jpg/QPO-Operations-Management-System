@@ -3,6 +3,7 @@ package com.machining.quote;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.machining.quote.domain.QuoteStatusWorkflow;
+import com.machining.quote.dto.SalesOrderU9PriceMode;
 import com.machining.quote.dto.SalesOrderU9SyncPreviewResp;
 import com.machining.quote.dto.u9.U9SalesOrderHeadDTO;
 import com.machining.quote.entity.SalesOrderHeader;
@@ -119,6 +120,23 @@ class SalesOrderU9MinimalContractTest {
     }
 
     @Test
+    void assemblerCanSwitchToTaxIncludedPriceMode() {
+        U9SalesOrderRequestAssembler assembler = new U9SalesOrderRequestAssembler();
+        SalesOrderHeader header = header();
+        SalesOrderItem item = item(501L, 1, "MAT-100201", 2, "100.00");
+        item.setTaxIncludedUnitPrice(new BigDecimal("113.00"));
+
+        U9SalesOrderHeadDTO request = assembler.assemble(header, List.of(item), SalesOrderU9PriceMode.TAX_INCLUDED);
+
+        assertThat(request.getIsPriceIncludeTax()).isTrue();
+        assertThat(request.getSOLineDTOList()).singleElement()
+                .satisfies(line -> {
+                    assertThat(line.getFinallyPriceTC()).isEqualByComparingTo("113.00");
+                    assertThat(line.getDescFlexField().getPrivateDescSeg9()).isEqualTo("113");
+                });
+    }
+
+    @Test
     void validatorBlocksMissingUntaxedPriceAndOnlyWarnsForBlankDeliveryDates() {
         U9SalesOrderContractValidator validator = new U9SalesOrderContractValidator();
         SalesOrderItem item = item(501L, 1, "MAT-100201", 2, null);
@@ -137,6 +155,23 @@ class SalesOrderU9MinimalContractTest {
     }
 
     @Test
+    void validatorChecksRequiredPriceFieldBySelectedMode() {
+        U9SalesOrderContractValidator validator = new U9SalesOrderContractValidator();
+        SalesOrderItem taxModeReady = item(501L, 1, "MAT-100201", 2, null);
+        taxModeReady.setTaxIncludedUnitPrice(new BigDecimal("113.00"));
+        SalesOrderItem missingTaxIncluded = item(502L, 2, "MAT-100202", 2, "100.00");
+        missingTaxIncluded.setTaxIncludedUnitPrice(null);
+
+        ValidationResult taxModeResult = validator.validate(header(), List.of(taxModeReady), SalesOrderU9PriceMode.TAX_INCLUDED);
+        ValidationResult missingTaxResult = validator.validate(header(), List.of(missingTaxIncluded), SalesOrderU9PriceMode.TAX_INCLUDED);
+
+        assertThat(taxModeResult.hasBlockingErrors()).isFalse();
+        assertThat(taxModeResult.blockingErrors()).noneMatch(message -> message.contains("未税单价"));
+        assertThat(missingTaxResult.hasBlockingErrors()).isTrue();
+        assertThat(missingTaxResult.blockingErrors()).anyMatch(message -> message.contains("含税单价"));
+    }
+
+    @Test
     void previewFingerprintMatchesActualSubmittedRequestFingerprint() {
         U9SalesOrderRequestAssembler assembler = new U9SalesOrderRequestAssembler();
         SalesOrderU9SyncService service = new SalesOrderU9SyncService();
@@ -152,6 +187,14 @@ class SalesOrderU9MinimalContractTest {
         when(headerMapper.selectById(header.getId())).thenReturn(header);
         when(itemMapper.selectList(any())).thenReturn(List.of(item));
         when(stateService.reserve(header.getId())).thenReturn(new SalesOrderU9SyncStateService.PreparedOrder(
+                header,
+                List.of(item),
+                preparedRequest,
+                "ATT-901",
+                preparedFingerprint,
+                LocalDateTime.of(2026, 8, 11, 14, 30)
+        ));
+        when(stateService.reserve(header.getId(), SalesOrderU9PriceMode.UNTAXED)).thenReturn(new SalesOrderU9SyncStateService.PreparedOrder(
                 header,
                 List.of(item),
                 preparedRequest,

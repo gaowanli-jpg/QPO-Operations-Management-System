@@ -51,10 +51,13 @@ describe('sales order U9 sync options frontend', () => {
     expect(component).not.toContain('/u9-sales-master')
   })
 
-  test('shows untaxed U9 price and private field preview without customer material number', () => {
+  test('shows selected U9 price mode and private field preview without customer material number', () => {
     const component = readSource('components', 'SalesOrderU9Sync.vue')
 
-    expect(component).toContain('label="U9未税单价"')
+    expect(component).toContain(':label="selectedU9PriceColumnLabel"')
+    expect(component).toContain('U9未税单价')
+    expect(component).toContain('U9含税单价')
+    expect(component).toContain('selectedU9PriceField')
     expect(component).toContain('label="U9私有字段"')
     expect(component).toContain('PrivateDescSeg1')
     expect(component).toContain('PrivateDescSeg2')
@@ -62,9 +65,9 @@ describe('sales order U9 sync options frontend', () => {
     expect(component).toContain('PrivateDescSeg4')
     expect(component).toContain('PrivateDescSeg5')
     expect(component).toContain('PrivateDescSeg9')
+    expect(component).toContain('PrivateDescSeg9 同步价格')
     expect(component).toContain('PubDescSeg2')
     expect(component).toContain('u9PrivateFieldValue')
-    expect(component).not.toContain('label="U9含税单价"')
     expect(component).not.toContain('客户料号')
     expect(component).not.toContain('prop="salesMaterialNo"')
   })

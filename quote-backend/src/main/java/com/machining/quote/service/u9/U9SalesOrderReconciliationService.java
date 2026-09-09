@@ -182,7 +182,7 @@ public class U9SalesOrderReconciliationService {
             compareText(errors, "行" + expectedLine.getDocLineNo() + "物料号", expectedLine.getItemCode(), actualLine.text("ItemInfo.ItemID.Code"));
             compareDecimal(errors, "行" + expectedLine.getDocLineNo() + "销售数量", expectedLine.getOrderByQtyTU(), decimal(actualLine.value("OrderByQtyTU")));
             compareDecimal(errors, "行" + expectedLine.getDocLineNo() + "计价数量", expectedLine.getOrderByQtyPU(), decimal(actualLine.value("OrderByQtyPU")));
-            compareDecimal(errors, "行" + expectedLine.getDocLineNo() + "未税单价", expectedLine.getFinallyPriceTC(), decimal(actualLine.value("FinallyPriceTC")));
+            compareDecimal(errors, "行" + expectedLine.getDocLineNo() + "同步单价", expectedLine.getFinallyPriceTC(), decimal(actualLine.value("FinallyPriceTC")));
         }
         return errors;
     }

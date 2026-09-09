@@ -11,6 +11,7 @@ public class SalesOrderU9ItemUpdateLineReq {
     public static final String FIELD_CUSTOMER_DELIVERY_DATE = "customerDeliveryDate";
     public static final String FIELD_INTERNAL_DELIVERY_DATE = "internalDeliveryDate";
     public static final String FIELD_UNTAXED_UNIT_PRICE = "untaxedUnitPrice";
+    public static final String FIELD_TAX_INCLUDED_UNIT_PRICE = "taxIncludedUnitPrice";
     public static final String FIELD_CUSTOMER_ORDER_NO = "customerOrderNo";
     public static final String FIELD_CUSTOMER_PROJECT_NO = "customerProjectNo";
     public static final String FIELD_INTERNAL_PROJECT_NO = "internalProjectNo";
@@ -21,6 +22,7 @@ public class SalesOrderU9ItemUpdateLineReq {
     private LocalDate customerDeliveryDate;
     private LocalDate internalDeliveryDate;
     private BigDecimal untaxedUnitPrice;
+    private BigDecimal taxIncludedUnitPrice;
     private String customerOrderNo;
     private String customerProjectNo;
     private String internalProjectNo;
@@ -69,6 +71,15 @@ public class SalesOrderU9ItemUpdateLineReq {
     public void setUntaxedUnitPrice(BigDecimal untaxedUnitPrice) {
         this.untaxedUnitPrice = untaxedUnitPrice;
         providedFields.add(FIELD_UNTAXED_UNIT_PRICE);
+    }
+
+    public BigDecimal getTaxIncludedUnitPrice() {
+        return taxIncludedUnitPrice;
+    }
+
+    public void setTaxIncludedUnitPrice(BigDecimal taxIncludedUnitPrice) {
+        this.taxIncludedUnitPrice = taxIncludedUnitPrice;
+        providedFields.add(FIELD_TAX_INCLUDED_UNIT_PRICE);
     }
 
     public String getCustomerOrderNo() {

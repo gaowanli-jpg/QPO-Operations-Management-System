@@ -163,14 +163,40 @@ describe('sales order U9 sync module', () => {
     expect(component).toContain('prop="u9OrderCode"')
     expect(component).toContain('prop="materialNo" label="物料号"')
     expect(component).toContain('prop="materialNoStatus"')
-    expect(component).toContain('prop="untaxedUnitPrice"')
+    expect(component).toContain(':prop="selectedU9PriceField"')
     expect(component).toContain('U9未税单价')
+    expect(component).toContain('U9含税单价')
     expect(component).toContain('未税单价缺失')
+    expect(component).toContain('含税单价缺失')
     expect(component).toContain('label="U9私有字段"')
-    expect(component).toContain('PrivateDescSeg9 价格')
+    expect(component).toContain('PrivateDescSeg9 同步价格')
     expect(component).toContain('prop="errorMessage"')
     expect(component).not.toContain('prop="salesMaterialNo"')
     expect(component).not.toContain('priceMissingTagType')
+  })
+
+  test('lets operators choose whether U9 sync uses untaxed or tax included price', () => {
+    const component = readSource('components', 'SalesOrderU9Sync.vue')
+    const api = readSource('services', 'marketApi.js')
+
+    expect(component).toContain('const U9_PRICE_MODE_OPTIONS = [')
+    expect(component).toContain("value: 'UNTAXED'")
+    expect(component).toContain("value: 'TAX_INCLUDED'")
+    expect(component).toContain('const u9PriceMode = ref(\'UNTAXED\')')
+    expect(component).toContain('U9价格口径')
+    expect(component).toContain('按未税价同步')
+    expect(component).toContain('按含税价同步')
+    expect(component).toContain('U9价格=未税单价')
+    expect(component).toContain('U9价格=含税单价')
+    expect(component).toContain('priceMode: u9PriceMode.value')
+    expect(component).toContain('syncSalesOrderU9(selectedOrderId.value, { priceMode: u9PriceMode.value })')
+    expect(component).toContain('selectedU9PriceField')
+    expect(component).toContain('selectedU9PriceMissingText')
+    expect(component).toContain('previewMatchesCurrentView')
+    expect(component).toContain('source.priceMode === u9PriceMode.value')
+    expect(component).toContain('PrivateDescSeg9 同步价格')
+    expect(api).toContain('syncSalesOrderU9 = (salesOrderId, payload = {})')
+    expect(api).toContain('syncSalesOrdersU9 = (salesOrderIds = [], payload = {})')
   })
 
   test('keeps order-level sales order metadata in order info while item edits stay line scoped', () => {
@@ -218,7 +244,7 @@ describe('sales order U9 sync module', () => {
       'label="数量(PCS)"',
       'label="就绪"',
       'label="错误/警告"',
-      'prop="untaxedUnitPrice"',
+      ':prop="selectedU9PriceField"',
       'label="未税金额"',
       'label="下单日期"',
       'label="客户下单抬头"',
@@ -269,6 +295,7 @@ describe('sales order U9 sync module', () => {
       'customerDeliveryDate',
       'internalDeliveryDate',
       'untaxedUnitPrice',
+      'taxIncludedUnitPrice',
       'customerOrderNo',
       'customerProjectNo',
       'internalProjectNo',
@@ -299,7 +326,8 @@ describe('sales order U9 sync module', () => {
     readOnlyColumns.forEach(column => expect(component).toContain(column))
 
     expect(component).toContain('v-model="itemDrafts[row.salesOrderItemId].qty"')
-    expect(component).toContain('v-model="itemDrafts[row.salesOrderItemId].untaxedUnitPrice"')
+    expect(component).toContain('v-model="itemDrafts[row.salesOrderItemId][selectedU9PriceField]"')
+    expect(component).toContain('taxIncludedUnitPrice')
     expect(component).toContain('v-model="itemDrafts[row.salesOrderItemId].customerDeliveryDate"')
     expect(component).toContain('v-model="itemDrafts[row.salesOrderItemId].internalDeliveryDate"')
     expect(component).toContain('v-model="itemDrafts[row.salesOrderItemId].customerOrderNo"')

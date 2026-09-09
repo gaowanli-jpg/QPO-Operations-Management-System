@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.machining.quote.domain.QuoteStatusWorkflow;
 import com.machining.quote.dto.PageResult;
+import com.machining.quote.dto.SalesOrderU9PriceMode;
 import com.machining.quote.dto.SalesOrderU9SyncOrderRow;
 import com.machining.quote.dto.SalesOrderU9SyncPreviewLine;
 import com.machining.quote.dto.SalesOrderU9SyncPreviewResp;
@@ -529,9 +530,15 @@ class SalesOrderU9SyncModuleWorkflowTest {
                     .thenReturn(U9SalesOrderReconciliationService.Result.notFoundConfirmed("创建前未找到同 DocNo U9 订单"));
             doAnswer(invocation -> reserve(invocation.getArgument(0)))
                     .when(stateService).reserve(any());
+            doAnswer(invocation -> reserve(invocation.getArgument(0), invocation.getArgument(1)))
+                    .when(stateService).reserve(any(), any());
         }
 
         private SalesOrderU9SyncStateService.PreparedOrder reserve(Long salesOrderId) {
+            return reserve(salesOrderId, SalesOrderU9PriceMode.UNTAXED);
+        }
+
+        private SalesOrderU9SyncStateService.PreparedOrder reserve(Long salesOrderId, SalesOrderU9PriceMode priceMode) {
             SalesOrderHeader header = headerMapper.selectByIdForUpdate(salesOrderId);
             if (header == null) {
                 throw new RuntimeException("销售订单不存在");
@@ -540,11 +547,11 @@ class SalesOrderU9SyncModuleWorkflowTest {
             if (items == null) {
                 items = List.of();
             }
-            U9SalesOrderContractValidator.ValidationResult validation = validator.validate(header, items);
+            U9SalesOrderContractValidator.ValidationResult validation = validator.validate(header, items, priceMode);
             if (validation.hasBlockingErrors()) {
                 throw new RuntimeException(validation.firstBlockingError());
             }
-            com.machining.quote.dto.u9.U9SalesOrderHeadDTO request = assembler.assemble(header, items);
+            com.machining.quote.dto.u9.U9SalesOrderHeadDTO request = assembler.assemble(header, items, priceMode);
             return new SalesOrderU9SyncStateService.PreparedOrder(
                     header,
                     items,

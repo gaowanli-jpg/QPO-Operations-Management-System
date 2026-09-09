@@ -54,7 +54,7 @@ class SalesOrderU9SyncAcceptanceTest {
         String checklist = doc.substring(doc.indexOf("## 14. 最终验收清单"), doc.indexOf("## 15. 已确认决策"));
 
         assertThat(checklist)
-                .contains("- [x] `IsPriceIncludeTax=false`。")
+                .contains("- [x] 默认 `IsPriceIncludeTax=false`，可切换 `IsPriceIncludeTax=true`。")
                 .contains("- [x] 销售员和部门都允许为空。")
                 .contains("- [x] 所有订单拥有稳定、唯一、非空 `DocNo`。")
                 .contains("- [x] 复用 `market:u9-sync:*`，不新增用户权限。")
@@ -75,8 +75,9 @@ class SalesOrderU9SyncAcceptanceTest {
                 .contains(
                         "head.setSeller(trimToNull(header.getU9SellerCode()))",
                         "head.setSaleDepartment(trimToNull(header.getU9SaleDepartmentCode()))",
-                        "head.setIsPriceIncludeTax(false)",
-                        "line.setFinallyPriceTC(item.getUntaxedUnitPrice())",
+                        "head.setIsPriceIncludeTax(priceMode.isPriceIncludeTax())",
+                        "SalesOrderU9PriceMode.UNTAXED",
+                        "line.setFinallyPriceTC(priceFor(item, priceMode))",
                         "desc.setPrivateDescSeg1",
                         "desc.setPrivateDescSeg2",
                         "desc.setPrivateDescSeg3",

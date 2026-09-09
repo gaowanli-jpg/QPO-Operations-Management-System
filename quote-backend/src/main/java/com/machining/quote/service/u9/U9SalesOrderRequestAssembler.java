@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.MapperFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import com.machining.quote.dto.SalesOrderU9PriceMode;
 import com.machining.quote.dto.u9.U9DescFlexFieldDTO;
 import com.machining.quote.dto.u9.U9SalesOrderHeadDTO;
 import com.machining.quote.dto.u9.U9SalesOrderLineDTO;
@@ -27,6 +28,11 @@ public class U9SalesOrderRequestAssembler {
             .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
 
     public U9SalesOrderHeadDTO assemble(SalesOrderHeader header, List<SalesOrderItem> items) {
+        return assemble(header, items, SalesOrderU9PriceMode.UNTAXED);
+    }
+
+    public U9SalesOrderHeadDTO assemble(SalesOrderHeader header, List<SalesOrderItem> items, SalesOrderU9PriceMode priceMode) {
+        priceMode = SalesOrderU9PriceMode.defaultMode(priceMode);
         U9SalesOrderHeadDTO head = new U9SalesOrderHeadDTO();
         head.setOtherID(trimToNull(header.getSalesOrderNo()));
         head.setDocNo(trimToNull(header.getDocumentNo()));
@@ -35,12 +41,12 @@ public class U9SalesOrderRequestAssembler {
         head.setSeller(trimToNull(header.getU9SellerCode()));
         head.setSaleDepartment(trimToNull(header.getU9SaleDepartmentCode()));
         head.setDocumentType(trimToNull(header.getDocumentTypeCode()));
-        head.setIsPriceIncludeTax(false);
+        head.setIsPriceIncludeTax(priceMode.isPriceIncludeTax());
 
         boolean renumber = shouldRenumber(items);
         int sequence = 1;
         for (SalesOrderItem item : items == null ? List.<SalesOrderItem>of() : items) {
-            head.getSOLineDTOList().add(toLine(header, item, renumber ? sequence : item.getLineNo(), sequence));
+            head.getSOLineDTOList().add(toLine(header, item, renumber ? sequence : item.getLineNo(), sequence, priceMode));
             sequence++;
         }
         return head;
@@ -61,17 +67,22 @@ public class U9SalesOrderRequestAssembler {
         }
     }
 
-    private U9SalesOrderLineDTO toLine(SalesOrderHeader header, SalesOrderItem item, Integer docLineNo, int sequence) {
+    private U9SalesOrderLineDTO toLine(
+            SalesOrderHeader header,
+            SalesOrderItem item,
+            Integer docLineNo,
+            int sequence,
+            SalesOrderU9PriceMode priceMode) {
         BigDecimal qty = BigDecimal.valueOf(item.getQty());
         U9SalesOrderLineDTO line = new U9SalesOrderLineDTO();
         line.setDocLineNo(docLineNo == null || docLineNo <= 0 ? sequence : docLineNo);
         line.setItemCode(trimToNull(item.getMaterialNo()));
         line.setOrderByQtyTU(qty);
         line.setOrderByQtyPU(qty);
-        line.setFinallyPriceTC(item.getUntaxedUnitPrice());
+        line.setFinallyPriceTC(priceFor(item, priceMode));
         line.setFreeType(-1);
         line.setShipTogetherFlag(-1);
-        line.setDescFlexField(descFlex(header, item));
+        line.setDescFlexField(descFlex(header, item, priceMode));
         line.getSOShiplineDTOList().add(toShipLine(item, qty));
         return line;
     }
@@ -87,16 +98,22 @@ public class U9SalesOrderRequestAssembler {
         return shipLine;
     }
 
-    private U9DescFlexFieldDTO descFlex(SalesOrderHeader header, SalesOrderItem item) {
+    private U9DescFlexFieldDTO descFlex(SalesOrderHeader header, SalesOrderItem item, SalesOrderU9PriceMode priceMode) {
         U9DescFlexFieldDTO desc = new U9DescFlexFieldDTO();
         desc.setPrivateDescSeg1(firstNonBlank(item.getCustomerProjectNo(), header.getCustomerProjectNo()));
         desc.setPrivateDescSeg2(firstNonBlank(item.getCustomerOrderNo(), header.getCustomerOrderNo()));
         desc.setPrivateDescSeg3(firstNonBlank(item.getInternalProjectNo(), header.getInternalProjectNo()));
         desc.setPrivateDescSeg4(item.getCustomerDeliveryDate() == null ? null : item.getCustomerDeliveryDate().toString());
         desc.setPrivateDescSeg5(item.getInternalDeliveryDate() == null ? null : item.getInternalDeliveryDate().toString());
-        desc.setPrivateDescSeg9(formatDecimal(item.getUntaxedUnitPrice()));
+        desc.setPrivateDescSeg9(formatDecimal(priceFor(item, priceMode)));
         desc.setPubDescSeg2(trimToNull(item.getRemark()));
         return desc;
+    }
+
+    private BigDecimal priceFor(SalesOrderItem item, SalesOrderU9PriceMode priceMode) {
+        return SalesOrderU9PriceMode.defaultMode(priceMode).isPriceIncludeTax()
+                ? item.getTaxIncludedUnitPrice()
+                : item.getUntaxedUnitPrice();
     }
 
     private boolean shouldRenumber(List<SalesOrderItem> items) {

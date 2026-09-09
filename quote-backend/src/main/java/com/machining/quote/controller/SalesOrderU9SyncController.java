@@ -105,8 +105,9 @@ public class SalesOrderU9SyncController {
     public SalesOrderU9SyncPreviewResp preview(
             @PathVariable Long salesOrderId,
             @RequestParam(value = "page", required = false) Integer page,
-            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
-        return salesOrderU9SyncService.previewSalesOrder(salesOrderId, page, pageSize);
+            @RequestParam(value = "pageSize", required = false) Integer pageSize,
+            @RequestParam(value = "priceMode", required = false) String priceMode) {
+        return salesOrderU9SyncService.previewSalesOrder(salesOrderId, page, pageSize, priceMode);
     }
 
     @PutMapping("/orders/{salesOrderId}/assignment")
@@ -170,8 +171,10 @@ public class SalesOrderU9SyncController {
 
     @PostMapping("/orders/{salesOrderId}/sync")
     @RequirePermission("market:u9-sync:submit")
-    public SalesOrderU9SyncResp syncOne(@PathVariable Long salesOrderId) {
-        return salesOrderU9SyncService.syncSalesOrders(List.of(salesOrderId));
+    public SalesOrderU9SyncResp syncOne(
+            @PathVariable Long salesOrderId,
+            @RequestBody(required = false) SalesOrderU9SyncReq req) {
+        return salesOrderU9SyncService.syncSalesOrders(List.of(salesOrderId), req == null ? null : req.getPriceMode());
     }
 
     @PostMapping("/orders/{salesOrderId}/reconcile")
@@ -183,7 +186,9 @@ public class SalesOrderU9SyncController {
     @PostMapping("/sync")
     @RequirePermission("market:u9-sync:submit")
     public SalesOrderU9SyncResp sync(@RequestBody(required = false) SalesOrderU9SyncReq req) {
-        return salesOrderU9SyncService.syncSalesOrders(req == null ? List.of() : req.getSalesOrderIds());
+        return salesOrderU9SyncService.syncSalesOrders(
+                req == null ? List.of() : req.getSalesOrderIds(),
+                req == null ? null : req.getPriceMode());
     }
 
     private Long currentUserId() {

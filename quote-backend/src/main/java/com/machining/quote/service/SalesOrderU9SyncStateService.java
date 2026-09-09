@@ -2,6 +2,7 @@ package com.machining.quote.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
+import com.machining.quote.dto.SalesOrderU9PriceMode;
 import com.machining.quote.dto.u9.U9SalesOrderHeadDTO;
 import com.machining.quote.entity.CustomerMaster;
 import com.machining.quote.entity.SalesOrderHeader;
@@ -57,18 +58,24 @@ public class SalesOrderU9SyncStateService {
 
     @Transactional
     public PreparedOrder reserve(Long salesOrderId) {
+        return reserve(salesOrderId, SalesOrderU9PriceMode.UNTAXED);
+    }
+
+    @Transactional
+    public PreparedOrder reserve(Long salesOrderId, SalesOrderU9PriceMode priceMode) {
+        priceMode = SalesOrderU9PriceMode.defaultMode(priceMode);
         SalesOrderHeader header = lockedHeader(salesOrderId);
         assertDataScope(header);
         assertCanReserve(header);
         validateActiveMasterData(header);
         List<SalesOrderItem> items = loadItems(header.getId());
-        ValidationResult validation = contractValidator.validate(header, items);
+        ValidationResult validation = contractValidator.validate(header, items, priceMode);
         if (validation.hasBlockingErrors()) {
             String message = validation.firstBlockingError();
             markValidationFailed(header, message);
             throw new RuntimeException(message);
         }
-        U9SalesOrderHeadDTO request = requestAssembler.assemble(header, items);
+        U9SalesOrderHeadDTO request = requestAssembler.assemble(header, items, priceMode);
         String fingerprint = requestAssembler.fingerprint(request);
         String attemptId = UUID.randomUUID().toString().replace("-", "");
         LocalDateTime startedAt = now();

@@ -9,6 +9,7 @@ import com.machining.quote.dto.SalesOrderU9AssignmentResp;
 import com.machining.quote.dto.SalesOrderU9DepartmentOptionDTO;
 import com.machining.quote.dto.SalesOrderU9OrderDateUpdateReq;
 import com.machining.quote.dto.SalesOrderU9OrderDateUpdateResp;
+import com.machining.quote.dto.SalesOrderU9PriceMode;
 import com.machining.quote.dto.SalesOrderU9ReconcileResp;
 import com.machining.quote.dto.SalesOrderU9SellerOptionDTO;
 import com.machining.quote.dto.SalesOrderU9SyncOrderRow;
@@ -134,6 +135,19 @@ public class SalesOrderU9SyncService {
     }
 
     public SalesOrderU9SyncPreviewResp previewSalesOrder(Long salesOrderId, Integer page, Integer pageSize) {
+        return previewSalesOrder(salesOrderId, page, pageSize, SalesOrderU9PriceMode.UNTAXED);
+    }
+
+    public SalesOrderU9SyncPreviewResp previewSalesOrder(Long salesOrderId, Integer page, Integer pageSize, String priceModeCode) {
+        return previewSalesOrder(salesOrderId, page, pageSize, SalesOrderU9PriceMode.fromCode(priceModeCode));
+    }
+
+    public SalesOrderU9SyncPreviewResp previewSalesOrder(
+            Long salesOrderId,
+            Integer page,
+            Integer pageSize,
+            SalesOrderU9PriceMode priceMode) {
+        SalesOrderU9PriceMode selectedPriceMode = SalesOrderU9PriceMode.defaultMode(priceMode);
         int safePage = normalizePage(page);
         int safePageSize = normalizePageSize(pageSize);
         SalesOrderHeader header = requireSalesOrder(salesOrderId);
@@ -141,7 +155,7 @@ public class SalesOrderU9SyncService {
         long total = countItems(header.getId());
         List<SalesOrderItem> pageItems = loadPagedItems(header.getId(), safePage, safePageSize);
         MaterialStats stats = materialStats(items);
-        ValidationResult validation = contractValidator.validate(header, items);
+        ValidationResult validation = contractValidator.validate(header, items, selectedPriceMode);
         SalesOrderU9SyncPreviewResp resp = new SalesOrderU9SyncPreviewResp();
         resp.setSalesOrderId(header.getId());
         resp.setSalesOrderNo(header.getSalesOrderNo());
@@ -167,6 +181,9 @@ public class SalesOrderU9SyncService {
         resp.setU9SyncStatus(header.getU9SyncStatus());
         resp.setU9OrderCode(header.getU9OrderCode());
         resp.setU9SyncMessage(header.getU9SyncMessage());
+        resp.setPriceMode(selectedPriceMode.name());
+        resp.setPriceModeLabel(selectedPriceMode.priceFieldLabel());
+        resp.setU9PriceField(selectedPriceMode.priceField());
         resp.setItemCount(stats.total());
         resp.setMaterialConfirmedItemCount(stats.confirmed());
         resp.setMissingMaterialItemCount(stats.missingOrUnconfirmed());
@@ -178,9 +195,9 @@ public class SalesOrderU9SyncService {
         resp.setBlockedReason(validation.firstBlockingError());
         resp.setSyncReady(!validation.hasBlockingErrors());
         if (!validation.hasBlockingErrors()) {
-            resp.setRequestFingerprint(requestAssembler.fingerprint(requestAssembler.assemble(header, items)));
+            resp.setRequestFingerprint(requestAssembler.fingerprint(requestAssembler.assemble(header, items, selectedPriceMode)));
         }
-        List<SalesOrderU9SyncPreviewLine> records = pageItems.stream().map(item -> toPreviewLine(header, item)).toList();
+        List<SalesOrderU9SyncPreviewLine> records = pageItems.stream().map(item -> toPreviewLine(header, item, selectedPriceMode)).toList();
         resp.setRecords(records);
         resp.setLines(records);
         return resp;
@@ -270,6 +287,15 @@ public class SalesOrderU9SyncService {
     }
 
     public SalesOrderU9SyncResp syncSalesOrders(List<Long> salesOrderIds) {
+        return syncSalesOrders(salesOrderIds, SalesOrderU9PriceMode.UNTAXED);
+    }
+
+    public SalesOrderU9SyncResp syncSalesOrders(List<Long> salesOrderIds, String priceModeCode) {
+        return syncSalesOrders(salesOrderIds, SalesOrderU9PriceMode.fromCode(priceModeCode));
+    }
+
+    public SalesOrderU9SyncResp syncSalesOrders(List<Long> salesOrderIds, SalesOrderU9PriceMode priceMode) {
+        priceMode = SalesOrderU9PriceMode.defaultMode(priceMode);
         long startedAt = System.currentTimeMillis();
         List<Long> ids = normalizeIds(salesOrderIds);
         SalesOrderU9SyncResp resp = new SalesOrderU9SyncResp();
@@ -283,15 +309,15 @@ public class SalesOrderU9SyncService {
             return resp;
         }
 
-        log.info("Sales order U9 sync started orderCount={}", ids.size());
+        log.info("Sales order U9 sync started orderCount={} priceMode={}", ids.size(), priceMode.name());
         for (Long id : ids) {
-            syncOneSalesOrder(id, resp);
+            syncOneSalesOrder(id, resp, priceMode);
         }
         finalizeResponse(resp);
-        audit(resp, startedAt);
-        log.info("Sales order U9 sync completed orderCount={} successOrderCount={} failedOrderCount={} durationMs={}",
+        audit(resp, startedAt, priceMode);
+        log.info("Sales order U9 sync completed orderCount={} successOrderCount={} failedOrderCount={} priceMode={} durationMs={}",
                 resp.getTotalOrderCount(), resp.getSuccessOrderCount(), resp.getFailedOrderCount(),
-                System.currentTimeMillis() - startedAt);
+                priceMode.name(), System.currentTimeMillis() - startedAt);
         return resp;
     }
 
@@ -304,10 +330,10 @@ public class SalesOrderU9SyncService {
         return reconcileResp(prepared, result);
     }
 
-    private void syncOneSalesOrder(Long salesOrderId, SalesOrderU9SyncResp resp) {
+    private void syncOneSalesOrder(Long salesOrderId, SalesOrderU9SyncResp resp, SalesOrderU9PriceMode priceMode) {
         PreparedOrder prepared;
         try {
-            prepared = syncStateService.reserve(salesOrderId);
+            prepared = syncStateService.reserve(salesOrderId, priceMode);
         } catch (RuntimeException error) {
             resp.getRows().add(failedRow(salesOrderId, null, safeError(error.getMessage())));
             return;
@@ -599,7 +625,7 @@ public class SalesOrderU9SyncService {
         return row;
     }
 
-    private SalesOrderU9SyncPreviewLine toPreviewLine(SalesOrderHeader header, SalesOrderItem item) {
+    private SalesOrderU9SyncPreviewLine toPreviewLine(SalesOrderHeader header, SalesOrderItem item, SalesOrderU9PriceMode priceMode) {
         SalesOrderU9SyncPreviewLine line = new SalesOrderU9SyncPreviewLine();
         line.setSalesOrderItemId(item.getId());
         line.setLineNo(item.getLineNo());
@@ -629,7 +655,7 @@ public class SalesOrderU9SyncService {
         line.setUntaxedTotalPrice(item.getUntaxedTotalPrice());
         line.setDeliveryDate(preferredDeliveryDate(item));
         line.setRemark(item.getRemark());
-        ValidationResult validation = contractValidator.validateItem(item);
+        ValidationResult validation = contractValidator.validateItem(item, priceMode);
         line.setBlockingErrors(validation.blockingErrors());
         line.setWarnings(validation.warnings());
         line.setReady(!validation.hasBlockingErrors());
@@ -791,12 +817,13 @@ public class SalesOrderU9SyncService {
         return row;
     }
 
-    private void audit(SalesOrderU9SyncResp resp, long startedAt) {
+    private void audit(SalesOrderU9SyncResp resp, long startedAt, SalesOrderU9PriceMode priceMode) {
         if (auditService == null) {
             return;
         }
         Map<String, Object> summary = new LinkedHashMap<>();
         summary.put("status", resp.getStatus());
+        summary.put("priceMode", priceMode.name());
         summary.put("totalOrderCount", resp.getTotalOrderCount());
         summary.put("successOrderCount", resp.getSuccessOrderCount());
         summary.put("failedOrderCount", resp.getFailedOrderCount());

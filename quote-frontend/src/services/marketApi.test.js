@@ -166,6 +166,8 @@ describe('marketApi', () => {
     await marketApi.syncSalesOrderU9(101)
     await marketApi.reconcileSalesOrderU9(101)
     await marketApi.syncSalesOrdersU9([101, 102])
+    await marketApi.syncSalesOrderU9(103, { priceMode: 'TAX_INCLUDED' })
+    await marketApi.syncSalesOrdersU9([104, 105], { priceMode: 'TAX_INCLUDED' })
 
     expect(request).toHaveBeenNthCalledWith(1, '/api/market/u9-sync/orders', { params })
     expect(request).toHaveBeenNthCalledWith(2, '/api/market/u9-sync/options')
@@ -202,7 +204,7 @@ describe('marketApi', () => {
     })
     expect(request).toHaveBeenNthCalledWith(8, '/api/market/u9-sync/orders/101/sync', {
       method: 'POST',
-      data: undefined
+      data: {}
     })
     expect(request).toHaveBeenNthCalledWith(9, '/api/market/u9-sync/orders/101/reconcile', {
       method: 'POST',
@@ -211,6 +213,14 @@ describe('marketApi', () => {
     expect(request).toHaveBeenNthCalledWith(10, '/api/market/u9-sync/sync', {
       method: 'POST',
       data: { salesOrderIds: [101, 102] }
+    })
+    expect(request).toHaveBeenNthCalledWith(11, '/api/market/u9-sync/orders/103/sync', {
+      method: 'POST',
+      data: { priceMode: 'TAX_INCLUDED' }
+    })
+    expect(request).toHaveBeenNthCalledWith(12, '/api/market/u9-sync/sync', {
+      method: 'POST',
+      data: { salesOrderIds: [104, 105], priceMode: 'TAX_INCLUDED' }
     })
   })
 

@@ -2,6 +2,7 @@ package com.machining.quote;
 
 import com.machining.quote.domain.QuoteStatusWorkflow;
 import com.machining.quote.dto.SalesOrderU9SyncResp;
+import com.machining.quote.dto.SalesOrderU9PriceMode;
 import com.machining.quote.dto.u9.U9ApiResult;
 import com.machining.quote.dto.u9.U9ResultDTO;
 import com.machining.quote.dto.u9.U9SalesOrderHeadDTO;
@@ -148,6 +149,31 @@ class SalesOrderU9SyncWorkflowTest {
     }
 
     @Test
+    void taxIncludedPriceModeBuildsU9RequestFromTaxIncludedUnitPrice() {
+        Fixture fixture = fixture();
+        SalesOrderHeader header = header(9001L, "SOQPO-001", "未同步");
+        SalesOrderItem item = item(5001L, header.getId(), "SALES-MAT-001", new BigDecimal("18.50"));
+        item.setUntaxedUnitPrice(null);
+        item.setTaxIncludedUnitPrice(new BigDecimal("18.50"));
+        markConfirmed(item, "MAT-CONFIRMED-001", 4);
+        fixture.withOrder(header, List.of(item));
+        when(fixture.u9Client.create(any())).thenReturn(apiResult(0,
+                u9Row(header.getSalesOrderNo(), true, "U9-ID-1", "U9-SO-001", "")
+        ));
+
+        SalesOrderU9SyncResp resp = fixture.service.syncSalesOrders(List.of(header.getId()), SalesOrderU9PriceMode.TAX_INCLUDED);
+
+        assertThat(resp.isSuccess()).isTrue();
+        U9SalesOrderHeadDTO request = fixture.capturedU9Orders().get(0);
+        assertThat(request.getIsPriceIncludeTax()).isTrue();
+        assertThat(request.getSOLineDTOList()).singleElement()
+                .satisfies(line -> {
+                    assertThat(line.getFinallyPriceTC()).isEqualByComparingTo("18.50");
+                    assertThat(line.getDescFlexField().getPrivateDescSeg9()).isEqualTo("18.5");
+                });
+    }
+
+    @Test
     void partialU9FailureUpdatesEachSalesOrderIndependently() {
         Fixture fixture = fixture();
         SalesOrderHeader first = header(9001L, "SOQPO-001", "未同步");
@@ -269,7 +295,8 @@ class SalesOrderU9SyncWorkflowTest {
         String frontendU9Sync = readFrontend("components/SalesOrderU9Sync.vue");
 
         assertThat(doc16)
-                .contains("U9 销售订单使用未税单价")
+                .contains("U9 销售订单默认使用未税单价")
+                .contains("可由操作员切换为含税单价")
                 .contains("SALES_ORDER_U9_ASSIGNMENT_UPDATE")
                 .contains("SALES_ORDER_U9_RECONCILE")
                 .contains("预览和选项读取不写操作日志")
@@ -278,7 +305,8 @@ class SalesOrderU9SyncWorkflowTest {
                 .doesNotContain("CustomerItemNo");
         assertThat(doc37)
                 .contains("U9 同步最终以 42 号文档的最小已验证契约为准")
-                .contains("FinallyPriceTC` 使用 `sales_order_item.untaxed_unit_price`")
+                .contains("FinallyPriceTC` 默认使用 `sales_order_item.untaxed_unit_price`")
+                .contains("可切换为 `sales_order_item.tax_included_unit_price`")
                 .doesNotContain("销售订单 U9 继续只使用正式含税价格字段")
                 .doesNotContain("OrderPriceTC` 和 `FinallyPriceTC` 等于含税单价")
                 .doesNotContain("含税单价为空时 U9 不调用外部系统");
@@ -443,6 +471,8 @@ class SalesOrderU9SyncWorkflowTest {
                     .thenReturn(U9SalesOrderReconciliationService.Result.notFoundConfirmed("创建前未找到同 DocNo U9 订单"));
             doAnswer(invocation -> reserve(invocation.getArgument(0)))
                     .when(stateService).reserve(any());
+            doAnswer(invocation -> reserve(invocation.getArgument(0), invocation.getArgument(1)))
+                    .when(stateService).reserve(any(), any());
             doAnswer(invocation -> {
                 SalesOrderU9SyncStateService.PreparedOrder prepared = invocation.getArgument(0);
                 String u9OrderId = invocation.getArgument(1);
@@ -477,6 +507,10 @@ class SalesOrderU9SyncWorkflowTest {
         }
 
         private SalesOrderU9SyncStateService.PreparedOrder reserve(Long salesOrderId) {
+            return reserve(salesOrderId, SalesOrderU9PriceMode.UNTAXED);
+        }
+
+        private SalesOrderU9SyncStateService.PreparedOrder reserve(Long salesOrderId, SalesOrderU9PriceMode priceMode) {
             SalesOrderHeader header = headerMapper.selectByIdForUpdate(salesOrderId);
             if (header == null) {
                 throw new RuntimeException("销售订单不存在");
@@ -485,7 +519,7 @@ class SalesOrderU9SyncWorkflowTest {
                 throw new RuntimeException("销售订单已同步，不能重复创建 U9 订单");
             }
             List<SalesOrderItem> items = itemMapper.selectList(new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<>());
-            U9SalesOrderContractValidator.ValidationResult validation = validator.validate(header, items);
+            U9SalesOrderContractValidator.ValidationResult validation = validator.validate(header, items, priceMode);
             if (validation.hasBlockingErrors()) {
                 SalesOrderHeader update = new SalesOrderHeader();
                 update.setId(header.getId());
@@ -494,7 +528,7 @@ class SalesOrderU9SyncWorkflowTest {
                 headerMapper.updateById(update);
                 throw new RuntimeException(validation.firstBlockingError());
             }
-            U9SalesOrderHeadDTO request = assembler.assemble(header, items);
+            U9SalesOrderHeadDTO request = assembler.assemble(header, items, priceMode);
             String hash = assembler.fingerprint(request);
             SalesOrderHeader update = new SalesOrderHeader();
             update.setId(header.getId());

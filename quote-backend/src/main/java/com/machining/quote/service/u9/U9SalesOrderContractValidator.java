@@ -1,10 +1,12 @@
 package com.machining.quote.service.u9;
 
 import com.machining.quote.domain.QuoteStatusWorkflow;
+import com.machining.quote.dto.SalesOrderU9PriceMode;
 import com.machining.quote.entity.SalesOrderHeader;
 import com.machining.quote.entity.SalesOrderItem;
 import org.springframework.stereotype.Component;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -18,6 +20,11 @@ public class U9SalesOrderContractValidator {
     private static final String STATUS_PENDING_CONFIRMATION = "结果待确认";
 
     public ValidationResult validate(SalesOrderHeader header, List<SalesOrderItem> items) {
+        return validate(header, items, SalesOrderU9PriceMode.UNTAXED);
+    }
+
+    public ValidationResult validate(SalesOrderHeader header, List<SalesOrderItem> items, SalesOrderU9PriceMode priceMode) {
+        priceMode = SalesOrderU9PriceMode.defaultMode(priceMode);
         List<String> errors = new ArrayList<>();
         List<String> warnings = new ArrayList<>();
         if (header == null) {
@@ -30,7 +37,7 @@ public class U9SalesOrderContractValidator {
             errors.add("销售订单没有可同步零件");
         }
         for (SalesOrderItem item : safeItems) {
-            ValidationResult lineResult = validateItem(item);
+            ValidationResult lineResult = validateItem(item, priceMode);
             errors.addAll(lineResult.blockingErrors());
             warnings.addAll(lineResult.warnings());
         }
@@ -38,6 +45,11 @@ public class U9SalesOrderContractValidator {
     }
 
     public ValidationResult validateItem(SalesOrderItem item) {
+        return validateItem(item, SalesOrderU9PriceMode.UNTAXED);
+    }
+
+    public ValidationResult validateItem(SalesOrderItem item, SalesOrderU9PriceMode priceMode) {
+        priceMode = SalesOrderU9PriceMode.defaultMode(priceMode);
         List<String> errors = new ArrayList<>();
         List<String> warnings = new ArrayList<>();
         if (item == null) {
@@ -55,8 +67,8 @@ public class U9SalesOrderContractValidator {
         if (item.getQty() == null || item.getQty() <= 0) {
             errors.add("销售订单零件" + itemLabel(item) + "数量必须为正整数，不能同步 U9");
         }
-        if (item.getUntaxedUnitPrice() == null) {
-            errors.add("销售订单零件" + itemLabel(item) + "未税单价为空，不能同步 U9");
+        if (requiredPrice(item, priceMode) == null) {
+            errors.add("销售订单零件" + itemLabel(item) + priceMode.priceFieldLabel() + "为空，不能同步 U9");
         }
         if (item.getCustomerDeliveryDate() == null) {
             warnings.add("销售订单零件" + itemLabel(item) + "客户交期为空，U9 请求不发送客户交期");
@@ -65,6 +77,12 @@ public class U9SalesOrderContractValidator {
             warnings.add("销售订单零件" + itemLabel(item) + "内部交期为空，U9 请求不发送内部交期");
         }
         return new ValidationResult(distinct(errors), distinct(warnings));
+    }
+
+    private BigDecimal requiredPrice(SalesOrderItem item, SalesOrderU9PriceMode priceMode) {
+        return SalesOrderU9PriceMode.defaultMode(priceMode).isPriceIncludeTax()
+                ? item.getTaxIncludedUnitPrice()
+                : item.getUntaxedUnitPrice();
     }
 
     private void validateHeader(SalesOrderHeader header, List<String> errors) {

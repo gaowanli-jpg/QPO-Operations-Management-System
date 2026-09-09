@@ -8,4 +8,5 @@ import java.util.List;
 @Data
 public class SalesOrderU9SyncReq {
     private List<Long> salesOrderIds = new ArrayList<>();
+    private String priceMode;
 }

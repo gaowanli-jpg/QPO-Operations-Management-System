@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.machining.quote.config.RequirePermission;
 import com.machining.quote.controller.SalesOrderU9SyncController;
 import com.machining.quote.domain.QuoteStatusWorkflow;
+import com.machining.quote.dto.SalesOrderU9PriceMode;
 import com.machining.quote.dto.SalesOrderU9ReconcileResp;
 import com.machining.quote.dto.SalesOrderU9SyncResp;
 import com.machining.quote.dto.u9.U9ApiResult;
@@ -86,6 +87,7 @@ class SalesOrderU9SyncReconciliationTest {
         Fixture fixture = fixture();
         SalesOrderU9SyncStateService.PreparedOrder prepared = prepared(9001L, "ATT-1");
         when(fixture.stateService.reserve(9001L)).thenReturn(prepared);
+        when(fixture.stateService.reserve(9001L, SalesOrderU9PriceMode.UNTAXED)).thenReturn(prepared);
         when(fixture.reconciliationService.checkExisting(prepared)).thenReturn(
                 U9SalesOrderReconciliationService.Result.foundAndMatched("U9-ID-1", "U9-SO-1", List.of())
         );
@@ -107,6 +109,7 @@ class SalesOrderU9SyncReconciliationTest {
         Fixture matchedFixture = fixture();
         SalesOrderU9SyncStateService.PreparedOrder matched = prepared(9002L, "ATT-2");
         when(matchedFixture.stateService.reserve(9002L)).thenReturn(matched);
+        when(matchedFixture.stateService.reserve(9002L, SalesOrderU9PriceMode.UNTAXED)).thenReturn(matched);
         when(matchedFixture.reconciliationService.checkExisting(matched)).thenReturn(
                 U9SalesOrderReconciliationService.Result.notFoundConfirmed("创建前未找到同 DocNo U9 订单")
         );
@@ -123,6 +126,7 @@ class SalesOrderU9SyncReconciliationTest {
         Fixture pendingFixture = fixture();
         SalesOrderU9SyncStateService.PreparedOrder pending = prepared(9003L, "ATT-3");
         when(pendingFixture.stateService.reserve(9003L)).thenReturn(pending);
+        when(pendingFixture.stateService.reserve(9003L, SalesOrderU9PriceMode.UNTAXED)).thenReturn(pending);
         when(pendingFixture.reconciliationService.checkExisting(pending)).thenReturn(
                 U9SalesOrderReconciliationService.Result.notFoundConfirmed("创建前未找到同 DocNo U9 订单")
         );
@@ -143,6 +147,8 @@ class SalesOrderU9SyncReconciliationTest {
     void reserveBlocksPendingStatusBeforeAnyExternalCreate() {
         Fixture fixture = fixture();
         when(fixture.stateService.reserve(9004L)).thenThrow(new RuntimeException("结果待确认状态只能核对，不能直接重新创建"));
+        when(fixture.stateService.reserve(9004L, SalesOrderU9PriceMode.UNTAXED))
+                .thenThrow(new RuntimeException("结果待确认状态只能核对，不能直接重新创建"));
 
         SalesOrderU9SyncResp resp = fixture.service.syncSalesOrders(List.of(9004L));
 

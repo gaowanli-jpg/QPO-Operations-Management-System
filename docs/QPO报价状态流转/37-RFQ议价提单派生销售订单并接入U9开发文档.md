@@ -8,7 +8,7 @@
 >
 > 文档状态：已完成并验收（2026-08-08）。本文目标链路、阶段实施计划和验收记录已与当前代码一致。
 >
-> 2026-08-11 U9 同步重构阶段 7 收口：RFQ 议价提单派生销售订单进入 U9 时，最终以 `42-销售订单U9同步模块重构开发文档.md` 的最小已验证契约为准。U9 同步使用已确认物料号和未税单价，`FinallyPriceTC` 取 `sales_order_item.untaxed_unit_price`，不发送客户料号、图号、版本、单位、换算率、税额或金额字段；工艺路线不发送给 U9。
+> 2026-09-09 U9 价格口径优化：RFQ 议价提单派生销售订单进入 U9 时，最终以 `42-销售订单U9同步模块重构开发文档.md` 的最小已验证契约为准。U9 同步使用已确认物料号和操作员选择的价格口径，`FinallyPriceTC` 默认使用 `sales_order_item.untaxed_unit_price`，可切换为 `sales_order_item.tax_included_unit_price`；不发送客户料号、图号、版本、单位、换算率、税额或金额字段，工艺路线不发送给 U9。
 
 > 2026-08-10 议价提单表格数据替换阶段 7 收口：正式提单前可通过 `/api/market/release/item-data-replacement/preview` 预览 Excel 替换结果，再通过 `/api/market/release/item-data-replacement/confirm` 确认保存。两个接口均复用 `market:release:create` 和 RFQ 数据权限，后端仍是最终边界；预览不写 `audit_log`，确认仅在业务字段落库时写 `RELEASE_ITEM_DATA_REPLACEMENT` 摘要。确认响应的 `affectedRows` 用于立即刷新议价提单列表，`acceptedQtyUpdates` 只回填本次页面草稿和勾选状态；Excel 的通过数量不写入 RFQ 零件主表，也不改变后续派生销售订单的数据库取值规则。日志不得记录完整 Excel、完整 multipart 请求体、完整业务体、Authorization header、token 或外部系统敏感响应。
 
@@ -74,7 +74,7 @@
 - 订单零件完整提单。
 - `sales_order_item.material_no` 非空。
 - `sales_order_item.material_no_status = 已确认`。
-- `sales_order_item.untaxed_unit_price` 不为空；含税单价不能作为 U9 价格兜底。
+- 默认未税模式要求 `sales_order_item.untaxed_unit_price` 不为空；操作员切换含税模式时要求 `sales_order_item.tax_included_unit_price` 不为空。两种模式互不兜底。
 - `sales_order_header.document_type_code` 不为空。
 - 客户编码不为空。
 
@@ -123,7 +123,7 @@ RFQ 派生销售订单后，提单行仍然是 RFQ 来源，因此需要增加�
 - 已提零件、WMS、待产、锁库和 MES 生产下发继续以 `order_delivery_ticket` 为业务来源。
 - WMS 继续使用提单行的 `material_no`，不直接使用派生销售订单零件的物料号。
 - 销售订单 U9 使用正式未税价格字段 `untaxed_unit_price`。
-- 未税单价为空不阻断议价提单和进入已提零件，但阻断 U9 预览和提交；含税单价不能作为 U9 价格兜底。
+- 所选 U9 价格字段为空不阻断议价提单和进入已提零件，但阻断 U9 预览和提交；未税价与含税价互不兜底。
 - 未确认物料号不阻断进入已提零件，但阻断 U9 预览和提交。
 - 不修改 RFQ 导入、核价、报价和销售订单独立导入的主表隔离规则。
 - 直接导入的销售订单仍不写 `order_rfq / item_quote_version`；RFQ 原始订单和零件仍保留在 `order_rfq / item_quote_version`，派生销售订单只是新增的 U9 销售订单载体，不替代或迁移 RFQ 主表。
@@ -617,7 +617,7 @@ POST /api/market/u9-sync/sync
 | `FinallyPriceTC` | `sales_order_item.untaxed_unit_price` |
 | 数量 | `sales_order_item.qty` |
 
-U9 同步最终以 42 号文档的最小已验证契约为准：`IsPriceIncludeTax=false`，`FinallyPriceTC` 使用 `sales_order_item.untaxed_unit_price`，税率、税额、未税金额和含税金额由 U9 自动计算；QPO 不发送客户料号、图号、版本、单位、换算率、订单价、税额或金额字段。客户订单号、客户项目号、内部项目号、交期、未税价格和备注通过已确认的 U9 私有字段写入行扩展字段。
+U9 同步最终以 42 号文档的最小已验证契约为准：`IsPriceIncludeTax=false` 时，`FinallyPriceTC` 默认使用 `sales_order_item.untaxed_unit_price`；操作员切换为含税模式时，`IsPriceIncludeTax=true`，`FinallyPriceTC` 可切换为 `sales_order_item.tax_included_unit_price`。QPO 不发送客户料号、图号、版本、单位、换算率、订单价、税额或金额字段。客户订单号、客户项目号、内部项目号、交期、同步价格和备注通过已确认的 U9 私有字段写入行扩展字段。
 
 `customer_order_no` 和 `customer_order_title` 必须保存到 QPO 销售订单主表并展示在销售订单详情、议价提单结果和 U9 预览中。当前 `U9SalesOrderHeadDTO` 没有可序列化的客户下单抬头字段，`customerOrderNo` 也被标记为 `@JsonIgnore`，因此本阶段不虚构外部字段、不把两者擅自塞入 `Memo`。如果数据中心或 U9 后续提供正式字段，再通过独立接口契约变更接入。
 
@@ -628,7 +628,7 @@ U9 同步最终以 42 号文档的最小已验证契约为准：`IsPriceIncludeT
 - 订单状态不是 `已生成提单`：阻断。
 - 零件缺少确认物料号：阻断，提示缺少 MES 物料号。
 - `material_no_status` 不是 `已确认`：阻断。
-- 未税单价为空：阻断，提示“未税单价为空”。
+- 本次所选价格字段为空：阻断，提示“未税单价为空”或“含税单价为空”。
 - 单据类型编码为空：阻断。
 - 客户编码为空：阻断。
 
@@ -976,7 +976,7 @@ RFQ release sales order completed salesOrderId={} salesOrderNo={} sourceRfqCount
 - 检查 `SalesOrderU9SyncService` 不按导入来源错误过滤派生订单。
 - U9 订单列表增加来源展示：`RFQ 议价提单派生` / `销售订单导入`。
 - 预览继续读取 `sales_order_header / sales_order_item`。
-- 预览严格校验物料号确认、未税单价、客户编码和单据类型编码。
+- 预览严格校验物料号确认、本次 U9 价格口径对应单价、客户编码和单据类型编码。
 - 提交继续使用现有数据中心统一 client、幂等、失败重试和状态回写。
 - 增加从议价提单结果跳转 U9 同步页面的 query 参数。
 
@@ -984,7 +984,7 @@ RFQ release sales order completed salesOrderId={} salesOrderNo={} sourceRfqCount
 
 - 派生销售订单出现在 U9 同步订单列表。
 - 物料号未确认时 U9 不调用外部系统。
-- 未税单价为空时 U9 不调用外部系统。
+- 所选价格字段为空时 U9 不调用外部系统。
 - 条件满足后整单同步，U9 请求使用销售订单表字段。
 - U9 成功或失败状态只回写派生销售订单，不修改 RFQ 报价状态。
 
@@ -1088,8 +1088,8 @@ RFQ release sales order completed salesOrderId={} salesOrderNo={} sourceRfqCount
 
 - 派生销售订单出现在 U9 列表。
 - `ItemCode` 等于销售订单零件已确认物料号。
-- `FinallyPriceTC` 等于销售订单零件未税单价，不发送 `OrderPriceTC`。
-- 未税单价为空时预览阻断且不调用数据中心。
+- `FinallyPriceTC` 等于本次所选销售订单零件单价，不发送 `OrderPriceTC`。
+- 所选价格字段为空时预览阻断且不调用数据中心。
 - 物料号未确认时预览阻断且不调用数据中心。
 - 预览通过后提交再次校验。
 - 整单同步、幂等、失败重试和状态回写不回退。

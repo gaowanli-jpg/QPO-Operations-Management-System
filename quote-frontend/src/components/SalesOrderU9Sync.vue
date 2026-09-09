@@ -173,6 +173,30 @@
           </div>
         </div>
 
+        <div class="u9-price-mode-panel">
+          <div class="panel-title-row compact-row">
+            <div>
+              <div class="panel-title compact">U9价格口径</div>
+              <p class="panel-subtitle">只切换同步到 U9 的价格字段，不发送税额或总额。</p>
+            </div>
+          </div>
+          <el-radio-group
+            v-model="u9PriceMode"
+            class="u9-price-mode-group"
+            :disabled="previewLoading || isPending(u9SyncActionKeys.sync) || isPendingConfirmation"
+            @change="handleU9PriceModeChange"
+          >
+            <el-radio-button
+              v-for="option in U9_PRICE_MODE_OPTIONS"
+              :key="option.value"
+              :label="option.value"
+            >
+              {{ option.label }}
+            </el-radio-button>
+          </el-radio-group>
+          <p class="u9-price-mode-tip">{{ selectedU9PriceModeTip }}</p>
+        </div>
+
         <div class="sync-condition-panel">
           <div class="panel-title compact">同步条件</div>
           <div class="condition-row">
@@ -308,7 +332,7 @@
                 已修改 {{ dirtyItemCount }} 行
               </el-tag>
               <el-tag type="info">U9同步使用已确认物料号</el-tag>
-              <el-tag type="info">U9价格=未税单价</el-tag>
+              <el-tag type="info">{{ selectedU9PriceTagText }}</el-tag>
             </div>
             <el-tooltip :disabled="!itemEditSaveDisabledReason" :content="itemEditSaveDisabledReason" placement="top">
               <span class="sales-order-u9-sync-action-wrap">
@@ -450,19 +474,19 @@
               <span v-else class="muted-placeholder">-</span>
             </template>
           </el-table-column>
-          <el-table-column prop="untaxedUnitPrice" label="U9未税单价" width="122" align="right">
+          <el-table-column :prop="selectedU9PriceField" :label="selectedU9PriceColumnLabel" width="122" align="right">
             <template #default="{ row }">
               <el-input
                 v-if="itemDrafts[row.salesOrderItemId]"
-                v-model="itemDrafts[row.salesOrderItemId].untaxedUnitPrice"
+                v-model="itemDrafts[row.salesOrderItemId][selectedU9PriceField]"
                 class="item-edit-input item-edit-money"
                 inputmode="decimal"
                 :disabled="itemEditReadOnly"
-                placeholder="未税单价"
+                :placeholder="selectedU9PriceMissingText"
                 @input="handleItemDraftChange(row)"
               />
-              <el-tag v-else-if="row.untaxedUnitPrice == null" type="danger" size="small">未税单价缺失</el-tag>
-              <span v-else>{{ formatMoney(row.untaxedUnitPrice) }}</span>
+              <el-tag v-else-if="row[selectedU9PriceField] == null" type="danger" size="small">{{ selectedU9PriceMissingText }}</el-tag>
+              <span v-else>{{ formatMoney(row[selectedU9PriceField]) }}</span>
             </template>
           </el-table-column>
           <el-table-column prop="untaxedTotalPrice" label="未税金额" width="112" align="right">
@@ -626,11 +650,32 @@ import { CLIENT_PAGE_SIZES, DEFAULT_CLIENT_PAGE_SIZE } from '../utils/clientPagi
 const U9_SYNC_SUBMIT_PERMISSION = 'market:u9-sync:submit'
 const U9_SYNC_ORDER_SELECT_PERMISSION = 'market:u9-sync:order-select'
 const U9_SYNC_ALLOWED_STATUSES = ['部分已提单', '已生成提单']
+const U9_PRICE_MODE_OPTIONS = [
+  {
+    value: 'UNTAXED',
+    label: '按未税价同步',
+    field: 'untaxedUnitPrice',
+    name: '未税单价',
+    columnLabel: 'U9未税单价',
+    missingText: '未税单价缺失',
+    tagText: 'U9价格=未税单价'
+  },
+  {
+    value: 'TAX_INCLUDED',
+    label: '按含税价同步',
+    field: 'taxIncludedUnitPrice',
+    name: '含税单价',
+    columnLabel: 'U9含税单价',
+    missingText: '含税单价缺失',
+    tagText: 'U9价格=含税单价'
+  }
+]
 const U9_ITEM_EDITABLE_FIELDS = [
   'qty',
   'customerDeliveryDate',
   'internalDeliveryDate',
   'untaxedUnitPrice',
+  'taxIncludedUnitPrice',
   'customerOrderNo',
   'customerProjectNo',
   'internalProjectNo',
@@ -650,7 +695,7 @@ const privateFieldDefinitions = [
   { key: 'internalProjectNo', u9Field: 'PrivateDescSeg3 内部项目号', fallback: 'internalProjectNo' },
   { key: 'customerDeliveryDate', u9Field: 'PrivateDescSeg4 客户交期', format: 'date' },
   { key: 'internalDeliveryDate', u9Field: 'PrivateDescSeg5 内部交期', format: 'date' },
-  { key: 'untaxedUnitPrice', u9Field: 'PrivateDescSeg9 价格', format: 'money' },
+  { key: 'syncPrice', u9Field: 'PrivateDescSeg9 同步价格', format: 'money', syncPrice: true },
   { key: 'remark', u9Field: 'PubDescSeg2 销售备注' }
 ]
 
@@ -678,6 +723,7 @@ const assignmentDraft = ref({ sellerCode: '', saleDepartmentCode: '' })
 const savedAssignment = ref({ sellerCode: '', saleDepartmentCode: '' })
 const orderDateDraft = ref(null)
 const savedOrderDate = ref(null)
+const u9PriceMode = ref('UNTAXED')
 const itemDrafts = reactive({})
 const savedItemDrafts = reactive({})
 const dirtyItemIds = ref(new Set())
@@ -699,6 +745,13 @@ const currentU9OrderCode = computed(() => {
   const returnedCode = syncRows.value.find(row => row?.u9OrderCode)?.u9OrderCode
   return returnedCode || reconcileResult.value?.u9OrderCode || previewData.value?.u9OrderCode || selectedOrder.value?.u9OrderCode || '-'
 })
+const selectedU9PriceMode = computed(() => U9_PRICE_MODE_OPTIONS.find(option => option.value === u9PriceMode.value) || U9_PRICE_MODE_OPTIONS[0])
+const selectedU9PriceField = computed(() => selectedU9PriceMode.value.field)
+const selectedU9PriceName = computed(() => selectedU9PriceMode.value.name)
+const selectedU9PriceColumnLabel = computed(() => selectedU9PriceMode.value.columnLabel)
+const selectedU9PriceMissingText = computed(() => selectedU9PriceMode.value.missingText)
+const selectedU9PriceTagText = computed(() => selectedU9PriceMode.value.tagText)
+const selectedU9PriceModeTip = computed(() => `${selectedU9PriceTagText.value}，U9 IsPriceIncludeTax=${u9PriceMode.value === 'TAX_INCLUDED' ? 'true' : 'false'}。`)
 
 const customerDisplay = computed(() => {
   const source = previewData.value || selectedOrder.value || {}
@@ -924,6 +977,9 @@ const handleRefreshU9Options = async () => {
 
 const applyPreviewData = (response = {}, { preserveResult = false } = {}) => {
   previewData.value = response || {}
+  if (response?.priceMode) {
+    u9PriceMode.value = response.priceMode
+  }
   selectedOrder.value = {
     ...selectedOrder.value,
     ...(response || {}),
@@ -947,7 +1003,8 @@ const previewSelectedOrder = async ({ silent = false, preserveResult = false } =
   try {
     const response = await previewSalesOrderU9Sync(selectedOrderId.value, {
       page: itemPagination.page,
-      pageSize: itemPagination.pageSize
+      pageSize: itemPagination.pageSize,
+      priceMode: u9PriceMode.value
     })
     applyPreviewData(response || {}, { preserveResult })
     if (!silent) {
@@ -995,6 +1052,8 @@ const handleItemPageSizeChange = async (nextPageSize) => {
 
 const previewMatchesItemPagination = (source) => Number(source?.page) === itemPagination.page &&
   Number(source?.pageSize) === itemPagination.pageSize
+const previewMatchesCurrentView = (source) => previewMatchesItemPagination(source) &&
+  (!source?.priceMode || source.priceMode === u9PriceMode.value)
 
 const handleSellerChange = (sellerCode) => {
   const seller = sellerByCode(sellerCode)
@@ -1005,6 +1064,15 @@ const handleSellerChange = (sellerCode) => {
 
 const handleDepartmentChange = () => {
   assignmentDraft.value = { ...assignmentDraft.value }
+}
+
+const handleU9PriceModeChange = async () => {
+  if (!selectedOrderId.value) return
+  if (dirtyItemCount.value > 0) {
+    ElMessage.warning('请先保存零件行修改，再切换 U9 价格口径刷新预览。')
+    return
+  }
+  await previewSelectedOrder({ silent: true, preserveResult: true })
 }
 
 const handleSaveAssignment = async () => {
@@ -1041,7 +1109,7 @@ const handleSaveOrderDate = async () => {
   try {
     const payload = { salesOrderDate: orderDateDraft.value }
     const response = await saveSalesOrderU9OrderDate(selectedOrderId.value, payload)
-    if (response?.preview && previewMatchesItemPagination(response.preview)) {
+    if (response?.preview && previewMatchesCurrentView(response.preview)) {
       applyPreviewData(response.preview, { preserveResult: true })
     } else {
       hydrateOrderDate(response || payload)
@@ -1070,6 +1138,7 @@ const normalizeItemDraft = (line = {}) => ({
   customerDeliveryDate: dateDraftValue(line.customerDeliveryDate),
   internalDeliveryDate: dateDraftValue(line.internalDeliveryDate),
   untaxedUnitPrice: line.untaxedUnitPrice === undefined || line.untaxedUnitPrice === null ? '' : String(line.untaxedUnitPrice),
+  taxIncludedUnitPrice: line.taxIncludedUnitPrice === undefined || line.taxIncludedUnitPrice === null ? '' : String(line.taxIncludedUnitPrice),
   customerOrderNo: textDraftValue(line, 'customerOrderNo'),
   customerProjectNo: textDraftValue(line, 'customerProjectNo'),
   internalProjectNo: textDraftValue(line, 'internalProjectNo'),
@@ -1105,7 +1174,7 @@ const comparableItemValue = (field, value) => {
     const number = Number(value)
     return Number.isFinite(number) ? number : String(value)
   }
-  if (field === 'untaxedUnitPrice') {
+  if (field === 'untaxedUnitPrice' || field === 'taxIncludedUnitPrice') {
     if (value === undefined || value === null || value === '') return null
     return String(value).trim()
   }
@@ -1137,7 +1206,7 @@ const itemRequestValue = (field, value) => {
   }
   if (field === 'customerDeliveryDate' || field === 'internalDeliveryDate') return value || null
   if (field === 'qty') return value === undefined || value === null || value === '' ? null : Number(value)
-  if (field === 'untaxedUnitPrice') return value === undefined || value === null || value === '' ? null : String(value).trim()
+  if (field === 'untaxedUnitPrice' || field === 'taxIncludedUnitPrice') return value === undefined || value === null || value === '' ? null : String(value).trim()
   return value
 }
 
@@ -1163,7 +1232,7 @@ const handleSaveItemEdits = async () => {
   itemEditSaving.value = true
   try {
     const response = await saveSalesOrderU9Items(selectedOrderId.value, { items })
-    if (response?.preview && previewMatchesItemPagination(response.preview)) {
+    if (response?.preview && previewMatchesCurrentView(response.preview)) {
       applyPreviewData(response.preview, { preserveResult: true })
     } else {
       await previewSelectedOrder({ silent: true, preserveResult: true })
@@ -1178,7 +1247,7 @@ const handleSaveItemEdits = async () => {
 
 const handleItemDataReplacementConfirmed = async (response = {}) => {
   try {
-    if (response?.preview && previewMatchesItemPagination(response.preview)) {
+    if (response?.preview && previewMatchesCurrentView(response.preview)) {
       applyPreviewData(response.preview, { preserveResult: true })
     } else {
       await previewSelectedOrder({ silent: true, preserveResult: true })
@@ -1198,7 +1267,7 @@ const syncSelectedOrder = async () => {
   return runAction(u9SyncActionKeys.sync, async () => {
     try {
       await ElMessageBox.confirm(
-        `确认将销售订单 ${selectedOrder.value.salesOrderNo || ''} 整单同步到 U9？`,
+        `确认将销售订单 ${selectedOrder.value.salesOrderNo || ''} 按${selectedU9PriceName.value}整单同步到 U9？`,
         '确认同步U9',
         {
           type: 'warning',
@@ -1210,7 +1279,7 @@ const syncSelectedOrder = async () => {
       return
     }
     try {
-      const response = await syncSalesOrderU9(selectedOrderId.value)
+      const response = await syncSalesOrderU9(selectedOrderId.value, { priceMode: u9PriceMode.value })
       syncResult.value = response || {}
       reconcileResult.value = null
       if (response?.success) {
@@ -1322,6 +1391,7 @@ const lineIssueSummary = (row) => {
 const previewMessageTypeText = (type) => type === 'error' ? '阻断' : '警告'
 
 const u9PrivateFieldValue = (row, field) => {
+  if (field.syncPrice) return formatMoney(row?.[selectedU9PriceField.value])
   const raw = row?.[field.key] ?? (field.fallback ? orderValue(field.fallback) : '')
   if (field.format === 'date') return formatDate(raw)
   if (field.format === 'money') return formatMoney(raw)
@@ -1462,6 +1532,7 @@ onMounted(() => {
 
 .u9-assignment-panel,
 .u9-order-date-panel,
+.u9-price-mode-panel,
 .sync-condition-panel,
 .selected-order-meta,
 .sync-result-panel {
@@ -1512,6 +1583,24 @@ onMounted(() => {
 
 .order-date-current-line strong {
   color: var(--erp-text);
+}
+
+.u9-price-mode-group {
+  width: 100%;
+}
+
+.u9-price-mode-group :deep(.el-radio-button) {
+  width: 50%;
+}
+
+.u9-price-mode-group :deep(.el-radio-button__inner) {
+  width: 100%;
+}
+
+.u9-price-mode-tip {
+  margin: 8px 0 0;
+  color: var(--erp-text-secondary);
+  font-size: 12px;
 }
 
 .condition-row {

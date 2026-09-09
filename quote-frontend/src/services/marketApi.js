@@ -96,11 +96,11 @@ export const confirmSalesOrderU9ItemDataReplacement = (salesOrderId, formData) =
   formData
 )
 
-export const syncSalesOrderU9 = (salesOrderId) => postJson(`/api/market/u9-sync/orders/${salesOrderId}/sync`)
+export const syncSalesOrderU9 = (salesOrderId, payload = {}) => postJson(`/api/market/u9-sync/orders/${salesOrderId}/sync`, payload)
 
 export const reconcileSalesOrderU9 = (salesOrderId) => postJson(`/api/market/u9-sync/orders/${salesOrderId}/reconcile`)
 
-export const syncSalesOrdersU9 = (salesOrderIds = []) => postJson('/api/market/u9-sync/sync', { salesOrderIds })
+export const syncSalesOrdersU9 = (salesOrderIds = [], payload = {}) => postJson('/api/market/u9-sync/sync', { salesOrderIds, ...payload })
 
 export const parsePartSelection = (rfqId, formData) => multipartPost(`/api/market/release/parse-part-selection/${rfqId}`, formData)
 

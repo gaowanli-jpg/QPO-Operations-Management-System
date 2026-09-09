@@ -11,23 +11,37 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class SalesOrderU9TaxPriceContractTest {
     @Test
-    void u9SyncUsesOnlyUntaxedUnitPriceForCreateRequest() throws IOException {
+    void u9SyncDefaultsToUntaxedAndAllowsOperatorSelectedTaxIncludedPriceMode() throws IOException {
         String assembler = read(Path.of(
                 "src", "main", "java", "com", "machining", "quote", "service", "u9",
                 "U9SalesOrderRequestAssembler.java"));
         String validator = read(Path.of(
                 "src", "main", "java", "com", "machining", "quote", "service", "u9",
                 "U9SalesOrderContractValidator.java"));
+        String priceMode = read(Path.of(
+                "src", "main", "java", "com", "machining", "quote", "dto",
+                "SalesOrderU9PriceMode.java"));
+        String reconciliation = read(Path.of(
+                "src", "main", "java", "com", "machining", "quote", "service", "u9",
+                "U9SalesOrderReconciliationService.java"));
 
         assertThat(assembler)
                 .contains(
-                        "line.setFinallyPriceTC(item.getUntaxedUnitPrice())",
-                        "head.setIsPriceIncludeTax(false)",
-                        "desc.setPrivateDescSeg9(formatDecimal(item.getUntaxedUnitPrice()))")
-                .doesNotContain("getTaxIncludedUnitPrice()", "setOrderPriceTC", "OrderPriceTC", "preferredPrice(");
+                        "public U9SalesOrderHeadDTO assemble(SalesOrderHeader header, List<SalesOrderItem> items)",
+                        "SalesOrderU9PriceMode.UNTAXED",
+                        "head.setIsPriceIncludeTax(priceMode.isPriceIncludeTax())",
+                        "line.setFinallyPriceTC(priceFor(item, priceMode))",
+                        "desc.setPrivateDescSeg9(formatDecimal(priceFor(item, priceMode)))")
+                .contains("getUntaxedUnitPrice()", "getTaxIncludedUnitPrice()")
+                .doesNotContain("setOrderPriceTC", "OrderPriceTC", "TaxSchedule");
         assertThat(validator)
-                .contains("item.getUntaxedUnitPrice() == null", "未税单价为空")
-                .doesNotContain("含税单价为空");
+                .contains("priceMode.priceFieldLabel()", "requiredPrice(item, priceMode) == null")
+                .contains("getUntaxedUnitPrice()", "getTaxIncludedUnitPrice()");
+        assertThat(priceMode)
+                .contains("UNTAXED", "TAX_INCLUDED", "isPriceIncludeTax", "fromCode");
+        assertThat(reconciliation)
+                .contains("同步单价")
+                .doesNotContain("未税单价\", expectedLine.getFinallyPriceTC()");
     }
 
     @Test

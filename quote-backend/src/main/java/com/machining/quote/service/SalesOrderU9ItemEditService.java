@@ -150,10 +150,18 @@ public class SalesOrderU9ItemEditService {
         }
         if (line.hasField(SalesOrderU9ItemUpdateLineReq.FIELD_UNTAXED_UNIT_PRICE)) {
             BigDecimal price = line.getUntaxedUnitPrice();
-            validatePrice(price);
+            validatePrice(price, "未税单价");
             if (!sameDecimal(item.getUntaxedUnitPrice(), price)) {
                 item.setUntaxedUnitPrice(price);
                 changed.add(SalesOrderU9ItemUpdateLineReq.FIELD_UNTAXED_UNIT_PRICE);
+            }
+        }
+        if (line.hasField(SalesOrderU9ItemUpdateLineReq.FIELD_TAX_INCLUDED_UNIT_PRICE)) {
+            BigDecimal price = line.getTaxIncludedUnitPrice();
+            validatePrice(price, "含税单价");
+            if (!sameDecimal(item.getTaxIncludedUnitPrice(), price)) {
+                item.setTaxIncludedUnitPrice(price);
+                changed.add(SalesOrderU9ItemUpdateLineReq.FIELD_TAX_INCLUDED_UNIT_PRICE);
             }
         }
         applyText(item.getCustomerOrderNo(), line.getCustomerOrderNo(), 120,
@@ -220,9 +228,9 @@ public class SalesOrderU9ItemEditService {
         }
     }
 
-    private void validatePrice(BigDecimal price) {
+    private void validatePrice(BigDecimal price, String label) {
         if (price == null || price.compareTo(BigDecimal.ZERO) < 0) {
-            throw new RuntimeException("未税单价必须大于等于 0");
+            throw new RuntimeException(label + "必须大于等于 0");
         }
     }
 
@@ -257,6 +265,7 @@ public class SalesOrderU9ItemEditService {
                 .set("customer_delivery_date", item.getCustomerDeliveryDate())
                 .set("internal_delivery_date", item.getInternalDeliveryDate())
                 .set("untaxed_unit_price", item.getUntaxedUnitPrice())
+                .set("tax_included_unit_price", item.getTaxIncludedUnitPrice())
                 .set("customer_order_no", item.getCustomerOrderNo())
                 .set("customer_project_no", item.getCustomerProjectNo())
                 .set("internal_project_no", item.getInternalProjectNo())

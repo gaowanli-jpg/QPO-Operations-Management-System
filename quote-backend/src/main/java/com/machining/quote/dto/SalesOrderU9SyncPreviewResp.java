@@ -32,6 +32,9 @@ public class SalesOrderU9SyncPreviewResp {
     private String u9SyncStatus;
     private String u9OrderCode;
     private String u9SyncMessage;
+    private String priceMode;
+    private String priceModeLabel;
+    private String u9PriceField;
     private Boolean syncReady;
     private String blockedReason;
     private List<String> blockingErrors = new ArrayList<>();
