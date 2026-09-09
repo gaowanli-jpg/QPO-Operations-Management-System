@@ -74,7 +74,7 @@
 - 订单零件完整提单。
 - `sales_order_item.material_no` 非空。
 - `sales_order_item.material_no_status = 已确认`。
-- 默认未税模式要求 `sales_order_item.untaxed_unit_price` 不为空；操作员切换含税模式时要求 `sales_order_item.tax_included_unit_price` 不为空。两种模式互不兜底。
+- 默认含税模式要求 `sales_order_item.tax_included_unit_price` 不为空；操作员切换未税模式时要求 `sales_order_item.untaxed_unit_price` 不为空。两种模式互不兜底。
 - `sales_order_header.document_type_code` 不为空。
 - 客户编码不为空。
 
@@ -617,7 +617,7 @@ POST /api/market/u9-sync/sync
 | `FinallyPriceTC` | `sales_order_item.untaxed_unit_price` |
 | 数量 | `sales_order_item.qty` |
 
-U9 同步最终以 42 号文档的最小已验证契约为准：`IsPriceIncludeTax=false` 时，`FinallyPriceTC` 默认使用 `sales_order_item.untaxed_unit_price`；操作员切换为含税模式时，`IsPriceIncludeTax=true`，`FinallyPriceTC` 可切换为 `sales_order_item.tax_included_unit_price`。QPO 不发送客户料号、图号、版本、单位、换算率、订单价、税额或金额字段。客户订单号、客户项目号、内部项目号、交期、同步价格和备注通过已确认的 U9 私有字段写入行扩展字段。
+U9 同步最终以 42 号文档的最小已验证契约为准：`IsPriceIncludeTax=true` 时，`FinallyPriceTC` 默认使用 `sales_order_item.tax_included_unit_price`；操作员切换为未税模式时，`IsPriceIncludeTax=false`，`FinallyPriceTC` 可切换为 `sales_order_item.untaxed_unit_price`。QPO 不发送客户料号、图号、版本、单位、换算率、订单价、税额或金额字段。客户订单号、客户项目号、内部项目号、交期、同步价格和备注通过已确认的 U9 私有字段写入行扩展字段。
 
 `customer_order_no` 和 `customer_order_title` 必须保存到 QPO 销售订单主表并展示在销售订单详情、议价提单结果和 U9 预览中。当前 `U9SalesOrderHeadDTO` 没有可序列化的客户下单抬头字段，`customerOrderNo` 也被标记为 `@JsonIgnore`，因此本阶段不虚构外部字段、不把两者擅自塞入 `Memo`。如果数据中心或 U9 后续提供正式字段，再通过独立接口契约变更接入。
 

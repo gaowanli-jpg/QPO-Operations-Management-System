@@ -20,7 +20,7 @@ public class U9SalesOrderContractValidator {
     private static final String STATUS_PENDING_CONFIRMATION = "结果待确认";
 
     public ValidationResult validate(SalesOrderHeader header, List<SalesOrderItem> items) {
-        return validate(header, items, SalesOrderU9PriceMode.UNTAXED);
+        return validate(header, items, SalesOrderU9PriceMode.defaultMode(null));
     }
 
     public ValidationResult validate(SalesOrderHeader header, List<SalesOrderItem> items, SalesOrderU9PriceMode priceMode) {
@@ -45,7 +45,7 @@ public class U9SalesOrderContractValidator {
     }
 
     public ValidationResult validateItem(SalesOrderItem item) {
-        return validateItem(item, SalesOrderU9PriceMode.UNTAXED);
+        return validateItem(item, SalesOrderU9PriceMode.defaultMode(null));
     }
 
     public ValidationResult validateItem(SalesOrderItem item, SalesOrderU9PriceMode priceMode) {

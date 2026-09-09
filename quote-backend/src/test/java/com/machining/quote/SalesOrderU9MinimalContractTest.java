@@ -65,14 +65,14 @@ class SalesOrderU9MinimalContractTest {
         assertThat(json.path("DocumentType").asText()).isEqualTo("SO01");
         assertThat(json.path("Seller").asText()).isEqualTo("C00150");
         assertThat(json.path("SaleDepartment").asText()).isEqualTo("200201");
-        assertThat(json.path("IsPriceIncludeTax").asBoolean()).isFalse();
+        assertThat(json.path("IsPriceIncludeTax").asBoolean()).isTrue();
 
         JsonNode firstLine = json.path("SOLineDTOList").get(0);
         assertThat(firstLine.path("DocLineNo").asInt()).isEqualTo(1);
         assertThat(firstLine.path("ItemCode").asText()).isEqualTo("MAT-100201");
         assertThat(firstLine.path("OrderByQtyTU").decimalValue()).isEqualByComparingTo("2");
         assertThat(firstLine.path("OrderByQtyPU").decimalValue()).isEqualByComparingTo("2");
-        assertThat(firstLine.path("FinallyPriceTC").decimalValue()).isEqualByComparingTo("100.00");
+        assertThat(firstLine.path("FinallyPriceTC").decimalValue()).isEqualByComparingTo("113.00");
         assertThat(firstLine.path("FreeType").asInt()).isEqualTo(-1);
         assertThat(firstLine.path("ShipTogetherFlag").asInt()).isEqualTo(-1);
         assertThat(firstLine.path("SOShiplineDTOList")).hasSize(1);
@@ -86,7 +86,7 @@ class SalesOrderU9MinimalContractTest {
         assertThat(descFlex.path("PrivateDescSeg3").asText()).isEqualTo("ITEM-IP");
         assertThat(descFlex.path("PrivateDescSeg4").asText()).isEqualTo("2026-09-30");
         assertThat(descFlex.path("PrivateDescSeg5").asText()).isEqualTo("2026-09-25");
-        assertThat(descFlex.path("PrivateDescSeg9").asText()).isEqualTo("100");
+        assertThat(descFlex.path("PrivateDescSeg9").asText()).isEqualTo("113");
         assertThat(descFlex.path("PubDescSeg2").asText()).isEqualTo("ship with release note");
 
         assertThat(rawJson)
@@ -137,21 +137,21 @@ class SalesOrderU9MinimalContractTest {
     }
 
     @Test
-    void validatorBlocksMissingUntaxedPriceAndOnlyWarnsForBlankDeliveryDates() {
+    void validatorBlocksMissingTaxIncludedPriceByDefaultAndOnlyWarnsForBlankDeliveryDates() {
         U9SalesOrderContractValidator validator = new U9SalesOrderContractValidator();
-        SalesOrderItem item = item(501L, 1, "MAT-100201", 2, null);
-        item.setTaxIncludedUnitPrice(new BigDecimal("113.00"));
-        item.setTaxIncludedTotalPrice(new BigDecimal("226.00"));
+        SalesOrderItem item = item(501L, 1, "MAT-100201", 2, "100.00");
+        item.setTaxIncludedUnitPrice(null);
+        item.setTaxIncludedTotalPrice(null);
         item.setCustomerDeliveryDate(null);
         item.setInternalDeliveryDate(null);
 
         ValidationResult result = validator.validate(header(), List.of(item));
 
         assertThat(result.hasBlockingErrors()).isTrue();
-        assertThat(result.blockingErrors()).anyMatch(message -> message.contains("未税单价"));
+        assertThat(result.blockingErrors()).anyMatch(message -> message.contains("含税单价"));
         assertThat(result.warnings()).anyMatch(message -> message.contains("客户交期"));
         assertThat(result.warnings()).anyMatch(message -> message.contains("内部交期"));
-        assertThat(result.blockingErrors()).noneMatch(message -> message.contains("含税单价"));
+        assertThat(result.blockingErrors()).noneMatch(message -> message.contains("未税单价"));
     }
 
     @Test
@@ -194,7 +194,7 @@ class SalesOrderU9MinimalContractTest {
                 preparedFingerprint,
                 LocalDateTime.of(2026, 8, 11, 14, 30)
         ));
-        when(stateService.reserve(header.getId(), SalesOrderU9PriceMode.UNTAXED)).thenReturn(new SalesOrderU9SyncStateService.PreparedOrder(
+        when(stateService.reserve(header.getId(), SalesOrderU9PriceMode.TAX_INCLUDED)).thenReturn(new SalesOrderU9SyncStateService.PreparedOrder(
                 header,
                 List.of(item),
                 preparedRequest,

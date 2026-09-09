@@ -67,11 +67,11 @@ class SalesOrderU9SyncWorkflowTest {
     }
 
     @Test
-    void onlyTaxIncludedPriceFailsBeforeCallingDataCenterOrU9() {
+    void onlyUntaxedPriceFailsBeforeCallingDataCenterOrU9ByDefault() {
         Fixture fixture = fixture();
         SalesOrderHeader header = header(9001L, "SOQPO-001", "未同步");
         SalesOrderItem item = item(5001L, header.getId(), "SALES-MAT-001", new BigDecimal("18.50"));
-        item.setUntaxedUnitPrice(null);
+        item.setTaxIncludedUnitPrice(null);
         markConfirmed(item, "MAT-CONFIRMED-001", 4);
         fixture.withOrder(header, List.of(item));
 
@@ -79,14 +79,14 @@ class SalesOrderU9SyncWorkflowTest {
 
         assertThat(resp.isSuccess()).isFalse();
         assertThat(resp.getStatus()).isEqualTo("FAILED");
-        assertThat(resp.getMessage()).contains("未税单价为空");
+        assertThat(resp.getMessage()).contains("含税单价为空");
         assertThat(resp.getRows()).singleElement()
-                .satisfies(row -> assertThat(row.getErrorMessage()).contains("未税单价为空"));
+                .satisfies(row -> assertThat(row.getErrorMessage()).contains("含税单价为空"));
         verify(fixture.u9Client, never()).create(any());
 
         SalesOrderHeader failureUpdate = fixture.lastHeaderUpdate();
         assertThat(failureUpdate.getU9SyncStatus()).isEqualTo("同步失败");
-        assertThat(failureUpdate.getU9SyncMessage()).contains("未税单价为空");
+        assertThat(failureUpdate.getU9SyncMessage()).contains("含税单价为空");
     }
 
     @Test
@@ -120,16 +120,16 @@ class SalesOrderU9SyncWorkflowTest {
         assertThat(request.getDocNo()).isEqualTo(header.getDocumentNo());
         assertThat(request.getOrderBy()).isEqualTo("CUST-001");
         assertThat(request.getDocumentType()).isEqualTo("SO88");
-        assertThat(request.getIsPriceIncludeTax()).isFalse();
+        assertThat(request.getIsPriceIncludeTax()).isTrue();
         assertThat(request.getSOLineDTOList()).singleElement()
                 .satisfies(line -> {
                     assertThat(line.getItemCode()).isEqualTo("MAT-CONFIRMED-001");
                     assertThat(line.getOrderByQtyTU()).isEqualByComparingTo("4");
-                    assertThat(line.getFinallyPriceTC()).isEqualByComparingTo("16.37");
+                    assertThat(line.getFinallyPriceTC()).isEqualByComparingTo("18.50");
                     assertThat(line.getDescFlexField().getPrivateDescSeg2()).isEqualTo(header.getCustomerOrderNo());
                     assertThat(line.getDescFlexField().getPrivateDescSeg3()).isEqualTo(header.getInternalProjectNo());
                     assertThat(line.getDescFlexField().getPrivateDescSeg5()).isEqualTo("2026-08-08");
-                    assertThat(line.getDescFlexField().getPrivateDescSeg9()).isEqualTo("16.37");
+                    assertThat(line.getDescFlexField().getPrivateDescSeg9()).isEqualTo("18.5");
                     assertThat(line.getSOShiplineDTOList()).singleElement()
                             .satisfies(shipLine -> {
                                 assertThat(shipLine.getItemCode()).isEqualTo("MAT-CONFIRMED-001");
@@ -295,8 +295,8 @@ class SalesOrderU9SyncWorkflowTest {
         String frontendU9Sync = readFrontend("components/SalesOrderU9Sync.vue");
 
         assertThat(doc16)
-                .contains("U9 销售订单默认使用未税单价")
-                .contains("可由操作员切换为含税单价")
+                .contains("U9 销售订单默认使用含税单价")
+                .contains("可由操作员切换为未税单价")
                 .contains("SALES_ORDER_U9_ASSIGNMENT_UPDATE")
                 .contains("SALES_ORDER_U9_RECONCILE")
                 .contains("预览和选项读取不写操作日志")
@@ -305,8 +305,8 @@ class SalesOrderU9SyncWorkflowTest {
                 .doesNotContain("CustomerItemNo");
         assertThat(doc37)
                 .contains("U9 同步最终以 42 号文档的最小已验证契约为准")
-                .contains("FinallyPriceTC` 默认使用 `sales_order_item.untaxed_unit_price`")
-                .contains("可切换为 `sales_order_item.tax_included_unit_price`")
+                .contains("FinallyPriceTC` 默认使用 `sales_order_item.tax_included_unit_price`")
+                .contains("可切换为 `sales_order_item.untaxed_unit_price`")
                 .doesNotContain("销售订单 U9 继续只使用正式含税价格字段")
                 .doesNotContain("OrderPriceTC` 和 `FinallyPriceTC` 等于含税单价")
                 .doesNotContain("含税单价为空时 U9 不调用外部系统");
@@ -507,7 +507,7 @@ class SalesOrderU9SyncWorkflowTest {
         }
 
         private SalesOrderU9SyncStateService.PreparedOrder reserve(Long salesOrderId) {
-            return reserve(salesOrderId, SalesOrderU9PriceMode.UNTAXED);
+            return reserve(salesOrderId, SalesOrderU9PriceMode.TAX_INCLUDED);
         }
 
         private SalesOrderU9SyncStateService.PreparedOrder reserve(Long salesOrderId, SalesOrderU9PriceMode priceMode) {

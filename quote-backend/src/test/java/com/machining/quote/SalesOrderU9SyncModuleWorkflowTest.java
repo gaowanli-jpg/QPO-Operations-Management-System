@@ -339,7 +339,7 @@ class SalesOrderU9SyncModuleWorkflowTest {
     }
 
     @Test
-    void previewAllowsRowsWithOnlyUntaxedPriceBeforeU9Sync() {
+    void previewAllowsRowsWithOnlyUntaxedPriceWhenOperatorSelectsUntaxedMode() {
         Fixture fixture = fixture();
         SalesOrderHeader header = header(9001L, "SOQPO-001", QuoteStatusWorkflow.RELEASED, "未同步");
         SalesOrderItem missingPrice = item(5001L, header.getId(), "P-001", "MAT-READY-001", "已确认");
@@ -351,7 +351,7 @@ class SalesOrderU9SyncModuleWorkflowTest {
         when(fixture.headerMapper.selectById(header.getId())).thenReturn(header);
         when(fixture.itemMapper.selectList(any())).thenReturn(List.of(missingPrice));
 
-        SalesOrderU9SyncPreviewResp resp = fixture.service.previewSalesOrder(header.getId());
+        SalesOrderU9SyncPreviewResp resp = fixture.service.previewSalesOrder(header.getId(), 1, 200, "UNTAXED");
 
         assertThat(resp.getSyncReady()).isTrue();
         assertThat(resp.getBlockedReason()).isBlank();
@@ -535,7 +535,7 @@ class SalesOrderU9SyncModuleWorkflowTest {
         }
 
         private SalesOrderU9SyncStateService.PreparedOrder reserve(Long salesOrderId) {
-            return reserve(salesOrderId, SalesOrderU9PriceMode.UNTAXED);
+            return reserve(salesOrderId, SalesOrderU9PriceMode.TAX_INCLUDED);
         }
 
         private SalesOrderU9SyncStateService.PreparedOrder reserve(Long salesOrderId, SalesOrderU9PriceMode priceMode) {

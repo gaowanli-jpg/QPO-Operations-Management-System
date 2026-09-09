@@ -474,23 +474,41 @@
               <span v-else class="muted-placeholder">-</span>
             </template>
           </el-table-column>
-          <el-table-column :prop="selectedU9PriceField" :label="selectedU9PriceColumnLabel" width="122" align="right">
+          <el-table-column prop="untaxedUnitPrice" label="未税单价" width="122" align="right">
             <template #default="{ row }">
               <el-input
                 v-if="itemDrafts[row.salesOrderItemId]"
-                v-model="itemDrafts[row.salesOrderItemId][selectedU9PriceField]"
+                v-model="itemDrafts[row.salesOrderItemId].untaxedUnitPrice"
                 class="item-edit-input item-edit-money"
                 inputmode="decimal"
                 :disabled="itemEditReadOnly"
-                :placeholder="selectedU9PriceMissingText"
+                placeholder="未税单价缺失"
                 @input="handleItemDraftChange(row)"
               />
-              <el-tag v-else-if="row[selectedU9PriceField] == null" type="danger" size="small">{{ selectedU9PriceMissingText }}</el-tag>
-              <span v-else>{{ formatMoney(row[selectedU9PriceField]) }}</span>
+              <el-tag v-else-if="row.untaxedUnitPrice == null" type="danger" size="small">未税单价缺失</el-tag>
+              <span v-else>{{ formatMoney(row.untaxedUnitPrice) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="taxIncludedUnitPrice" label="含税单价" width="122" align="right">
+            <template #default="{ row }">
+              <el-input
+                v-if="itemDrafts[row.salesOrderItemId]"
+                v-model="itemDrafts[row.salesOrderItemId].taxIncludedUnitPrice"
+                class="item-edit-input item-edit-money"
+                inputmode="decimal"
+                :disabled="itemEditReadOnly"
+                placeholder="含税单价缺失"
+                @input="handleItemDraftChange(row)"
+              />
+              <el-tag v-else-if="row.taxIncludedUnitPrice == null" type="danger" size="small">含税单价缺失</el-tag>
+              <span v-else>{{ formatMoney(row.taxIncludedUnitPrice) }}</span>
             </template>
           </el-table-column>
           <el-table-column prop="untaxedTotalPrice" label="未税金额" width="112" align="right">
             <template #default="{ row }">{{ formatMoney(row.untaxedTotalPrice) }}</template>
+          </el-table-column>
+          <el-table-column prop="taxIncludedTotalPrice" label="含税金额" width="112" align="right">
+            <template #default="{ row }">{{ formatMoney(row.taxIncludedTotalPrice) }}</template>
           </el-table-column>
           <el-table-column prop="salesOrderDate" label="下单日期" width="116">
             <template #default="{ row }">{{ formatDate(row.salesOrderDate) }}</template>
@@ -656,7 +674,6 @@ const U9_PRICE_MODE_OPTIONS = [
     label: '按未税价同步',
     field: 'untaxedUnitPrice',
     name: '未税单价',
-    columnLabel: 'U9未税单价',
     missingText: '未税单价缺失',
     tagText: 'U9价格=未税单价'
   },
@@ -665,7 +682,6 @@ const U9_PRICE_MODE_OPTIONS = [
     label: '按含税价同步',
     field: 'taxIncludedUnitPrice',
     name: '含税单价',
-    columnLabel: 'U9含税单价',
     missingText: '含税单价缺失',
     tagText: 'U9价格=含税单价'
   }
@@ -723,7 +739,7 @@ const assignmentDraft = ref({ sellerCode: '', saleDepartmentCode: '' })
 const savedAssignment = ref({ sellerCode: '', saleDepartmentCode: '' })
 const orderDateDraft = ref(null)
 const savedOrderDate = ref(null)
-const u9PriceMode = ref('UNTAXED')
+const u9PriceMode = ref('TAX_INCLUDED')
 const itemDrafts = reactive({})
 const savedItemDrafts = reactive({})
 const dirtyItemIds = ref(new Set())
@@ -748,7 +764,6 @@ const currentU9OrderCode = computed(() => {
 const selectedU9PriceMode = computed(() => U9_PRICE_MODE_OPTIONS.find(option => option.value === u9PriceMode.value) || U9_PRICE_MODE_OPTIONS[0])
 const selectedU9PriceField = computed(() => selectedU9PriceMode.value.field)
 const selectedU9PriceName = computed(() => selectedU9PriceMode.value.name)
-const selectedU9PriceColumnLabel = computed(() => selectedU9PriceMode.value.columnLabel)
 const selectedU9PriceMissingText = computed(() => selectedU9PriceMode.value.missingText)
 const selectedU9PriceTagText = computed(() => selectedU9PriceMode.value.tagText)
 const selectedU9PriceModeTip = computed(() => `${selectedU9PriceTagText.value}，U9 IsPriceIncludeTax=${u9PriceMode.value === 'TAX_INCLUDED' ? 'true' : 'false'}。`)

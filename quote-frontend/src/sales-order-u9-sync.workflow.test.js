@@ -163,9 +163,10 @@ describe('sales order U9 sync module', () => {
     expect(component).toContain('prop="u9OrderCode"')
     expect(component).toContain('prop="materialNo" label="物料号"')
     expect(component).toContain('prop="materialNoStatus"')
-    expect(component).toContain(':prop="selectedU9PriceField"')
-    expect(component).toContain('U9未税单价')
-    expect(component).toContain('U9含税单价')
+    expect(component).toContain('prop="untaxedUnitPrice" label="未税单价"')
+    expect(component).toContain('prop="taxIncludedUnitPrice" label="含税单价"')
+    expect(component).toContain('按未税价同步')
+    expect(component).toContain('按含税价同步')
     expect(component).toContain('未税单价缺失')
     expect(component).toContain('含税单价缺失')
     expect(component).toContain('label="U9私有字段"')
@@ -182,7 +183,7 @@ describe('sales order U9 sync module', () => {
     expect(component).toContain('const U9_PRICE_MODE_OPTIONS = [')
     expect(component).toContain("value: 'UNTAXED'")
     expect(component).toContain("value: 'TAX_INCLUDED'")
-    expect(component).toContain('const u9PriceMode = ref(\'UNTAXED\')')
+    expect(component).toContain('const u9PriceMode = ref(\'TAX_INCLUDED\')')
     expect(component).toContain('U9价格口径')
     expect(component).toContain('按未税价同步')
     expect(component).toContain('按含税价同步')
@@ -244,8 +245,10 @@ describe('sales order U9 sync module', () => {
       'label="数量(PCS)"',
       'label="就绪"',
       'label="错误/警告"',
-      ':prop="selectedU9PriceField"',
+      'prop="untaxedUnitPrice" label="未税单价"',
+      'prop="taxIncludedUnitPrice" label="含税单价"',
       'label="未税金额"',
+      'label="含税金额"',
       'label="下单日期"',
       'label="客户下单抬头"',
       'label="客户订单号"',
@@ -326,8 +329,8 @@ describe('sales order U9 sync module', () => {
     readOnlyColumns.forEach(column => expect(component).toContain(column))
 
     expect(component).toContain('v-model="itemDrafts[row.salesOrderItemId].qty"')
-    expect(component).toContain('v-model="itemDrafts[row.salesOrderItemId][selectedU9PriceField]"')
-    expect(component).toContain('taxIncludedUnitPrice')
+    expect(component).toContain('v-model="itemDrafts[row.salesOrderItemId].untaxedUnitPrice"')
+    expect(component).toContain('v-model="itemDrafts[row.salesOrderItemId].taxIncludedUnitPrice"')
     expect(component).toContain('v-model="itemDrafts[row.salesOrderItemId].customerDeliveryDate"')
     expect(component).toContain('v-model="itemDrafts[row.salesOrderItemId].internalDeliveryDate"')
     expect(component).toContain('v-model="itemDrafts[row.salesOrderItemId].customerOrderNo"')

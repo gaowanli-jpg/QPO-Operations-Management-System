@@ -77,16 +77,17 @@ class SalesOrderU9ItemDataReplacementStage2Test {
         SalesOrderU9ItemDataReplacementExcelParser parser = new SalesOrderU9ItemDataReplacementExcelParser();
 
         SalesOrderU9ItemDataReplacementExcelParseResult parsed = parser.parse(new ByteArrayInputStream(excel(
-                List.of("图号", "版本", "行号", "数量", "客户交期", "备注"),
-                List.of("LK17.5.1.1-1", "A", 1, 8, "2026-09-30", ""))));
+                List.of("图号", "版本", "行号", "数量", "客户交期", "含税单价", "备注"),
+                List.of("LK17.5.1.1-1", "A", 1, 8, "2026-09-30", "13.75", ""))));
 
-        assertThat(parsed.getRecognizedFields()).containsExactly("qty", "customerDeliveryDate", "remark");
+        assertThat(parsed.getRecognizedFields()).containsExactly("qty", "customerDeliveryDate", "taxIncludedUnitPrice", "remark");
         assertThat(parsed.getRows()).singleElement().satisfies(row -> {
             assertThat(row.getPartNo()).isEqualTo("LK17.5.1.1-1");
             assertThat(row.getNormalizedPartNo()).isEqualTo("LK17.5.1.1-1");
             assertThat(row.getLineNo()).isEqualTo(1);
             assertThat(row.getValues()).containsEntry("qty", 8);
             assertThat(row.getValues()).containsEntry("customerDeliveryDate", LocalDate.of(2026, 9, 30));
+            assertThat(row.getValues()).containsEntry("taxIncludedUnitPrice", new BigDecimal("13.75"));
             assertThat(row.getValues()).doesNotContainKey("remark");
             assertThat(row.getErrors()).isEmpty();
         });

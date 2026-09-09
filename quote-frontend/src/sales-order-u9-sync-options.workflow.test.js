@@ -54,9 +54,10 @@ describe('sales order U9 sync options frontend', () => {
   test('shows selected U9 price mode and private field preview without customer material number', () => {
     const component = readSource('components', 'SalesOrderU9Sync.vue')
 
-    expect(component).toContain(':label="selectedU9PriceColumnLabel"')
-    expect(component).toContain('U9未税单价')
-    expect(component).toContain('U9含税单价')
+    expect(component).toContain('prop="untaxedUnitPrice" label="未税单价"')
+    expect(component).toContain('prop="taxIncludedUnitPrice" label="含税单价"')
+    expect(component).toContain('按未税价同步')
+    expect(component).toContain('按含税价同步')
     expect(component).toContain('selectedU9PriceField')
     expect(component).toContain('label="U9私有字段"')
     expect(component).toContain('PrivateDescSeg1')

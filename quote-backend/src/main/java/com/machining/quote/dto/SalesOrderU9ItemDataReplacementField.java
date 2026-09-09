@@ -15,6 +15,7 @@ public enum SalesOrderU9ItemDataReplacementField {
     CUSTOMER_DELIVERY_DATE("客户交期", "customerDeliveryDate", ValueType.DATE, null, true),
     INTERNAL_DELIVERY_DATE("内部交期", "internalDeliveryDate", ValueType.DATE, null, true),
     UNTAXED_UNIT_PRICE("未税单价", "untaxedUnitPrice", ValueType.NON_NEGATIVE_DECIMAL, null, true),
+    TAX_INCLUDED_UNIT_PRICE("含税单价", "taxIncludedUnitPrice", ValueType.NON_NEGATIVE_DECIMAL, null, true, "VAT单价-含税"),
     CUSTOMER_ORDER_NO("客户订单号", "customerOrderNo", ValueType.TEXT, 120, true, "客户采购订单号"),
     CUSTOMER_PROJECT_NO("客户项目号", "customerProjectNo", ValueType.TEXT, 120, true),
     INTERNAL_PROJECT_NO("内部项目号", "internalProjectNo", ValueType.TEXT, 120, true),

@@ -107,15 +107,16 @@ class SalesOrderU9ItemEditServiceTest {
         assertThat(item.getRemark()).isEqualTo("U9 ready");
 
         U9SalesOrderHeadDTO u9Request = new U9SalesOrderRequestAssembler().assemble(header, List.of(item));
+        assertThat(u9Request.getIsPriceIncludeTax()).isTrue();
         assertThat(u9Request.getSOLineDTOList()).singleElement().satisfies(u9Line -> {
             assertThat(u9Line.getOrderByQtyTU()).isEqualByComparingTo("8");
-            assertThat(u9Line.getFinallyPriceTC()).isEqualByComparingTo("12.50");
+            assertThat(u9Line.getFinallyPriceTC()).isEqualByComparingTo("16.00");
             assertThat(u9Line.getDescFlexField().getPrivateDescSeg1()).isEqualTo("CP-900");
             assertThat(u9Line.getDescFlexField().getPrivateDescSeg2()).isEqualTo("PO-900");
             assertThat(u9Line.getDescFlexField().getPrivateDescSeg3()).isEqualTo("IP-900");
             assertThat(u9Line.getDescFlexField().getPrivateDescSeg4()).isEqualTo("2026-09-30");
             assertThat(u9Line.getDescFlexField().getPrivateDescSeg5()).isEqualTo("2026-09-25");
-            assertThat(u9Line.getDescFlexField().getPrivateDescSeg9()).isEqualTo("12.5");
+            assertThat(u9Line.getDescFlexField().getPrivateDescSeg9()).isEqualTo("16");
             assertThat(u9Line.getDescFlexField().getPubDescSeg2()).isEqualTo("U9 ready");
             assertThat(u9Line.getSOShiplineDTOList()).singleElement().satisfies(shipLine -> {
                 assertThat(shipLine.getShipPlanQtyTU()).isEqualByComparingTo("8");

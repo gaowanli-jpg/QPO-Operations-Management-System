@@ -349,6 +349,7 @@ public class SalesOrderU9ItemDataReplacementService {
             case "customerDeliveryDate" -> item.setCustomerDeliveryDate((LocalDate) value);
             case "internalDeliveryDate" -> item.setInternalDeliveryDate((LocalDate) value);
             case "untaxedUnitPrice" -> item.setUntaxedUnitPrice((BigDecimal) value);
+            case "taxIncludedUnitPrice" -> item.setTaxIncludedUnitPrice((BigDecimal) value);
             case "customerOrderNo" -> item.setCustomerOrderNo(trimToNull(stringValue(value)));
             case "customerProjectNo" -> item.setCustomerProjectNo(trimToNull(stringValue(value)));
             case "internalProjectNo" -> item.setInternalProjectNo(trimToNull(stringValue(value)));
@@ -365,6 +366,7 @@ public class SalesOrderU9ItemDataReplacementService {
                 .set("customer_delivery_date", item.getCustomerDeliveryDate())
                 .set("internal_delivery_date", item.getInternalDeliveryDate())
                 .set("untaxed_unit_price", item.getUntaxedUnitPrice())
+                .set("tax_included_unit_price", item.getTaxIncludedUnitPrice())
                 .set("customer_order_no", item.getCustomerOrderNo())
                 .set("customer_project_no", item.getCustomerProjectNo())
                 .set("internal_project_no", item.getInternalProjectNo())
@@ -424,6 +426,7 @@ public class SalesOrderU9ItemDataReplacementService {
             case CUSTOMER_DELIVERY_DATE -> item.getCustomerDeliveryDate();
             case INTERNAL_DELIVERY_DATE -> item.getInternalDeliveryDate();
             case UNTAXED_UNIT_PRICE -> item.getUntaxedUnitPrice();
+            case TAX_INCLUDED_UNIT_PRICE -> item.getTaxIncludedUnitPrice();
             case CUSTOMER_ORDER_NO -> item.getCustomerOrderNo();
             case CUSTOMER_PROJECT_NO -> item.getCustomerProjectNo();
             case INTERNAL_PROJECT_NO -> item.getInternalProjectNo();

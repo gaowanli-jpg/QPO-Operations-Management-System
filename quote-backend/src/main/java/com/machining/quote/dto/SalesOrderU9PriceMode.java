@@ -30,7 +30,7 @@ public enum SalesOrderU9PriceMode {
 
     public static SalesOrderU9PriceMode fromCode(String value) {
         if (value == null || value.trim().isEmpty()) {
-            return UNTAXED;
+            return TAX_INCLUDED;
         }
         String normalized = value.trim()
                 .replace('-', '_')
@@ -44,6 +44,6 @@ public enum SalesOrderU9PriceMode {
     }
 
     public static SalesOrderU9PriceMode defaultMode(SalesOrderU9PriceMode mode) {
-        return mode == null ? UNTAXED : mode;
+        return mode == null ? TAX_INCLUDED : mode;
     }
 }

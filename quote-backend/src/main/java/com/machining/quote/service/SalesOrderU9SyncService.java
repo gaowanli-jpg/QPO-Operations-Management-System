@@ -135,7 +135,7 @@ public class SalesOrderU9SyncService {
     }
 
     public SalesOrderU9SyncPreviewResp previewSalesOrder(Long salesOrderId, Integer page, Integer pageSize) {
-        return previewSalesOrder(salesOrderId, page, pageSize, SalesOrderU9PriceMode.UNTAXED);
+        return previewSalesOrder(salesOrderId, page, pageSize, SalesOrderU9PriceMode.defaultMode(null));
     }
 
     public SalesOrderU9SyncPreviewResp previewSalesOrder(Long salesOrderId, Integer page, Integer pageSize, String priceModeCode) {
@@ -287,7 +287,7 @@ public class SalesOrderU9SyncService {
     }
 
     public SalesOrderU9SyncResp syncSalesOrders(List<Long> salesOrderIds) {
-        return syncSalesOrders(salesOrderIds, SalesOrderU9PriceMode.UNTAXED);
+        return syncSalesOrders(salesOrderIds, SalesOrderU9PriceMode.defaultMode(null));
     }
 
     public SalesOrderU9SyncResp syncSalesOrders(List<Long> salesOrderIds, String priceModeCode) {

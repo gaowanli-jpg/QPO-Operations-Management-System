@@ -247,6 +247,36 @@ class SalesOrderU9ItemDataReplacementStage3Test {
     }
 
     @Test
+    void confirmCanReplaceTaxIncludedUnitPriceWithoutChangingUntaxedPrice() {
+        Fixture fixture = fixture();
+        SalesOrderHeader header = header(107L, "SO-107", "未同步");
+        SalesOrderItem item = item(270L, 107L, 1, "P-TAX", "A");
+        SalesOrderU9SyncPreviewResp latestPreview = new SalesOrderU9SyncPreviewResp();
+        latestPreview.setSalesOrderId(header.getId());
+        fixture.withOrder(header, List.of(item));
+        when(fixture.previewService.previewSalesOrder(header.getId())).thenReturn(latestPreview);
+        byte[] excel = excel(
+                List.of("图号", "版本", "含税单价"),
+                List.of("P-TAX", "A", "18.88"));
+
+        String fingerprint = fixture.service.preview(header.getId(), new ByteArrayInputStream(excel))
+                .getPreviewFingerprint();
+        SalesOrderU9ItemDataReplacementConfirmDTO result = fixture.service.confirm(
+                header.getId(),
+                new ByteArrayInputStream(excel),
+                fingerprint);
+
+        assertThat(result.getSuccess()).isTrue();
+        assertThat(result.getUpdatedCount()).isEqualTo(1);
+        assertThat(result.getChangedFields()).containsExactly("taxIncludedUnitPrice");
+        assertThat(item.getUntaxedUnitPrice()).isEqualByComparingTo("10.00");
+        assertThat(item.getUntaxedTotalPrice()).isEqualByComparingTo("50.00");
+        assertThat(item.getTaxIncludedUnitPrice()).isEqualByComparingTo("18.88");
+        assertThat(item.getTaxIncludedTotalPrice()).isEqualByComparingTo("94.40");
+        verify(fixture.itemMapper, times(1)).update(isNull(), any(UpdateWrapper.class));
+    }
+
+    @Test
     void confirmSkipsErrorRowsAndAppliesValidRows() {
         Fixture fixture = fixture();
         SalesOrderHeader header = header(106L, "SO-106", "未同步");

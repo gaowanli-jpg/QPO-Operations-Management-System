@@ -11,7 +11,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class SalesOrderU9TaxPriceContractTest {
     @Test
-    void u9SyncDefaultsToUntaxedAndAllowsOperatorSelectedTaxIncludedPriceMode() throws IOException {
+    void u9SyncDefaultsToTaxIncludedAndAllowsOperatorSelectedUntaxedPriceMode() throws IOException {
         String assembler = read(Path.of(
                 "src", "main", "java", "com", "machining", "quote", "service", "u9",
                 "U9SalesOrderRequestAssembler.java"));
@@ -28,7 +28,7 @@ class SalesOrderU9TaxPriceContractTest {
         assertThat(assembler)
                 .contains(
                         "public U9SalesOrderHeadDTO assemble(SalesOrderHeader header, List<SalesOrderItem> items)",
-                        "SalesOrderU9PriceMode.UNTAXED",
+                        "SalesOrderU9PriceMode.defaultMode(null)",
                         "head.setIsPriceIncludeTax(priceMode.isPriceIncludeTax())",
                         "line.setFinallyPriceTC(priceFor(item, priceMode))",
                         "desc.setPrivateDescSeg9(formatDecimal(priceFor(item, priceMode)))")
@@ -38,7 +38,7 @@ class SalesOrderU9TaxPriceContractTest {
                 .contains("priceMode.priceFieldLabel()", "requiredPrice(item, priceMode) == null")
                 .contains("getUntaxedUnitPrice()", "getTaxIncludedUnitPrice()");
         assertThat(priceMode)
-                .contains("UNTAXED", "TAX_INCLUDED", "isPriceIncludeTax", "fromCode");
+                .contains("UNTAXED", "TAX_INCLUDED", "isPriceIncludeTax", "fromCode", "return TAX_INCLUDED", "return mode == null ? TAX_INCLUDED : mode");
         assertThat(reconciliation)
                 .contains("同步单价")
                 .doesNotContain("未税单价\", expectedLine.getFinallyPriceTC()");

@@ -28,7 +28,7 @@ public class U9SalesOrderRequestAssembler {
             .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
 
     public U9SalesOrderHeadDTO assemble(SalesOrderHeader header, List<SalesOrderItem> items) {
-        return assemble(header, items, SalesOrderU9PriceMode.UNTAXED);
+        return assemble(header, items, SalesOrderU9PriceMode.defaultMode(null));
     }
 
     public U9SalesOrderHeadDTO assemble(SalesOrderHeader header, List<SalesOrderItem> items, SalesOrderU9PriceMode priceMode) {

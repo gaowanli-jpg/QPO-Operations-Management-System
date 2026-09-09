@@ -58,7 +58,7 @@ public class SalesOrderU9SyncStateService {
 
     @Transactional
     public PreparedOrder reserve(Long salesOrderId) {
-        return reserve(salesOrderId, SalesOrderU9PriceMode.UNTAXED);
+        return reserve(salesOrderId, SalesOrderU9PriceMode.defaultMode(null));
     }
 
     @Transactional

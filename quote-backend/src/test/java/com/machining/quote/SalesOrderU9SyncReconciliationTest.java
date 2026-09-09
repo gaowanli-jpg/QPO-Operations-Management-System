@@ -87,7 +87,7 @@ class SalesOrderU9SyncReconciliationTest {
         Fixture fixture = fixture();
         SalesOrderU9SyncStateService.PreparedOrder prepared = prepared(9001L, "ATT-1");
         when(fixture.stateService.reserve(9001L)).thenReturn(prepared);
-        when(fixture.stateService.reserve(9001L, SalesOrderU9PriceMode.UNTAXED)).thenReturn(prepared);
+        when(fixture.stateService.reserve(9001L, SalesOrderU9PriceMode.TAX_INCLUDED)).thenReturn(prepared);
         when(fixture.reconciliationService.checkExisting(prepared)).thenReturn(
                 U9SalesOrderReconciliationService.Result.foundAndMatched("U9-ID-1", "U9-SO-1", List.of())
         );
@@ -109,7 +109,7 @@ class SalesOrderU9SyncReconciliationTest {
         Fixture matchedFixture = fixture();
         SalesOrderU9SyncStateService.PreparedOrder matched = prepared(9002L, "ATT-2");
         when(matchedFixture.stateService.reserve(9002L)).thenReturn(matched);
-        when(matchedFixture.stateService.reserve(9002L, SalesOrderU9PriceMode.UNTAXED)).thenReturn(matched);
+        when(matchedFixture.stateService.reserve(9002L, SalesOrderU9PriceMode.TAX_INCLUDED)).thenReturn(matched);
         when(matchedFixture.reconciliationService.checkExisting(matched)).thenReturn(
                 U9SalesOrderReconciliationService.Result.notFoundConfirmed("创建前未找到同 DocNo U9 订单")
         );
@@ -126,7 +126,7 @@ class SalesOrderU9SyncReconciliationTest {
         Fixture pendingFixture = fixture();
         SalesOrderU9SyncStateService.PreparedOrder pending = prepared(9003L, "ATT-3");
         when(pendingFixture.stateService.reserve(9003L)).thenReturn(pending);
-        when(pendingFixture.stateService.reserve(9003L, SalesOrderU9PriceMode.UNTAXED)).thenReturn(pending);
+        when(pendingFixture.stateService.reserve(9003L, SalesOrderU9PriceMode.TAX_INCLUDED)).thenReturn(pending);
         when(pendingFixture.reconciliationService.checkExisting(pending)).thenReturn(
                 U9SalesOrderReconciliationService.Result.notFoundConfirmed("创建前未找到同 DocNo U9 订单")
         );
@@ -147,7 +147,7 @@ class SalesOrderU9SyncReconciliationTest {
     void reserveBlocksPendingStatusBeforeAnyExternalCreate() {
         Fixture fixture = fixture();
         when(fixture.stateService.reserve(9004L)).thenThrow(new RuntimeException("结果待确认状态只能核对，不能直接重新创建"));
-        when(fixture.stateService.reserve(9004L, SalesOrderU9PriceMode.UNTAXED))
+        when(fixture.stateService.reserve(9004L, SalesOrderU9PriceMode.TAX_INCLUDED))
                 .thenThrow(new RuntimeException("结果待确认状态只能核对，不能直接重新创建"));
 
         SalesOrderU9SyncResp resp = fixture.service.syncSalesOrders(List.of(9004L));
@@ -428,6 +428,9 @@ class SalesOrderU9SyncReconciliationTest {
         item.setReleasedQty(2);
         item.setRemainingQty(0);
         item.setUntaxedUnitPrice(new BigDecimal("16.37"));
+        item.setUntaxedTotalPrice(new BigDecimal("32.74"));
+        item.setTaxIncludedUnitPrice(new BigDecimal("18.50"));
+        item.setTaxIncludedTotalPrice(new BigDecimal("37.00"));
         item.setCustomerDeliveryDate(LocalDate.of(2026, 9, 1));
         item.setInternalDeliveryDate(LocalDate.of(2026, 8, 28));
         item.setStatus(QuoteStatusWorkflow.RELEASED);
@@ -448,13 +451,13 @@ class SalesOrderU9SyncReconciliationTest {
         head.setBusinessDate("2026-08-11");
         head.setOrderBy("CUST-A");
         head.setDocumentType("SO01");
-        head.setIsPriceIncludeTax(false);
+        head.setIsPriceIncludeTax(true);
         U9SalesOrderLineDTO line = new U9SalesOrderLineDTO();
         line.setDocLineNo(1);
         line.setItemCode("MAT-" + (header.getId() * 10));
         line.setOrderByQtyTU(new BigDecimal("2"));
         line.setOrderByQtyPU(new BigDecimal("2"));
-        line.setFinallyPriceTC(new BigDecimal("16.37"));
+        line.setFinallyPriceTC(new BigDecimal("18.50"));
         head.getSOLineDTOList().add(line);
         return head;
     }
