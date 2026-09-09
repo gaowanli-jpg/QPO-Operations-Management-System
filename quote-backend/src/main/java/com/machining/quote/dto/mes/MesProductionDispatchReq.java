@@ -92,10 +92,17 @@ public class MesProductionDispatchReq {
     @JsonIgnore
     public void setSourceItemId(Long sourceItemId) {
         this.sourceItemId = sourceItemId;
-        Item item = writableFirstItem();
-        if (item.getSaleOrderItemNo() == null && sourceItemId != null) {
-            item.setSaleOrderItemNo(String.valueOf(sourceItemId));
-        }
+    }
+
+    @JsonIgnore
+    public String getSaleOrderItemNo() {
+        Item item = firstItem();
+        return item == null ? null : item.getSaleOrderItemNo();
+    }
+
+    @JsonIgnore
+    public void setSaleOrderItemNo(String saleOrderItemNo) {
+        writableFirstItem().setSaleOrderItemNo(saleOrderItemNo);
     }
 
     @JsonIgnore

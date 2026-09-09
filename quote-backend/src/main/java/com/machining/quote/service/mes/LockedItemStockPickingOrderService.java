@@ -5,8 +5,12 @@ import com.machining.quote.dto.mes.MesProductionOrderCreateReq;
 import com.machining.quote.dto.mes.MesProductionOrderCreateResp;
 import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.OrderDeliveryTicketAllocation;
+import com.machining.quote.entity.SalesOrderHeader;
+import com.machining.quote.entity.SalesOrderItem;
 import com.machining.quote.mapper.OrderDeliveryTicketAllocationMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
+import com.machining.quote.mapper.SalesOrderHeaderMapper;
+import com.machining.quote.mapper.SalesOrderItemMapper;
 import com.machining.quote.service.AuditService;
 import com.machining.quote.service.DataCenterCallException;
 import com.machining.quote.service.DataCenterEndpointRegistry;
@@ -26,6 +30,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
@@ -40,6 +45,7 @@ public class LockedItemStockPickingOrderService {
     private static final String STATUS_FAILED = "FAILED";
     private static final String STATUS_SKIPPED = "SKIPPED";
     private static final String STATUS_RESULT_UNKNOWN = "RESULT_UNKNOWN";
+    private static final String SOURCE_SALES_ORDER = "SALES_ORDER";
     private static final Set<String> LOCKED_STOCK_TYPES = Set.of("IN_STOCK_LOCK", "IN_PRODUCTION_LOCK");
     private static final DateTimeFormatter BIZ_TIME_FORMAT = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
 
@@ -49,6 +55,10 @@ public class LockedItemStockPickingOrderService {
     private OrderDeliveryTicketMapper ticketMapper;
     @Autowired
     private MesProductionOrderCreateClient mesProductionOrderCreateClient;
+    @Autowired(required = false)
+    private SalesOrderItemMapper salesOrderItemMapper;
+    @Autowired(required = false)
+    private SalesOrderHeaderMapper salesOrderHeaderMapper;
     @Autowired(required = false)
     private AuditService auditService;
     @Autowired(required = false)
@@ -138,6 +148,7 @@ public class LockedItemStockPickingOrderService {
         if (validationError != null) {
             throw new RuntimeException(validationError);
         }
+        SalesOrderIdentity salesOrder = resolveSalesOrder(allocation);
         MesProductionOrderCreateReq.Item item = new MesProductionOrderCreateReq.Item();
         item.setOrderType(ORDER_TYPE_STOCK_PICKING);
         item.setProductCode(trimToNull(allocation.getMaterialNo()));
@@ -145,8 +156,8 @@ public class LockedItemStockPickingOrderService {
         item.setPlanStartTime(LocalDateTime.now(clock));
         item.setPlanEndTime(allocation.getDeliveryDate().atStartOfDay());
         item.setRemark(trimToNull(allocation.getRemark()));
-        item.setSaleOrderNo(trimToNull(allocation.getRfqNo()));
-        item.setSaleOrderItemNo(saleOrderItemNo(allocation));
+        item.setSaleOrderNo(salesOrder.saleOrderNo());
+        item.setSaleOrderItemNo(salesOrder.saleOrderItemNo());
         item.setSaleRemark(MesCustomerRequirementsAssembler.assemble(
                 allocation.getDescription(),
                 allocation.getSurfaceTreatment()));
@@ -158,6 +169,55 @@ public class LockedItemStockPickingOrderService {
         String existingBizId = trimToNull(allocation.getStockPickingBizId());
         String groupKey = existingBizId == null ? "NEW" : existingBizId;
         return new StockPickingPlan(allocation, item, existingBizId, groupKey);
+    }
+
+    private SalesOrderIdentity resolveSalesOrder(OrderDeliveryTicketAllocation allocation) {
+        if (salesOrderItemMapper == null || salesOrderHeaderMapper == null) {
+            throw new RuntimeException("Official sales order line service is unavailable before MES stock picking dispatch");
+        }
+        SalesOrderItem itemByTicket = allocation.getTicketId() == null
+                ? null
+                : salesOrderItemMapper.selectBySourceTicketIdForUpdate(allocation.getTicketId());
+        SalesOrderItem itemByDirectSource = null;
+        if (SOURCE_SALES_ORDER.equalsIgnoreCase(blankToEmpty(allocation.getSourceType()))
+                && allocation.getSourceItemId() != null) {
+            itemByDirectSource = salesOrderItemMapper.selectByIdForUpdate(allocation.getSourceItemId());
+        }
+        if (itemByTicket != null && itemByDirectSource != null
+                && !sameSalesOrderItem(itemByTicket, itemByDirectSource)) {
+            throw new RuntimeException("Official sales order line resolution is ambiguous for MES stock picking dispatch");
+        }
+        SalesOrderItem item = itemByTicket != null ? itemByTicket : itemByDirectSource;
+        if (item == null) {
+            throw new RuntimeException("Official sales order line is required before MES stock picking dispatch");
+        }
+        if (itemByTicket == null
+                && SOURCE_SALES_ORDER.equalsIgnoreCase(blankToEmpty(allocation.getSourceType()))
+                && allocation.getSourceOrderId() != null
+                && item.getSalesOrderId() != null
+                && !Objects.equals(allocation.getSourceOrderId(), item.getSalesOrderId())) {
+            throw new RuntimeException("Official sales order source does not match stock picking allocation");
+        }
+        if (item.getLineNo() == null || item.getLineNo() <= 0) {
+            throw new RuntimeException("Official sales order line number is required before MES stock picking dispatch");
+        }
+        if (item.getSalesOrderId() == null) {
+            throw new RuntimeException("Official sales order header is required before MES stock picking dispatch");
+        }
+        SalesOrderHeader header = salesOrderHeaderMapper.selectById(item.getSalesOrderId());
+        if (header == null) {
+            throw new RuntimeException("Official sales order header is required before MES stock picking dispatch");
+        }
+        String saleOrderNo = firstNonBlank(header.getDocumentNo(), header.getSalesOrderNo(), allocation.getRfqNo());
+        if (isBlank(saleOrderNo)) {
+            throw new RuntimeException("Official sales order number is required before MES stock picking dispatch");
+        }
+        return new SalesOrderIdentity(saleOrderNo, String.valueOf(item.getLineNo()));
+    }
+
+    private boolean sameSalesOrderItem(SalesOrderItem left, SalesOrderItem right) {
+        return Objects.equals(left.getId(), right.getId())
+                && Objects.equals(left.getSalesOrderId(), right.getSalesOrderId());
     }
 
     private List<List<StockPickingPlan>> groupPlans(List<StockPickingPlan> plans) {
@@ -462,16 +522,6 @@ public class LockedItemStockPickingOrderService {
         );
     }
 
-    private String saleOrderItemNo(OrderDeliveryTicketAllocation allocation) {
-        if (allocation.getSourceItemId() != null) {
-            return String.valueOf(allocation.getSourceItemId());
-        }
-        if (allocation.getItemId() != null) {
-            return String.valueOf(allocation.getItemId());
-        }
-        return null;
-    }
-
     private String externalId(MesProductionOrderCreateResp.Item responseItem) {
         if (responseItem == null) {
             return null;
@@ -537,5 +587,8 @@ public class LockedItemStockPickingOrderService {
             MesProductionOrderCreateReq.Item item,
             String existingBizId,
             String groupKey) {
+    }
+
+    private record SalesOrderIdentity(String saleOrderNo, String saleOrderItemNo) {
     }
 }

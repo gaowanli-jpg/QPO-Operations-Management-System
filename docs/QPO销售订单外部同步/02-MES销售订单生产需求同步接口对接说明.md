@@ -62,7 +62,7 @@ Authorization: Bearer {QPO_OPEN_API_TOKEN}
         "supplierCode": "SUP-C02058",
         "items": [
           {
-            "saleOrderItemNo": "10",
+            "saleOrderItemNo": "1",
             "materialNo": "MAT-001",
             "releasedQty": 5,
             "description": "零件描述",
@@ -117,7 +117,7 @@ Authorization: Bearer {QPO_OPEN_API_TOKEN}
 
 | 字段 | 类型 | 必返 | 说明 |
 | --- | --- | --- | --- |
-| `saleOrderItemNo` | string | 是 | 订单内稳定且唯一的明细编号，来自 QPO 销售订单行号。 |
+| `saleOrderItemNo` | string | 是 | 订单内稳定且唯一的明细编号，来自 QPO 系统生成的销售订单行号；订单内从 1 连续递增。 |
 | `materialNo` | string | 否 | 销售物料号 / MES 物料编码，用于 MES 匹配物料；QPO 销售订单可能先于 MES 物料号生成，未获取物料号时返回空值 / `null`。 |
 | `releasedQty` | decimal | 是 | 已提数量，固定来自 QPO `sales_order_item.released_qty`。 |
 | `description` | string | 否 | 明细描述。 |
@@ -139,7 +139,7 @@ MES 建议按以下业务键幂等落库：
 说明：
 
 - `saleOrderNo` 是对外销售订单唯一编号，取 QPO `sales_order_header.document_no`。
-- `saleOrderItemNo` 是订单内稳定明细编号。
+- `saleOrderItemNo` 是订单内稳定明细编号，使用 QPO 入库时按识别零件行顺序生成的 1..n 系统行号，不使用客户 Excel 原始“序号”。
 - 同一订单多次同步时，MES 可按 `saleOrderNo + saleOrderItemNo` 做插入或更新。
 - `changedAt` 可作为增量同步水位，不建议作为业务主键。
 

@@ -4,8 +4,12 @@ import com.machining.quote.dto.mes.MesProductionOrderCreateReq;
 import com.machining.quote.dto.mes.MesProductionOrderCreateResp;
 import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.OrderDeliveryTicketAllocation;
+import com.machining.quote.entity.SalesOrderHeader;
+import com.machining.quote.entity.SalesOrderItem;
 import com.machining.quote.mapper.OrderDeliveryTicketAllocationMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
+import com.machining.quote.mapper.SalesOrderHeaderMapper;
+import com.machining.quote.mapper.SalesOrderItemMapper;
 import com.machining.quote.service.AuditService;
 import com.machining.quote.service.DataCenterCallException;
 import com.machining.quote.service.DataCenterEndpointRegistry;
@@ -75,7 +79,7 @@ class LockedItemStockPickingOrderServiceTest {
             assertThat(row.getPlanEndTime()).isEqualTo(LocalDateTime.of(2026, 9, 30, 0, 0, 0));
             assertThat(row.getRemark()).isEqualTo("工单备注");
             assertThat(row.getSaleOrderNo()).isEqualTo("SO-2026-001");
-            assertThat(row.getSaleOrderItemNo()).isEqualTo("9001");
+            assertThat(row.getSaleOrderItemNo()).isEqualTo("4");
             assertThat(row.getSaleRemark()).isEqualTo("材料名称：导入材料描述\n表面处理：阳极氧化");
             assertThat(row.getCustomerPoNo()).isEqualTo("");
             assertThat(row.getCustomerProjectNo()).isEqualTo("CP-9");
@@ -191,6 +195,12 @@ class LockedItemStockPickingOrderServiceTest {
         ReflectionTestUtils.setField(service, "auditService", auditService);
         ReflectionTestUtils.setField(service, "dataScopeService", dataScopeService);
         ReflectionTestUtils.setField(service, "clock", clock);
+        SalesOrderItemMapper salesOrderItemMapper = mock(SalesOrderItemMapper.class);
+        SalesOrderHeaderMapper salesOrderHeaderMapper = mock(SalesOrderHeaderMapper.class);
+        when(salesOrderItemMapper.selectByIdForUpdate(9001L)).thenReturn(salesOrderItem(9001L, 4, 3001L));
+        when(salesOrderHeaderMapper.selectById(3001L)).thenReturn(salesOrderHeader(3001L, "SO-2026-001"));
+        ReflectionTestUtils.setField(service, "salesOrderItemMapper", salesOrderItemMapper);
+        ReflectionTestUtils.setField(service, "salesOrderHeaderMapper", salesOrderHeaderMapper);
     }
 
     private OrderDeliveryTicketAllocation allocation(Integer id, String allocationType, String stockPickingStatus) {
@@ -217,6 +227,22 @@ class LockedItemStockPickingOrderServiceTest {
         row.setDeliveryDate(LocalDate.of(2026, 9, 30));
         row.setStockPickingStatus(stockPickingStatus);
         return row;
+    }
+
+    private SalesOrderItem salesOrderItem(Long id, Integer lineNo, Long salesOrderId) {
+        SalesOrderItem item = new SalesOrderItem();
+        item.setId(id);
+        item.setLineNo(lineNo);
+        item.setSalesOrderId(salesOrderId);
+        return item;
+    }
+
+    private SalesOrderHeader salesOrderHeader(Long id, String documentNo) {
+        SalesOrderHeader header = new SalesOrderHeader();
+        header.setId(id);
+        header.setDocumentNo(documentNo);
+        header.setSalesOrderNo(documentNo);
+        return header;
     }
 
     private MesProductionOrderCreateResp success(String bizId, MesProductionOrderCreateResp.Item item) {

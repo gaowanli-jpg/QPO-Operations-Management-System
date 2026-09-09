@@ -43,7 +43,7 @@ QPO 请求体继续沿用现有结构，不新增 `orderType` 字段。
   "items": [
     {
       "saleOrderNo": "SO-20260813-001",
-      "saleOrderItemNo": "10",
+      "saleOrderItemNo": "1",
       "productCode": "MAT-000123",
       "demandQty": 10,
       "makeQty": 10,
@@ -96,7 +96,7 @@ MES 在 `data.items[]` 中原样返回 QPO 请求中的：
         "id": "MES-TASK-ID-001",
         "planNo": "PLAN-20260813-001",
         "saleOrderNo": "SO-20260813-001",
-        "saleOrderItemNo": "10",
+        "saleOrderItemNo": "1",
         "productCode": "MAT-000123",
         "status": "SUCCESS"
       }
@@ -111,7 +111,7 @@ MES 在 `data.items[]` 中原样返回 QPO 请求中的：
 | --- | --- | --- | --- | --- |
 | `bizId` | 根节点 | QPO -> MES，MES -> QPO | 是 | 本次批量需求任务请求号，也是 QPO 侧批次身份。 |
 | `items[].saleOrderNo` | 行 | QPO -> MES，MES -> QPO | 是 | 销售订单号，MES 必须原样返回。 |
-| `items[].saleOrderItemNo` | 行 | QPO -> MES，MES -> QPO | 是 | 销售订单行号，MES 必须原样返回。 |
+| `items[].saleOrderItemNo` | 行 | QPO -> MES，MES -> QPO | 是 | QPO 系统生成的销售订单行号，订单内从 1 连续递增，MES 必须原样返回。 |
 | `items[].productCode` | 行 | QPO -> MES，MES -> QPO | 是 | MES 物料号 / 产品编码。 |
 | `items[].planNo` | 行 | MES -> QPO | 成功时是 | MES 生成的生产计划号。 |
 | `items[].id` | 行 | MES -> QPO | 成功时建议返回 | MES 需求任务 ID 或任务标识。 |
@@ -174,7 +174,7 @@ bizId=B:
 ```json
 {
   "saleOrderNo": "SO-001",
-  "saleOrderItemNo": "10"
+  "saleOrderItemNo": "1"
 }
 ```
 
@@ -351,7 +351,7 @@ durationMs
 ```json
 {
   "saleOrderNo": "SO-001",
-  "saleOrderItemNo": "10"
+  "saleOrderItemNo": "1"
 }
 ```
 
@@ -368,7 +368,7 @@ MES 返回：
     "items": [
       {
         "saleOrderNo": "SO-001",
-        "saleOrderItemNo": "10",
+        "saleOrderItemNo": "1",
         "productCode": "MAT-001",
         "planNo": "PLAN-001",
         "status": "SUCCESS"

@@ -80,7 +80,7 @@ class MesRealContractTest {
 
         MesProductionDispatchReq.Item item = new MesProductionDispatchReq.Item();
         item.setSaleOrderNo("QPO-MES-E2E-SO-20260812-001");
-        item.setSaleOrderItemNo("10");
+        item.setSaleOrderItemNo("1");
         item.setProductCode("SY100399000001");
         item.setDemandQty(5);
         item.setMakeQty(5);
@@ -104,7 +104,7 @@ class MesRealContractTest {
         Map<String, Object> row = items(payload).get(0);
         assertThat(row)
                 .containsEntry("saleOrderNo", "QPO-MES-E2E-SO-20260812-001")
-                .containsEntry("saleOrderItemNo", "10")
+                .containsEntry("saleOrderItemNo", "1")
                 .containsEntry("productCode", "SY100399000001")
                 .containsEntry("demandQty", 5)
                 .containsEntry("makeQty", 5)

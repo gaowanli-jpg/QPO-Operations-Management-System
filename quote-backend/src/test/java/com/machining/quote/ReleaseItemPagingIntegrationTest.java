@@ -127,6 +127,7 @@ class ReleaseItemPagingIntegrationTest extends LargeOrderItemPagingTestSupport {
 
         SalesOrderItem salesItem = new SalesOrderItem();
         salesItem.setSalesOrderId(salesOrder.getId());
+        salesItem.setLineNo(1);
         salesItem.setPartNo("MIXED-SO-01");
         salesItem.setVersion("A");
         salesItem.setQty(1);

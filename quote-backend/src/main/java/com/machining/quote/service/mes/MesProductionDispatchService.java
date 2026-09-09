@@ -673,9 +673,10 @@ public class MesProductionDispatchService {
         List<MesProductionAssemblyRelationDTO> assemblyRelations = buildAssemblyRelations(allocation);
         req.setAssemblyRelations(assemblyRelations);
 
+        SalesOrderResolution resolution = resolveSalesOrderIfAvailable(allocation);
         MesProductionDispatchReq.Item item = new MesProductionDispatchReq.Item();
-        item.setSaleOrderNo(trimToNull(allocation.getRfqNo()));
-        item.setSaleOrderItemNo(allocation.getSourceItemId() == null ? null : String.valueOf(allocation.getSourceItemId()));
+        item.setSaleOrderNo(resolution == null ? trimToNull(allocation.getRfqNo()) : resolution.saleOrderNo());
+        item.setSaleOrderItemNo(resolution == null ? null : resolution.saleOrderItemNo());
         item.setProductCode(trimToNull(allocation.getMaterialNo()));
         item.setDemandQty(allocation.getQty());
         item.setMakeQty(allocation.getQty());
@@ -692,6 +693,13 @@ public class MesProductionDispatchService {
         item.setProcessRoute(buildProcessRoute(allocation.getProcessRoute()));
         req.setItems(List.of(item));
         return req;
+    }
+
+    private SalesOrderResolution resolveSalesOrderIfAvailable(OrderDeliveryTicketAllocation allocation) {
+        if (salesOrderItemMapper == null || salesOrderHeaderMapper == null) {
+            return null;
+        }
+        return resolveSalesOrder(allocation);
     }
 
     private List<MesProductionProcessRouteDTO> buildProcessRoute(Object processRoute) {

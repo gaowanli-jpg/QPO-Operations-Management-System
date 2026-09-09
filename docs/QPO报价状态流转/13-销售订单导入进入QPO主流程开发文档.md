@@ -78,7 +78,7 @@
 
 | 模板字段 | QPO 映射 | 必填 | 说明 |
 | --- | --- | --- | --- |
-| 序号 | `item_quote_version.sales_order_line_no` | 否 | 用于导入结果定位，保留原始序号 |
+| 序号 | 不映射 | 否 | 历史模板字段，当前不读取、不入库；系统行号由识别到的零件行按 1..n 生成 |
 | 下单日期 | `order_rfq.sales_order_date` | 是 | 同一订单分组内应一致 |
 | 客户订单号 | `order_rfq.customer_order_no` / `item_quote_version.customer_order_no` | 是 | 参与订单分组和提单默认值 |
 | 客户项目号 | `order_rfq.customer_project_no` / `item_quote_version.customer_project_no` | 否 | 提单默认值 |
@@ -131,7 +131,7 @@
 
 | 字段 | 类型 | 用途 |
 | --- | --- | --- |
-| `sales_order_line_no` | `INTEGER` | 模板序号 |
+| `sales_order_line_no` | `INTEGER` | 历史兼容字段，不再保存客户 Excel 原始“序号”；销售订单行号以 `sales_order_item.line_no` 的系统 1..n 序号为准 |
 | `customer_order_no` | `VARCHAR(120)` | 行级客户订单号快照 |
 | `customer_project_no` | `VARCHAR(120)` | 行级客户项目号快照 |
 | `internal_project_no` | `VARCHAR(120)` | 行级内部项目号快照 |

@@ -15,9 +15,7 @@ import org.springframework.stereotype.Component;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 @Component
 public class U9SalesOrderRequestAssembler {
@@ -102,12 +100,13 @@ public class U9SalesOrderRequestAssembler {
     }
 
     private boolean shouldRenumber(List<SalesOrderItem> items) {
-        Set<Integer> used = new HashSet<>();
+        int expectedLineNo = 1;
         for (SalesOrderItem item : items == null ? List.<SalesOrderItem>of() : items) {
             Integer lineNo = item.getLineNo();
-            if (lineNo == null || lineNo <= 0 || !used.add(lineNo)) {
+            if (lineNo == null || lineNo != expectedLineNo) {
                 return true;
             }
+            expectedLineNo++;
         }
         return false;
     }

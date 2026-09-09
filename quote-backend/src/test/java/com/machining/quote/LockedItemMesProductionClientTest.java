@@ -1,5 +1,6 @@
 package com.machining.quote;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.machining.quote.dto.mes.MesProductionDispatchReq;
 import com.machining.quote.dto.mes.MesProductionDispatchResp;
 import com.machining.quote.dto.mes.MesProductionProcessRouteDTO;
@@ -30,6 +31,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class LockedItemMesProductionClientTest {
     private static final Path DOCKER_COMPOSE = Path.of("..", "docker-compose.yml");
     private static final Path ERP_ENV = Path.of("..", "erp.env");
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     @Test
     void dispatchPostsLockedItemSnapshotToConfiguredMesPath() throws IOException {
@@ -62,7 +64,7 @@ class LockedItemMesProductionClientTest {
                     .contains("\"internalProjectNo\":\"IP-9\"")
                     .contains("\"items\":[")
                     .contains("\"saleOrderNo\":\"SO-1\"")
-                    .contains("\"saleOrderItemNo\":\"9001\"")
+                    .contains("\"saleOrderItemNo\":\"1\"")
                     .contains("\"productCode\":\"MAT-001\"")
                     .contains("\"demandQty\":4")
                     .contains("\"makeQty\":4")
@@ -76,6 +78,21 @@ class LockedItemMesProductionClientTest {
         } finally {
             server.stop(0);
         }
+    }
+
+    @Test
+    void sourceItemIdDoesNotBackfillSaleOrderItemNo() throws Exception {
+        MesProductionDispatchReq req = new MesProductionDispatchReq();
+        req.setRequestId("REQ-LEGACY");
+        req.setSourceOrderNo("SO-1");
+        req.setSourceItemId(9001L);
+        req.setMaterialNo("MAT-001");
+        req.setProductionQty(1);
+
+        String json = OBJECT_MAPPER.writeValueAsString(req);
+
+        assertThat(req.getSaleOrderItemNo()).isNull();
+        assertThat(json).doesNotContain("saleOrderItemNo", "9001");
     }
 
     @Test
@@ -248,6 +265,7 @@ class LockedItemMesProductionClientTest {
         req.setSourceOrderId(3001L);
         req.setSourceItemId(9001L);
         req.setSourceOrderNo("SO-1");
+        req.setSaleOrderItemNo("1");
         req.setCustomerName("ACME");
         req.setPartNo("P-100");
         req.setVersion("A");

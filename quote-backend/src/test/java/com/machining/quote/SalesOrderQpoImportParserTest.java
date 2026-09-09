@@ -109,6 +109,28 @@ class SalesOrderQpoImportParserTest {
     }
 
     @Test
+    void ignoresCustomerExcelSequenceWhenParsingSalesOrderRows() throws Exception {
+        SalesOrderQpoExcelParseResult result = parser.parse(
+                new ByteArrayInputStream(workbookBytes(fullHeaders(), List.of(
+                        row(10, LocalDate.of(2026, 7, 2), "ROW-PO-001", "ROW-CP-001", "ROW-TITLE",
+                                "样品订单", "ROW-IP-001", null, null, "P-001", 10, null, null, null,
+                                "A", null, null, null, null),
+                        row(10, null, null, null, null, null, null, null, null, "P-002", 5, null,
+                                null, null, "B", null, null, null, null),
+                        row(99, null, null, null, null, null, null, null, null, "P-003", 2, null,
+                                null, null, "C", null, null, null, null)
+                ))),
+                defaults());
+
+        assertThat(result.getOrders().get(0).getLines())
+                .extracting(SalesOrderQpoExcelLineDTO::getSalesOrderLineNo)
+                .containsExactly(null, null, null);
+        assertThat(result.getOrders().get(0).getLines())
+                .extracting(SalesOrderQpoExcelLineDTO::getSourceRowNumber)
+                .containsExactly(2, 3, 4);
+    }
+
+    @Test
     void parsesDocumentedSalesOrderDateFormats() throws Exception {
         List<Object> dateValues = List.of(
                 "2026-03-08",

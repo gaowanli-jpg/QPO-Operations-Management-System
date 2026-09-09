@@ -186,6 +186,24 @@ class FlywayMigrationPolicyTest {
                 .doesNotContain("parent_id = 190", "parent_id = 150");
     }
 
+    @Test
+    void salesOrderItemLineNumbersAreNormalizedByPersistedRowOrder() throws IOException {
+        Path migrationPath = MIGRATION_DIR.resolve("V51__normalize_sales_order_item_line_numbers.sql");
+        assertThat(migrationPath).exists();
+
+        String migration = read(migrationPath);
+        assertThat(migration)
+                .contains(
+                        "ROW_NUMBER() OVER",
+                        "PARTITION BY sales_order_id",
+                        "ORDER BY id",
+                        "line_no = ordered.new_line_no",
+                        "ALTER TABLE sales_order_item",
+                        "ALTER COLUMN line_no SET NOT NULL",
+                        "uk_sales_order_item_order_line_no")
+                .doesNotContain("ORDER BY line_no");
+    }
+
     private static List<MigrationFile> migrationFiles() throws IOException {
         List<MigrationFile> migrations = new ArrayList<>();
         try (var paths = Files.list(MIGRATION_DIR)) {

@@ -35,7 +35,6 @@ public class ImportTemplateExportService {
     );
 
     private static final List<TemplateField> SALES_ORDER_FIELDS = List.of(
-            optional("序号", "1", "市场原始行号，用于导入结果定位。"),
             optional("下单日期", "2026-07-24", "零件级下单日期；为空时继承页面订单默认信息。"),
             optional("客户订单号", "PO-20260724-001", "零件级客户订单号；为空时继承页面订单默认信息。"),
             optional("客户项目号", "CP-001", "零件级客户项目号；为空时继承页面订单默认信息。"),
