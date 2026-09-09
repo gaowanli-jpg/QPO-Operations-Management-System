@@ -17,7 +17,10 @@ public class SalesOrderItemUpdateLineReq {
     public static final String FIELD_SURFACE_TREATMENT = "surfaceTreatment";
     public static final String FIELD_CUSTOMER_ORDER_NO = "customerOrderNo";
     public static final String FIELD_CUSTOMER_PROJECT_NO = "customerProjectNo";
+    public static final String FIELD_CUSTOMER_ORDER_TITLE = "customerOrderTitle";
     public static final String FIELD_INTERNAL_PROJECT_NO = "internalProjectNo";
+    public static final String FIELD_DESCRIPTION = "description";
+    public static final String FIELD_STATUS = "status";
     public static final String FIELD_REMARK = "remark";
 
     private Long salesOrderItemId;
@@ -31,7 +34,10 @@ public class SalesOrderItemUpdateLineReq {
     private String surfaceTreatment;
     private String customerOrderNo;
     private String customerProjectNo;
+    private String customerOrderTitle;
     private String internalProjectNo;
+    private String description;
+    private String status;
     private String remark;
     private final Set<String> providedFields = new LinkedHashSet<>();
 
@@ -133,6 +139,15 @@ public class SalesOrderItemUpdateLineReq {
         providedFields.add(FIELD_CUSTOMER_PROJECT_NO);
     }
 
+    public String getCustomerOrderTitle() {
+        return customerOrderTitle;
+    }
+
+    public void setCustomerOrderTitle(String customerOrderTitle) {
+        this.customerOrderTitle = customerOrderTitle;
+        providedFields.add(FIELD_CUSTOMER_ORDER_TITLE);
+    }
+
     public String getInternalProjectNo() {
         return internalProjectNo;
     }
@@ -140,6 +155,24 @@ public class SalesOrderItemUpdateLineReq {
     public void setInternalProjectNo(String internalProjectNo) {
         this.internalProjectNo = internalProjectNo;
         providedFields.add(FIELD_INTERNAL_PROJECT_NO);
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
+        providedFields.add(FIELD_DESCRIPTION);
+    }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
+        providedFields.add(FIELD_STATUS);
     }
 
     public String getRemark() {

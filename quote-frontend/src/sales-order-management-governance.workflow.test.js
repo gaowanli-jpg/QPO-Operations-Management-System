@@ -79,6 +79,36 @@ describe('sales order management governance and drawings', () => {
     expect(salesOrderManage).toContain('runAction(salesOrderActionKeys.productionTaskNoticeExport(salesOrderId)')
   })
 
+  test('detail item table makes title description and item status editable and replaceable', () => {
+    const itemTableSource = salesOrderManage.slice(
+      salesOrderManage.indexOf('<el-table-column prop="lineNo"'),
+      salesOrderManage.indexOf('<el-table-column prop="orderType"')
+    )
+    const editableFieldsSource = salesOrderManage.slice(
+      salesOrderManage.indexOf('const SALES_ORDER_ITEM_EDITABLE_FIELDS = ['),
+      salesOrderManage.indexOf('const SALES_ORDER_STATUS_ACTIONS = [')
+    )
+    const draftSource = salesOrderManage.slice(
+      salesOrderManage.indexOf('const buildItemDraft = (row = {}) => ({'),
+      salesOrderManage.indexOf('const buildOrderPayload = () =>')
+    )
+    const replacementDialog = readSource('components', 'sales-order', 'SalesOrderItemDataReplacementDialog.vue')
+
+    expect(itemTableSource).toContain('prop="customerOrderTitle" label="客户下单抬头"')
+    expect(itemTableSource.indexOf('prop="customerOrderTitle" label="客户下单抬头"')).toBeLessThan(
+      itemTableSource.indexOf('prop="description" label="物料描述"')
+    )
+    expect(itemTableSource).toContain('v-model="itemDrafts[row.id].customerOrderTitle"')
+    expect(itemTableSource).toContain('v-model="itemDrafts[row.id].description"')
+    expect(itemTableSource).toContain('v-model="itemDrafts[row.id].status"')
+
+    for (const field of ['customerOrderTitle', 'description', 'status']) {
+      expect(editableFieldsSource).toContain(`'${field}'`)
+      expect(draftSource).toContain(`${field}: draftValue(row.${field})`)
+    }
+    expect(replacementDialog).toContain('客户下单抬头、物料描述、订单状态')
+  })
+
   test('detail view exposes sales order drawing replacement between supplement and production export', () => {
     expect(salesOrderManage).toContain('导入替换图纸')
     expect(salesOrderManage).toContain('replaceSalesOrderDrawings')

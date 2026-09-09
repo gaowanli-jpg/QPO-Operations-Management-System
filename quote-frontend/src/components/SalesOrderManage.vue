@@ -332,7 +332,19 @@
                   <span v-else>{{ row.qty || 0 }}</span>
                 </template>
               </el-table-column>
-              <el-table-column prop="status" label="状态" width="110" align="center" />
+              <el-table-column prop="status" label="订单状态" width="140" align="center" show-overflow-tooltip>
+                <template #default="{ row }">
+                  <el-input
+                    v-if="itemDrafts[row.id]"
+                    v-model="itemDrafts[row.id].status"
+                    class="item-edit-input"
+                    clearable
+                    :disabled="salesOrderEditLocked"
+                    placeholder="订单状态"
+                  />
+                  <span v-else>{{ row.status || '-' }}</span>
+                </template>
+              </el-table-column>
               <el-table-column label="U9/变更" width="178" align="center">
                 <template #default="{ row }">
                   <div class="item-u9-change-exclusion-cell">
@@ -383,7 +395,32 @@
                   <el-tag v-else type="info" size="small">无图</el-tag>
                 </template>
               </el-table-column>
-              <el-table-column prop="description" label="物料描述" min-width="180" show-overflow-tooltip />
+              <el-table-column prop="customerOrderTitle" label="客户下单抬头" min-width="170" show-overflow-tooltip>
+                <template #default="{ row }">
+                  <el-input
+                    v-if="itemDrafts[row.id]"
+                    v-model="itemDrafts[row.id].customerOrderTitle"
+                    class="item-edit-input"
+                    clearable
+                    :disabled="salesOrderEditLocked"
+                    placeholder="客户下单抬头"
+                  />
+                  <span v-else>{{ row.customerOrderTitle || '-' }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column prop="description" label="物料描述" min-width="220" show-overflow-tooltip>
+                <template #default="{ row }">
+                  <el-input
+                    v-if="itemDrafts[row.id]"
+                    v-model="itemDrafts[row.id].description"
+                    class="item-edit-input"
+                    clearable
+                    :disabled="salesOrderEditLocked"
+                    placeholder="物料描述"
+                  />
+                  <span v-else>{{ row.description || '-' }}</span>
+                </template>
+              </el-table-column>
               <el-table-column prop="orderType" label="订单类型" width="120" show-overflow-tooltip />
               <el-table-column prop="customerOrderNo" label="客户订单号" min-width="160" show-overflow-tooltip>
                 <template #default="{ row }">
@@ -717,13 +754,16 @@ const SALES_ORDER_HEADER_EDITABLE_FIELDS = [
 const SALES_ORDER_ITEM_EDITABLE_FIELDS = [
   'version',
   'qty',
+  'status',
   'untaxedUnitPrice',
   'taxIncludedUnitPrice',
   'customerDeliveryDate',
   'internalDeliveryDate',
   'customerOrderNo',
   'customerProjectNo',
+  'customerOrderTitle',
   'internalProjectNo',
+  'description',
   'materialName',
   'surfaceTreatment',
   'remark'
@@ -1168,13 +1208,16 @@ const resetItemDrafts = (rows = []) => {
 const buildItemDraft = (row = {}) => ({
   version: draftValue(row.version),
   qty: row.qty ?? null,
+  status: draftValue(row.status),
   untaxedUnitPrice: draftValue(row.untaxedUnitPrice),
   taxIncludedUnitPrice: draftValue(row.taxIncludedUnitPrice),
   customerDeliveryDate: draftValue(row.customerDeliveryDate),
   internalDeliveryDate: draftValue(row.internalDeliveryDate),
   customerOrderNo: draftValue(row.customerOrderNo),
   customerProjectNo: draftValue(row.customerProjectNo),
+  customerOrderTitle: draftValue(row.customerOrderTitle),
   internalProjectNo: draftValue(row.internalProjectNo),
+  description: draftValue(row.description),
   materialName: draftValue(row.materialName),
   surfaceTreatment: draftValue(row.surfaceTreatment),
   remark: draftValue(row.remark)

@@ -11,7 +11,7 @@
     <div class="sales-order-replacement-dialog">
       <el-alert
         title="按图号、版本和可选行号匹配当前销售订单零件，先预览差异，确认后才写入本地销售订单零件。"
-        description="Excel 空单元格不会清空原值；本入口只维护数量、未税单价、含税单价、交期、订单号、项目号、材料、表面处理和备注；版本仅用于匹配，不作为可替换字段。"
+        description="Excel 空单元格不会清空原值；本入口只维护数量、未税单价、含税单价、交期、订单号、项目号、客户下单抬头、物料描述、订单状态、材料、表面处理和备注；版本仅用于匹配，不作为可替换字段。"
         type="info"
         :closable="false"
         show-icon

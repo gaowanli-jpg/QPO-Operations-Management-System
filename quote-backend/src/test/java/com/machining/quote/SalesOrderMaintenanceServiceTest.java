@@ -152,7 +152,10 @@ class SalesOrderMaintenanceServiceTest {
         line.setInternalDeliveryDate(LocalDate.of(2026, 9, 25));
         line.setCustomerOrderNo(" PO-ITEM ");
         line.setCustomerProjectNo(" CP-ITEM ");
+        line.setCustomerOrderTitle(" Title-ITEM ");
         line.setInternalProjectNo(" IP-ITEM ");
+        line.setDescription(" Updated description ");
+        line.setStatus("已生成提单");
         line.setRemark(" urgent ");
         req.setItems(List.of(line));
 
@@ -170,7 +173,10 @@ class SalesOrderMaintenanceServiceTest {
                 "internalDeliveryDate",
                 "customerOrderNo",
                 "customerProjectNo",
+                "customerOrderTitle",
                 "internalProjectNo",
+                "description",
+                "status",
                 "remark");
         assertThat(item.getQty()).isEqualTo(3);
         assertThat(item.getUntaxedUnitPrice()).isEqualByComparingTo("200.00");
@@ -186,7 +192,10 @@ class SalesOrderMaintenanceServiceTest {
         assertThat(item.getInternalDeliveryDate()).isEqualTo(LocalDate.of(2026, 9, 25));
         assertThat(item.getCustomerOrderNo()).isEqualTo("PO-ITEM");
         assertThat(item.getCustomerProjectNo()).isEqualTo("CP-ITEM");
+        assertThat(item.getCustomerOrderTitle()).isEqualTo("Title-ITEM");
         assertThat(item.getInternalProjectNo()).isEqualTo("IP-ITEM");
+        assertThat(item.getDescription()).isEqualTo("Updated description");
+        assertThat(item.getStatus()).isEqualTo("已生成提单");
         assertThat(item.getRemark()).isEqualTo("urgent");
 
         verify(fixture.dataScopeService).assertCanAccessSalesOrder(header);
@@ -260,8 +269,8 @@ class SalesOrderMaintenanceServiceTest {
         item.setTaxIncludedUnitPrice(new BigDecimal("113.00"));
         fixture.withOrder(header, List.of(item));
         byte[] excel = excel(
-                List.of("图号", "版本", "行号", "数量", "客户交期", "内部交期", "未税单价", "含税单价", "客户订单号", "客户项目号", "内部项目号", "备注"),
-                List.of(item.getPartNo(), item.getVersion(), item.getLineNo(), 4, "2026-10-11", "2026-10-02", "120.00", "150.00", "PO-X", "CP-X", "IP-X", "note"));
+                List.of("图号", "版本", "行号", "数量", "客户交期", "内部交期", "未税单价", "含税单价", "客户订单号", "客户项目号", "客户下单抬头", "内部项目号", "物料描述", "订单状态", "备注"),
+                List.of(item.getPartNo(), item.getVersion(), item.getLineNo(), 4, "2026-10-11", "2026-10-02", "120.00", "150.00", "PO-X", "CP-X", "TITLE-X", "IP-X", "replacement description", "已生成提单", "note"));
 
         SalesOrderU9ItemDataReplacementPreviewDTO preview = fixture.replacementService.preview(
                 header.getId(), new ByteArrayInputStream(excel));
@@ -281,11 +290,18 @@ class SalesOrderMaintenanceServiceTest {
                 "taxIncludedUnitPrice",
                 "customerOrderNo",
                 "customerProjectNo",
+                "customerOrderTitle",
                 "internalProjectNo",
+                "description",
+                "status",
                 "remark");
         assertThat(item.getQty()).isEqualTo(4);
         assertThat(item.getUntaxedUnitPrice()).isEqualByComparingTo("120.00");
         assertThat(item.getTaxIncludedUnitPrice()).isEqualByComparingTo("150.00");
+        assertThat(item.getCustomerOrderTitle()).isEqualTo("TITLE-X");
+        assertThat(item.getInternalProjectNo()).isEqualTo("IP-X");
+        assertThat(item.getDescription()).isEqualTo("replacement description");
+        assertThat(item.getStatus()).isEqualTo("已生成提单");
         verify(fixture.ticketMapper, never()).update(any(), any());
         verifyAudit(fixture.auditService, "SALES_ORDER_ITEM_DATA_REPLACEMENT", header.getId());
     }

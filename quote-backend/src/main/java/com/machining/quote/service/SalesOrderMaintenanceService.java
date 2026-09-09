@@ -173,8 +173,14 @@ public class SalesOrderMaintenanceService {
                 SalesOrderItemUpdateLineReq.FIELD_CUSTOMER_ORDER_NO, changed, line, item::setCustomerOrderNo);
         applyText(item.getCustomerProjectNo(), line.getCustomerProjectNo(), TEXT_120,
                 SalesOrderItemUpdateLineReq.FIELD_CUSTOMER_PROJECT_NO, changed, line, item::setCustomerProjectNo);
+        applyText(item.getCustomerOrderTitle(), line.getCustomerOrderTitle(), TEXT_255,
+                SalesOrderItemUpdateLineReq.FIELD_CUSTOMER_ORDER_TITLE, changed, line, item::setCustomerOrderTitle);
         applyText(item.getInternalProjectNo(), line.getInternalProjectNo(), TEXT_120,
                 SalesOrderItemUpdateLineReq.FIELD_INTERNAL_PROJECT_NO, changed, line, item::setInternalProjectNo);
+        applyText(item.getDescription(), line.getDescription(), TEXT_500,
+                SalesOrderItemUpdateLineReq.FIELD_DESCRIPTION, changed, line, item::setDescription);
+        applyText(item.getStatus(), line.getStatus(), TEXT_50,
+                SalesOrderItemUpdateLineReq.FIELD_STATUS, changed, line, item::setStatus);
         applyText(item.getRemark(), line.getRemark(), TEXT_500,
                 SalesOrderItemUpdateLineReq.FIELD_REMARK, changed, line, item::setRemark);
 
@@ -445,7 +451,10 @@ public class SalesOrderMaintenanceService {
                 .set("surface_treatment", item.getSurfaceTreatment())
                 .set("customer_order_no", item.getCustomerOrderNo())
                 .set("customer_project_no", item.getCustomerProjectNo())
+                .set("customer_order_title", item.getCustomerOrderTitle())
                 .set("internal_project_no", item.getInternalProjectNo())
+                .set("description", item.getDescription())
+                .set("status", item.getStatus())
                 .set("remark", item.getRemark())
                 .set("untaxed_total_price", item.getUntaxedTotalPrice())
                 .set("tax_included_total_price", item.getTaxIncludedTotalPrice())
@@ -581,8 +590,17 @@ public class SalesOrderMaintenanceService {
         if (SalesOrderItemUpdateLineReq.FIELD_CUSTOMER_PROJECT_NO.equals(field)) {
             return "客户项目号";
         }
+        if (SalesOrderItemUpdateLineReq.FIELD_CUSTOMER_ORDER_TITLE.equals(field)) {
+            return "客户下单抬头";
+        }
         if (SalesOrderItemUpdateLineReq.FIELD_INTERNAL_PROJECT_NO.equals(field)) {
             return "内部项目号";
+        }
+        if (SalesOrderItemUpdateLineReq.FIELD_DESCRIPTION.equals(field)) {
+            return "物料描述";
+        }
+        if (SalesOrderItemUpdateLineReq.FIELD_STATUS.equals(field)) {
+            return "订单状态";
         }
         if (SalesOrderItemUpdateLineReq.FIELD_REMARK.equals(field)) {
             return "备注";
