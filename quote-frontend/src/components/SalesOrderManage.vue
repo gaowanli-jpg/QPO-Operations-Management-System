@@ -255,6 +255,15 @@
                 <el-tag v-if="dirtyItemCount > 0" type="warning">已修改 {{ dirtyItemCount }} 行</el-tag>
               </div>
               <div class="item-maintenance-action-buttons">
+                <el-button
+                  v-permission="'market:sales-order:item-detail-export'"
+                  plain
+                  :loading="itemDetailExportPending"
+                  :disabled="itemDetailExportPending"
+                  @click="handleSalesOrderItemDetailExport"
+                >
+                  导出明细表
+                </el-button>
                 <el-tooltip :disabled="!salesOrderEditLocked" :content="salesOrderEditLockedReason" placement="top">
                   <span class="sales-order-action-wrap">
                     <el-button
@@ -786,6 +795,7 @@ import {
   convertSalesOrderUntaxedToTaxIncluded,
   discardSalesOrder,
   discardSalesOrderItemForU9Change,
+  downloadSalesOrderItemDetails,
   downloadSalesOrderProductionTaskNotice,
   getSalesOrder,
   getSalesOrderDrawingSummary,
@@ -831,6 +841,7 @@ const salesOrderActionKeys = {
   itemFieldReplacement: (orderId, field) => `sales-order:item-field-replacement:${field || 'none'}:${orderId || 'none'}`,
   itemPriceConversion: (orderId, direction) => `sales-order:item-price-conversion:${direction}:${orderId || 'none'}`,
   itemU9ChangeExclusion: (itemId) => `sales-order:item-u9-change-exclusion:${itemId || 'none'}`,
+  itemDetailExport: (orderId) => `sales-order:item-detail-export:${orderId || 'none'}`,
   supplementDrawings: (orderId) => `sales-order:supplement-drawings:${orderId || 'none'}`,
   salesOrderDrawingReplace: (orderId) => `sales-order:drawing-replace:${orderId || 'none'}`,
   productionTaskNoticeExport: (orderId) => `sales-order:production-task-notice-export:${orderId || 'none'}`
@@ -965,6 +976,7 @@ const itemPriceConversionPending = (direction) => isPending(salesOrderActionKeys
 const missingDrawingItems = computed(() => drawingSummary.value?.missingItems || detailItemList.value.filter(item => !item.drawingUrl))
 const supplementUploadPending = computed(() => isPending(salesOrderActionKeys.supplementDrawings(orderDetail.value?.orderInfo?.id)))
 const replaceSalesOrderDrawingUploadPending = computed(() => isPending(salesOrderActionKeys.salesOrderDrawingReplace(orderDetail.value?.orderInfo?.id)))
+const itemDetailExportPending = computed(() => isPending(salesOrderActionKeys.itemDetailExport(orderDetail.value?.orderInfo?.id)))
 const productionTaskNoticeExportPending = computed(() => isPending(salesOrderActionKeys.productionTaskNoticeExport(orderDetail.value?.orderInfo?.id)))
 const salesOrderEditLocked = computed(() => SALES_ORDER_EDIT_LOCKED_U9_STATUSES.includes(String(orderDetail.value?.orderInfo?.u9SyncStatus || '').trim()))
 const salesOrderEditLockedReason = computed(() => salesOrderEditLocked.value ? `当前 U9 状态不允许修改销售订单：${orderDetail.value?.orderInfo?.u9SyncStatus || '-'}` : '')
@@ -1275,6 +1287,24 @@ const handleProductionTaskNoticeExport = async () => {
     if (error) {
       console.error(error)
       ElMessage.error(error.message || '导出生产任务通知单失败。')
+    }
+  })
+}
+
+const handleSalesOrderItemDetailExport = async () => {
+  const salesOrderId = orderDetail.value?.orderInfo?.id
+  if (!salesOrderId) return ElMessage.warning('请先打开销售订单详情。')
+  const salesOrderNo = orderDetail.value?.orderInfo?.salesOrderNo || salesOrderId
+  return runAction(salesOrderActionKeys.itemDetailExport(salesOrderId), async () => {
+    const result = await downloadSalesOrderItemDetails(salesOrderId, `${salesOrderNo}-零件明细表.xlsx`)
+    if (result?.success === false) {
+      throw new Error(result.message || '导出明细表失败。')
+    }
+    ElMessage.success('明细表已开始下载。')
+  }).catch((error) => {
+    if (error) {
+      console.error(error)
+      ElMessage.error(error.message || '导出明细表失败。')
     }
   })
 }

@@ -15,6 +15,7 @@ import com.machining.quote.dto.SalesOrderU9ItemDataReplacementPreviewDTO;
 import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.SalesOrderItem;
 import com.machining.quote.service.SalesOrderItemDataReplacementService;
+import com.machining.quote.service.SalesOrderItemDetailExportService;
 import com.machining.quote.service.SalesOrderManageService;
 import com.machining.quote.service.SalesOrderMaintenanceService;
 import com.machining.quote.service.SalesOrderProductionTaskNoticeExportService;
@@ -44,6 +45,8 @@ public class SalesOrderManageController {
     private SalesOrderManageService salesOrderManageService;
     @Autowired
     private SalesOrderProductionTaskNoticeExportService productionTaskNoticeExportService;
+    @Autowired
+    private SalesOrderItemDetailExportService itemDetailExportService;
     @Autowired
     private SalesOrderMaintenanceService salesOrderMaintenanceService;
     @Autowired
@@ -85,6 +88,13 @@ public class SalesOrderManageController {
             @RequestParam(value = "page", required = false) Integer page,
             @RequestParam(value = "pageSize", required = false) Integer pageSize) {
         return salesOrderManageService.pageOrderItems(salesOrderId, page, pageSize);
+    }
+
+    @GetMapping("/orders/{salesOrderId}/items/export")
+    @RequirePermission("market:sales-order:item-detail-export")
+    public void exportItemDetails(@PathVariable Long salesOrderId, HttpServletResponse response) throws IOException {
+        SalesOrderItemDetailExportService.ExportFile exportFile = itemDetailExportService.export(salesOrderId);
+        writeXlsxDownload(response, exportFile.fileName(), exportFile.bytes());
     }
 
     @GetMapping("/orders/{salesOrderId}/tickets")
@@ -207,8 +217,12 @@ public class SalesOrderManageController {
     @RequirePermission("market:sales-order:production-task-notice-export")
     public void exportProductionTaskNotice(@PathVariable Long salesOrderId, HttpServletResponse response) throws IOException {
         byte[] bytes = productionTaskNoticeExportService.export(salesOrderId);
-        response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         String fileName = salesOrderId + "-生产任务通知单.xlsx";
+        writeXlsxDownload(response, fileName, bytes);
+    }
+
+    private void writeXlsxDownload(HttpServletResponse response, String fileName, byte[] bytes) throws IOException {
+        response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         String encodedName = URLEncoder.encode(fileName, StandardCharsets.UTF_8).replaceAll("\\+", "%20");
         response.setHeader("Content-Disposition", "attachment; filename*=UTF-8''" + encodedName);
         response.getOutputStream().write(bytes);

@@ -134,6 +134,15 @@ describe('orderApi', () => {
     )
   })
 
+  test('downloads full sales order item detail table through sales order management endpoint', async () => {
+    await orderApi.downloadSalesOrderItemDetails(901, '零件明细表.xlsx')
+
+    expect(downloadFile).toHaveBeenCalledWith(
+      '/api/market/sales-order-management/orders/901/items/export',
+      '零件明细表.xlsx'
+    )
+  })
+
   test('exposes sales order management maintenance endpoints', async () => {
     const payload = { customerOrderNo: 'PO-100' }
     const itemPayload = {

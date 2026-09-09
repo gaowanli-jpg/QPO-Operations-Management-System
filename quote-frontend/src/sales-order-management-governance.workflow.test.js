@@ -25,6 +25,7 @@ describe('sales order management governance and drawings', () => {
       'replaceSalesOrderItemField',
       'supplementSalesOrderDrawings',
       'replaceSalesOrderDrawings',
+      'downloadSalesOrderItemDetails',
       'downloadSalesOrderProductionTaskNotice'
     ]) {
       expect(orderApi).toContain(`export const ${apiName}`)
@@ -33,6 +34,7 @@ describe('sales order management governance and drawings', () => {
     expect(orderApi).toContain('/api/market/sales-order-management/orders')
     expect(orderApi).toContain('/api/market/sales-order-management/orders/${salesOrderId}/supplement-drawings')
     expect(orderApi).toContain('/api/market/sales-order-management/orders/${salesOrderId}/drawings/replace')
+    expect(orderApi).toContain('/api/market/sales-order-management/orders/${salesOrderId}/items/export')
     expect(orderApi).toContain('/api/market/sales-order-management/orders/${salesOrderId}/production-task-notice/export')
     expect(orderApi).not.toContain('/api/market/sales-order-management/items/${itemId}/drawings')
   })
@@ -78,6 +80,16 @@ describe('sales order management governance and drawings', () => {
     expect(salesOrderManage).toContain('downloadSalesOrderProductionTaskNotice')
     expect(salesOrderManage).toContain('handleProductionTaskNoticeExport')
     expect(salesOrderManage).toContain('runAction(salesOrderActionKeys.productionTaskNoticeExport(salesOrderId)')
+  })
+
+  test('detail item tab exposes secured full item detail export action', () => {
+    expect(salesOrderManage).toContain('导出明细表')
+    expect(salesOrderManage).toContain("v-permission=\"'market:sales-order:item-detail-export'\"")
+    expect(salesOrderManage).toContain('itemDetailExport: (orderId) => `sales-order:item-detail-export:${orderId || \'none\'}`')
+    expect(salesOrderManage).toContain('itemDetailExportPending')
+    expect(salesOrderManage).toContain('downloadSalesOrderItemDetails')
+    expect(salesOrderManage).toContain('handleSalesOrderItemDetailExport')
+    expect(salesOrderManage).toContain('runAction(salesOrderActionKeys.itemDetailExport(salesOrderId)')
   })
 
   test('detail item table makes title description and item status editable and replaceable', () => {

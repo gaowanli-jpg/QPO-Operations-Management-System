@@ -64,6 +64,7 @@ describe('sales order management editable detail', () => {
     )
 
     expect(itemPane).toContain('表格数据替换')
+    expect(itemPane).toContain('导出明细表')
     expect(itemPane).toContain('保存修改')
     expect(itemPane).toContain('SalesOrderItemDataReplacementDialog')
     expect(itemPane).toContain('itemDrafts[row.id]')
@@ -92,6 +93,11 @@ describe('sales order management editable detail', () => {
     expect(component).toContain("'surfaceTreatment'")
     expect(component).toContain("'remark'")
     expect(component).toContain('saveSalesOrderItemChanges')
+    expect(component).toContain('downloadSalesOrderItemDetails')
+    expect(component).toContain('handleSalesOrderItemDetailExport')
+    expect(component).toContain("v-permission=\"'market:sales-order:item-detail-export'\"")
+    expect(component).toContain('itemDetailExport: (orderId) => `sales-order:item-detail-export:${orderId || \'none\'}`')
+    expect(component).toContain('runAction(salesOrderActionKeys.itemDetailExport(salesOrderId)')
     expect(component).toContain('openSalesOrderItemDataReplacementDialog')
 
     const replacementDialog = replacementDialogSource()

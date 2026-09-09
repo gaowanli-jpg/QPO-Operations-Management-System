@@ -26,11 +26,15 @@ class SalesOrderManagementApiTest {
                         "@GetMapping(\"/orders\")",
                         "@GetMapping(\"/orders/{salesOrderId}\")",
                         "@GetMapping(\"/orders/{salesOrderId}/items\")",
+                        "@GetMapping(\"/orders/{salesOrderId}/items/export\")",
                         "@GetMapping(\"/orders/{salesOrderId}/tickets\")",
                         "@GetMapping(\"/orders/{salesOrderId}/process-sheets\")",
                         "@GetMapping(\"/orders/{salesOrderId}/production-task-notice/export\")",
+                        "@RequirePermission(\"market:sales-order:item-detail-export\")",
                         "@RequirePermission(\"market:sales-order:production-task-notice-export\")",
-                        "@RequirePermission(\"market:sales-order:view\")"
+                        "@RequirePermission(\"market:sales-order:view\")",
+                        "SalesOrderItemDetailExportService",
+                        "exportItemDetails"
                 )
                 .doesNotContain("market:history-order:");
     }
@@ -69,6 +73,7 @@ class SalesOrderManagementApiTest {
                 .contains(
                         "controller/SalesOrderManageController.java",
                         "market:sales-order:view / market:sales-order:customer-select",
+                        "market:sales-order:item-detail-export",
                         "market:sales-order:production-task-notice-export",
                         "sales_order_header",
                         "sales_order_item",

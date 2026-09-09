@@ -180,3 +180,8 @@ export const downloadSalesOrderProductionTaskNotice = (salesOrderId, fallbackNam
   `/api/market/sales-order-management/orders/${salesOrderId}/production-task-notice/export`,
   fallbackName
 )
+
+export const downloadSalesOrderItemDetails = (salesOrderId, fallbackName = `${salesOrderId}-零件明细表.xlsx`) => downloadFile(
+  `/api/market/sales-order-management/orders/${salesOrderId}/items/export`,
+  fallbackName
+)
