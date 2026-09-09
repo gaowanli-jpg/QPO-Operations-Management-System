@@ -9,11 +9,13 @@ import com.machining.quote.mapper.DashboardAggregationMapper;
 import com.machining.quote.service.DashboardOverviewService;
 import com.machining.quote.service.DataScopeService;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.function.BiConsumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -123,6 +125,53 @@ class DashboardOverviewStage2Test {
         assertThat(source).doesNotContain("SELECT *");
         assertThat(source).doesNotContain("item_quote_version");
         assertThat(source).contains("NOT EXISTS (SELECT 1 FROM order_delivery_ticket_allocation");
+    }
+
+    @Test
+    void dashboardPendingQueriesExcludeDiscardedRowsAndExcludedSalesOrderItems() {
+        DashboardAggregationMapper mapper = mock(DashboardAggregationMapper.class);
+        DashboardOverviewService service = new DashboardOverviewService(mapper, null);
+
+        service.overview();
+
+        assertThat(sqlFor(mapper, (target, captor) -> verify(target).countRfqByStatus(captor.capture())))
+                .contains("COALESCE(rfq.status, '') <> '废弃'");
+        assertThat(sqlFor(mapper, (target, captor) -> verify(target).countRfqByCustomerAndStatus(captor.capture())))
+                .contains("COALESCE(rfq.status, '') <> '废弃'");
+        assertThat(sqlFor(mapper, (target, captor) -> verify(target).countU9ReadyByCustomer(captor.capture())))
+                .contains("COALESCE(so.status, '') <> '废弃'");
+
+        assertThat(sqlFor(mapper, (target, captor) -> verify(target).countDeliveredActive(captor.capture())))
+                .contains("COALESCE(ticket.discarded, false) = false");
+        assertThat(sqlFor(mapper, (target, captor) -> verify(target).countDeliveredNeedMaterial(captor.capture())))
+                .contains("COALESCE(ticket.discarded, false) = false");
+        assertThat(sqlFor(mapper, (target, captor) -> verify(target).countDeliveredNeedWms(captor.capture())))
+                .contains("COALESCE(ticket.discarded, false) = false");
+        assertThat(sqlFor(mapper, (target, captor) -> verify(target).countDeliveredMesCallbackPending(captor.capture())))
+                .contains("COALESCE(ticket.discarded, false) = false");
+        assertThat(sqlFor(mapper, (target, captor) -> verify(target).countDeliveredMesFailed(captor.capture())))
+                .contains("COALESCE(ticket.discarded, false) = false");
+        assertThat(sqlFor(mapper, (target, captor) -> verify(target).countDeliveredWmsFailed(captor.capture())))
+                .contains("COALESCE(ticket.discarded, false) = false");
+
+        assertThat(sqlFor(mapper, (target, captor) -> verify(target).countLockedProductionTodo(captor.capture())))
+                .contains("COALESCE(alloc.discarded, false) = false")
+                .contains("COALESCE(ticket.discarded, false) = false");
+        assertThat(sqlFor(mapper, (target, captor) -> verify(target).countLockedMesProductionFailed(captor.capture())))
+                .contains("COALESCE(alloc.discarded, false) = false")
+                .contains("COALESCE(ticket.discarded, false) = false");
+
+        assertThat(sqlFor(mapper, (target, captor) -> verify(target).countU9Ready(captor.capture())))
+                .contains("COALESCE(soi.u9_change_excluded, false) = false")
+                .contains("COALESCE(soi.status, '') <> '废弃'");
+        assertThat(sqlFor(mapper, (target, captor) -> verify(target).countU9Failed(captor.capture())))
+                .contains("COALESCE(so.status, '') <> '废弃'");
+    }
+
+    private String sqlFor(DashboardAggregationMapper mapper, BiConsumer<DashboardAggregationMapper, ArgumentCaptor<QueryWrapper>> verification) {
+        ArgumentCaptor<QueryWrapper> captor = ArgumentCaptor.forClass(QueryWrapper.class);
+        verification.accept(mapper, captor);
+        return captor.getValue().getCustomSqlSegment();
     }
 
     private DashboardStatusCountRow statusRow(String status, long count) {

@@ -167,6 +167,7 @@ public class DashboardOverviewService {
     private QueryWrapper<Object> rfqStatusQuery() {
         QueryWrapper<Object> query = new QueryWrapper<>();
         query.in("rfq.status", RFQ_DASHBOARD_STATUSES);
+        excludeDiscardedRfq(query);
         applyOrderScope(query);
         return query;
     }
@@ -178,12 +179,20 @@ public class DashboardOverviewService {
     private QueryWrapper<Object> u9ReadyQuery() {
         QueryWrapper<Object> query = new QueryWrapper<>();
         query.eq("so.status", QuoteStatusWorkflow.RELEASED);
+        excludeDiscardedSalesOrder(query);
         query.and(wrapper -> wrapper.isNull("so.u9_sync_status").or().ne("so.u9_sync_status", "已同步"));
         query.apply("""
-                EXISTS (SELECT 1 FROM sales_order_item soi WHERE soi.sales_order_id = so.id)
+                EXISTS (
+                    SELECT 1 FROM sales_order_item soi
+                    WHERE soi.sales_order_id = so.id
+                    AND COALESCE(soi.u9_change_excluded, false) = false
+                    AND COALESCE(soi.status, '') <> '废弃'
+                )
                 AND NOT EXISTS (
                     SELECT 1 FROM sales_order_item soi
                     WHERE soi.sales_order_id = so.id
+                    AND COALESCE(soi.u9_change_excluded, false) = false
+                    AND COALESCE(soi.status, '') <> '废弃'
                     AND (soi.material_no IS NULL OR BTRIM(soi.material_no) = '' OR COALESCE(soi.material_no_status, '') <> '已确认')
                 )
                 """);
@@ -194,12 +203,14 @@ public class DashboardOverviewService {
     private QueryWrapper<Object> u9FailedQuery() {
         QueryWrapper<Object> query = new QueryWrapper<>();
         query.eq("so.u9_sync_status", "同步失败");
+        excludeDiscardedSalesOrder(query);
         applySalesOrderScope(query);
         return query;
     }
 
     private QueryWrapper<Object> deliveredActiveQuery() {
         QueryWrapper<Object> query = new QueryWrapper<>();
+        excludeDiscardedDeliveryTicket(query);
         query.and(active -> active
                 .apply("NULLIF(BTRIM(ticket.material_no), '') IS NULL")
                 .or()
@@ -214,6 +225,7 @@ public class DashboardOverviewService {
 
     private QueryWrapper<Object> deliveredNeedMaterialQuery() {
         QueryWrapper<Object> query = new QueryWrapper<>();
+        excludeDiscardedDeliveryTicket(query);
         query.and(needMaterial -> needMaterial
                 .apply("NULLIF(BTRIM(ticket.material_no), '') IS NULL")
                 .or()
@@ -224,6 +236,7 @@ public class DashboardOverviewService {
 
     private QueryWrapper<Object> deliveredNeedWmsQuery() {
         QueryWrapper<Object> query = new QueryWrapper<>();
+        excludeDiscardedDeliveryTicket(query);
         query.apply("NULLIF(BTRIM(ticket.material_no), '') IS NOT NULL");
         query.eq("ticket.mes_sync_status", "SUCCESS");
         query.apply("COALESCE(ticket.wms_allocate_status, 'PENDING') <> 'SUCCESS'");
@@ -233,6 +246,7 @@ public class DashboardOverviewService {
 
     private QueryWrapper<Object> deliveredMesStatusQuery(String status) {
         QueryWrapper<Object> query = new QueryWrapper<>();
+        excludeDiscardedDeliveryTicket(query);
         query.eq("ticket.mes_sync_status", status);
         applyDeliveryTicketScope(query);
         return query;
@@ -240,6 +254,7 @@ public class DashboardOverviewService {
 
     private QueryWrapper<Object> deliveredWmsStatusQuery(String status) {
         QueryWrapper<Object> query = new QueryWrapper<>();
+        excludeDiscardedDeliveryTicket(query);
         query.eq("ticket.wms_allocate_status", status);
         applyDeliveryTicketScope(query);
         return query;
@@ -247,6 +262,7 @@ public class DashboardOverviewService {
 
     private QueryWrapper<Object> lockedProductionTodoQuery() {
         QueryWrapper<Object> query = new QueryWrapper<>();
+        excludeDiscardedAllocation(query);
         query.eq("alloc.allocation_type", "PRODUCTION_REQUIRED");
         query.and(wrapper -> wrapper.isNull("alloc.mes_production_status").or().ne("alloc.mes_production_status", "SUCCESS"));
         applyDeliveryTicketScope(query);
@@ -255,6 +271,7 @@ public class DashboardOverviewService {
 
     private QueryWrapper<Object> lockedProductionFailedQuery() {
         QueryWrapper<Object> query = new QueryWrapper<>();
+        excludeDiscardedAllocation(query);
         query.eq("alloc.allocation_type", "PRODUCTION_REQUIRED");
         query.eq("alloc.mes_production_status", "FAILED");
         applyDeliveryTicketScope(query);
@@ -265,6 +282,23 @@ public class DashboardOverviewService {
         if (dataScopeService != null) {
             dataScopeService.applyOrderScope(query, "rfq");
         }
+    }
+
+    private void excludeDiscardedRfq(QueryWrapper<Object> query) {
+        query.apply("COALESCE(rfq.status, '') <> '废弃'");
+    }
+
+    private void excludeDiscardedSalesOrder(QueryWrapper<Object> query) {
+        query.apply("COALESCE(so.status, '') <> '废弃'");
+    }
+
+    private void excludeDiscardedDeliveryTicket(QueryWrapper<Object> query) {
+        query.apply("COALESCE(ticket.discarded, false) = false");
+    }
+
+    private void excludeDiscardedAllocation(QueryWrapper<Object> query) {
+        query.apply("COALESCE(alloc.discarded, false) = false");
+        excludeDiscardedDeliveryTicket(query);
     }
 
     private void applySalesOrderScope(QueryWrapper<Object> query) {
