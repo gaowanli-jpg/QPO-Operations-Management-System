@@ -11,8 +11,10 @@ import com.machining.quote.dto.SalesOrderMaintenanceOrderUpdateReq;
 import com.machining.quote.dto.SalesOrderMaintenanceUpdateResp;
 import com.machining.quote.dto.SalesOrderU9ItemDataReplacementPreviewDTO;
 import com.machining.quote.dto.SalesOrderU9ItemDataReplacementRowStatus;
+import com.machining.quote.entity.DictPricingMarkupFee;
 import com.machining.quote.entity.SalesOrderHeader;
 import com.machining.quote.entity.SalesOrderItem;
+import com.machining.quote.mapper.DictPricingMarkupFeeMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.SalesOrderHeaderMapper;
 import com.machining.quote.mapper.SalesOrderItemMapper;
@@ -63,6 +65,10 @@ class SalesOrderMaintenanceServiceTest {
                 PostMapping.class, "/orders/{salesOrderId}/items/data-replacement/preview", "market:sales-order:update");
         assertRoute("confirmItemDataReplacement", new Class<?>[]{Long.class, String.class, org.springframework.web.multipart.MultipartFile.class},
                 PostMapping.class, "/orders/{salesOrderId}/items/data-replacement/confirm", "market:sales-order:update");
+        assertRoute("convertUntaxedToTaxIncluded", new Class<?>[]{Long.class},
+                PostMapping.class, "/orders/{salesOrderId}/items/convert-untaxed-to-tax-included", "market:sales-order:update");
+        assertRoute("convertTaxIncludedToUntaxed", new Class<?>[]{Long.class},
+                PostMapping.class, "/orders/{salesOrderId}/items/convert-tax-included-to-untaxed", "market:sales-order:update");
     }
 
     @Test
@@ -228,6 +234,87 @@ class SalesOrderMaintenanceServiceTest {
         assertThat(item.getUntaxedTotalPrice()).isEqualByComparingTo("200.00");
         assertThat(item.getTaxIncludedTotalPrice()).isEqualByComparingTo("237.00");
         verify(fixture.itemMapper).update(isNull(), any(UpdateWrapper.class));
+    }
+
+    @Test
+    void convertUntaxedToTaxIncludedUsesEnabledNormalTaxRateForWholeSalesOrder() {
+        Fixture fixture = fixture();
+        DictPricingMarkupFeeMapper pricingMarkupFeeMapper = mock(DictPricingMarkupFeeMapper.class);
+        ReflectionTestUtils.setField(fixture.maintenanceService, "pricingMarkupFeeMapper", pricingMarkupFeeMapper);
+        when(pricingMarkupFeeMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(
+                pricingFee(1L, "NORMAL", "TAX", "Tax 10", "10.00", true, 1),
+                pricingFee(2L, "NORMAL", "TAX", "Tax 3", "3.00", true, 2)));
+        SalesOrderHeader header = header(13L, "NOT_SYNCED");
+        SalesOrderItem first = item(203L, 13L);
+        first.setLineNo(10);
+        first.setQty(2);
+        first.setUntaxedUnitPrice(new BigDecimal("100.00"));
+        first.setTaxIncludedUnitPrice(new BigDecimal("1.00"));
+        SalesOrderItem second = item(204L, 13L);
+        second.setLineNo(20);
+        second.setQty(3);
+        second.setUntaxedUnitPrice(new BigDecimal("12.3456"));
+        second.setTaxIncludedUnitPrice(new BigDecimal("1.00"));
+        fixture.withOrder(header, List.of(first, second));
+
+        SalesOrderMaintenanceUpdateResp result = fixture.maintenanceService.convertUntaxedToTaxIncluded(header.getId());
+
+        assertThat(result.getSuccess()).isTrue();
+        assertThat(result.getUpdatedCount()).isEqualTo(2);
+        assertThat(result.getChangedFields()).containsExactly("taxIncludedUnitPrice");
+        assertThat(first.getUntaxedUnitPrice()).isEqualByComparingTo("100.00");
+        assertThat(first.getTaxIncludedUnitPrice()).isEqualByComparingTo("113.0000");
+        assertThat(first.getUntaxedTotalPrice()).isEqualByComparingTo("200.00");
+        assertThat(first.getTaxIncludedTotalPrice()).isEqualByComparingTo("226.00");
+        assertThat(second.getTaxIncludedUnitPrice()).isEqualByComparingTo("13.9505");
+        assertThat(second.getTaxIncludedTotalPrice()).isEqualByComparingTo("41.85");
+        verify(fixture.itemMapper, times(2)).update(isNull(), any(UpdateWrapper.class));
+        verifyAudit(fixture.auditService, "SALES_ORDER_ITEM_UPDATE", header.getId());
+    }
+
+    @Test
+    void convertTaxIncludedToUntaxedUsesEnabledNormalTaxRateForWholeSalesOrder() {
+        Fixture fixture = fixture();
+        DictPricingMarkupFeeMapper pricingMarkupFeeMapper = mock(DictPricingMarkupFeeMapper.class);
+        ReflectionTestUtils.setField(fixture.maintenanceService, "pricingMarkupFeeMapper", pricingMarkupFeeMapper);
+        when(pricingMarkupFeeMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(
+                pricingFee(1L, "NORMAL", "TAX", "Tax", "13.00", true, 1)));
+        SalesOrderHeader header = header(14L, "NOT_SYNCED");
+        SalesOrderItem item = item(205L, 14L);
+        item.setQty(4);
+        item.setUntaxedUnitPrice(new BigDecimal("1.00"));
+        item.setTaxIncludedUnitPrice(new BigDecimal("113.00"));
+        fixture.withOrder(header, List.of(item));
+
+        SalesOrderMaintenanceUpdateResp result = fixture.maintenanceService.convertTaxIncludedToUntaxed(header.getId());
+
+        assertThat(result.getUpdatedCount()).isEqualTo(1);
+        assertThat(result.getChangedFields()).containsExactly("untaxedUnitPrice");
+        assertThat(item.getTaxIncludedUnitPrice()).isEqualByComparingTo("113.00");
+        assertThat(item.getUntaxedUnitPrice()).isEqualByComparingTo("100.0000");
+        assertThat(item.getUntaxedTotalPrice()).isEqualByComparingTo("400.00");
+        assertThat(item.getTaxIncludedTotalPrice()).isEqualByComparingTo("452.00");
+        verify(fixture.itemMapper).update(isNull(), any(UpdateWrapper.class));
+    }
+
+    @Test
+    void priceConversionRejectsMissingSourcePriceBeforePartialUpdate() {
+        Fixture fixture = fixture();
+        DictPricingMarkupFeeMapper pricingMarkupFeeMapper = mock(DictPricingMarkupFeeMapper.class);
+        ReflectionTestUtils.setField(fixture.maintenanceService, "pricingMarkupFeeMapper", pricingMarkupFeeMapper);
+        when(pricingMarkupFeeMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(
+                pricingFee(1L, "NORMAL", "TAX", "Tax", "13.00", true, 1)));
+        SalesOrderHeader header = header(15L, "NOT_SYNCED");
+        SalesOrderItem item = item(206L, 15L);
+        item.setLineNo(10);
+        item.setUntaxedUnitPrice(null);
+        fixture.withOrder(header, List.of(item));
+
+        assertThatThrownBy(() -> fixture.maintenanceService.convertUntaxedToTaxIncluded(header.getId()))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("10")
+                .hasMessageContaining("untaxedUnitPrice");
+        verify(fixture.itemMapper, never()).update(any(), any());
     }
 
     @Test
@@ -549,6 +636,25 @@ class SalesOrderMaintenanceServiceTest {
         item.setUntaxedTotalPrice(new BigDecimal("100.00"));
         item.setTaxIncludedTotalPrice(new BigDecimal("113.00"));
         return item;
+    }
+
+    private static DictPricingMarkupFee pricingFee(
+            Long id,
+            String pricingScope,
+            String feeCategory,
+            String feeName,
+            String ratePercent,
+            boolean enabled,
+            int sortNo) {
+        DictPricingMarkupFee fee = new DictPricingMarkupFee();
+        fee.setId(id);
+        fee.setPricingScope(pricingScope);
+        fee.setFeeCategory(feeCategory);
+        fee.setFeeName(feeName);
+        fee.setRatePercent(new BigDecimal(ratePercent));
+        fee.setEnabled(enabled);
+        fee.setSortNo(sortNo);
+        return fee;
     }
 
     private static byte[] excel(List<String> headers, List<?>... rows) {

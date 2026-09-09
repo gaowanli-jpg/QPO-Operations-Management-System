@@ -267,6 +267,34 @@
                   <span class="sales-order-action-wrap">
                     <el-button
                       v-permission="SALES_ORDER_UPDATE_PERMISSION"
+                      type="warning"
+                      plain
+                      :loading="itemPriceConversionPending('UNTAXED_TO_TAX_INCLUDED')"
+                      :disabled="salesOrderEditLocked"
+                      @click="handleSalesOrderPriceConversion('UNTAXED_TO_TAX_INCLUDED')"
+                    >
+                      未税转含税
+                    </el-button>
+                  </span>
+                </el-tooltip>
+                <el-tooltip :disabled="!salesOrderEditLocked" :content="salesOrderEditLockedReason" placement="top">
+                  <span class="sales-order-action-wrap">
+                    <el-button
+                      v-permission="SALES_ORDER_UPDATE_PERMISSION"
+                      type="success"
+                      plain
+                      :loading="itemPriceConversionPending('TAX_INCLUDED_TO_UNTAXED')"
+                      :disabled="salesOrderEditLocked"
+                      @click="handleSalesOrderPriceConversion('TAX_INCLUDED_TO_UNTAXED')"
+                    >
+                      含税转未税
+                    </el-button>
+                  </span>
+                </el-tooltip>
+                <el-tooltip :disabled="!salesOrderEditLocked" :content="salesOrderEditLockedReason" placement="top">
+                  <span class="sales-order-action-wrap">
+                    <el-button
+                      v-permission="SALES_ORDER_UPDATE_PERMISSION"
                       type="primary"
                       plain
                       :loading="itemEditSaving"
@@ -708,6 +736,8 @@ import DrawingFolderViewer from './common/DrawingFolderViewer.vue'
 import { usePendingAction } from '../composables/usePendingAction'
 import { isDrawingFolderUrl, openAuthenticatedFileInNewWindow } from '../api'
 import {
+  convertSalesOrderTaxIncludedToUntaxed,
+  convertSalesOrderUntaxedToTaxIncluded,
   discardSalesOrder,
   discardSalesOrderItemForU9Change,
   downloadSalesOrderProductionTaskNotice,
@@ -733,10 +763,25 @@ const SALES_ORDER_TYPES = ['预测订单', '备货订单', '正式订单']
 const SALES_ORDER_UPDATE_PERMISSION = 'market:sales-order:update'
 const SALES_ORDER_EDIT_LOCKED_U9_STATUSES = ['同步中', '结果待确认', '已同步']
 const SALES_ORDER_STATUS_LOCKED_REASON = '销售订单已同步 U9，不能废弃'
+const SALES_ORDER_PRICE_CONVERSIONS = {
+  UNTAXED_TO_TAX_INCLUDED: {
+    label: '未税转含税',
+    sourceLabel: '未税单价',
+    targetLabel: '含税单价',
+    handler: convertSalesOrderUntaxedToTaxIncluded
+  },
+  TAX_INCLUDED_TO_UNTAXED: {
+    label: '含税转未税',
+    sourceLabel: '含税单价',
+    targetLabel: '未税单价',
+    handler: convertSalesOrderTaxIncludedToUntaxed
+  }
+}
 const salesOrderActionKeys = {
   statusChange: (orderId) => `sales-order:status-change:${orderId || 'none'}`,
   headerSave: (orderId) => `sales-order:header-save:${orderId || 'none'}`,
   itemSave: (orderId) => `sales-order:item-save:${orderId || 'none'}`,
+  itemPriceConversion: (orderId, direction) => `sales-order:item-price-conversion:${direction}:${orderId || 'none'}`,
   itemU9ChangeExclusion: (itemId) => `sales-order:item-u9-change-exclusion:${itemId || 'none'}`,
   supplementDrawings: (orderId) => `sales-order:supplement-drawings:${orderId || 'none'}`,
   salesOrderDrawingReplace: (orderId) => `sales-order:drawing-replace:${orderId || 'none'}`,
@@ -855,6 +900,7 @@ const itemDataReplacementBusy = ref(false)
 
 const orderEditSaving = computed(() => isPending(salesOrderActionKeys.headerSave(orderDetail.value?.orderInfo?.id)))
 const itemEditSaving = computed(() => isPending(salesOrderActionKeys.itemSave(orderDetail.value?.orderInfo?.id)))
+const itemPriceConversionPending = (direction) => isPending(salesOrderActionKeys.itemPriceConversion(orderDetail.value?.orderInfo?.id, direction))
 
 const missingDrawingItems = computed(() => drawingSummary.value?.missingItems || detailItemList.value.filter(item => !item.drawingUrl))
 const supplementUploadPending = computed(() => isPending(salesOrderActionKeys.supplementDrawings(orderDetail.value?.orderInfo?.id)))
@@ -1279,6 +1325,41 @@ const saveSalesOrderItemChanges = async () => {
     } catch (error) {
       console.error(error)
       ElMessage.error(error.response?.data?.message || '销售订单零件信息保存失败。')
+    }
+  })
+}
+
+const handleSalesOrderPriceConversion = async (direction) => {
+  const action = SALES_ORDER_PRICE_CONVERSIONS[direction]
+  const salesOrderId = orderDetail.value?.orderInfo?.id
+  if (!action) return
+  if (!salesOrderId) return ElMessage.warning('请先打开销售订单详情。')
+  if (salesOrderEditLocked.value) return ElMessage.warning(salesOrderEditLockedReason.value)
+  if (dirtyItemCount.value > 0) {
+    return ElMessage.warning('当前页有未保存修改，请先保存修改或刷新后再进行整单价格换算。')
+  }
+  try {
+    await ElMessageBox.confirm(
+      `确认按材料工艺百分比费用中的税率，将整单所有零件的${action.targetLabel}由${action.sourceLabel}重新计算并覆盖吗？`,
+      action.label,
+      {
+        type: 'warning',
+        confirmButtonText: '确认转换',
+        cancelButtonText: '取消'
+      }
+    )
+  } catch {
+    return
+  }
+  return runAction(salesOrderActionKeys.itemPriceConversion(salesOrderId, direction), async () => {
+    try {
+      const response = await action.handler(salesOrderId)
+      ElMessage.success(response?.message || `${action.label}完成。`)
+      await loadOrders()
+      await refreshCurrentDetail()
+    } catch (error) {
+      console.error(error)
+      ElMessage.error(error.response?.data?.message || `${action.label}失败。`)
     }
   })
 }

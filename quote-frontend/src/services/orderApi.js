@@ -119,6 +119,14 @@ export const saveSalesOrderItems = (salesOrderId, payload = {}) => request(`/api
   data: payload
 })
 
+export const convertSalesOrderUntaxedToTaxIncluded = (salesOrderId) => request(`/api/market/sales-order-management/orders/${salesOrderId}/items/convert-untaxed-to-tax-included`, {
+  method: 'POST'
+})
+
+export const convertSalesOrderTaxIncludedToUntaxed = (salesOrderId) => request(`/api/market/sales-order-management/orders/${salesOrderId}/items/convert-tax-included-to-untaxed`, {
+  method: 'POST'
+})
+
 export const discardSalesOrderItemForU9Change = (salesOrderId, itemId, payload = {}) => request(`/api/market/sales-order-management/orders/${salesOrderId}/items/${itemId}/discard`, {
   method: 'POST',
   data: payload

@@ -109,6 +109,25 @@ describe('sales order management governance and drawings', () => {
     expect(replacementDialog).toContain('客户下单抬头、物料描述、订单状态')
   })
 
+  test('detail item toolbar exposes whole-order price conversion before saving row edits', () => {
+    const toolbarSource = salesOrderManage.slice(
+      salesOrderManage.indexOf('<div class="item-maintenance-action-buttons">'),
+      salesOrderManage.indexOf('<el-table :data="detailItemList"')
+    )
+
+    expect(orderApi).toContain('export const convertSalesOrderUntaxedToTaxIncluded')
+    expect(orderApi).toContain('export const convertSalesOrderTaxIncludedToUntaxed')
+    expect(toolbarSource).toContain('未税转含税')
+    expect(toolbarSource).toContain('含税转未税')
+    expect(toolbarSource).toContain('handleSalesOrderPriceConversion')
+    expect(toolbarSource.indexOf('未税转含税')).toBeLessThan(toolbarSource.indexOf('保存修改'))
+    expect(toolbarSource.indexOf('含税转未税')).toBeLessThan(toolbarSource.indexOf('保存修改'))
+    expect(salesOrderManage).toContain('itemPriceConversionPending')
+    expect(salesOrderManage).toContain('convertSalesOrderUntaxedToTaxIncluded')
+    expect(salesOrderManage).toContain('convertSalesOrderTaxIncludedToUntaxed')
+    expect(salesOrderManage).toContain('dirtyItemCount.value > 0')
+  })
+
   test('detail view exposes sales order drawing replacement between supplement and production export', () => {
     expect(salesOrderManage).toContain('导入替换图纸')
     expect(salesOrderManage).toContain('replaceSalesOrderDrawings')

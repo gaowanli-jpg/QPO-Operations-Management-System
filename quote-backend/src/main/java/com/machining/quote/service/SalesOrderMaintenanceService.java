@@ -6,8 +6,10 @@ import com.machining.quote.dto.SalesOrderItemUpdateLineReq;
 import com.machining.quote.dto.SalesOrderItemUpdateReq;
 import com.machining.quote.dto.SalesOrderMaintenanceOrderUpdateReq;
 import com.machining.quote.dto.SalesOrderMaintenanceUpdateResp;
+import com.machining.quote.entity.DictPricingMarkupFee;
 import com.machining.quote.entity.SalesOrderHeader;
 import com.machining.quote.entity.SalesOrderItem;
+import com.machining.quote.mapper.DictPricingMarkupFeeMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.SalesOrderHeaderMapper;
 import com.machining.quote.mapper.SalesOrderItemMapper;
@@ -16,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -42,11 +45,16 @@ public class SalesOrderMaintenanceService {
     private static final int TEXT_255 = 255;
     private static final int TEXT_200 = 200;
     private static final int TEXT_500 = 500;
+    private static final int UNIT_PRICE_SCALE = 4;
+    private static final int TOTAL_PRICE_SCALE = 2;
+    private static final BigDecimal ONE_HUNDRED = new BigDecimal("100");
 
     @Autowired
     private SalesOrderHeaderMapper headerMapper;
     @Autowired
     private SalesOrderItemMapper itemMapper;
+    @Autowired(required = false)
+    private DictPricingMarkupFeeMapper pricingMarkupFeeMapper;
     @Autowired(required = false)
     private OrderDeliveryTicketMapper ticketMapper;
     @Autowired(required = false)
@@ -108,6 +116,68 @@ public class SalesOrderMaintenanceService {
         auditSuccess(ACTION_ITEM_UPDATE, header, null, itemAuditSummary(header, updatedCount, changedFields), changedFields,
                 System.currentTimeMillis() - startedAt);
         return response(header, updatedCount, changedFields, "销售订单零件信息已保存。");
+    }
+
+    @Transactional
+    public SalesOrderMaintenanceUpdateResp convertUntaxedToTaxIncluded(Long salesOrderId) {
+        return convertItemPrices(
+                salesOrderId,
+                SalesOrderItemUpdateLineReq.FIELD_UNTAXED_UNIT_PRICE,
+                SalesOrderItemUpdateLineReq.FIELD_TAX_INCLUDED_UNIT_PRICE,
+                true,
+                "未税单价已按税率转换为含税单价。");
+    }
+
+    @Transactional
+    public SalesOrderMaintenanceUpdateResp convertTaxIncludedToUntaxed(Long salesOrderId) {
+        return convertItemPrices(
+                salesOrderId,
+                SalesOrderItemUpdateLineReq.FIELD_TAX_INCLUDED_UNIT_PRICE,
+                SalesOrderItemUpdateLineReq.FIELD_UNTAXED_UNIT_PRICE,
+                false,
+                "含税单价已按税率转换为未税单价。");
+    }
+
+    private SalesOrderMaintenanceUpdateResp convertItemPrices(
+            Long salesOrderId,
+            String sourceField,
+            String targetField,
+            boolean multiplyByTaxFactor,
+            String message) {
+        long startedAt = System.currentTimeMillis();
+        SalesOrderHeader header = lockEditableHeader(salesOrderId);
+        BigDecimal taxFactor = loadNormalTaxFactor();
+        List<SalesOrderItem> items = listItems(salesOrderId);
+        if (items.isEmpty()) {
+            throw new RuntimeException("销售订单没有可换算的零件行");
+        }
+        List<SalesOrderItem> lockedItems = new ArrayList<>();
+        for (SalesOrderItem listed : items) {
+            SalesOrderItem item = lockItem(header, listed.getId());
+            BigDecimal sourcePrice = unitPrice(item, sourceField);
+            if (sourcePrice == null) {
+                throw new RuntimeException("销售订单零件行 " + itemLineLabel(item) + " 缺少 " + sourceField + "，不能进行价格换算");
+            }
+            validatePrice(sourcePrice, sourceField);
+            lockedItems.add(item);
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        for (SalesOrderItem item : lockedItems) {
+            BigDecimal sourcePrice = unitPrice(item, sourceField);
+            BigDecimal targetPrice = multiplyByTaxFactor
+                    ? sourcePrice.multiply(taxFactor).setScale(UNIT_PRICE_SCALE, RoundingMode.HALF_UP)
+                    : sourcePrice.divide(taxFactor, UNIT_PRICE_SCALE, RoundingMode.HALF_UP);
+            setUnitPrice(item, targetField, targetPrice);
+            recalculateDerivedFields(item);
+            item.setUpdatedAt(now);
+            persistItem(header, item, now);
+        }
+        Set<String> changedFields = new LinkedHashSet<>();
+        changedFields.add(targetField);
+        auditSuccess(ACTION_ITEM_UPDATE, header, null, itemAuditSummary(header, lockedItems.size(), changedFields), changedFields,
+                System.currentTimeMillis() - startedAt);
+        return response(header, lockedItems.size(), changedFields, message);
     }
 
     SalesOrderHeader lockEditableHeader(Long salesOrderId) {
@@ -383,6 +453,61 @@ public class SalesOrderMaintenanceService {
         }
     }
 
+    private BigDecimal loadNormalTaxFactor() {
+        if (pricingMarkupFeeMapper == null) {
+            throw new RuntimeException("未配置材料工艺税率，不能进行价格换算");
+        }
+        QueryWrapper<DictPricingMarkupFee> query = new QueryWrapper<>();
+        query.eq("pricing_scope", "NORMAL")
+                .eq("fee_category", "TAX")
+                .eq("enabled", true)
+                .orderByAsc("sort_no")
+                .orderByAsc("id");
+        List<DictPricingMarkupFee> fees = pricingMarkupFeeMapper.selectList(query);
+        if (fees == null || fees.isEmpty()) {
+            throw new RuntimeException("未配置启用的材料工艺税率，不能进行价格换算");
+        }
+        BigDecimal totalRate = fees.stream()
+                .filter(Objects::nonNull)
+                .map(DictPricingMarkupFee::getRatePercent)
+                .filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        if (totalRate.compareTo(BigDecimal.ZERO) < 0) {
+            throw new RuntimeException("材料工艺税率不能为负数");
+        }
+        return BigDecimal.ONE.add(totalRate.divide(ONE_HUNDRED, 10, RoundingMode.HALF_UP));
+    }
+
+    private BigDecimal unitPrice(SalesOrderItem item, String field) {
+        if (SalesOrderItemUpdateLineReq.FIELD_UNTAXED_UNIT_PRICE.equals(field)) {
+            return item.getUntaxedUnitPrice();
+        }
+        if (SalesOrderItemUpdateLineReq.FIELD_TAX_INCLUDED_UNIT_PRICE.equals(field)) {
+            return item.getTaxIncludedUnitPrice();
+        }
+        throw new IllegalArgumentException("Unsupported price field: " + field);
+    }
+
+    private void setUnitPrice(SalesOrderItem item, String field, BigDecimal value) {
+        if (SalesOrderItemUpdateLineReq.FIELD_UNTAXED_UNIT_PRICE.equals(field)) {
+            item.setUntaxedUnitPrice(value);
+            return;
+        }
+        if (SalesOrderItemUpdateLineReq.FIELD_TAX_INCLUDED_UNIT_PRICE.equals(field)) {
+            item.setTaxIncludedUnitPrice(value);
+            return;
+        }
+        throw new IllegalArgumentException("Unsupported price field: " + field);
+    }
+
+    private String itemLineLabel(SalesOrderItem item) {
+        return item.getLineNo() == null ? String.valueOf(item.getId()) : String.valueOf(item.getLineNo());
+    }
+
+    private BigDecimal lineTotal(BigDecimal unitPrice, Integer qty) {
+        return unitPrice.multiply(BigDecimal.valueOf(qty)).setScale(TOTAL_PRICE_SCALE, RoundingMode.HALF_UP);
+    }
+
     private void recalculateDerivedFields(SalesOrderItem item) {
         Integer qty = item.getQty();
         if (qty == null) {
@@ -393,12 +518,12 @@ public class SalesOrderMaintenanceService {
             return;
         }
         if (item.getUntaxedUnitPrice() != null) {
-            item.setUntaxedTotalPrice(item.getUntaxedUnitPrice().multiply(BigDecimal.valueOf(qty)));
+            item.setUntaxedTotalPrice(lineTotal(item.getUntaxedUnitPrice(), qty));
         } else {
             item.setUntaxedTotalPrice(null);
         }
         if (item.getTaxIncludedUnitPrice() != null) {
-            item.setTaxIncludedTotalPrice(item.getTaxIncludedUnitPrice().multiply(BigDecimal.valueOf(qty)));
+            item.setTaxIncludedTotalPrice(lineTotal(item.getTaxIncludedUnitPrice(), qty));
         } else {
             item.setTaxIncludedTotalPrice(null);
         }

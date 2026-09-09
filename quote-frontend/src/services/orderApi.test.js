@@ -183,6 +183,18 @@ describe('orderApi', () => {
     })
   })
 
+  test('exposes sales order management item price conversion endpoints', async () => {
+    await orderApi.convertSalesOrderUntaxedToTaxIncluded(901)
+    await orderApi.convertSalesOrderTaxIncludedToUntaxed(901)
+
+    expect(request).toHaveBeenNthCalledWith(1, '/api/market/sales-order-management/orders/901/items/convert-untaxed-to-tax-included', {
+      method: 'POST'
+    })
+    expect(request).toHaveBeenNthCalledWith(2, '/api/market/sales-order-management/orders/901/items/convert-tax-included-to-untaxed', {
+      method: 'POST'
+    })
+  })
+
   test('exposes order item maintenance endpoints', async () => {
     const payload = {
       items: [{
