@@ -104,6 +104,27 @@ class SalesOrderIntegrationPagingTest {
     }
 
     @Test
+    void queryPreservesSubSecondCursorPrecision() throws Exception {
+        SalesOrderIntegrationMapper mapper = mock(SalesOrderIntegrationMapper.class);
+        SalesOrderIntegrationSyncService service = service(mapper);
+        SalesOrderSyncQueryReq req = req(1);
+        LocalDateTime boundaryChangedAt = LocalDateTime.of(2026, 9, 9, 18, 11, 38, 456_789_000);
+        when(mapper.selectOrderPage(eq(req), eq(null), eq(null), eq(2)))
+                .thenReturn(List.of(
+                        order(134L, "SO-134", boundaryChangedAt),
+                        order(135L, "SO-135", LocalDateTime.of(2026, 9, 9, 18, 12))
+                ));
+        when(mapper.selectItemsByOrderIds(eq(List.of(134L)), eq(req)))
+                .thenReturn(List.of(item(134L, "SO-134", 10, "P-134", "A", "MAT-134")));
+
+        SalesOrderSyncResp resp = service.query(req);
+
+        JsonNode cursor = decodeCursor(resp.getData().getNextCursor());
+        assertThat(cursor.get("changedAt").asText()).isEqualTo("2026-09-09T18:11:38.456789");
+        assertThat(cursor.get("salesOrderId").asLong()).isEqualTo(134L);
+    }
+
+    @Test
     void mapperSqlExposesDocumentNoAsExternalSaleOrderNoAndKeepsStablePaging() throws Exception {
         String source = Files.readString(Path.of(
                 "src", "main", "java", "com", "machining", "quote", "mapper", "SalesOrderIntegrationSqlProvider.java"

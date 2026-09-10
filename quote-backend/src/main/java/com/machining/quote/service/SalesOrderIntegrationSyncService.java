@@ -28,7 +28,7 @@ import java.util.stream.Collectors;
 public class SalesOrderIntegrationSyncService {
     private static final Logger log = LoggerFactory.getLogger(SalesOrderIntegrationSyncService.class);
     private static final String CALLER = "EXTERNAL_SALES_ORDER_SYNC";
-    private static final DateTimeFormatter CURSOR_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
+    private static final DateTimeFormatter CURSOR_TIME_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Autowired
