@@ -4,6 +4,8 @@ import com.machining.quote.config.RequirePermission;
 import com.machining.quote.dto.CustomerOptionDTO;
 import com.machining.quote.dto.DeliveredItemDTO;
 import com.machining.quote.dto.DeliveredItemQueryReq;
+import com.machining.quote.dto.DeliveryItemBatchDiscardReq;
+import com.machining.quote.dto.DeliveryItemBatchRestoreReq;
 import com.machining.quote.dto.DeliveryItemDiscardReq;
 import com.machining.quote.dto.DeliveryItemRestoreReq;
 import com.machining.quote.dto.DeliveryTicketBatchReq;
@@ -88,6 +90,24 @@ public class OrderDeliveryController {
         return deliveredItemService.restoreTicket(ticketId, req);
     }
 
+    @PostMapping("/tickets/batch-discard")
+    @RequirePermission("market:delivered-item:discard")
+    public Map<String, Object> batchDiscardTickets(@RequestBody(required = false) DeliveryItemBatchDiscardReq req) {
+        if (req == null) {
+            req = new DeliveryItemBatchDiscardReq();
+        }
+        return deliveredItemService.batchDiscardTickets(req);
+    }
+
+    @PostMapping("/tickets/batch-restore")
+    @RequirePermission("market:delivered-item:restore")
+    public Map<String, Object> batchRestoreTickets(@RequestBody(required = false) DeliveryItemBatchRestoreReq req) {
+        if (req == null) {
+            req = new DeliveryItemBatchRestoreReq();
+        }
+        return deliveredItemService.batchRestoreTickets(req);
+    }
+
     @PostMapping("/tickets/mes-material/batch")
     @RequirePermission("market:delivered-item:mes-sync")
     public SystemTask syncMesMaterialBatch(@RequestBody DeliveryTicketBatchReq req) {
@@ -139,6 +159,24 @@ public class OrderDeliveryController {
         return lockedItemService.restoreAllocation(allocationId, req);
     }
 
+    @PostMapping("/locked-items/batch-discard")
+    @RequirePermission("market:locked-item:discard")
+    public Map<String, Object> batchDiscardLockedItems(@RequestBody(required = false) DeliveryItemBatchDiscardReq req) {
+        if (req == null) {
+            req = new DeliveryItemBatchDiscardReq();
+        }
+        return lockedItemService.batchDiscardAllocations(req);
+    }
+
+    @PostMapping("/locked-items/batch-restore")
+    @RequirePermission("market:locked-item:restore")
+    public Map<String, Object> batchRestoreLockedItems(@RequestBody(required = false) DeliveryItemBatchRestoreReq req) {
+        if (req == null) {
+            req = new DeliveryItemBatchRestoreReq();
+        }
+        return lockedItemService.batchRestoreAllocations(req);
+    }
+
     @PostMapping("/locked-items/stock-picking-orders")
     @RequirePermission("market:locked-item:stock-picking-submit")
     public SystemTask submitStockPickingOrders(@RequestBody LockedItemStockPickingBatchReq req) {
@@ -171,6 +209,24 @@ public class OrderDeliveryController {
             req = new DeliveryItemRestoreReq();
         }
         return productionItemService.restoreAllocation(allocationId, req);
+    }
+
+    @PostMapping("/production-items/batch-discard")
+    @RequirePermission("market:production-item:discard")
+    public Map<String, Object> batchDiscardProductionItems(@RequestBody(required = false) DeliveryItemBatchDiscardReq req) {
+        if (req == null) {
+            req = new DeliveryItemBatchDiscardReq();
+        }
+        return productionItemService.batchDiscardAllocations(req);
+    }
+
+    @PostMapping("/production-items/batch-restore")
+    @RequirePermission("market:production-item:restore")
+    public Map<String, Object> batchRestoreProductionItems(@RequestBody(required = false) DeliveryItemBatchRestoreReq req) {
+        if (req == null) {
+            req = new DeliveryItemBatchRestoreReq();
+        }
+        return productionItemService.batchRestoreAllocations(req);
     }
 
     @GetMapping("/production-items/customers")

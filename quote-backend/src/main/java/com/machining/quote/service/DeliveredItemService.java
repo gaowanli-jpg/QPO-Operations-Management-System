@@ -5,6 +5,8 @@ import com.machining.quote.config.AuthContext;
 import com.machining.quote.dto.CustomerOptionDTO;
 import com.machining.quote.dto.DeliveredItemDTO;
 import com.machining.quote.dto.DeliveredItemQueryReq;
+import com.machining.quote.dto.DeliveryItemBatchDiscardReq;
+import com.machining.quote.dto.DeliveryItemBatchRestoreReq;
 import com.machining.quote.dto.DeliveryItemDiscardReq;
 import com.machining.quote.dto.DeliveryItemRestoreReq;
 import com.machining.quote.dto.PageResult;
@@ -17,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 
@@ -180,6 +183,30 @@ public class DeliveredItemService {
         return result;
     }
 
+    @Transactional
+    public Map<String, Object> batchDiscardTickets(DeliveryItemBatchDiscardReq req) {
+        List<Integer> ticketIds = normalizeIds(req == null ? null : req.getTicketIds());
+        String reason = requiredReason(req == null ? null : req.getReason());
+        DeliveryItemDiscardReq singleReq = new DeliveryItemDiscardReq();
+        singleReq.setReason(reason);
+        List<Map<String, Object>> results = ticketIds.stream()
+                .map(ticketId -> discardTicket(ticketId, singleReq))
+                .toList();
+        return batchResult("已提零件批量废弃完成。", "discarded", reason, "ticketIds", ticketIds, results);
+    }
+
+    @Transactional
+    public Map<String, Object> batchRestoreTickets(DeliveryItemBatchRestoreReq req) {
+        List<Integer> ticketIds = normalizeIds(req == null ? null : req.getTicketIds());
+        String reason = optionalReason(req == null ? null : req.getReason());
+        DeliveryItemRestoreReq singleReq = new DeliveryItemRestoreReq();
+        singleReq.setReason(reason);
+        List<Map<String, Object>> results = ticketIds.stream()
+                .map(ticketId -> restoreTicket(ticketId, singleReq))
+                .toList();
+        return batchResult("已提零件批量恢复完成。", "active", reason, "ticketIds", ticketIds, results);
+    }
+
     private void applyDiscardedScope(QueryWrapper<?> query, Boolean discarded) {
         query.eq("ticket.discarded", Boolean.TRUE.equals(discarded));
     }
@@ -193,6 +220,19 @@ public class DeliveredItemService {
             throw new RuntimeException("已提零件不存在");
         }
         return ticket;
+    }
+
+    private List<Integer> normalizeIds(List<Integer> ids) {
+        if (ids == null) {
+            throw new RuntimeException("请选择需要处理的已提零件");
+        }
+        List<Integer> normalized = new LinkedHashSet<>(ids).stream()
+                .filter(id -> id != null && id > 0)
+                .toList();
+        if (normalized.isEmpty()) {
+            throw new RuntimeException("请选择需要处理的已提零件");
+        }
+        return normalized;
     }
 
     private String requiredReason(String value) {
@@ -236,6 +276,24 @@ public class DeliveredItemService {
         result.put("discardedBy", ticket.getDiscardedBy());
         result.put("restoredAt", ticket.getRestoredAt());
         result.put("restoredBy", ticket.getRestoredBy());
+        return result;
+    }
+
+    private Map<String, Object> batchResult(
+            String message,
+            String state,
+            String reason,
+            String idKey,
+            List<Integer> ids,
+            List<Map<String, Object>> results) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("success", true);
+        result.put("message", message);
+        result.put("state", state);
+        result.put("reason", reason);
+        result.put("count", results.size());
+        result.put(idKey, ids);
+        result.put("results", results);
         return result;
     }
 

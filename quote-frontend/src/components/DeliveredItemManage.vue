@@ -58,6 +58,28 @@
           >
             批量获取库存数据
           </el-button>
+          <el-button
+            v-permission="DELIVERED_ITEM_DISCARD_PERMISSION"
+            type="danger"
+            plain
+            :disabled="selectedTicketIds.length === 0 || isBatchDiscardPending"
+            :loading="isBatchDiscardPending"
+            @click="handleBatchDiscard"
+          >
+            批量废弃
+          </el-button>
+        </div>
+        <div v-if="viewMode === 'DISCARDED'" class="erp-toolbar-group delivered-batch-actions">
+          <el-button
+            v-permission="DELIVERED_ITEM_RESTORE_PERMISSION"
+            type="success"
+            plain
+            :disabled="selectedTicketIds.length === 0 || isBatchRestorePending"
+            :loading="isBatchRestorePending"
+            @click="handleBatchRestore"
+          >
+            批量恢复
+          </el-button>
         </div>
       </div>
 
@@ -155,7 +177,7 @@
           empty-text="暂无未完成流程的已提零件，完成锁库后的结果请在锁库零件模块查看。"
           @selection-change="handleSelectionChange"
         >
-          <el-table-column v-if="viewMode === 'ACTIVE'" type="selection" width="46" fixed align="center" />
+          <el-table-column type="selection" width="46" fixed align="center" />
           <el-table-column prop="id" label="提单ID" width="96" fixed align="center" show-overflow-tooltip />
           <el-table-column prop="partNo" label="图号" min-width="150" fixed show-overflow-tooltip />
           <el-table-column prop="version" label="版本" width="80" align="center">
@@ -384,6 +406,8 @@ import { isDrawingFolderUrl, openAuthenticatedFileInNewWindow } from '../api'
 import CustomerPickerDialog from './CustomerPickerDialog.vue'
 import DrawingFolderViewer from './common/DrawingFolderViewer.vue'
 import {
+  batchDiscardDeliveredItems,
+  batchRestoreDeliveredItems,
   discardDeliveredItem,
   getDeliveredItem,
   getDeliveryIntegrationTask,
@@ -408,6 +432,8 @@ const LOCKED_ITEM_VIEW_PERMISSION = 'market:locked-item:view'
 const SALES_ORDER_VIEW_PERMISSION = 'market:sales-order:view'
 
 const deliveredActionKeys = {
+  batchDiscard: () => 'delivery:discard:batch',
+  batchRestore: () => 'delivery:restore:batch',
   batchMesSync: () => 'delivery:mes-sync:batch',
   batchWmsAllocation: () => 'delivery:wms-allocation:batch'
 }
@@ -597,6 +623,56 @@ const handleRestore = async (row) => {
     if (error === 'cancel' || error === 'close') return
     console.error(error)
     ElMessage.error(error.response?.data?.message || error.message || '已提零件恢复失败。')
+  }
+}
+
+const isBatchDiscardPending = computed(() => isPending(deliveredActionKeys.batchDiscard()))
+const isBatchRestorePending = computed(() => isPending(deliveredActionKeys.batchRestore()))
+
+const handleBatchDiscard = async () => {
+  if (selectedTicketIds.value.length === 0) {
+    return ElMessage.warning('请先选择需要废弃的已提零件。')
+  }
+  try {
+    const { value } = await ElMessageBox.prompt(`请输入批量废弃原因，本次将废弃 ${selectedCountText()}。`, '批量废弃已提零件', {
+      confirmButtonText: '确认废弃',
+      cancelButtonText: '取消',
+      inputPlaceholder: '批量废弃原因',
+      inputValidator: (value) => String(value || '').trim() ? true : '废弃原因不能为空'
+    })
+    return runAction(deliveredActionKeys.batchDiscard(), async () => {
+      await batchDiscardDeliveredItems(selectedTicketIds.value, { reason: String(value || '').trim() })
+      ElMessage.success('已提零件批量废弃完成')
+      selectedRows.value = []
+      await loadItems()
+    })
+  } catch (error) {
+    if (error === 'cancel' || error === 'close') return
+    console.error(error)
+    ElMessage.error(error.response?.data?.message || error.message || '已提零件批量废弃失败。')
+  }
+}
+
+const handleBatchRestore = async () => {
+  if (selectedTicketIds.value.length === 0) {
+    return ElMessage.warning('请先选择需要恢复的已提零件。')
+  }
+  try {
+    const { value } = await ElMessageBox.prompt(`请输入批量恢复原因（可选），本次将恢复 ${selectedCountText()}。`, '批量恢复已提零件', {
+      confirmButtonText: '确认恢复',
+      cancelButtonText: '取消',
+      inputPlaceholder: '批量恢复原因（可选）'
+    })
+    return runAction(deliveredActionKeys.batchRestore(), async () => {
+      await batchRestoreDeliveredItems(selectedTicketIds.value, { reason: String(value || '').trim() })
+      ElMessage.success('已提零件批量恢复完成')
+      selectedRows.value = []
+      await loadItems()
+    })
+  } catch (error) {
+    if (error === 'cancel' || error === 'close') return
+    console.error(error)
+    ElMessage.error(error.response?.data?.message || error.message || '已提零件批量恢复失败。')
   }
 }
 

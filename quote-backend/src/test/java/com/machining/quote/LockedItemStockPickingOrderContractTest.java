@@ -104,13 +104,20 @@ class LockedItemStockPickingOrderContractTest {
         assertThat(service).contains(
                 "applyStockPickingStatusScope",
                 "applyDiscardedScope",
+                "batchDiscardAllocations(DeliveryItemBatchDiscardReq req)",
+                "batchRestoreAllocations(DeliveryItemBatchRestoreReq req)",
+                "batchResult(\"锁库零件批量废弃完成。\"",
                 "LOCKED_ITEM_DISCARD",
                 "LOCKED_ITEM_RESTORE");
         assertThat(controller).contains(
                 "@PostMapping(\"/locked-items/{allocationId}/discard\")",
                 "@RequirePermission(\"market:locked-item:discard\")",
+                "@PostMapping(\"/locked-items/batch-discard\")",
+                "return lockedItemService.batchDiscardAllocations(req)",
                 "@PostMapping(\"/locked-items/{allocationId}/restore\")",
                 "@RequirePermission(\"market:locked-item:restore\")",
+                "@PostMapping(\"/locked-items/batch-restore\")",
+                "return lockedItemService.batchRestoreAllocations(req)",
                 "@PostMapping(\"/locked-items/stock-picking-orders\")",
                 "@RequirePermission(\"market:locked-item:stock-picking-submit\")");
         assertThat(taskService).contains(

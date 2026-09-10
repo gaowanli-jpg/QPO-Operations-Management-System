@@ -80,7 +80,7 @@ describe('DeliveredItemManage foundation page', () => {
   test('supports selecting delivered items for batch MES and WMS tasks', () => {
     expect(source).toContain('@selection-change="handleSelectionChange"')
     expect(source).toContain('type="selection"')
-    expect(source).toContain('v-if="viewMode === \'ACTIVE\'" type="selection"')
+    expect(source).toContain('type="selection" width="46" fixed align="center"')
     expect(source).toContain('selectedRows')
     expect(source).toContain('selectedTicketIds')
     expect(source).toContain('batchMesSync')
@@ -109,6 +109,23 @@ describe('DeliveredItemManage foundation page', () => {
     expect(source).toContain('restoreDeliveredItem(row.id')
     expect(source).toContain('viewMode.value === \'ACTIVE\'')
     expect(source).toContain('viewMode.value === \'DISCARDED\'')
+  })
+
+  test('supports batch discard and batch restore with one reason per selected batch', () => {
+    expect(source).toContain('batchDiscardDeliveredItems')
+    expect(source).toContain('batchRestoreDeliveredItems')
+    expect(source).toContain('batchDiscard: () => \'delivery:discard:batch\'')
+    expect(source).toContain('batchRestore: () => \'delivery:restore:batch\'')
+    expect(source).toContain('DELIVERED_ITEM_DISCARD_PERMISSION')
+    expect(source).toContain('DELIVERED_ITEM_RESTORE_PERMISSION')
+    expect(source).toContain('批量废弃')
+    expect(source).toContain('批量恢复')
+    expect(source).toContain('@click="handleBatchDiscard"')
+    expect(source).toContain('@click="handleBatchRestore"')
+    expect(source).toContain('请输入批量废弃原因')
+    expect(source).toContain('await batchDiscardDeliveredItems(selectedTicketIds.value')
+    expect(source).toContain('await batchRestoreDeliveredItems(selectedTicketIds.value')
+    expect(source).toContain('selectedRows.value = []')
   })
 
   test('keeps WMS allocation as a batch toolbar action and locked-result entry as row navigation', () => {

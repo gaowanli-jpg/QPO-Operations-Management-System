@@ -39,6 +39,20 @@ describe('deliveredItemApi', () => {
     })
   })
 
+  test('batch discard and restore delivered tickets through module-owned endpoints', async () => {
+    await deliveredItemApi.batchDiscardDeliveredItems([42, 43], { reason: '批量停止处理' })
+    await deliveredItemApi.batchRestoreDeliveredItems([42, 43], { reason: '批量恢复处理' })
+
+    expect(request).toHaveBeenNthCalledWith(1, '/api/order-delivery/tickets/batch-discard', {
+      method: 'POST',
+      data: { ticketIds: [42, 43], reason: '批量停止处理' }
+    })
+    expect(request).toHaveBeenNthCalledWith(2, '/api/order-delivery/tickets/batch-restore', {
+      method: 'POST',
+      data: { ticketIds: [42, 43], reason: '批量恢复处理' }
+    })
+  })
+
   test('does not expose legacy single-ticket MES material sync helper', () => {
     expect(deliveredItemApi.syncMesMaterial).toBeUndefined()
   })
@@ -97,6 +111,20 @@ describe('deliveredItemApi', () => {
     })
   })
 
+  test('batch discard and restore locked allocations through module-owned endpoints', async () => {
+    await deliveredItemApi.batchDiscardLockedItems([101, 102], { reason: '批量停止处理' })
+    await deliveredItemApi.batchRestoreLockedItems([101, 102], { reason: '批量恢复处理' })
+
+    expect(request).toHaveBeenNthCalledWith(1, '/api/order-delivery/locked-items/batch-discard', {
+      method: 'POST',
+      data: { allocationIds: [101, 102], reason: '批量停止处理' }
+    })
+    expect(request).toHaveBeenNthCalledWith(2, '/api/order-delivery/locked-items/batch-restore', {
+      method: 'POST',
+      data: { allocationIds: [101, 102], reason: '批量恢复处理' }
+    })
+  })
+
 
   test('listProductionItems calls production work pool endpoint with params', async () => {
     const params = { mesProductionStatus: 'FAILED', partNo: 'P-200' }
@@ -131,6 +159,20 @@ describe('deliveredItemApi', () => {
     expect(request).toHaveBeenNthCalledWith(2, '/api/order-delivery/production-items/101/restore', {
       method: 'POST',
       data: {}
+    })
+  })
+
+  test('batch discard and restore production allocations through module-owned endpoints', async () => {
+    await deliveredItemApi.batchDiscardProductionItems([101, 102], { reason: '批量暂停生产' })
+    await deliveredItemApi.batchRestoreProductionItems([101, 102], { reason: '批量恢复生产' })
+
+    expect(request).toHaveBeenNthCalledWith(1, '/api/order-delivery/production-items/batch-discard', {
+      method: 'POST',
+      data: { allocationIds: [101, 102], reason: '批量暂停生产' }
+    })
+    expect(request).toHaveBeenNthCalledWith(2, '/api/order-delivery/production-items/batch-restore', {
+      method: 'POST',
+      data: { allocationIds: [101, 102], reason: '批量恢复生产' }
     })
   })
 

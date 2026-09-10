@@ -50,6 +50,28 @@
           >
             下发MES生产
           </el-button>
+          <el-button
+            v-permission="PRODUCTION_ITEM_DISCARD_PERMISSION"
+            type="danger"
+            plain
+            :disabled="selectedAllocationIds.length === 0 || isBatchDiscardPending"
+            :loading="isBatchDiscardPending"
+            @click="handleBatchDiscard"
+          >
+            批量废弃
+          </el-button>
+        </div>
+        <div v-if="viewMode === 'DISCARDED'" class="erp-toolbar-group production-batch-actions">
+          <el-button
+            v-permission="PRODUCTION_ITEM_RESTORE_PERMISSION"
+            type="success"
+            plain
+            :disabled="selectedAllocationIds.length === 0 || isBatchRestorePending"
+            :loading="isBatchRestorePending"
+            @click="handleBatchRestore"
+          >
+            批量恢复
+          </el-button>
         </div>
       </div>
 
@@ -124,7 +146,7 @@
           v-loading="loading"
           @selection-change="handleSelectionChange"
         >
-          <el-table-column v-if="viewMode === 'ACTIVE'" type="selection" width="46" fixed align="center" />
+          <el-table-column type="selection" width="46" fixed align="center" />
           <el-table-column prop="id" label="分配ID" width="96" fixed align="center" show-overflow-tooltip />
           <el-table-column prop="ticketId" label="提单ID" width="96" fixed align="center" show-overflow-tooltip />
           <el-table-column prop="partNo" label="图号" min-width="150" fixed show-overflow-tooltip />
@@ -301,6 +323,8 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import CustomerPickerDialog from './CustomerPickerDialog.vue'
 import {
+  batchDiscardProductionItems,
+  batchRestoreProductionItems,
   discardProductionItem,
   getDeliveredItem,
   getDeliveryIntegrationTask,
@@ -323,6 +347,8 @@ const router = useRouter()
 const { isPending, runAction } = usePendingAction()
 
 const productionActionKeys = {
+  batchDiscard: () => 'production-item:discard:batch',
+  batchRestore: () => 'production-item:restore:batch',
   mesProductionDispatch: () => 'production-item:mes-production:batch',
   mesProductionReconcile: (row) => `production-item:mes-production:reconcile:${row?.allocationId || row?.result?.requestId || 'unknown'}`
 }
@@ -503,6 +529,56 @@ const handleRestore = async (row) => {
     if (error === 'cancel' || error === 'close') return
     console.error(error)
     ElMessage.error(error.response?.data?.message || error.message || '待产零件恢复失败。')
+  }
+}
+
+const isBatchDiscardPending = computed(() => isPending(productionActionKeys.batchDiscard()))
+const isBatchRestorePending = computed(() => isPending(productionActionKeys.batchRestore()))
+
+const handleBatchDiscard = async () => {
+  if (selectedAllocationIds.value.length === 0) {
+    return ElMessage.warning('请先选择需要废弃的待产零件。')
+  }
+  try {
+    const { value } = await ElMessageBox.prompt(`请输入批量废弃原因，本次将废弃 ${selectedAllocationCountText()}。`, '批量废弃待产零件', {
+      confirmButtonText: '确认废弃',
+      cancelButtonText: '取消',
+      inputPlaceholder: '批量废弃原因',
+      inputValidator: (value) => String(value || '').trim() ? true : '废弃原因不能为空'
+    })
+    return runAction(productionActionKeys.batchDiscard(), async () => {
+      await batchDiscardProductionItems(selectedAllocationIds.value, { reason: String(value || '').trim() })
+      ElMessage.success('待产零件批量废弃完成')
+      selectedRows.value = []
+      await loadItems()
+    })
+  } catch (error) {
+    if (error === 'cancel' || error === 'close') return
+    console.error(error)
+    ElMessage.error(error.response?.data?.message || error.message || '待产零件批量废弃失败。')
+  }
+}
+
+const handleBatchRestore = async () => {
+  if (selectedAllocationIds.value.length === 0) {
+    return ElMessage.warning('请先选择需要恢复的待产零件。')
+  }
+  try {
+    const { value } = await ElMessageBox.prompt(`请输入批量恢复原因（可选），本次将恢复 ${selectedAllocationCountText()}。`, '批量恢复待产零件', {
+      confirmButtonText: '确认恢复',
+      cancelButtonText: '取消',
+      inputPlaceholder: '批量恢复原因（可选）'
+    })
+    return runAction(productionActionKeys.batchRestore(), async () => {
+      await batchRestoreProductionItems(selectedAllocationIds.value, { reason: String(value || '').trim() })
+      ElMessage.success('待产零件批量恢复完成')
+      selectedRows.value = []
+      await loadItems()
+    })
+  } catch (error) {
+    if (error === 'cancel' || error === 'close') return
+    console.error(error)
+    ElMessage.error(error.response?.data?.message || error.message || '待产零件批量恢复失败。')
   }
 }
 

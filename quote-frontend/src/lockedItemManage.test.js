@@ -84,7 +84,8 @@ describe('LockedItemManage guardrails', () => {
 
   test('allows selecting active locked allocation rows for stock picking order dispatch', () => {
     expect(pageSource).toContain('@selection-change="handleSelectionChange"')
-    expect(pageSource).toContain('v-if="viewMode === \'ACTIVE\'" type="selection"')
+    expect(pageSource).toContain('type="selection" width="46" fixed align="center"')
+    expect(pageSource).not.toContain('v-if="viewMode === \'ACTIVE\'" type="selection"')
     expect(pageSource).toContain('const selectedRows = ref([])')
     expect(pageSource).toContain('const selectedAllocationIds = computed(() => selectedRows.value.map(row => row.id).filter(Boolean))')
     expect(pageSource).toContain('const handleSelectionChange = (rows) =>')
@@ -249,6 +250,25 @@ describe('LockedItemManage guardrails', () => {
     expect(pageSource).toContain('market:locked-item:restore')
     expect(pageSource).toContain('discardLockedItem(row.id')
     expect(pageSource).toContain('restoreLockedItem(row.id')
+  })
+
+  test('supports batch discard and batch restore with one reason per selected batch', () => {
+    expect(apiSource).toContain('batchDiscardLockedItems')
+    expect(apiSource).toContain('batchRestoreLockedItems')
+    expect(pageSource).toContain('batchDiscardLockedItems')
+    expect(pageSource).toContain('batchRestoreLockedItems')
+    expect(pageSource).toContain('batchDiscard: () => \'locked-item:discard:batch\'')
+    expect(pageSource).toContain('batchRestore: () => \'locked-item:restore:batch\'')
+    expect(pageSource).toContain('LOCKED_ITEM_DISCARD_PERMISSION')
+    expect(pageSource).toContain('LOCKED_ITEM_RESTORE_PERMISSION')
+    expect(pageSource).toContain('批量废弃')
+    expect(pageSource).toContain('批量恢复')
+    expect(pageSource).toContain('@click="handleBatchDiscard"')
+    expect(pageSource).toContain('@click="handleBatchRestore"')
+    expect(pageSource).toContain('请输入批量废弃原因')
+    expect(pageSource).toContain('await batchDiscardLockedItems(selectedAllocationIds.value')
+    expect(pageSource).toContain('await batchRestoreLockedItems(selectedAllocationIds.value')
+    expect(pageSource).toContain('selectedRows.value = []')
   })
 
   test('supports ticket-specific result entry and Element Plus error feedback', () => {

@@ -3,6 +3,8 @@ package com.machining.quote.service;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.machining.quote.config.AuthContext;
 import com.machining.quote.dto.CustomerOptionDTO;
+import com.machining.quote.dto.DeliveryItemBatchDiscardReq;
+import com.machining.quote.dto.DeliveryItemBatchRestoreReq;
 import com.machining.quote.dto.DeliveryItemDiscardReq;
 import com.machining.quote.dto.DeliveryItemRestoreReq;
 import com.machining.quote.dto.LockedItemDTO;
@@ -19,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -170,6 +173,30 @@ public class LockedItemService {
         return result;
     }
 
+    @Transactional
+    public Map<String, Object> batchDiscardAllocations(DeliveryItemBatchDiscardReq req) {
+        List<Integer> allocationIds = normalizeIds(req == null ? null : req.getAllocationIds());
+        String reason = requiredReason(req == null ? null : req.getReason());
+        DeliveryItemDiscardReq singleReq = new DeliveryItemDiscardReq();
+        singleReq.setReason(reason);
+        List<Map<String, Object>> results = allocationIds.stream()
+                .map(allocationId -> discardAllocation(allocationId, singleReq))
+                .toList();
+        return batchResult("锁库零件批量废弃完成。", "discarded", reason, "allocationIds", allocationIds, results);
+    }
+
+    @Transactional
+    public Map<String, Object> batchRestoreAllocations(DeliveryItemBatchRestoreReq req) {
+        List<Integer> allocationIds = normalizeIds(req == null ? null : req.getAllocationIds());
+        String reason = optionalReason(req == null ? null : req.getReason());
+        DeliveryItemRestoreReq singleReq = new DeliveryItemRestoreReq();
+        singleReq.setReason(reason);
+        List<Map<String, Object>> results = allocationIds.stream()
+                .map(allocationId -> restoreAllocation(allocationId, singleReq))
+                .toList();
+        return batchResult("锁库零件批量恢复完成。", "active", reason, "allocationIds", allocationIds, results);
+    }
+
     private void applyCustomerFilter(QueryWrapper<LockedItemDTO> query, String customerCode, String customerName) {
         if (hasText(customerCode)) {
             String code = customerCode.trim();
@@ -242,6 +269,19 @@ public class LockedItemService {
         return allocation;
     }
 
+    private List<Integer> normalizeIds(List<Integer> ids) {
+        if (ids == null) {
+            throw new RuntimeException("请选择需要处理的锁库零件");
+        }
+        List<Integer> normalized = new LinkedHashSet<>(ids).stream()
+                .filter(id -> id != null && id > 0)
+                .toList();
+        if (normalized.isEmpty()) {
+            throw new RuntimeException("请选择需要处理的锁库零件");
+        }
+        return normalized;
+    }
+
     private void assertCanAccessAllocation(OrderDeliveryTicketAllocation allocation) {
         OrderDeliveryTicket ticket = allocation.getTicketId() == null ? null : ticketMapper.selectById(allocation.getTicketId());
         if (ticket == null) {
@@ -292,6 +332,24 @@ public class LockedItemService {
         result.put("discardedBy", allocation.getDiscardedBy());
         result.put("restoredAt", allocation.getRestoredAt());
         result.put("restoredBy", allocation.getRestoredBy());
+        return result;
+    }
+
+    private Map<String, Object> batchResult(
+            String message,
+            String state,
+            String reason,
+            String idKey,
+            List<Integer> ids,
+            List<Map<String, Object>> results) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("success", true);
+        result.put("message", message);
+        result.put("state", state);
+        result.put("reason", reason);
+        result.put("count", results.size());
+        result.put(idKey, ids);
+        result.put("results", results);
         return result;
     }
 
