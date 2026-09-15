@@ -113,12 +113,14 @@ class SalesOrderIntegrationRegressionTest {
         assertThat(firstItem.getSaleOrderItemNo()).isEqualTo("1");
         assertThat(firstItem.getMaterialNo()).isEqualTo("MAT-001");
         assertThat(firstItem.getReleasedQty()).isEqualTo(2);
+        assertThat(firstItem.getMaterialName()).isEqualTo("AL6061");
         assertThat(firstItem.getDescription()).isEqualTo("MES production demand item");
         assertThat(firstItem.getSurfaceTreatment()).isEqualTo("Anodized");
         assertThat(firstItem.getRemark()).isEqualTo("MES remark");
         assertThat(objectMapper.writeValueAsString(firstOrder))
                 .contains("\"customerCode\":\"C02058\"", "\"supplierCode\":\"SUP-C02058\"")
-                .doesNotContain("customerName", "documentNo", "partNo", "version", "qty", "materialName", "remainingQty");
+                .doesNotContain("customerName", "documentNo", "partNo", "version", "qty", "remainingQty");
+        assertThat(objectMapper.writeValueAsString(firstItem)).contains("\"materialName\":\"AL6061\"");
         assertThat(objectMapper.writeValueAsString(firstItem)).doesNotContain("orderType");
 
         JsonNode cursor = decodeCursor(resp.getData().getNextCursor());
@@ -277,6 +279,7 @@ class SalesOrderIntegrationRegressionTest {
         row.setLineNo(lineNo);
         row.setMaterialNo(materialNo);
         row.setReleasedQty(2);
+        row.setMaterialName("AL6061");
         row.setDescription("MES production demand item");
         row.setSurfaceTreatment("Anodized");
         row.setRemark("MES remark");

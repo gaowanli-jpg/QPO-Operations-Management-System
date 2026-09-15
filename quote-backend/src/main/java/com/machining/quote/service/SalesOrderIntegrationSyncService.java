@@ -114,6 +114,7 @@ public class SalesOrderIntegrationSyncService {
         record.setSaleOrderItemNo(String.valueOf(item.getLineNo()));
         record.setMaterialNo(item.getMaterialNo());
         record.setReleasedQty(nonNegative(item.getReleasedQty()));
+        record.setMaterialName(item.getMaterialName());
         record.setDescription(item.getDescription());
         record.setSurfaceTreatment(item.getSurfaceTreatment());
         record.setRemark(item.getRemark());

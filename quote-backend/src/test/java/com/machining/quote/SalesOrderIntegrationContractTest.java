@@ -40,7 +40,6 @@ class SalesOrderIntegrationContractTest {
             "qty",
             "materialNoStatus",
             "salesMaterialNo",
-            "materialName",
             "engineeringMaterialCode",
             "engineeringMaterialName",
             "engineeringMaterialTypeCode",
@@ -92,6 +91,7 @@ class SalesOrderIntegrationContractTest {
                         "saleOrderItemNo",
                         "materialNo",
                         "releasedQty",
+                        "materialName",
                         "description",
                         "surfaceTreatment",
                         "remark",
@@ -133,6 +133,7 @@ class SalesOrderIntegrationContractTest {
         assertThat(firstItem.getSaleOrderItemNo()).isEqualTo("1");
         assertThat(firstItem.getMaterialNo()).isEqualTo("MAT-001");
         assertThat(firstItem.getReleasedQty()).isEqualTo(1);
+        assertThat(firstItem.getMaterialName()).isEqualTo("AL6061");
         assertThat(firstItem.getDescription()).isEqualTo("Part description");
         assertThat(firstItem.getSurfaceTreatment()).isEqualTo("Anodized");
         assertThat(firstItem.getInternalProjectNo()).isEqualTo("IP-LINE-001");
@@ -141,6 +142,7 @@ class SalesOrderIntegrationContractTest {
         assertThat(objectMapper.writeValueAsString(firstItem))
                 .contains("\"surfaceTreatment\":\"Anodized\"")
                 .contains("\"releasedQty\":1")
+                .contains("\"materialName\":\"AL6061\"")
                 .contains("\"remark\":\"MES demand remark\"")
                 .contains("\"internalProjectNo\":\"IP-LINE-001\"")
                 .contains("\"customerOrderNo\":\"PO-001\"")
@@ -166,6 +168,7 @@ class SalesOrderIntegrationContractTest {
                         "saleOrderItemNo",
                         "materialNo",
                         "releasedQty",
+                        "materialName",
                         "description",
                         "surfaceTreatment",
                         "remark",
@@ -192,6 +195,7 @@ class SalesOrderIntegrationContractTest {
                 .contains("orderType")
                 .contains("customerCode")
                 .contains("supplierCode")
+                .contains("materialName")
                 .contains("releasedQty")
                 .contains("remark")
                 .contains("internalProjectNo")
@@ -266,6 +270,7 @@ class SalesOrderIntegrationContractTest {
         item.setDescription(null);
         item.setSurfaceTreatment(null);
         item.setRemark(null);
+        ReflectionTestUtils.setField(item, "materialName", null);
         ReflectionTestUtils.setField(item, "internalProjectNo", null);
         ReflectionTestUtils.setField(item, "customerOrderNo", null);
         ReflectionTestUtils.setField(item, "customerProjectNo", null);
@@ -280,6 +285,7 @@ class SalesOrderIntegrationContractTest {
                 .contains("\"customerCode\":\"C02058\"")
                 .contains("\"supplierCode\":null")
                 .contains("\"materialNo\":null")
+                .contains("\"materialName\":null")
                 .contains("\"description\":null")
                 .contains("\"surfaceTreatment\":null")
                 .contains("\"remark\":null")
@@ -289,6 +295,7 @@ class SalesOrderIntegrationContractTest {
                 .contains("\"nextCursor\":null");
         com.fasterxml.jackson.databind.JsonNode orderNode = objectMapper.readTree(json).path("data").path("records").get(0);
         assertThat(orderNode.has("internalProjectNo")).isFalse();
+        assertThat(orderNode.path("items").get(0).has("materialName")).isTrue();
         assertThat(orderNode.path("items").get(0).has("internalProjectNo")).isTrue();
         assertThat(orderNode.path("items").get(0).has("customerOrderNo")).isTrue();
         assertThat(orderNode.path("items").get(0).has("customerProjectNo")).isTrue();
@@ -339,6 +346,7 @@ class SalesOrderIntegrationContractTest {
     private void setMesDemandItemFields(SalesOrderSyncItemRow row) {
         ReflectionTestUtils.setField(row, "surfaceTreatment", "Anodized");
         ReflectionTestUtils.setField(row, "releasedQty", 1);
+        ReflectionTestUtils.setField(row, "materialName", "AL6061");
         ReflectionTestUtils.setField(row, "remark", "MES demand remark");
         ReflectionTestUtils.setField(row, "internalProjectNo", "IP-LINE-001");
         ReflectionTestUtils.setField(row, "customerOrderNo", "PO-001");

@@ -79,6 +79,7 @@ public class SalesOrderIntegrationSqlProvider {
                   soi.line_no,
                   soi.description,
                   soi.material_no,
+                  soi.material_name,
                   soi.surface_treatment,
                   soi.remark,
                   soi.internal_project_no,
