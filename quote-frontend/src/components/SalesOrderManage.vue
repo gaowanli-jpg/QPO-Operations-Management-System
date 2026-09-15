@@ -387,7 +387,7 @@
               <el-table-column prop="matchMessage" label="匹配说明" min-width="180" show-overflow-tooltip>
                 <template #default="scope">{{ scope.row.matchMessage || '-' }}</template>
               </el-table-column>
-              <el-table-column prop="qty" label="数量" width="118" align="right">
+              <el-table-column prop="qty" label="数量" width="126" align="right" class-name="sales-order-item-qty-column">
                 <template #default="{ row }">
                   <el-input-number
                     v-if="itemDrafts[row.id]"
@@ -475,19 +475,6 @@
                     placeholder="客户下单抬头"
                   />
                   <span v-else>{{ row.customerOrderTitle || '-' }}</span>
-                </template>
-              </el-table-column>
-              <el-table-column prop="description" label="物料描述" min-width="220" show-overflow-tooltip>
-                <template #default="{ row }">
-                  <el-input
-                    v-if="itemDrafts[row.id]"
-                    v-model="itemDrafts[row.id].description"
-                    class="item-edit-input"
-                    clearable
-                    :disabled="salesOrderEditLocked"
-                    placeholder="物料描述"
-                  />
-                  <span v-else>{{ row.description || '-' }}</span>
                 </template>
               </el-table-column>
               <el-table-column prop="orderType" label="订单类型" width="140" show-overflow-tooltip>
@@ -587,6 +574,19 @@
                     placeholder="材料"
                   />
                   <span v-else>{{ row.materialName || '-' }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column prop="description" label="物料描述" min-width="220" show-overflow-tooltip>
+                <template #default="{ row }">
+                  <el-input
+                    v-if="itemDrafts[row.id]"
+                    v-model="itemDrafts[row.id].description"
+                    class="item-edit-input"
+                    clearable
+                    :disabled="salesOrderEditLocked"
+                    placeholder="物料描述"
+                  />
+                  <span v-else>{{ row.description || '-' }}</span>
                 </template>
               </el-table-column>
               <el-table-column prop="surfaceTreatment" label="表面处理" min-width="160" show-overflow-tooltip>
@@ -2001,6 +2001,15 @@ onMounted(() => {
 .item-edit-number,
 .item-edit-money {
   min-width: 96px;
+}
+
+:deep(.sales-order-item-qty-column .cell) {
+  text-overflow: clip;
+}
+
+:deep(.sales-order-item-qty-column .item-edit-number) {
+  min-width: 0;
+  width: 100%;
 }
 
 .item-edit-date {

@@ -95,7 +95,7 @@ describe('sales order management governance and drawings', () => {
   test('detail item table makes title description and item status editable and replaceable', () => {
     const itemTableSource = salesOrderManage.slice(
       salesOrderManage.indexOf('<el-table-column prop="lineNo"'),
-      salesOrderManage.indexOf('<el-table-column prop="customerDeliveryDate"')
+      salesOrderManage.indexOf('<el-table-column label="未税单价"')
     )
     const editableFieldsSource = salesOrderManage.slice(
       salesOrderManage.indexOf('const SALES_ORDER_ITEM_EDITABLE_FIELDS = ['),
@@ -108,8 +108,11 @@ describe('sales order management governance and drawings', () => {
     const replacementDialog = readSource('components', 'sales-order', 'SalesOrderItemDataReplacementDialog.vue')
 
     expect(itemTableSource).toContain('prop="customerOrderTitle" label="客户下单抬头"')
-    expect(itemTableSource.indexOf('prop="customerOrderTitle" label="客户下单抬头"')).toBeLessThan(
+    expect(itemTableSource.indexOf('prop="materialName" label="材料"')).toBeLessThan(
       itemTableSource.indexOf('prop="description" label="物料描述"')
+    )
+    expect(itemTableSource.indexOf('prop="description" label="物料描述"')).toBeLessThan(
+      itemTableSource.indexOf('prop="surfaceTreatment" label="表面处理"')
     )
     expect(itemTableSource).toContain('v-model="itemDrafts[row.id].customerOrderTitle"')
     expect(itemTableSource).toContain('v-model="itemDrafts[row.id].description"')
