@@ -106,6 +106,7 @@ class AuditActionCatalogCharacterizationTest {
         assertThat(AuditService.labelForAction("SALES_ORDER_CHANGE_ITEM_UPDATE")).isNotEqualTo("SALES_ORDER_CHANGE_ITEM_UPDATE");
         assertThat(AuditService.labelForAction("SALES_ORDER_CHANGE_ITEM_DATA_REPLACEMENT")).isNotEqualTo("SALES_ORDER_CHANGE_ITEM_DATA_REPLACEMENT");
         assertThat(AuditService.labelForAction("SALES_ORDER_PRODUCTION_TASK_NOTICE_EXPORT")).isNotEqualTo("SALES_ORDER_PRODUCTION_TASK_NOTICE_EXPORT");
+        assertThat(AuditService.labelForAction("SALES_ORDER_U9_RESYNC_RESET")).isEqualTo("重置销售订单U9同步状态");
         assertThat(AuditService.labelForAction("SYSTEM_U9_ORG_CONFIG_UPDATE")).isNotEqualTo("SYSTEM_U9_ORG_CONFIG_UPDATE");
         assertThat(AuditService.labelForAction("CUSTOMER_SUPPLIER_CODE_UPDATE")).isEqualTo("维护客户供应商代码");
         assertThat(AuditService.labelForAction("AUTH_DATACENTER_SSO_SUCCESS")).contains("数据中心SSO");

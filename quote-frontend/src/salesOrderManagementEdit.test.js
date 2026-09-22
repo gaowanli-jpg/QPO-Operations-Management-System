@@ -113,6 +113,19 @@ describe('sales order management editable detail', () => {
     expect(component).toContain(':disabled="salesOrderEditLocked"')
   })
 
+  test('synced orders can be reset to the U9 sync candidate pool with the U9 submit permission', () => {
+    const component = componentSource()
+    const api = apiSource()
+
+    expect(component).toContain('重新同步U9')
+    expect(component).toContain("v-permission=\"'market:u9-sync:submit'\"")
+    expect(component).toContain("const canResetU9Sync = (row) => row?.u9SyncStatus === '已同步'")
+    expect(component).toContain('handleResetU9Sync')
+    expect(component).toContain('已在 U9 删除销售订单')
+    expect(api).toContain('resetSalesOrderU9SyncStatus')
+    expect(api).toContain('/u9-resync-reset')
+  })
+
   test('sales order item data replacement advertises material and surface treatment without replacing version', () => {
     const replacementDialog = replacementDialogSource()
 

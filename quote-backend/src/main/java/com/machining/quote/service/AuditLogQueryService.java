@@ -43,7 +43,7 @@ public class AuditLogQueryService {
             "SYSTEM", List.of("USER_", "QUOTE_TEMPLATE_", "AUDIT_"),
             "DICT", List.of("DICT_"),
             "ENGINEER", List.of("ITEM_", "REPEAT_", "QUOTE_REFRESH_TASK_SUBMIT"),
-            "MARKET", List.of("QUOTE_", "INTERNAL_TARGET_", "RFQ_"),
+            "MARKET", List.of("QUOTE_", "INTERNAL_TARGET_", "RFQ_", "SALES_ORDER_"),
             "ORDER", List.of("ORDER_"),
             "DELIVERY", List.of("DELIVERY_", "PROCESS_SHEET_")
     );

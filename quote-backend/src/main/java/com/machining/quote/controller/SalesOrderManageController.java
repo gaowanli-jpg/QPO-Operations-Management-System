@@ -12,6 +12,7 @@ import com.machining.quote.dto.SalesOrderItemUpdateReq;
 import com.machining.quote.dto.SalesOrderMaintenanceOrderUpdateReq;
 import com.machining.quote.dto.SalesOrderMaintenanceUpdateResp;
 import com.machining.quote.dto.SalesOrderU9ItemDataReplacementPreviewDTO;
+import com.machining.quote.dto.SalesOrderU9ResyncResetResp;
 import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.SalesOrderItem;
 import com.machining.quote.service.SalesOrderItemDataReplacementService;
@@ -19,6 +20,7 @@ import com.machining.quote.service.SalesOrderItemDetailExportService;
 import com.machining.quote.service.SalesOrderManageService;
 import com.machining.quote.service.SalesOrderMaintenanceService;
 import com.machining.quote.service.SalesOrderProductionTaskNoticeExportService;
+import com.machining.quote.service.SalesOrderU9SyncStateService;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
@@ -51,6 +53,8 @@ public class SalesOrderManageController {
     private SalesOrderMaintenanceService salesOrderMaintenanceService;
     @Autowired
     private SalesOrderItemDataReplacementService itemDataReplacementService;
+    @Autowired
+    private SalesOrderU9SyncStateService salesOrderU9SyncStateService;
 
     @GetMapping("/customers")
     @RequirePermission("market:sales-order:customer-select")
@@ -155,6 +159,16 @@ public class SalesOrderManageController {
     @RequirePermission("market:sales-order:update")
     public SalesOrderMaintenanceUpdateResp convertTaxIncludedToUntaxed(@PathVariable Long salesOrderId) {
         return salesOrderMaintenanceService.convertTaxIncludedToUntaxed(salesOrderId);
+    }
+
+    @PostMapping("/orders/{salesOrderId}/u9-resync-reset")
+    @RequirePermission("market:u9-sync:submit")
+    public SalesOrderU9ResyncResetResp resetU9SyncStatus(
+            @PathVariable Long salesOrderId,
+            @RequestBody(required = false) OrderStatusChangeReq req) {
+        return salesOrderU9SyncStateService.resetForResync(
+                salesOrderId,
+                req == null ? null : req.getReason());
     }
 
     @PostMapping("/orders/{salesOrderId}/items/{itemId}/discard")
