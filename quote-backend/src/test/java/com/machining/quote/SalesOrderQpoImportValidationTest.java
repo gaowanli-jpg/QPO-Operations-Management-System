@@ -70,42 +70,15 @@ import static org.mockito.Mockito.when;
 class SalesOrderQpoImportValidationTest extends SalesOrderQpoImportTestSupport {
 
     @Test
-    void serviceRejectsDuplicateCustomerOrderAndInternalProjectBeforeWriting() throws Exception {
-        SalesOrderQpoExcelParser parser = mock(SalesOrderQpoExcelParser.class);
-        CustomerMasterMapper customerMapper = mock(CustomerMasterMapper.class);
-        SalesOrderImportBatchMapper batchMapper = mock(SalesOrderImportBatchMapper.class);
-        SalesOrderHeaderMapper headerMapper = mock(SalesOrderHeaderMapper.class);
-        SalesOrderItemMapper itemMapper = mock(SalesOrderItemMapper.class);
-        SalesOrderQpoImportService service = service(
-                parser,
-                customerMapper,
-                batchMapper,
-                mock(SalesOrderImportRecordMapper.class),
-                headerMapper,
-                itemMapper,
-                mock(DataScopeService.class),
-                mock(AuditService.class)
-        );
-        when(customerMapper.selectById(7L)).thenReturn(customer());
-        when(parser.parse(any(InputStream.class))).thenReturn(parseResult());
-        when(headerMapper.selectCount(any())).thenReturn(1L);
+    void serviceDoesNotRejectDuplicateCustomerOrderAndInternalProjectCombinations() throws Exception {
+        String source = Files.readString(
+                Path.of("src/main/java/com/machining/quote/service/SalesOrderQpoImportService.java"),
+                StandardCharsets.UTF_8);
 
-        assertThatThrownBy(() -> service.importQpo(
-                new MockMultipartFile(
-                        "excelFile",
-                        "sales-order.xlsx",
-                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        "xlsx".getBytes(StandardCharsets.UTF_8)
-                ),
-                7L,
-                "SO01"
-        ))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("重复")
-                .hasMessageContaining("PO-001")
-                .hasMessageContaining("IP-001");
-        verify(batchMapper, never()).insert(any(SalesOrderImportBatch.class));
-        verify(itemMapper, never()).insert(any(SalesOrderItem.class));
+        assertThat(source)
+                .doesNotContain("validateDuplicateImports")
+                .doesNotContain("headerMapper.selectCount")
+                .doesNotContain("销售订单重复导入");
     }
 
     @Test

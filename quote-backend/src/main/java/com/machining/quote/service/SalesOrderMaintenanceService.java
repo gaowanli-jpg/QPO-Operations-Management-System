@@ -38,7 +38,6 @@ public class SalesOrderMaintenanceService {
     static final String TARGET_TYPE = "sales_order_header";
     static final String STATUS_SYNCING = "同步中";
     static final String STATUS_PENDING_CONFIRMATION = "结果待确认";
-    static final String STATUS_SYNCED = "已同步";
 
     private static final Set<String> ORDER_TYPES = Set.of("预测订单", "备货订单", "正式订单");
     private static final Set<String> ITEM_FIELD_REPLACEMENT_FIELDS = Set.of(
@@ -686,7 +685,7 @@ public class SalesOrderMaintenanceService {
 
     private void assertEditable(SalesOrderHeader header) {
         String status = trimToNull(header.getU9SyncStatus());
-        if (STATUS_SYNCING.equals(status) || STATUS_PENDING_CONFIRMATION.equals(status) || STATUS_SYNCED.equals(status)) {
+        if (STATUS_SYNCING.equals(status) || STATUS_PENDING_CONFIRMATION.equals(status)) {
             throw new RuntimeException("U9 状态为" + status + "，不能修改销售订单");
         }
     }

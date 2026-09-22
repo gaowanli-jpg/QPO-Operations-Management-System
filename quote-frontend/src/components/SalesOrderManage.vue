@@ -73,10 +73,22 @@
             </el-table-column>
             <el-table-column prop="u9SyncStatus" label="U9状态" width="120" show-overflow-tooltip />
             <el-table-column prop="updatedAt" label="更新时间" width="180" show-overflow-tooltip />
-            <el-table-column label="操作" width="250" align="center" fixed="right">
+            <el-table-column label="操作" width="330" align="center" fixed="right">
               <template #default="scope">
                 <div class="erp-table-actions sales-order-row-actions">
                   <el-button size="small" @click="openDetail(scope.row)">查看销售订单</el-button>
+                  <el-button
+                    v-if="canResetU9Sync(scope.row)"
+                    v-permission="'market:u9-sync:submit'"
+                    size="small"
+                    type="warning"
+                    plain
+                    :loading="isU9ResyncResetPending(scope.row)"
+                    :disabled="isU9ResyncResetPending(scope.row)"
+                    @click="handleResetU9Sync(scope.row)"
+                  >
+                    重新同步U9
+                  </el-button>
                   <el-button
                     v-for="action in rowStatusActions(scope.row)"
                     :key="`${scope.row.id}-${action.label}`"
@@ -808,6 +820,7 @@ import {
   replaceSalesOrderItemField,
   restoreSalesOrder,
   restoreSalesOrderItemForU9Change,
+  resetSalesOrderU9SyncStatus,
   replaceSalesOrderDrawings,
   supplementSalesOrderDrawings
 } from '../services/orderApi'
@@ -818,7 +831,7 @@ const route = useRoute()
 const SALES_ORDER_STATUSES = ['已报价', '部分已提单', '已生成提单', '废弃']
 const SALES_ORDER_TYPES = ['预测订单', '备货订单', '正式订单']
 const SALES_ORDER_UPDATE_PERMISSION = 'market:sales-order:update'
-const SALES_ORDER_EDIT_LOCKED_U9_STATUSES = ['同步中', '结果待确认', '已同步']
+const SALES_ORDER_EDIT_LOCKED_U9_STATUSES = ['同步中', '结果待确认']
 const SALES_ORDER_STATUS_LOCKED_REASON = '销售订单已同步 U9，不能废弃'
 const SALES_ORDER_PRICE_CONVERSIONS = {
   UNTAXED_TO_TAX_INCLUDED: {
@@ -841,6 +854,7 @@ const salesOrderActionKeys = {
   itemFieldReplacement: (orderId, field) => `sales-order:item-field-replacement:${field || 'none'}:${orderId || 'none'}`,
   itemPriceConversion: (orderId, direction) => `sales-order:item-price-conversion:${direction}:${orderId || 'none'}`,
   itemU9ChangeExclusion: (itemId) => `sales-order:item-u9-change-exclusion:${itemId || 'none'}`,
+  u9ResyncReset: (orderId) => `sales-order:u9-resync-reset:${orderId || 'none'}`,
   itemDetailExport: (orderId) => `sales-order:item-detail-export:${orderId || 'none'}`,
   supplementDrawings: (orderId) => `sales-order:supplement-drawings:${orderId || 'none'}`,
   salesOrderDrawingReplace: (orderId) => `sales-order:drawing-replace:${orderId || 'none'}`,
@@ -1579,6 +1593,9 @@ const lineTaxIncludedTotal = (row = {}, draft = null) => {
 
 const isOrderStatusPending = (row) => isPending(salesOrderActionKeys.statusChange(row?.id))
 
+const canResetU9Sync = (row) => row?.u9SyncStatus === '已同步'
+const isU9ResyncResetPending = (row) => isPending(salesOrderActionKeys.u9ResyncReset(row?.id))
+
 const statusActionLocked = (row) => {
   if (!row) return false
   return row.status === '已生成提单' && row.u9SyncStatus === '已同步'
@@ -1764,6 +1781,39 @@ const formatCompactNumber = (value) => {
 }
 
 const formatCompactMoney = (value) => `¥${formatCompactNumber(value)}`
+
+const handleResetU9Sync = async (row) => {
+  if (!canResetU9Sync(row)) return
+  let reason = ''
+  try {
+    const result = await ElMessageBox.prompt(
+      `请确认已在 U9 删除销售订单「${row.salesOrderNo || row.id}」后再继续。重置后 QPO 将清除当前 U9 绑定并允许重新同步。`,
+      '重新同步 U9',
+      {
+        inputPlaceholder: '请输入重置原因，例如：已在 U9 删除原销售订单',
+        inputPattern: /\S+/,
+        inputErrorMessage: '重置原因不能为空',
+        confirmButtonText: '确认重置',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+    reason = result.value?.trim() || ''
+  } catch {
+    return
+  }
+  return runAction(salesOrderActionKeys.u9ResyncReset(row.id), async () => {
+    try {
+      const response = await resetSalesOrderU9SyncStatus(row.id, { reason })
+      ElMessage.success(response?.message || '销售订单已重置为未同步，可重新同步 U9。')
+      await loadOrders()
+      await refreshCurrentDetail()
+    } catch (error) {
+      console.error(error)
+      ElMessage.error(error.response?.data?.message || '重置 U9 同步状态失败。')
+    }
+  })
+}
 
 watch(
   () => route.query.salesOrderId,

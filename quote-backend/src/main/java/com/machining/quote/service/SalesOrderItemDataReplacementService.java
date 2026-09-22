@@ -361,8 +361,7 @@ public class SalesOrderItemDataReplacementService {
     private boolean isLocked(SalesOrderHeader header) {
         String status = trimToNull(header.getU9SyncStatus());
         return SalesOrderMaintenanceService.STATUS_SYNCING.equals(status)
-                || SalesOrderMaintenanceService.STATUS_PENDING_CONFIRMATION.equals(status)
-                || SalesOrderMaintenanceService.STATUS_SYNCED.equals(status);
+                || SalesOrderMaintenanceService.STATUS_PENDING_CONFIRMATION.equals(status);
     }
 
     private void assertDataScope(SalesOrderHeader header) {

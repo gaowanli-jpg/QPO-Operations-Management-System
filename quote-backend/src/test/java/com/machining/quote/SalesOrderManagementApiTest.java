@@ -30,6 +30,8 @@ class SalesOrderManagementApiTest {
                         "@GetMapping(\"/orders/{salesOrderId}/tickets\")",
                         "@GetMapping(\"/orders/{salesOrderId}/process-sheets\")",
                         "@GetMapping(\"/orders/{salesOrderId}/production-task-notice/export\")",
+                        "@PostMapping(\"/orders/{salesOrderId}/u9-resync-reset\")",
+                        "@RequirePermission(\"market:u9-sync:submit\")",
                         "@RequirePermission(\"market:sales-order:item-detail-export\")",
                         "@RequirePermission(\"market:sales-order:production-task-notice-export\")",
                         "@RequirePermission(\"market:sales-order:view\")",

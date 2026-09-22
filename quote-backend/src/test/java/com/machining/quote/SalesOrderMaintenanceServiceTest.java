@@ -362,8 +362,8 @@ class SalesOrderMaintenanceServiceTest {
     }
 
     @Test
-    void maintenanceWritesRejectLockedU9Statuses() {
-        for (String status : List.of("同步中", "结果待确认", "已同步")) {
+    void maintenanceWritesRejectU9StatusesStillInFlight() {
+        for (String status : List.of("同步中", "结果待确认")) {
             Fixture fixture = fixture();
             SalesOrderHeader header = header(19L, status);
             SalesOrderItem item = item(210L, 19L);
@@ -389,6 +389,44 @@ class SalesOrderMaintenanceServiceTest {
             verify(fixture.itemMapper, never()).update(any(), any());
             verify(fixture.headerMapper, never()).update(any(), any());
         }
+    }
+
+    @Test
+    void maintenanceWritesAllowAlreadySyncedOrders() {
+        Fixture fixture = fixture();
+        SalesOrderHeader header = header(20L, "已同步");
+        SalesOrderItem item = item(211L, 20L);
+        fixture.withOrder(header, List.of(item));
+
+        SalesOrderMaintenanceOrderUpdateReq orderReq = new SalesOrderMaintenanceOrderUpdateReq();
+        orderReq.setDocumentTypeCode("SO02");
+        SalesOrderMaintenanceUpdateResp orderResult = fixture.maintenanceService.saveOrder(header.getId(), orderReq);
+
+        SalesOrderItemUpdateReq itemReq = new SalesOrderItemUpdateReq();
+        SalesOrderItemUpdateLineReq line = new SalesOrderItemUpdateLineReq();
+        line.setSalesOrderItemId(item.getId());
+        line.setRemark("synced order correction");
+        itemReq.setItems(List.of(line));
+        SalesOrderMaintenanceUpdateResp itemResult = fixture.maintenanceService.saveItems(header.getId(), itemReq);
+
+        assertThat(orderResult.getUpdatedCount()).isEqualTo(1);
+        assertThat(itemResult.getUpdatedCount()).isEqualTo(1);
+        assertThat(header.getDocumentTypeCode()).isEqualTo("SO02");
+        assertThat(item.getRemark()).isEqualTo("synced order correction");
+        verify(fixture.headerMapper).update(any(), any());
+        verify(fixture.itemMapper).update(any(), any());
+
+        byte[] replacementExcel = excel(
+                List.of("图号", "版本", "备注"),
+                List.of(item.getPartNo(), item.getVersion(), "synced order replacement"));
+        SalesOrderU9ItemDataReplacementPreviewDTO preview = fixture.replacementService.preview(
+                header.getId(), new ByteArrayInputStream(replacementExcel));
+        SalesOrderItemDataReplacementConfirmResp replacementResult = fixture.replacementService.confirm(
+                header.getId(), new ByteArrayInputStream(replacementExcel), preview.getPreviewFingerprint());
+
+        assertThat(replacementResult.getSuccess()).isTrue();
+        assertThat(replacementResult.getUpdatedCount()).isEqualTo(1);
+        assertThat(item.getRemark()).isEqualTo("synced order replacement");
     }
 
     @Test

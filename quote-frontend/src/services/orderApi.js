@@ -132,6 +132,11 @@ export const convertSalesOrderTaxIncludedToUntaxed = (salesOrderId) => request(`
   method: 'POST'
 })
 
+export const resetSalesOrderU9SyncStatus = (salesOrderId, payload = {}) => request(`/api/market/sales-order-management/orders/${salesOrderId}/u9-resync-reset`, {
+  method: 'POST',
+  data: payload
+})
+
 export const discardSalesOrderItemForU9Change = (salesOrderId, itemId, payload = {}) => request(`/api/market/sales-order-management/orders/${salesOrderId}/items/${itemId}/discard`, {
   method: 'POST',
   data: payload

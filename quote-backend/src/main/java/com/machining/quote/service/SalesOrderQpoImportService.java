@@ -1,6 +1,5 @@
 package com.machining.quote.service;
 
-import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.machining.quote.config.AuthContext;
 import com.machining.quote.dto.SalesOrderQpoExcelLineDTO;
 import com.machining.quote.dto.SalesOrderQpoExcelParseResult;
@@ -153,7 +152,6 @@ public class SalesOrderQpoImportService {
         if (parseResult.getOrderCount() <= 0 || parseResult.getOrders().isEmpty()) {
             throw new IllegalArgumentException("销售订单表格没有可导入的订单");
         }
-        validateDuplicateImports(customer, parseResult.getOrders());
         DrawingBindingResult drawingBinding = bindDrawings(customer, batchNo, parseResult, drawings, versionDrawings, drawingFolderFiles, drawingFolderName);
 
         SalesOrderImportBatch batch = createBatch(batchNo, sourceFileName, parseResult);
@@ -207,20 +205,6 @@ public class SalesOrderQpoImportService {
                     : excelParser.parse(excelFile.getInputStream(), defaults);
         } catch (IOException e) {
             throw new RuntimeException("閿€鍞鍗曞鍏ヨ〃鏍艰鍙栧け璐ワ細" + safeError(e.getMessage()), e);
-        }
-    }
-
-    private void validateDuplicateImports(CustomerMaster customer, List<SalesOrderQpoOrderGroupDTO> groups) {
-        for (SalesOrderQpoOrderGroupDTO group : groups) {
-            QueryWrapper<SalesOrderHeader> query = new QueryWrapper<>();
-            query.eq("customer_id", customer.getId())
-                    .eq("customer_order_no", group.getCustomerOrderNo())
-                    .eq("internal_project_no", group.getInternalProjectNo());
-            Long count = headerMapper.selectCount(query);
-            if (count != null && count > 0) {
-                throw new IllegalArgumentException("销售订单重复导入：客户订单号 "
-                        + group.getCustomerOrderNo() + " / 内部项目号 " + group.getInternalProjectNo());
-            }
         }
     }
 

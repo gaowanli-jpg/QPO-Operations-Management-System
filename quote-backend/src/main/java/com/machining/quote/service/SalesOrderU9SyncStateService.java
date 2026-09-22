@@ -3,6 +3,7 @@ package com.machining.quote.service;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.machining.quote.dto.SalesOrderU9PriceMode;
+import com.machining.quote.dto.SalesOrderU9ResyncResetResp;
 import com.machining.quote.dto.u9.U9SalesOrderHeadDTO;
 import com.machining.quote.entity.CustomerMaster;
 import com.machining.quote.entity.SalesOrderHeader;
@@ -25,11 +26,14 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
 public class SalesOrderU9SyncStateService {
+    public static final String ACTION_RESYNC_RESET = "SALES_ORDER_U9_RESYNC_RESET";
     public static final String STATUS_UNSYNCED = "未同步";
     public static final String STATUS_SYNCING = "同步中";
     public static final String STATUS_SYNCED = "已同步";
@@ -48,6 +52,8 @@ public class SalesOrderU9SyncStateService {
     private U9SyncDepartmentOptionCacheMapper departmentOptionMapper;
     @Autowired(required = false)
     private DataScopeService dataScopeService;
+    @Autowired(required = false)
+    private AuditService auditService;
     @Autowired
     private U9SalesOrderRequestAssembler requestAssembler = new U9SalesOrderRequestAssembler();
     @Autowired
@@ -140,6 +146,82 @@ public class SalesOrderU9SyncStateService {
     @Transactional
     public void markPending(PreparedOrder prepared, String message) {
         updateFinalState(prepared, STATUS_PENDING_CONFIRMATION, null, null, message);
+    }
+
+    @Transactional
+    public SalesOrderU9ResyncResetResp resetForResync(Long salesOrderId, String reason) {
+        SalesOrderHeader header = lockedHeader(salesOrderId);
+        assertDataScope(header);
+        String currentStatus = trimToNull(header.getU9SyncStatus());
+        if (!STATUS_SYNCED.equals(currentStatus)) {
+            throw new RuntimeException("只有已同步 U9 的销售订单可以重置为未同步");
+        }
+
+        String resetReason = isBlank(reason)
+                ? "已确认 U9 原销售订单已删除"
+                : safeMessage(reason);
+        String message = safeMessage(resetReason + "，已重置 U9 同步状态，等待重新同步");
+        LocalDateTime resetAt = now();
+        String previousU9OrderId = trimToNull(header.getU9OrderId());
+        String previousU9OrderCode = trimToNull(header.getU9OrderCode());
+
+        UpdateWrapper<SalesOrderHeader> update = new UpdateWrapper<>();
+        update.eq("id", header.getId())
+                .eq("u9_sync_status", STATUS_SYNCED)
+                .set("u9_sync_status", STATUS_UNSYNCED)
+                .set("u9_order_id", null)
+                .set("u9_order_code", null)
+                .set("u9_sync_attempt_id", null)
+                .set("u9_sync_request_hash", null)
+                .set("u9_sync_started_at", null)
+                .set("u9_sync_finished_at", null)
+                .set("u9_sync_message", message)
+                .set("updated_at", resetAt);
+        if (headerMapper.update(null, update) <= 0) {
+            throw new RuntimeException("U9 同步状态已变化，请刷新后重试");
+        }
+
+        Map<String, Object> before = new LinkedHashMap<>();
+        before.put("u9SyncStatus", currentStatus);
+        before.put("u9OrderId", previousU9OrderId);
+        before.put("u9OrderCode", previousU9OrderCode);
+        Map<String, Object> after = new LinkedHashMap<>();
+        after.put("u9SyncStatus", STATUS_UNSYNCED);
+        after.put("reason", resetReason);
+        after.put("resetAt", resetAt);
+        if (auditService != null) {
+            auditService.record(
+                    ACTION_RESYNC_RESET,
+                    "sales_order_header",
+                    header.getId(),
+                    before,
+                    after,
+                    "MARKET",
+                    "SUCCESS",
+                    "销售订单已重置为未同步，可重新同步 U9",
+                    null
+            );
+        }
+
+        header.setU9SyncStatus(STATUS_UNSYNCED);
+        header.setU9OrderId(null);
+        header.setU9OrderCode(null);
+        header.setU9SyncAttemptId(null);
+        header.setU9SyncRequestHash(null);
+        header.setU9SyncStartedAt(null);
+        header.setU9SyncFinishedAt(null);
+        header.setU9SyncMessage(message);
+        header.setUpdatedAt(resetAt);
+
+        SalesOrderU9ResyncResetResp response = new SalesOrderU9ResyncResetResp();
+        response.setSalesOrderId(header.getId());
+        response.setSalesOrderNo(header.getSalesOrderNo());
+        response.setFromStatus(currentStatus);
+        response.setToStatus(STATUS_UNSYNCED);
+        response.setPreviousU9OrderId(previousU9OrderId);
+        response.setPreviousU9OrderCode(previousU9OrderCode);
+        response.setMessage(message);
+        return response;
     }
 
     private SalesOrderHeader lockedHeader(Long salesOrderId) {
