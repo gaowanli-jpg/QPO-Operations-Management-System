@@ -147,6 +147,16 @@ export const restoreSalesOrderItemForU9Change = (salesOrderId, itemId, payload =
   data: payload
 })
 
+export const discardSalesOrderItemLinked = (salesOrderId, itemId, payload = {}) => request(`/api/market/sales-order-management/orders/${salesOrderId}/items/${itemId}/linked-discard`, {
+  method: 'POST',
+  data: payload
+})
+
+export const restoreSalesOrderItemLinked = (salesOrderId, itemId, payload = {}) => request(`/api/market/sales-order-management/orders/${salesOrderId}/items/${itemId}/linked-restore`, {
+  method: 'POST',
+  data: payload
+})
+
 export const previewSalesOrderItemDataReplacement = (salesOrderId, formData) => request(`/api/market/sales-order-management/orders/${salesOrderId}/items/data-replacement/preview`, {
   method: 'POST',
   data: formData,

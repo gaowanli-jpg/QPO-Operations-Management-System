@@ -77,7 +77,20 @@ class SalesOrderManagementGovernanceTest {
                         "restoreItemForU9Change")
                 .doesNotContain(
                         "@RequirePermission(\"market:sales-order:discard\")\n    public OrderStatusChangeResult discardItemForU9Change",
-                        "@RequirePermission(\"market:sales-order:restore\")\n    public OrderStatusChangeResult restoreItemForU9Change");
+                "@RequirePermission(\"market:sales-order:restore\")\n    public OrderStatusChangeResult restoreItemForU9Change");
+    }
+
+    @Test
+    void controllerExposesLinkedDiscardAndRestoreWithTheSalesOrderUpdatePermission() throws IOException {
+        String source = read(CONTROLLER);
+
+        assertThat(source)
+                .contains(
+                        "@PostMapping(\"/orders/{salesOrderId}/items/{itemId}/linked-discard\")",
+                        "@PostMapping(\"/orders/{salesOrderId}/items/{itemId}/linked-restore\")",
+                        "@RequirePermission(\"market:sales-order:update\")",
+                        "salesOrderLinkedDiscardService.discard",
+                        "salesOrderLinkedDiscardService.restore");
     }
 
     @Test

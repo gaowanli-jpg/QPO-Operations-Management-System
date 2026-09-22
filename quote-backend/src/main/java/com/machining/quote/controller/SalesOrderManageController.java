@@ -9,6 +9,7 @@ import com.machining.quote.dto.ProcessSheetDTO;
 import com.machining.quote.dto.SalesOrderItemDataReplacementConfirmResp;
 import com.machining.quote.dto.SalesOrderItemFieldReplacementReq;
 import com.machining.quote.dto.SalesOrderItemUpdateReq;
+import com.machining.quote.dto.SalesOrderLinkedDiscardResult;
 import com.machining.quote.dto.SalesOrderMaintenanceOrderUpdateReq;
 import com.machining.quote.dto.SalesOrderMaintenanceUpdateResp;
 import com.machining.quote.dto.SalesOrderU9ItemDataReplacementPreviewDTO;
@@ -17,6 +18,7 @@ import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.SalesOrderItem;
 import com.machining.quote.service.SalesOrderItemDataReplacementService;
 import com.machining.quote.service.SalesOrderItemDetailExportService;
+import com.machining.quote.service.SalesOrderLinkedDiscardService;
 import com.machining.quote.service.SalesOrderManageService;
 import com.machining.quote.service.SalesOrderMaintenanceService;
 import com.machining.quote.service.SalesOrderProductionTaskNoticeExportService;
@@ -55,6 +57,8 @@ public class SalesOrderManageController {
     private SalesOrderItemDataReplacementService itemDataReplacementService;
     @Autowired
     private SalesOrderU9SyncStateService salesOrderU9SyncStateService;
+    @Autowired
+    private SalesOrderLinkedDiscardService salesOrderLinkedDiscardService;
 
     @GetMapping("/customers")
     @RequirePermission("market:sales-order:customer-select")
@@ -190,6 +194,30 @@ public class SalesOrderManageController {
             @PathVariable Long itemId,
             @RequestBody(required = false) OrderStatusChangeReq req) {
         return salesOrderManageService.restoreItemForU9Change(
+                salesOrderId,
+                itemId,
+                req == null ? new OrderStatusChangeReq() : req);
+    }
+
+    @PostMapping("/orders/{salesOrderId}/items/{itemId}/linked-discard")
+    @RequirePermission("market:sales-order:update")
+    public SalesOrderLinkedDiscardResult discardItemLinked(
+            @PathVariable Long salesOrderId,
+            @PathVariable Long itemId,
+            @RequestBody(required = false) OrderStatusChangeReq req) {
+        return salesOrderLinkedDiscardService.discard(
+                salesOrderId,
+                itemId,
+                req == null ? new OrderStatusChangeReq() : req);
+    }
+
+    @PostMapping("/orders/{salesOrderId}/items/{itemId}/linked-restore")
+    @RequirePermission("market:sales-order:update")
+    public SalesOrderLinkedDiscardResult restoreItemLinked(
+            @PathVariable Long salesOrderId,
+            @PathVariable Long itemId,
+            @RequestBody(required = false) OrderStatusChangeReq req) {
+        return salesOrderLinkedDiscardService.restore(
                 salesOrderId,
                 itemId,
                 req == null ? new OrderStatusChangeReq() : req);

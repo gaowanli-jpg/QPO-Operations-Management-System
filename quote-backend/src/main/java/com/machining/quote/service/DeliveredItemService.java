@@ -154,6 +154,8 @@ public class DeliveredItemService {
         ticket.setDiscardedAt(now);
         ticket.setDiscardedBy(currentUserId);
         ticket.setDiscardReason(reason);
+        ticket.setDiscardSource("MANUAL");
+        ticket.setDiscardSourceSalesOrderItemId(null);
         if (ticketMapper.updateById(ticket) <= 0) {
             throw new RuntimeException("已提零件废弃失败，请刷新后重试");
         }
@@ -175,6 +177,8 @@ public class DeliveredItemService {
         ticket.setRestoredAt(now);
         ticket.setRestoredBy(currentUserId());
         ticket.setRestoreReason(reason);
+        ticket.setDiscardSource(null);
+        ticket.setDiscardSourceSalesOrderItemId(null);
         if (ticketMapper.updateById(ticket) <= 0) {
             throw new RuntimeException("已提零件恢复失败，请刷新后重试");
         }

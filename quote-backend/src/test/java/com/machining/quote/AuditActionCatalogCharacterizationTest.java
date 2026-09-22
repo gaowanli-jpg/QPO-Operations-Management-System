@@ -62,6 +62,8 @@ class AuditActionCatalogCharacterizationTest {
         assertThat(AuditService.inferModule("SALES_ORDER_UPDATE")).isEqualTo("MARKET");
         assertThat(AuditService.inferModule("SALES_ORDER_ITEM_UPDATE")).isEqualTo("MARKET");
         assertThat(AuditService.inferModule("SALES_ORDER_ITEM_DATA_REPLACEMENT")).isEqualTo("MARKET");
+        assertThat(AuditService.inferModule("SALES_ORDER_ITEM_LINKED_DISCARD")).isEqualTo("MARKET");
+        assertThat(AuditService.inferModule("SALES_ORDER_ITEM_LINKED_RESTORE")).isEqualTo("MARKET");
         assertThat(AuditService.inferModule("SALES_ORDER_CHANGE_ITEM_UPDATE")).isEqualTo("CHANGE");
         assertThat(AuditService.inferModule("SALES_ORDER_CHANGE_ITEM_DATA_REPLACEMENT")).isEqualTo("CHANGE");
         assertThat(AuditService.inferModule("SALES_ORDER_PRODUCTION_TASK_NOTICE_EXPORT")).isEqualTo("MARKET");
@@ -103,6 +105,8 @@ class AuditActionCatalogCharacterizationTest {
         assertThat(AuditService.labelForAction("SALES_ORDER_UPDATE")).isNotEqualTo("SALES_ORDER_UPDATE");
         assertThat(AuditService.labelForAction("SALES_ORDER_ITEM_UPDATE")).isNotEqualTo("SALES_ORDER_ITEM_UPDATE");
         assertThat(AuditService.labelForAction("SALES_ORDER_ITEM_DATA_REPLACEMENT")).isNotEqualTo("SALES_ORDER_ITEM_DATA_REPLACEMENT");
+        assertThat(AuditService.labelForAction("SALES_ORDER_ITEM_LINKED_DISCARD")).isNotEqualTo("SALES_ORDER_ITEM_LINKED_DISCARD");
+        assertThat(AuditService.labelForAction("SALES_ORDER_ITEM_LINKED_RESTORE")).isNotEqualTo("SALES_ORDER_ITEM_LINKED_RESTORE");
         assertThat(AuditService.labelForAction("SALES_ORDER_CHANGE_ITEM_UPDATE")).isNotEqualTo("SALES_ORDER_CHANGE_ITEM_UPDATE");
         assertThat(AuditService.labelForAction("SALES_ORDER_CHANGE_ITEM_DATA_REPLACEMENT")).isNotEqualTo("SALES_ORDER_CHANGE_ITEM_DATA_REPLACEMENT");
         assertThat(AuditService.labelForAction("SALES_ORDER_PRODUCTION_TASK_NOTICE_EXPORT")).isNotEqualTo("SALES_ORDER_PRODUCTION_TASK_NOTICE_EXPORT");
@@ -233,6 +237,8 @@ class AuditActionCatalogCharacterizationTest {
         assertThat(AuditService.labelForAction("SALES_ORDER_UPDATE")).isEqualTo("保存销售订单信息");
         assertThat(AuditService.labelForAction("SALES_ORDER_ITEM_UPDATE")).isEqualTo("保存销售订单零件行");
         assertThat(AuditService.labelForAction("SALES_ORDER_ITEM_DATA_REPLACEMENT")).isEqualTo("销售订单表格数据替换");
+        assertThat(AuditService.labelForAction("SALES_ORDER_ITEM_LINKED_DISCARD")).isEqualTo("销售订单零件关联废弃");
+        assertThat(AuditService.labelForAction("SALES_ORDER_ITEM_LINKED_RESTORE")).isEqualTo("销售订单零件关联恢复");
         assertThat(queryService)
                 .contains("sales_order_header")
                 .contains("sales_order_item");

@@ -90,6 +90,14 @@ public class SalesOrderItem {
     private LocalDateTime u9ChangeRestoredAt;
     private Long u9ChangeRestoredBy;
     private String u9ChangeRestoreReason;
+    private Boolean linkedDiscarded;
+    private LocalDateTime linkedDiscardedAt;
+    private Long linkedDiscardedBy;
+    private String linkedDiscardReason;
+    private Boolean linkedU9ChangeExcluded;
+    private LocalDateTime linkedRestoredAt;
+    private Long linkedRestoredBy;
+    private String linkedRestoreReason;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }
