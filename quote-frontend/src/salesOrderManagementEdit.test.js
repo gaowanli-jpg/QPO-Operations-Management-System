@@ -104,10 +104,11 @@ describe('sales order management editable detail', () => {
     expect(replacementDialog).toContain('未税单价、含税单价、交期')
   })
 
-  test('editing is locked while U9 is syncing pending confirmation or already synced', () => {
+  test('editing is locked only while U9 is syncing or pending confirmation', () => {
     const component = componentSource()
 
-    expect(component).toContain("const SALES_ORDER_EDIT_LOCKED_U9_STATUSES = ['同步中', '结果待确认', '已同步']")
+    expect(component).toContain("const SALES_ORDER_EDIT_LOCKED_U9_STATUSES = ['同步中', '结果待确认']")
+    expect(component).not.toContain("const SALES_ORDER_EDIT_LOCKED_U9_STATUSES = ['同步中', '结果待确认', '已同步']")
     expect(component).toContain('当前 U9 状态不允许修改销售订单')
     expect(component).toContain(':disabled="salesOrderEditLocked"')
   })

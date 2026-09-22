@@ -818,7 +818,7 @@ const route = useRoute()
 const SALES_ORDER_STATUSES = ['已报价', '部分已提单', '已生成提单', '废弃']
 const SALES_ORDER_TYPES = ['预测订单', '备货订单', '正式订单']
 const SALES_ORDER_UPDATE_PERMISSION = 'market:sales-order:update'
-const SALES_ORDER_EDIT_LOCKED_U9_STATUSES = ['同步中', '结果待确认', '已同步']
+const SALES_ORDER_EDIT_LOCKED_U9_STATUSES = ['同步中', '结果待确认']
 const SALES_ORDER_STATUS_LOCKED_REASON = '销售订单已同步 U9，不能废弃'
 const SALES_ORDER_PRICE_CONVERSIONS = {
   UNTAXED_TO_TAX_INCLUDED: {
