@@ -9,6 +9,7 @@ import com.machining.quote.dto.ProcessSheetDTO;
 import com.machining.quote.dto.SalesOrderItemDataReplacementConfirmResp;
 import com.machining.quote.dto.SalesOrderItemFieldReplacementReq;
 import com.machining.quote.dto.SalesOrderItemUpdateReq;
+import com.machining.quote.dto.SalesOrderLinkedDiscardBatchResult;
 import com.machining.quote.dto.SalesOrderLinkedDiscardResult;
 import com.machining.quote.dto.SalesOrderMaintenanceOrderUpdateReq;
 import com.machining.quote.dto.SalesOrderMaintenanceUpdateResp;
@@ -220,6 +221,26 @@ public class SalesOrderManageController {
         return salesOrderLinkedDiscardService.restore(
                 salesOrderId,
                 itemId,
+                req == null ? new OrderStatusChangeReq() : req);
+    }
+
+    @PostMapping("/orders/{salesOrderId}/linked-discard")
+    @RequirePermission("market:sales-order:update")
+    public SalesOrderLinkedDiscardBatchResult discardOrderLinked(
+            @PathVariable Long salesOrderId,
+            @RequestBody(required = false) OrderStatusChangeReq req) {
+        return salesOrderLinkedDiscardService.discardOrder(
+                salesOrderId,
+                req == null ? new OrderStatusChangeReq() : req);
+    }
+
+    @PostMapping("/orders/{salesOrderId}/linked-restore")
+    @RequirePermission("market:sales-order:update")
+    public SalesOrderLinkedDiscardBatchResult restoreOrderLinked(
+            @PathVariable Long salesOrderId,
+            @RequestBody(required = false) OrderStatusChangeReq req) {
+        return salesOrderLinkedDiscardService.restoreOrder(
+                salesOrderId,
                 req == null ? new OrderStatusChangeReq() : req);
     }
 

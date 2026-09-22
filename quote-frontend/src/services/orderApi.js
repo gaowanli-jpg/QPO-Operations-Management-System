@@ -179,6 +179,16 @@ export const restoreSalesOrder = (salesOrderId, payload = {}) => request(`/api/m
   data: payload
 })
 
+export const discardSalesOrderLinked = (salesOrderId, payload = {}) => request(`/api/market/sales-order-management/orders/${salesOrderId}/linked-discard`, {
+  method: 'POST',
+  data: payload
+})
+
+export const restoreSalesOrderLinked = (salesOrderId, payload = {}) => request(`/api/market/sales-order-management/orders/${salesOrderId}/linked-restore`, {
+  method: 'POST',
+  data: payload
+})
+
 export const supplementSalesOrderDrawings = (salesOrderId, formData) => request(`/api/market/sales-order-management/orders/${salesOrderId}/supplement-drawings`, {
   method: 'POST',
   data: formData,

@@ -48,7 +48,6 @@ public class SalesOrderManageService {
     private static final String ACTION_ITEM_RESTORE = "SALES_ORDER_ITEM_U9_CHANGE_RESTORE";
     private static final String ACTION_DRAWING_SUPPLEMENT = "SALES_ORDER_DRAWING_SUPPLEMENT";
     private static final String ACTION_DRAWING_REPLACE = "SALES_ORDER_DRAWING_REPLACE";
-    private static final String U9_STATUS_SYNCED = "已同步";
     private static final String U9_STATUS_SYNCING = "同步中";
     private static final String U9_STATUS_PENDING_CONFIRMATION = "结果待确认";
 
@@ -1057,11 +1056,8 @@ public class SalesOrderManageService {
     }
 
     private void validateSalesOrderDiscardAllowed(SalesOrderHeader order, String fromStatus, String rejectionMessage) {
-        if (order != null && U9_STATUS_SYNCED.equals(order.getU9SyncStatus())) {
-            throw new RuntimeException("已同步 U9 的销售订单不能废弃。");
-        }
         if (!QuoteStatusWorkflow.RELEASED.equals(fromStatus)) {
-            throw new RuntimeException(rejectionMessage);
+            throw new RuntimeException("只有已生成提单的销售订单可以废弃。");
         }
     }
 
@@ -1151,6 +1147,7 @@ public class SalesOrderManageService {
         row.put("orderType", order.getOrderType());
         row.put("internalProjectNo", order.getInternalProjectNo());
         row.put("status", order.getStatus());
+        row.put("linkedDiscarded", Boolean.TRUE.equals(order.getLinkedDiscarded()));
         row.put("u9SyncStatus", order.getU9SyncStatus());
         row.put("u9OrderId", order.getU9OrderId());
         row.put("u9OrderCode", order.getU9OrderCode());

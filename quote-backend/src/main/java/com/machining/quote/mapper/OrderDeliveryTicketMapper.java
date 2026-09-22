@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.toolkit.Constants;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.machining.quote.config.JsonbTypeHandler;
 import com.machining.quote.dto.DeliveredItemDTO;
+import com.machining.quote.dto.SalesOrderLinkedDiscardRelation;
 import com.machining.quote.entity.OrderDeliveryTicket;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -15,11 +16,62 @@ import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
 
 import java.util.List;
+import java.time.LocalDateTime;
 
 @Mapper
 public interface OrderDeliveryTicketMapper extends BaseMapper<OrderDeliveryTicket> {
     @Select("SELECT * FROM order_delivery_ticket WHERE id = #{id} FOR UPDATE")
     OrderDeliveryTicket selectByIdForUpdate(@Param("id") Integer id);
+
+    @Update("""
+            <script>
+            UPDATE order_delivery_ticket AS ticket
+            SET discarded = TRUE,
+                discarded_at = #{updatedAt},
+                discarded_by = #{operatorId},
+                discard_reason = #{reason},
+                discard_source = #{discardSource},
+                discard_source_sales_order_item_id = target.source_item_id
+            FROM (VALUES
+                <foreach collection="relations" item="relation" separator=",">
+                    (#{relation.recordId}, #{relation.salesOrderItemId})
+                </foreach>
+            ) AS target(id, source_item_id)
+            WHERE ticket.id = target.id
+              AND COALESCE(ticket.discarded, FALSE) = FALSE
+            </script>
+            """)
+    int markLinkedDiscarded(@Param("relations") List<SalesOrderLinkedDiscardRelation> relations,
+                            @Param("discardSource") String discardSource,
+                            @Param("reason") String reason,
+                            @Param("operatorId") Long operatorId,
+                            @Param("updatedAt") LocalDateTime updatedAt);
+
+    @Update("""
+            <script>
+            UPDATE order_delivery_ticket AS ticket
+            SET discarded = FALSE,
+                restored_at = #{updatedAt},
+                restored_by = #{operatorId},
+                restore_reason = #{reason},
+                discard_source = NULL,
+                discard_source_sales_order_item_id = NULL
+            FROM (VALUES
+                <foreach collection="relations" item="relation" separator=",">
+                    (#{relation.recordId}, #{relation.salesOrderItemId})
+                </foreach>
+            ) AS target(id, source_item_id)
+            WHERE ticket.id = target.id
+              AND COALESCE(ticket.discarded, FALSE) = TRUE
+              AND ticket.discard_source = #{discardSource}
+              AND ticket.discard_source_sales_order_item_id = target.source_item_id
+            </script>
+            """)
+    int restoreLinkedDiscarded(@Param("relations") List<SalesOrderLinkedDiscardRelation> relations,
+                               @Param("discardSource") String discardSource,
+                               @Param("reason") String reason,
+                               @Param("operatorId") Long operatorId,
+                               @Param("updatedAt") LocalDateTime updatedAt);
 
     @Update("""
             UPDATE order_delivery_ticket

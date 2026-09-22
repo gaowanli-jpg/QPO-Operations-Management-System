@@ -58,6 +58,30 @@ class SalesOrderLinkedDiscardMigrationTest {
         assertThat(allocation).contains(
                 "private String discardSource;",
                 "private Long discardSourceSalesOrderItemId;");
+
+        Path headerMigration = ROOT.resolve(Path.of("resources", "db", "migration", "V54__sales_order_linked_discard.sql"));
+        assertThat(headerMigration).exists();
+        assertThat(Files.readString(headerMigration, StandardCharsets.UTF_8)).contains(
+                "ALTER TABLE sales_order_header",
+                "linked_discarded boolean DEFAULT false NOT NULL",
+                "linked_discarded_at timestamp",
+                "linked_discarded_by bigint",
+                "linked_discard_reason character varying(500)",
+                "linked_restored_at timestamp",
+                "linked_restored_by bigint",
+                "linked_restore_reason character varying(500)",
+                "idx_sales_order_header_linked_discard")
+                .doesNotContain("V1__", "V2__");
+
+        String header = read("entity", "SalesOrderHeader.java");
+        assertThat(header).contains(
+                "private Boolean linkedDiscarded;",
+                "private LocalDateTime linkedDiscardedAt;",
+                "private Long linkedDiscardedBy;",
+                "private String linkedDiscardReason;",
+                "private LocalDateTime linkedRestoredAt;",
+                "private Long linkedRestoredBy;",
+                "private String linkedRestoreReason;");
     }
 
     private static String read(String folder, String fileName) throws Exception {

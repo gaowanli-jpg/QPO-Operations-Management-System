@@ -20,9 +20,13 @@ class SalesOrderLinkedDiscardApiTest {
                 "import com.machining.quote.service.SalesOrderLinkedDiscardService;",
                 "@PostMapping(\"/orders/{salesOrderId}/items/{itemId}/linked-discard\")",
                 "@PostMapping(\"/orders/{salesOrderId}/items/{itemId}/linked-restore\")",
+                "@PostMapping(\"/orders/{salesOrderId}/linked-discard\")",
+                "@PostMapping(\"/orders/{salesOrderId}/linked-restore\")",
                 "@RequirePermission(\"market:sales-order:update\")",
                 "salesOrderLinkedDiscardService.discard",
-                "salesOrderLinkedDiscardService.restore");
+                "salesOrderLinkedDiscardService.restore",
+                "salesOrderLinkedDiscardService.discardOrder",
+                "salesOrderLinkedDiscardService.restoreOrder");
     }
 
     @Test

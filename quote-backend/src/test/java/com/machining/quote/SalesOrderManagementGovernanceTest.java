@@ -202,27 +202,25 @@ class SalesOrderManagementGovernanceTest {
     }
 
     @Test
-    void syncedOrNonReleasedSalesOrdersCannotBeDiscarded() {
+    void nonReleasedSalesOrdersCannotBeDiscardedButSyncedReleasedOrdersCan() throws Exception {
         Fixture partiallyReleased = fixture(header(300L, QuoteStatusWorkflow.PARTIALLY_RELEASED), List.of(), 0L);
         assertThatThrownBy(() -> invokeStatusAction(partiallyReleased.service, "discard", 300L, "不能废弃"))
                 .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("只有已生成提单且未同步 U9 的销售订单可以废弃");
+                .hasMessageContaining("只有已生成提单的销售订单可以废弃");
         verify(partiallyReleased.headerMapper, never()).updateById(any());
         verify(partiallyReleased.itemMapper, never()).updateById(any());
 
         SalesOrderHeader syncedHeader = header(301L, QuoteStatusWorkflow.RELEASED);
         syncedHeader.setU9SyncStatus("已同步");
         Fixture synced = fixture(syncedHeader, List.of(), 0L);
-        assertThatThrownBy(() -> invokeStatusAction(synced.service, "discard", 301L, "不能废弃"))
-                .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("已同步 U9 的销售订单不能废弃");
-        verify(synced.headerMapper, never()).updateById(any());
-        verify(synced.itemMapper, never()).updateById(any());
+        Object syncedDiscardResult = invokeStatusAction(synced.service, "discard", 301L, "同步后业务废弃");
+        assertThat(String.valueOf(syncedDiscardResult)).contains(QuoteStatusWorkflow.DISCARDED);
+        verify(synced.headerMapper).updateById(any(SalesOrderHeader.class));
 
         Fixture ticketed = fixture(header(302L, QuoteStatusWorkflow.QUOTED), List.of(), 1L);
         assertThatThrownBy(() -> invokeStatusAction(ticketed.service, "discard", 302L, "已有提单"))
                 .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("只有已生成提单且未同步 U9 的销售订单可以废弃");
+                .hasMessageContaining("只有已生成提单的销售订单可以废弃");
         verify(ticketed.headerMapper, never()).updateById(any());
         verify(ticketed.itemMapper, never()).updateById(any());
     }
