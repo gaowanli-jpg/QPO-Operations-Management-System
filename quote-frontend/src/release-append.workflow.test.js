@@ -54,4 +54,19 @@ describe('release append module', () => {
     expect(component).not.toContain('订单默认信息')
     expect(component).not.toContain('同步 U9')
   })
+
+  test('uses the new order import step-card hierarchy and spacing', () => {
+    const component = readSource('components', 'ReleaseAppendManage.vue')
+
+    expect(component.match(/class="import-step append-step/g)).toHaveLength(4)
+    expect(component).toContain('步骤 1：客户基础信息')
+    expect(component).toContain('步骤 2：选择目标销售订单')
+    expect(component).toContain('步骤 3：上传销售订单（Excel）')
+    expect(component).toContain('步骤 4：上传关联图纸（PDF） / 上传订单附件文件夹')
+    expect(component).toContain('class="step-panel upload-panel"')
+    expect(component).toContain(':md="14" :lg="10" :xl="9" class="customer-input-col"')
+    expect(component).toContain('.section-title {')
+    expect(component).toContain('background: var(--erp-surface-soft)')
+    expect(component).toContain('border-radius: var(--erp-radius-full)')
+  })
 })
