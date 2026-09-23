@@ -142,6 +142,8 @@ public class LockedItemService {
         allocation.setDiscardedAt(now);
         allocation.setDiscardedBy(currentUserId());
         allocation.setDiscardReason(reason);
+        allocation.setDiscardSource("MANUAL");
+        allocation.setDiscardSourceSalesOrderItemId(null);
         allocation.setUpdatedAt(now);
         if (allocationMapper.updateById(allocation) <= 0) {
             throw new RuntimeException("锁库零件废弃失败，请刷新后重试");
@@ -164,6 +166,8 @@ public class LockedItemService {
         allocation.setRestoredAt(now);
         allocation.setRestoredBy(currentUserId());
         allocation.setRestoreReason(reason);
+        allocation.setDiscardSource(null);
+        allocation.setDiscardSourceSalesOrderItemId(null);
         allocation.setUpdatedAt(now);
         if (allocationMapper.updateById(allocation) <= 0) {
             throw new RuntimeException("锁库零件恢复失败，请刷新后重试");

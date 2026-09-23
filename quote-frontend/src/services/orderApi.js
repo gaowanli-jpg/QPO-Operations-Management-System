@@ -13,7 +13,8 @@ const CUSTOMER_ENDPOINTS = {
   'sales-order-change': '/api/change/sales-orders/customers',
   'delivered-item': '/api/order-delivery/tickets/customers',
   'locked-item': '/api/order-delivery/locked-items/customers',
-  'production-item': '/api/order-delivery/production-items/customers'
+  'production-item': '/api/order-delivery/production-items/customers',
+  'linked-change': '/api/change/linked-changes/customers'
 }
 
 export const listCustomers = (scope = 'market-order', params = undefined) => {
@@ -147,6 +148,16 @@ export const restoreSalesOrderItemForU9Change = (salesOrderId, itemId, payload =
   data: payload
 })
 
+export const discardSalesOrderItemLinked = (salesOrderId, itemId, payload = {}) => request(`/api/market/sales-order-management/orders/${salesOrderId}/items/${itemId}/linked-discard`, {
+  method: 'POST',
+  data: payload
+})
+
+export const restoreSalesOrderItemLinked = (salesOrderId, itemId, payload = {}) => request(`/api/market/sales-order-management/orders/${salesOrderId}/items/${itemId}/linked-restore`, {
+  method: 'POST',
+  data: payload
+})
+
 export const previewSalesOrderItemDataReplacement = (salesOrderId, formData) => request(`/api/market/sales-order-management/orders/${salesOrderId}/items/data-replacement/preview`, {
   method: 'POST',
   data: formData,
@@ -165,6 +176,16 @@ export const discardSalesOrder = (salesOrderId, payload = {}) => request(`/api/m
 })
 
 export const restoreSalesOrder = (salesOrderId, payload = {}) => request(`/api/market/sales-order-management/orders/${salesOrderId}/restore`, {
+  method: 'POST',
+  data: payload
+})
+
+export const discardSalesOrderLinked = (salesOrderId, payload = {}) => request(`/api/market/sales-order-management/orders/${salesOrderId}/linked-discard`, {
+  method: 'POST',
+  data: payload
+})
+
+export const restoreSalesOrderLinked = (salesOrderId, payload = {}) => request(`/api/market/sales-order-management/orders/${salesOrderId}/linked-restore`, {
   method: 'POST',
   data: payload
 })

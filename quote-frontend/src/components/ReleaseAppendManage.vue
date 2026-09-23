@@ -8,46 +8,54 @@
     </header>
 
     <section class="erp-surface release-append-workflow">
-      <div class="append-step append-step-customer">
+      <div class="import-step append-step append-step-customer">
         <div class="section-title">
           <span class="step-index">01</span>
-          <span>选择客户</span>
+          <span>步骤 1：客户基础信息</span>
         </div>
         <div class="step-panel">
           <el-form label-width="120px" class="append-form">
-            <el-form-item label="客户" required>
-              <el-input :model-value="customerLabel" readonly placeholder="请选择客户主数据">
-                <template #append>
-                  <el-button v-permission="'market:release-append:customer-select'" @click="customerPickerVisible = true">
-                    选择客户
-                  </el-button>
-                </template>
-              </el-input>
-            </el-form-item>
+            <el-row :gutter="20" justify="center">
+              <el-col :xs="24" :sm="22" :md="14" :lg="10" :xl="9" class="customer-input-col">
+                <el-form-item label="客户" required>
+                  <el-input :model-value="customerLabel" readonly placeholder="请选择客户主数据">
+                    <template #append>
+                      <el-button v-permission="'market:release-append:customer-select'" @click="customerPickerVisible = true">
+                        选择客户
+                      </el-button>
+                    </template>
+                  </el-input>
+                </el-form-item>
+              </el-col>
+            </el-row>
           </el-form>
         </div>
       </div>
 
-      <div class="append-step append-step-target-order">
+      <div class="import-step append-step append-step-target-order">
         <div class="section-title">
           <span class="step-index">02</span>
-          <span>选择目标销售订单</span>
+          <span>步骤 2：选择目标销售订单</span>
         </div>
         <div class="step-panel target-order-panel">
           <el-form label-width="120px" class="append-form">
-            <el-form-item label="销售订单" required>
-              <el-input :model-value="targetOrderLabel" readonly placeholder="请先选择客户，再选择可追加销售订单">
-                <template #append>
-                  <el-button
-                    v-permission="'market:release-append:order-select'"
-                    :disabled="!selectedCustomer.customerName"
-                    @click="openOrderPicker"
-                  >
-                    选择订单
-                  </el-button>
-                </template>
-              </el-input>
-            </el-form-item>
+            <el-row :gutter="20" justify="center">
+              <el-col :xs="24" :sm="22" :md="16" :lg="12" :xl="10" class="target-order-input-col">
+                <el-form-item label="销售订单" required>
+                  <el-input :model-value="targetOrderLabel" readonly placeholder="请先选择客户，再选择可追加销售订单">
+                    <template #append>
+                      <el-button
+                        v-permission="'market:release-append:order-select'"
+                        :disabled="!selectedCustomer.customerName"
+                        @click="openOrderPicker"
+                      >
+                        选择订单
+                      </el-button>
+                    </template>
+                  </el-input>
+                </el-form-item>
+              </el-col>
+            </el-row>
           </el-form>
           <el-alert
             title="只允许选择同客户且 U9 未处理或失败的销售订单；本页面不改订单头，只追加新零件。"
@@ -58,10 +66,10 @@
         </div>
       </div>
 
-      <div class="append-step append-step-excel">
+      <div class="import-step append-step append-step-excel">
         <div class="section-title">
           <span class="step-index">03</span>
-          <span>上传销售订单 Excel</span>
+          <span>步骤 3：上传销售订单（Excel）</span>
         </div>
         <div class="step-panel upload-panel">
           <el-alert
@@ -69,6 +77,7 @@
             type="info"
             :closable="false"
             show-icon
+            class="upload-alert"
           />
           <el-upload
             ref="excelUploadRef"
@@ -82,7 +91,7 @@
             class="centered-upload"
           >
             <template #trigger>
-              <el-button type="primary" plain>选取 销售订单.xlsx</el-button>
+              <el-button type="primary" plain class="workflow-primary-action append-upload-axis">选取 销售订单.xlsx</el-button>
             </template>
             <template #tip>
               <div class="el-upload__tip">只能上传 1 份销售订单 Excel 文件</div>
@@ -91,10 +100,10 @@
         </div>
       </div>
 
-      <div class="append-step append-step-drawings">
+      <div class="import-step append-step append-step-drawings">
         <div class="section-title">
           <span class="step-index">04</span>
-          <span>上传关联图纸 / 上传订单附件文件夹</span>
+          <span>步骤 4：上传关联图纸（PDF） / 上传订单附件文件夹</span>
         </div>
         <div class="drawing-folder-upload-row">
           <ImportDrawingUploadPanel
@@ -141,7 +150,7 @@
     </section>
 
     <section v-if="appendResult" class="erp-table-surface append-result-panel">
-      <div class="erp-section-title-row">
+      <div class="erp-toolbar append-result-header">
         <div>
           <h2 class="erp-section-title">追加结果</h2>
           <p class="erp-section-description">{{ appendResult.message || '追加处理完成。' }}</p>
@@ -367,50 +376,72 @@ const buildDrawingReportHtml = (report) => {
 .release-append-page {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: var(--erp-space-5);
 }
 
 .release-append-workflow {
   display: grid;
-  gap: 18px;
-  padding: 20px;
+  gap: var(--erp-space-5);
+  padding: var(--erp-space-5);
+  background: linear-gradient(180deg, var(--erp-surface), var(--erp-bg-subtle));
 }
 
-.append-step {
-  display: grid;
-  gap: 10px;
+.import-step {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--erp-border-soft);
+  border-radius: var(--erp-radius-xl);
+  background: var(--erp-surface);
+  box-shadow: var(--erp-shadow-sm);
 }
 
 .section-title {
   display: flex;
   align-items: center;
-  gap: 8px;
-  color: var(--erp-text-primary);
+  gap: var(--erp-space-3);
+  margin: 0;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--erp-border-soft);
+  background: var(--erp-surface-soft);
+  color: var(--erp-text);
+  font-size: 14px;
   font-weight: 700;
+  line-height: 1.2;
 }
 
 .step-index {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: var(--erp-primary-soft);
-  color: var(--erp-primary);
-  font-size: 12px;
-  font-weight: 800;
+  min-width: 34px;
+  height: 24px;
+  border-radius: var(--erp-radius-full);
+  background: var(--erp-primary);
+  color: var(--erp-text-inverse);
+  font-size: var(--erp-font-size-xs);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
 }
 
 .step-panel {
-  padding: 18px;
-  border: 1px solid var(--erp-border-soft);
-  border-radius: 8px;
-  background: var(--erp-surface);
+  padding: 18px 20px;
 }
 
-.append-form {
-  max-width: 760px;
+.append-form,
+.append-form :deep(.el-row) {
+  width: 100%;
+}
+
+.append-form :deep(.el-form-item) {
+  margin-bottom: 0;
+}
+
+.customer-input-col {
+  max-width: 560px;
+}
+
+.target-order-input-col {
+  max-width: 800px;
 }
 
 .target-order-panel,
@@ -419,32 +450,82 @@ const buildDrawingReportHtml = (report) => {
   gap: 14px;
 }
 
+.upload-alert {
+  margin-bottom: 16px;
+}
+
 .centered-upload {
+  width: 100%;
+  text-align: center;
+}
+
+.centered-upload :deep(.el-upload) {
   display: flex;
   justify-content: center;
+}
+
+.centered-upload :deep(.el-upload__tip) {
+  margin-top: 10px;
+  color: var(--erp-text-muted);
+  text-align: center;
+}
+
+.append-upload-axis {
+  justify-content: center;
+  min-width: 240px;
 }
 
 .drawing-upload-dual-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
+  align-items: stretch;
+  gap: var(--erp-space-4);
+  padding: 18px 20px;
 }
 
 .drawing-folder-upload-row {
-  margin-bottom: 14px;
+  padding: 18px 20px 0;
+}
+
+.drawing-upload-dual-grid :deep(.import-drawing-upload-panel) {
+  height: 100%;
+  min-width: 0;
 }
 
 .submit-footer {
   justify-content: center;
-  padding-top: 4px;
+  margin-top: 0;
+  border-style: dashed;
+  background: var(--erp-surface);
 }
 
 .submit-btn {
-  min-width: 220px;
+  width: auto;
+  min-width: 260px;
+  font-size: 14px;
+  font-weight: 700;
 }
 
 .append-result-panel {
-  padding: 18px;
+  padding: var(--erp-space-4);
+}
+
+.append-result-header {
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--erp-space-3);
+}
+
+.append-result-header h2 {
+  margin: 0;
+  color: var(--erp-text);
+  font-size: 15px;
+}
+
+.append-result-header p {
+  margin: 4px 0 0;
+  color: var(--erp-text-secondary);
+  font-size: var(--erp-font-size-sm);
 }
 
 .result-stats {
@@ -454,9 +535,28 @@ const buildDrawingReportHtml = (report) => {
   justify-content: flex-end;
 }
 
-@media (max-width: 960px) {
+@media (max-width: 900px) {
+  .customer-input-col,
+  .target-order-input-col {
+    max-width: 100%;
+  }
+
+  .submit-footer,
+  .append-result-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .result-stats {
+    justify-content: flex-start;
+  }
+
   .drawing-upload-dual-grid {
     grid-template-columns: 1fr;
+  }
+
+  .submit-btn {
+    width: 100%;
   }
 }
 </style>

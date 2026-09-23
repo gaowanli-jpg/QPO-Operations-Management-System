@@ -24,7 +24,7 @@ import java.util.Map;
 @Service
 public class AuditLogQueryService {
     private static final List<String> ROLES = List.of("ADMIN", "MARKET", "ENGINEER", "SYSTEM");
-    private static final List<String> MODULES = List.of("AUTH", "SYSTEM", "DICT", "ENGINEER", "MARKET", "ORDER", "DELIVERY");
+    private static final List<String> MODULES = List.of("AUTH", "SYSTEM", "DICT", "ENGINEER", "MARKET", "ORDER", "DELIVERY", "CHANGE");
     private static final List<String> TARGET_TYPES = List.of(
             "erp_user",
             "dict_material",
@@ -36,6 +36,7 @@ public class AuditLogQueryService {
             "item_quote_version",
             "sales_order_header",
             "sales_order_item",
+            "sales_order_linked_change_notice",
             "order_delivery_ticket"
     );
     private static final Map<String, List<String>> MODULE_ACTION_PREFIXES = Map.of(
@@ -45,7 +46,8 @@ public class AuditLogQueryService {
             "ENGINEER", List.of("ITEM_", "REPEAT_", "QUOTE_REFRESH_TASK_SUBMIT"),
             "MARKET", List.of("QUOTE_", "INTERNAL_TARGET_", "RFQ_", "SALES_ORDER_"),
             "ORDER", List.of("ORDER_"),
-            "DELIVERY", List.of("DELIVERY_", "PROCESS_SHEET_")
+            "DELIVERY", List.of("DELIVERY_", "PROCESS_SHEET_"),
+            "CHANGE", List.of("SALES_ORDER_CHANGE_", "LINKED_CHANGE_NOTICE_")
     );
     public static final int EXPORT_LIMIT = 5000;
     private static final DateTimeFormatter DATE_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");

@@ -164,6 +164,8 @@ describe('orderApi', () => {
     await orderApi.replaceSalesOrderItemField(901, { field: 'customerOrderNo', value: 'PO-BULK' })
     await orderApi.discardSalesOrderItemForU9Change(901, 21, { reason: '不参与 U9' })
     await orderApi.restoreSalesOrderItemForU9Change(901, 21, { reason: '恢复参与 U9' })
+    await orderApi.discardSalesOrderItemLinked(901, 21, { reason: '同步废弃下游工作池零件' })
+    await orderApi.restoreSalesOrderItemLinked(901, 21, { reason: '恢复下游工作池零件' })
 
     expect(request).toHaveBeenNthCalledWith(1, '/api/market/sales-order-management/orders/901', {
       method: 'PUT',
@@ -194,6 +196,14 @@ describe('orderApi', () => {
     expect(request).toHaveBeenNthCalledWith(7, '/api/market/sales-order-management/orders/901/items/21/restore', {
       method: 'POST',
       data: { reason: '恢复参与 U9' }
+    })
+    expect(request).toHaveBeenNthCalledWith(8, '/api/market/sales-order-management/orders/901/items/21/linked-discard', {
+      method: 'POST',
+      data: { reason: '同步废弃下游工作池零件' }
+    })
+    expect(request).toHaveBeenNthCalledWith(9, '/api/market/sales-order-management/orders/901/items/21/linked-restore', {
+      method: 'POST',
+      data: { reason: '恢复下游工作池零件' }
     })
   })
 

@@ -103,9 +103,18 @@
                   >
                     {{ action.label }}
                   </el-button>
-                  <el-tooltip v-if="statusActionLocked(scope.row)" :content="SALES_ORDER_STATUS_LOCKED_REASON" placement="top">
-                    <span class="status-locked-label">状态锁定</span>
-                  </el-tooltip>
+                  <el-button
+                    v-permission="SALES_ORDER_UPDATE_PERMISSION"
+                    size="small"
+                    :type="scope.row.linkedDiscarded ? 'success' : 'warning'"
+                    plain
+                    class="status-action-button"
+                    :loading="isOrderLinkedStatusPending(scope.row)"
+                    :disabled="isOrderLinkedStatusPending(scope.row)"
+                    @click="handleLinkedStatusAction(scope.row)"
+                  >
+                    {{ scope.row.linkedDiscarded ? '关联恢复' : '关联废弃' }}
+                  </el-button>
                 </div>
               </template>
             </el-table-column>
@@ -426,7 +435,7 @@
                   <span v-else>{{ row.status || '-' }}</span>
                 </template>
               </el-table-column>
-              <el-table-column label="U9/变更" width="178" align="center">
+              <el-table-column label="U9/变更" width="330" align="center">
                 <template #default="{ row }">
                   <div class="item-u9-change-exclusion-cell">
                     <el-tooltip
@@ -449,6 +458,21 @@
                           @click="handleSalesOrderItemU9ChangeExclusion(row)"
                         >
                           {{ row.u9ChangeExcluded ? '恢复' : '废弃' }}
+                        </el-button>
+                      </span>
+                    </el-tooltip>
+                    <el-tooltip :disabled="!salesOrderItemU9ChangeExclusionLocked" :content="salesOrderItemLinkedDiscardLockedReason" placement="top">
+                      <span class="sales-order-action-wrap">
+                        <el-button
+                          v-permission="SALES_ORDER_UPDATE_PERMISSION"
+                          size="small"
+                          :type="row.linkedDiscarded ? 'success' : 'warning'"
+                          plain
+                          :loading="isItemLinkedDiscardPending(row)"
+                          :disabled="salesOrderItemU9ChangeExclusionLocked || isItemLinkedDiscardPending(row)"
+                          @click="handleSalesOrderItemLinkedDiscard(row)"
+                        >
+                          {{ row.linkedDiscarded ? '关联恢复' : '关联废弃' }}
                         </el-button>
                       </span>
                     </el-tooltip>
@@ -806,6 +830,8 @@ import {
   convertSalesOrderTaxIncludedToUntaxed,
   convertSalesOrderUntaxedToTaxIncluded,
   discardSalesOrder,
+  discardSalesOrderLinked,
+  discardSalesOrderItemLinked,
   discardSalesOrderItemForU9Change,
   downloadSalesOrderItemDetails,
   downloadSalesOrderProductionTaskNotice,
@@ -819,6 +845,8 @@ import {
   saveSalesOrderItems,
   replaceSalesOrderItemField,
   restoreSalesOrder,
+  restoreSalesOrderLinked,
+  restoreSalesOrderItemLinked,
   restoreSalesOrderItemForU9Change,
   resetSalesOrderU9SyncStatus,
   replaceSalesOrderDrawings,
@@ -832,7 +860,6 @@ const SALES_ORDER_STATUSES = ['已报价', '部分已提单', '已生成提单',
 const SALES_ORDER_TYPES = ['预测订单', '备货订单', '正式订单']
 const SALES_ORDER_UPDATE_PERMISSION = 'market:sales-order:update'
 const SALES_ORDER_EDIT_LOCKED_U9_STATUSES = ['同步中', '结果待确认']
-const SALES_ORDER_STATUS_LOCKED_REASON = '销售订单已同步 U9，不能废弃'
 const SALES_ORDER_PRICE_CONVERSIONS = {
   UNTAXED_TO_TAX_INCLUDED: {
     label: '未税转含税',
@@ -849,11 +876,13 @@ const SALES_ORDER_PRICE_CONVERSIONS = {
 }
 const salesOrderActionKeys = {
   statusChange: (orderId) => `sales-order:status-change:${orderId || 'none'}`,
+  linkedStatusChange: (orderId) => `sales-order:linked-status-change:${orderId || 'none'}`,
   headerSave: (orderId) => `sales-order:header-save:${orderId || 'none'}`,
   itemSave: (orderId) => `sales-order:item-save:${orderId || 'none'}`,
   itemFieldReplacement: (orderId, field) => `sales-order:item-field-replacement:${field || 'none'}:${orderId || 'none'}`,
   itemPriceConversion: (orderId, direction) => `sales-order:item-price-conversion:${direction}:${orderId || 'none'}`,
   itemU9ChangeExclusion: (itemId) => `sales-order:item-u9-change-exclusion:${itemId || 'none'}`,
+  itemLinkedDiscard: (itemId) => `sales-order:item-linked-discard:${itemId || 'none'}`,
   u9ResyncReset: (orderId) => `sales-order:u9-resync-reset:${orderId || 'none'}`,
   itemDetailExport: (orderId) => `sales-order:item-detail-export:${orderId || 'none'}`,
   supplementDrawings: (orderId) => `sales-order:supplement-drawings:${orderId || 'none'}`,
@@ -901,7 +930,7 @@ const SALES_ORDER_STATUS_ACTIONS = [
     permission: 'market:sales-order:discard',
     handler: discardSalesOrder,
     type: 'danger',
-    reason: '销售订单：废弃未同步 U9 订单',
+    reason: '销售订单：废弃订单',
     successMessage: '销售订单已废弃。',
     errorMessage: '废弃销售订单失败。',
     confirmTitle: '废弃销售订单',
@@ -996,6 +1025,7 @@ const salesOrderEditLocked = computed(() => SALES_ORDER_EDIT_LOCKED_U9_STATUSES.
 const salesOrderEditLockedReason = computed(() => salesOrderEditLocked.value ? `当前 U9 状态不允许修改销售订单：${orderDetail.value?.orderInfo?.u9SyncStatus || '-'}` : '')
 const salesOrderItemU9ChangeExclusionLocked = computed(() => ['同步中', '结果待确认'].includes(String(orderDetail.value?.orderInfo?.u9SyncStatus || '').trim()))
 const salesOrderItemU9ChangeExclusionLockedReason = computed(() => salesOrderItemU9ChangeExclusionLocked.value ? `当前 U9 状态不能废弃或恢复销售订单零件：${orderDetail.value?.orderInfo?.u9SyncStatus || '-'}` : '')
+const salesOrderItemLinkedDiscardLockedReason = computed(() => salesOrderItemU9ChangeExclusionLocked.value ? `当前 U9 状态不能关联废弃或恢复销售订单零件：${orderDetail.value?.orderInfo?.u9SyncStatus || '-'}` : '')
 const dirtyItemCount = computed(() => detailItemList.value.filter(row => hasItemDraftChanges(row)).length)
 const autoReleaseSummary = computed(() => {
   const summary = orderDetail.value?.summary || {}
@@ -1504,6 +1534,7 @@ const openSalesOrderItemDataReplacementDialog = () => {
 }
 
 const isItemU9ChangeExclusionPending = (row) => isPending(salesOrderActionKeys.itemU9ChangeExclusion(row?.id))
+const isItemLinkedDiscardPending = (row) => isPending(salesOrderActionKeys.itemLinkedDiscard(row?.id))
 
 const handleSalesOrderItemU9ChangeExclusion = async (row) => {
   const salesOrderId = orderDetail.value?.orderInfo?.id
@@ -1540,6 +1571,45 @@ const handleSalesOrderItemU9ChangeExclusion = async (row) => {
     } catch (error) {
       console.error(error)
       ElMessage.error(error.response?.data?.message || (restoring ? '恢复销售订单零件失败。' : '废弃销售订单零件失败。'))
+    }
+  })
+}
+
+const handleSalesOrderItemLinkedDiscard = async (row) => {
+  const salesOrderId = orderDetail.value?.orderInfo?.id
+  if (!salesOrderId || !row?.id) return ElMessage.warning('请先打开销售订单详情。')
+  if (salesOrderItemU9ChangeExclusionLocked.value) return ElMessage.warning(salesOrderItemLinkedDiscardLockedReason.value)
+  const restoring = Boolean(row.linkedDiscarded)
+  const title = restoring ? '关联恢复销售订单零件' : '关联废弃销售订单零件'
+  const placeholder = restoring ? '请输入关联恢复原因' : '请输入关联废弃原因'
+  let reason = ''
+  try {
+    const result = await ElMessageBox.prompt(
+      `${title}：${row.partNo || row.id}${row.version ? ` / ${row.version}` : ''}。将同时处理仍在已提、待产和锁库工作池中的关联零件，已完成外部流程的记录会跳过。`,
+      title,
+      {
+        inputPlaceholder: placeholder,
+        inputPattern: /\S+/,
+        inputErrorMessage: '原因不能为空',
+        confirmButtonText: restoring ? '确认关联恢复' : '确认关联废弃',
+        cancelButtonText: '取消',
+        type: restoring ? 'success' : 'warning'
+      }
+    )
+    reason = result.value?.trim() || ''
+  } catch {
+    return
+  }
+  const handler = restoring ? restoreSalesOrderItemLinked : discardSalesOrderItemLinked
+  return runAction(salesOrderActionKeys.itemLinkedDiscard(row.id), async () => {
+    try {
+      const response = await handler(salesOrderId, row.id, { reason })
+      ElMessage.success(response?.message || (restoring ? '销售订单零件已关联恢复。' : '销售订单零件已关联废弃。'))
+      await loadOrders()
+      await refreshCurrentDetail()
+    } catch (error) {
+      console.error(error)
+      ElMessage.error(error.response?.data?.message || (restoring ? '关联恢复销售订单零件失败。' : '关联废弃销售订单零件失败。'))
     }
   })
 }
@@ -1596,13 +1666,8 @@ const isOrderStatusPending = (row) => isPending(salesOrderActionKeys.statusChang
 const canResetU9Sync = (row) => row?.u9SyncStatus === '已同步'
 const isU9ResyncResetPending = (row) => isPending(salesOrderActionKeys.u9ResyncReset(row?.id))
 
-const statusActionLocked = (row) => {
-  if (!row) return false
-  return row.status === '已生成提单' && row.u9SyncStatus === '已同步'
-}
-
 const rowStatusActions = (row) => {
-  if (!row || statusActionLocked(row)) {
+  if (!row) {
     return []
   }
   return SALES_ORDER_STATUS_ACTIONS.filter(action => action.status === row.status)
@@ -1634,6 +1699,54 @@ const performStatusAction = async (row, action) => {
     await refreshCurrentDetail()
   }).catch((error) => {
     if (error) {
+      console.error(error)
+      ElMessage.error(error.response?.data?.message || action.errorMessage)
+    }
+  })
+}
+
+const isOrderLinkedStatusPending = (row) => isPending(salesOrderActionKeys.linkedStatusChange(row?.id))
+
+const handleLinkedStatusAction = async (row) => {
+  if (!row?.id) return
+  const restoring = Boolean(row.linkedDiscarded)
+  const action = restoring
+    ? {
+        handler: restoreSalesOrderLinked,
+        type: 'success',
+        reason: '销售订单：整单关联恢复',
+        title: '关联恢复销售订单',
+        confirmButtonText: '确认关联恢复',
+        successMessage: '销售订单及关联下游零件已恢复。',
+        errorMessage: '整单关联恢复销售订单失败。',
+        message: `确认关联恢复销售订单「${row.salesOrderNo || row.id}」吗？系统将恢复本次关联废弃产生的下游零件，人工废弃和已完成外部流程的零件不会被恢复。`
+      }
+    : {
+        handler: discardSalesOrderLinked,
+        type: 'warning',
+        reason: '销售订单：整单关联废弃',
+        title: '关联废弃销售订单',
+        confirmButtonText: '确认关联废弃',
+        successMessage: '销售订单及关联下游零件已废弃。',
+        errorMessage: '整单关联废弃销售订单失败。',
+        message: `确认关联废弃销售订单「${row.salesOrderNo || row.id}」吗？系统将废弃订单全部零件，并处理仍在已提、待产、锁库工作池中的关联零件。`
+      }
+  try {
+    await ElMessageBox.confirm(action.message, action.title, {
+      type: action.type,
+      confirmButtonText: action.confirmButtonText,
+      cancelButtonText: '取消'
+    })
+  } catch {
+    return
+  }
+  return runAction(salesOrderActionKeys.linkedStatusChange(row.id), async () => {
+    try {
+      const response = await action.handler(row.id, { reason: action.reason })
+      ElMessage.success(response?.message || action.successMessage)
+      await loadOrders()
+      await refreshCurrentDetail()
+    } catch (error) {
       console.error(error)
       ElMessage.error(error.response?.data?.message || action.errorMessage)
     }

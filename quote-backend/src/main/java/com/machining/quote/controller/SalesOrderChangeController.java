@@ -35,7 +35,6 @@ public class SalesOrderChangeController {
     private SalesOrderChangeItemEditService salesOrderChangeItemEditService;
     @Autowired
     private SalesOrderChangeItemDataReplacementService itemDataReplacementService;
-
     @GetMapping("/customers")
     @RequirePermission("change:sales-order:customer-select")
     public PageResult<CustomerOptionDTO> listCustomers(

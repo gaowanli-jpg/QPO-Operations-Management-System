@@ -34,6 +34,13 @@ public class SalesOrderHeader {
     private String orderType;
     private String internalProjectNo;
     private String status;
+    private Boolean linkedDiscarded;
+    private LocalDateTime linkedDiscardedAt;
+    private Long linkedDiscardedBy;
+    private String linkedDiscardReason;
+    private LocalDateTime linkedRestoredAt;
+    private Long linkedRestoredBy;
+    private String linkedRestoreReason;
     private String u9SellerCode;
     private String u9SellerName;
     private String u9SaleDepartmentCode;
