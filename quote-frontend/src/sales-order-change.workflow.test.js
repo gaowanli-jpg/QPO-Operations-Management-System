@@ -17,7 +17,7 @@ describe('sales order change module stage 1', () => {
   test('places the change group between orders and system in the sidebar', () => {
     const app = readSource('App.vue')
 
-    expect(app).toContain("{ key: 'change', title: '变更', paths: ['/sales-order-change'] }")
+    expect(app).toContain("{ key: 'change', title: '变更', paths: ['/linked-changes', '/sales-order-change'] }")
     expect(app).toContain("'/sales-order-change': { title: '销售变更', permission: 'change:sales-order:view'")
     expect(app).toContain("'/sales-order-change':")
     expect(app).toContain('校正已同步 U9 销售订单的本地零件数据')

@@ -56,6 +56,8 @@ public class SalesOrderLinkedDiscardService {
     private DataScopeService dataScopeService;
     @Autowired(required = false)
     private AuditService auditService;
+    @Autowired(required = false)
+    private SalesOrderLinkedChangeNoticeService linkedChangeNoticeService;
 
     @Transactional
     public SalesOrderLinkedDiscardResult discard(Long salesOrderId, Long itemId, OrderStatusChangeReq req) {
@@ -104,6 +106,10 @@ public class SalesOrderLinkedDiscardService {
 
         LocalDateTime now = LocalDateTime.now();
         Long operatorId = currentUserId();
+        if (linkedChangeNoticeService != null) {
+            linkedChangeNoticeService.createForItem(order, item, tickets, allocations,
+                    "ITEM", reason, now, operatorId);
+        }
         for (OrderDeliveryTicket ticket : ticketTargets) {
             ticket.setDiscarded(true);
             ticket.setDiscardedAt(now);
@@ -241,6 +247,10 @@ public class SalesOrderLinkedDiscardService {
 
         LocalDateTime now = LocalDateTime.now();
         Long operatorId = currentUserId();
+        if (linkedChangeNoticeService != null) {
+            linkedChangeNoticeService.createForItems(order, targetItems,
+                    ticketRowsByItem(relations), allocationRowsByItem(relations), reason, now, operatorId);
+        }
         updateLinkedDiscardTargets(targets, reason, operatorId, now);
 
         List<Long> targetItemIds = targetItems.stream().map(SalesOrderItem::getId).toList();
@@ -416,7 +426,12 @@ public class SalesOrderLinkedDiscardService {
         List<OrderDeliveryTicket> tickets = ticketMapper.selectList(ticketQuery);
         tickets = tickets == null ? List.of() : tickets;
         for (OrderDeliveryTicket ticket : tickets) {
-            if (dataScopeService != null) {
+            // The order row is already locked and scope-checked above. Avoid
+            // re-querying that same header once per ticket in order-level flow;
+            // linked RFQ tickets still require their own scope check.
+            if (dataScopeService != null
+                    && !("SALES_ORDER".equalsIgnoreCase(text(ticket.getSourceType()))
+                    && Objects.equals(order.getId(), ticket.getSourceOrderId()))) {
                 dataScopeService.assertCanAccessDeliveryTicket(ticket);
             }
         }
@@ -561,6 +576,18 @@ public class SalesOrderLinkedDiscardService {
             }
         }
         return targets;
+    }
+
+    private Map<Long, List<OrderDeliveryTicket>> ticketRowsByItem(BatchRelations relations) {
+        Map<Long, List<OrderDeliveryTicket>> rows = new LinkedHashMap<>();
+        relations.ticketsByItem.forEach((itemId, tickets) -> rows.put(itemId, new ArrayList<>(tickets.values())));
+        return rows;
+    }
+
+    private Map<Long, List<OrderDeliveryTicketAllocation>> allocationRowsByItem(BatchRelations relations) {
+        Map<Long, List<OrderDeliveryTicketAllocation>> rows = new LinkedHashMap<>();
+        relations.allocationsByItem.forEach((itemId, allocations) -> rows.put(itemId, new ArrayList<>(allocations.values())));
+        return rows;
     }
 
     private void updateLinkedDiscardTargets(

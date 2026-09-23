@@ -231,6 +231,7 @@ public class AuditService {
         if ("SALES_ORDER_ITEM_LINKED_DISCARD".equalsIgnoreCase(action)) return "MARKET";
         if ("SALES_ORDER_ITEM_LINKED_RESTORE".equalsIgnoreCase(action)) return "MARKET";
         if (startsWith(action, "SALES_ORDER_CHANGE_")) return "CHANGE";
+        if (startsWith(action, "LINKED_CHANGE_NOTICE_")) return "CHANGE";
         if ("ORDER_QUOTE_COMPLETE".equalsIgnoreCase(action)) return "ENGINEER";
         if ("PRICING_SHEET_EXPORT".equalsIgnoreCase(action)) return "ENGINEER";
         if (startsWith(action, "DICT_")) return "DICT";
@@ -356,6 +357,8 @@ public class AuditService {
             case "SALES_ORDER_ITEM_LINKED_RESTORE" -> "销售订单零件关联恢复";
             case "SALES_ORDER_CHANGE_ITEM_UPDATE" -> "销售变更保存零件行";
             case "SALES_ORDER_CHANGE_ITEM_DATA_REPLACEMENT" -> "销售变更表格数据替换";
+            case "LINKED_CHANGE_NOTICE_HANDLE" -> "处理关联变更通知";
+            case "LINKED_CHANGE_NOTICE_REOPEN" -> "恢复关联变更未处理状态";
             case "QUOTE_EXPORT_TASK_SUBMIT" -> "提交报价单导出任务";
             case "QUOTE_REFRESH_TASK_SUBMIT" -> "提交一键刷新核价任务";
             case "AUDIT_RETENTION_CONFIG_UPDATE" -> "更新操作日志保留策略";
