@@ -7,6 +7,7 @@ import com.machining.quote.entity.SalesOrderItem;
 import com.machining.quote.mapper.SalesOrderHeaderMapper;
 import com.machining.quote.mapper.SalesOrderItemMapper;
 import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
@@ -23,10 +24,12 @@ import java.io.InputStream;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Function;
 
 @Service
 public class SalesOrderProductionTaskNoticeExportService {
@@ -41,6 +44,19 @@ public class SalesOrderProductionTaskNoticeExportService {
     private static final int TEMPLATE_FORM_NO_ROW = 66;
     private static final int FIRST_DATA_COLUMN = 1;
     private static final int LAST_DATA_COLUMN = 34;
+    private static final int COLUMN_WIDTH_UNIT = 256;
+    private static final int MAX_TOTAL_ADAPTIVE_GROWTH = 36 * COLUMN_WIDTH_UNIT;
+    private static final float DEFAULT_DATA_ROW_HEIGHT_POINTS = 14.4F;
+    private static final List<AdaptiveTextField> ADAPTIVE_TEXT_FIELDS = List.of(
+            new AdaptiveTextField("H", "I", 22, SalesOrderItem::getInternalProjectNo),
+            new AdaptiveTextField("J", "K", 24, SalesOrderItem::getCustomerOrderNo),
+            new AdaptiveTextField("L", "O", 22, SalesOrderItem::getCustomerProjectNo),
+            new AdaptiveTextField("P", "S", 26, SalesOrderItem::getPartNo),
+            new AdaptiveTextField("U", "U", 14, SalesOrderItem::getVersion),
+            new AdaptiveTextField("V", "X", 26, item -> firstNonBlankStatic(item.getEngineeringMaterialName(), item.getMaterialName())),
+            new AdaptiveTextField("Y", "AB", 24, SalesOrderItem::getSurfaceTreatment),
+            new AdaptiveTextField("AG", "AI", 36, SalesOrderItem::getRemark)
+    );
 
     @Autowired
     private SalesOrderHeaderMapper salesOrderHeaderMapper;
@@ -122,6 +138,7 @@ public class SalesOrderProductionTaskNoticeExportService {
             resizeTemplateDataRows(sheet, items.size());
             writeHeader(sheet, order, items.size());
             writeItems(sheet, items);
+            applyAdaptiveLayout(workbook, sheet, items);
             workbook.write(outputStream);
             return outputStream.toByteArray();
         }
@@ -171,6 +188,136 @@ public class SalesOrderProductionTaskNoticeExportService {
             setText(sheet, rowIndex, "AC", dateText(item.getSalesOrderDate() == null ? null : item.getSalesOrderDate()));
             setText(sheet, rowIndex, "AF", dateText(item.getInternalDeliveryDate()));
             setText(sheet, rowIndex, "AG", item.getRemark());
+        }
+    }
+
+    private void applyAdaptiveLayout(Workbook workbook, Sheet sheet, List<SalesOrderItem> items) {
+        if (items == null || items.isEmpty()) {
+            return;
+        }
+
+        Map<AdaptiveTextField, Integer> currentWidths = new LinkedHashMap<>();
+        Map<AdaptiveTextField, Integer> requestedGrowth = new LinkedHashMap<>();
+        int totalRequestedGrowth = 0;
+        for (AdaptiveTextField field : ADAPTIVE_TEXT_FIELDS) {
+            int currentWidth = columnWidth(sheet, field.startColumn(), field.endColumn());
+            currentWidths.put(field, currentWidth);
+            int requiredWidth = requiredColumnWidth(field, items);
+            int growth = Math.max(0, requiredWidth - currentWidth);
+            requestedGrowth.put(field, growth);
+            totalRequestedGrowth += growth;
+        }
+
+        double growthScale = totalRequestedGrowth == 0
+                ? 0D
+                : Math.min(1D, (double) MAX_TOTAL_ADAPTIVE_GROWTH / totalRequestedGrowth);
+        for (AdaptiveTextField field : ADAPTIVE_TEXT_FIELDS) {
+            int growth = (int) Math.floor(requestedGrowth.get(field) * growthScale);
+            if (growth > 0) {
+                resizeColumnGroup(sheet, field.startColumn(), field.endColumn(), currentWidths.get(field) + growth);
+            }
+        }
+
+        Map<Short, CellStyle> wrappedStyles = new HashMap<>();
+        for (int itemIndex = 0; itemIndex < items.size(); itemIndex++) {
+            Row row = getOrCreateRow(sheet, DATA_START_ROW + itemIndex);
+            float baseHeight = row.getHeightInPoints();
+            if (baseHeight <= 0) {
+                baseHeight = DEFAULT_DATA_ROW_HEIGHT_POINTS;
+            }
+            int maxLines = 1;
+            SalesOrderItem item = items.get(itemIndex);
+            for (AdaptiveTextField field : ADAPTIVE_TEXT_FIELDS) {
+                Cell cell = row.getCell(columnIndex(field.startColumn()), Row.MissingCellPolicy.CREATE_NULL_AS_BLANK);
+                cell.setCellStyle(wrappedStyle(workbook, cell, wrappedStyles));
+                maxLines = Math.max(maxLines, wrappedLineCount(field.value(item), columnWidth(sheet, field.startColumn(), field.endColumn())));
+            }
+            if (maxLines > 1) {
+                row.setHeightInPoints(baseHeight * maxLines);
+            }
+        }
+    }
+
+    private int requiredColumnWidth(AdaptiveTextField field, List<SalesOrderItem> items) {
+        double maxDisplayWidth = 0D;
+        for (SalesOrderItem item : items) {
+            maxDisplayWidth = Math.max(maxDisplayWidth, displayWidth(field.value(item)));
+        }
+        int requiredWidthInCharacters = (int) Math.ceil(maxDisplayWidth + 2D);
+        return Math.min(field.maxWidthInCharacters() * COLUMN_WIDTH_UNIT, requiredWidthInCharacters * COLUMN_WIDTH_UNIT);
+    }
+
+    private int wrappedLineCount(String value, int widthInUnits) {
+        if (value == null || value.isBlank()) {
+            return 1;
+        }
+        double availableWidth = Math.max(1D, (double) widthInUnits / COLUMN_WIDTH_UNIT - 1D);
+        int lines = 0;
+        for (String segment : value.replace("\r\n", "\n").replace('\r', '\n').split("\n", -1)) {
+            lines += Math.max(1, (int) Math.ceil(displayWidth(segment) / availableWidth));
+        }
+        return lines;
+    }
+
+    private double displayWidth(String value) {
+        if (value == null || value.isEmpty()) {
+            return 0D;
+        }
+        double width = 0D;
+        for (int offset = 0; offset < value.length();) {
+            int codePoint = value.codePointAt(offset);
+            if (codePoint == '\t') {
+                width += 4D;
+            } else if (isWideCodePoint(codePoint)) {
+                width += 2D;
+            } else {
+                width += 1D;
+            }
+            offset += Character.charCount(codePoint);
+        }
+        return width;
+    }
+
+    private boolean isWideCodePoint(int codePoint) {
+        return (codePoint >= 0x1100 && codePoint <= 0x115F)
+                || (codePoint >= 0x2E80 && codePoint <= 0xA4CF)
+                || (codePoint >= 0xAC00 && codePoint <= 0xD7A3)
+                || (codePoint >= 0xF900 && codePoint <= 0xFAFF)
+                || (codePoint >= 0xFE10 && codePoint <= 0xFE6F)
+                || (codePoint >= 0xFF01 && codePoint <= 0xFF60)
+                || (codePoint >= 0xFFE0 && codePoint <= 0xFFE6);
+    }
+
+    private CellStyle wrappedStyle(Workbook workbook, Cell cell, Map<Short, CellStyle> wrappedStyles) {
+        short sourceStyleIndex = cell.getCellStyle().getIndex();
+        return wrappedStyles.computeIfAbsent(sourceStyleIndex, styleIndex -> {
+            CellStyle style = workbook.createCellStyle();
+            style.cloneStyleFrom(cell.getCellStyle());
+            style.setWrapText(true);
+            return style;
+        });
+    }
+
+    private int columnWidth(Sheet sheet, String startColumn, String endColumn) {
+        int total = 0;
+        for (int index = columnIndex(startColumn); index <= columnIndex(endColumn); index++) {
+            total += sheet.getColumnWidth(index);
+        }
+        return total;
+    }
+
+    private void resizeColumnGroup(Sheet sheet, String startColumn, String endColumn, int targetWidth) {
+        int startIndex = columnIndex(startColumn);
+        int endIndex = columnIndex(endColumn);
+        int currentWidth = columnWidth(sheet, startColumn, endColumn);
+        int extraWidth = Math.max(0, targetWidth - currentWidth);
+        int columnCount = endIndex - startIndex + 1;
+        int baseGrowth = extraWidth / columnCount;
+        int remainder = extraWidth % columnCount;
+        for (int index = startIndex; index <= endIndex; index++) {
+            int growth = baseGrowth + (index - startIndex < remainder ? 1 : 0);
+            int width = Math.min(255 * COLUMN_WIDTH_UNIT, sheet.getColumnWidth(index) + growth);
+            sheet.setColumnWidth(index, width);
         }
     }
 
@@ -359,6 +506,10 @@ public class SalesOrderProductionTaskNoticeExportService {
     }
 
     private String firstNonBlank(String... values) {
+        return firstNonBlankStatic(values);
+    }
+
+    private static String firstNonBlankStatic(String... values) {
         if (values == null) {
             return "";
         }
@@ -368,6 +519,17 @@ public class SalesOrderProductionTaskNoticeExportService {
             }
         }
         return "";
+    }
+
+    private record AdaptiveTextField(
+            String startColumn,
+            String endColumn,
+            int maxWidthInCharacters,
+            Function<SalesOrderItem, String> valueExtractor) {
+
+        private String value(SalesOrderItem item) {
+            return item == null || valueExtractor == null ? "" : valueExtractor.apply(item);
+        }
     }
 
     private boolean isBusinessFailure(RuntimeException e) {

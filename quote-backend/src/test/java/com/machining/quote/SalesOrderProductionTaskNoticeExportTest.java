@@ -297,6 +297,44 @@ class SalesOrderProductionTaskNoticeExportTest {
     }
 
     @Test
+    void exportAdaptsLongNoticeTextWithinMergedDataCells() throws Exception {
+        SalesOrderHeader header = new SalesOrderHeader();
+        header.setId(915L);
+        header.setSalesOrderNo("SOQPO-915");
+        header.setSalesOrderDate(LocalDate.of(2026, 9, 8));
+
+        SalesOrderItem item = item(9151L, 915L, 1, "未匹配");
+        item.setInternalProjectNo("内部项目号-2026-超长项目编号-ALPHA-001");
+        item.setCustomerOrderNo("客户订单号-超长订单编号-CUSTOMER-2026-0001");
+        item.setCustomerProjectNo("客户项目号-超长项目编号-PROJECT-2026-0001");
+        item.setPartNo("PART-VERY-LONG-5.71.18502-REV-A");
+        item.setQty(3);
+        item.setVersion("REVISION-A");
+        item.setEngineeringMaterialName("铝合金 6061-T6 阳极氧化用长材料描述");
+        item.setSurfaceTreatment("本色阳极氧化及喷砂处理-长工艺说明");
+        item.setRemark("这是用于验证生产任务通知单自适应布局的超长备注，包含中文、English、数字2026以及多个业务说明字段。");
+
+        Fixture fixture = fixture(header, List.of(item));
+
+        byte[] bytes = fixture.service.export(915L);
+
+        try (Workbook workbook = WorkbookFactory.create(new ByteArrayInputStream(bytes))) {
+            Sheet sheet = workbook.getSheet("StandardDocPrintTemplate");
+            Row dataRow = sheet.getRow(11);
+
+            assertThat(dataRow.getHeightInPoints()).isGreaterThan(15F);
+            for (String column : List.of("H", "J", "L", "P", "V", "Y", "AG")) {
+                assertThat(dataRow.getCell(columnIndex(column)).getCellStyle().getWrapText())
+                        .as("%s should wrap long notice text", column)
+                        .isTrue();
+            }
+            assertThat(columnWidth(sheet, "H", "I")).isGreaterThan(12 * 256);
+            assertThat(hasMergedRegion(sheet, "H12:I12")).isTrue();
+            assertThat(text(sheet, 16, "AB")).isEqualTo("表单编号：SOQPO-915");
+        }
+    }
+
+    @Test
     void exportSupportsLargeProductionTaskNoticeRowsUpToTwoThousand() throws Exception {
         assertTimeoutPreemptively(Duration.ofSeconds(20), () -> {
             assertLargeProductionTaskNoticeExport(150);
@@ -430,6 +468,14 @@ class SalesOrderProductionTaskNoticeExportTest {
             result = result * 26 + (column.charAt(i) - 'A' + 1);
         }
         return result - 1;
+    }
+
+    private int columnWidth(Sheet sheet, String firstColumn, String lastColumn) {
+        int total = 0;
+        for (int index = columnIndex(firstColumn); index <= columnIndex(lastColumn); index++) {
+            total += sheet.getColumnWidth(index);
+        }
+        return total;
     }
 
     private String columnName(int zeroBasedColumnIndex) {
