@@ -1,26 +1,37 @@
 <template>
-  <el-autocomplete
-    v-model="inputValue"
-    class="customer-autocomplete"
-    :placeholder="placeholder"
-    :disabled="disabled"
-    :clearable="clearable"
-    :fetch-suggestions="fetchSuggestions"
-    :trigger-on-focus="triggerOnFocus"
-    :debounce="0"
-    value-key="displayName"
-    @select="handleSelect"
-    @clear="handleClear"
-  >
-    <template #default="{ item }">
-      <div class="customer-autocomplete-option">
-        <span class="customer-autocomplete-name">{{ item.displayName }}</span>
-        <span class="customer-autocomplete-meta">
-          {{ item.customerCode }}<template v-if="item.customerShortName && item.customerShortName !== item.displayName"> · {{ item.customerShortName }}</template>
-        </span>
-      </div>
-    </template>
-  </el-autocomplete>
+  <div class="customer-autocomplete-shell" :class="{ 'is-disabled': disabled, 'full-width': fullWidth }">
+    <el-autocomplete
+      v-model="inputValue"
+      class="customer-autocomplete"
+      :placeholder="placeholder"
+      :disabled="disabled"
+      :clearable="clearable"
+      :fetch-suggestions="fetchSuggestions"
+      :trigger-on-focus="triggerOnFocus"
+      :debounce="0"
+      value-key="displayName"
+      @select="handleSelect"
+      @clear="handleClear"
+      popper-class="customer-autocomplete-popper"
+    >
+      <template #default="{ item }">
+        <div class="customer-autocomplete-option">
+          <span class="customer-autocomplete-name">{{ item.displayName }}</span>
+          <span class="customer-autocomplete-meta">
+            {{ item.customerCode }}<template v-if="item.customerShortName && item.customerShortName !== item.displayName"> · {{ item.customerShortName }}</template>
+          </span>
+        </div>
+      </template>
+    </el-autocomplete>
+    <el-button
+      class="customer-autocomplete-picker"
+      v-permission="permission"
+      :disabled="disabled"
+      @click="$emit('open-picker')"
+    >
+      选择客户
+    </el-button>
+  </div>
 </template>
 
 <script setup>
@@ -55,10 +66,18 @@ const props = defineProps({
   triggerOnFocus: {
     type: Boolean,
     default: false
+  },
+  permission: {
+    type: String,
+    default: ''
+  },
+  fullWidth: {
+    type: Boolean,
+    default: false
   }
 })
 
-const emit = defineEmits(['update:modelValue', 'select', 'clear'])
+const emit = defineEmits(['update:modelValue', 'select', 'clear', 'open-picker'])
 const inputValue = ref(props.modelValue || '')
 const loading = ref(false)
 let requestId = 0
@@ -88,11 +107,11 @@ const fetchSuggestions = async (queryString, callback) => {
       field: 'all',
       keyword: query,
       page: 1,
-      pageSize: 10
+      pageSize: 50
     })
     if (currentRequestId !== requestId) return
     const records = Array.isArray(response) ? response : (response?.records || [])
-    callback(records.map(normalizeCustomer).filter(customer => customer.displayName).slice(0, 10))
+    callback(records.map(normalizeCustomer).filter(customer => customer.displayName))
   } catch (error) {
     if (currentRequestId === requestId) callback([])
     console.error(error)
@@ -116,7 +135,59 @@ const handleClear = () => {
 
 <style scoped>
 .customer-autocomplete {
-  width: 230px;
+  flex: 1;
+  min-width: 0;
+}
+
+.customer-autocomplete-shell {
+  display: flex;
+  align-items: stretch;
+  width: 220px;
+  min-height: 32px;
+  border: 1px solid var(--el-border-color);
+  border-radius: 4px;
+  background: var(--el-fill-color-blank);
+  overflow: visible;
+}
+
+.customer-autocomplete-shell.full-width {
+  width: 100%;
+}
+
+.customer-autocomplete-shell:focus-within {
+  border-color: var(--el-color-primary);
+}
+
+.customer-autocomplete-shell :deep(.el-input__wrapper) {
+  min-height: 30px;
+  padding: 0 8px;
+  border: 0;
+  box-shadow: none;
+  background: transparent;
+}
+
+.customer-autocomplete-picker {
+  flex: 0 0 auto;
+  height: 30px;
+  margin: 0;
+  padding: 0 10px;
+  border: 0;
+  border-left: 1px solid var(--el-border-color);
+  border-radius: 0;
+  color: var(--el-color-primary);
+  background: transparent;
+  font-size: 12px;
+}
+
+.customer-autocomplete-picker:hover,
+.customer-autocomplete-picker:focus {
+  color: var(--el-color-primary-light-3);
+  background: var(--el-fill-color-light);
+}
+
+.customer-autocomplete-shell.is-disabled {
+  background: var(--el-disabled-bg-color);
+  cursor: not-allowed;
 }
 
 .customer-autocomplete-option {
@@ -137,5 +208,10 @@ const handleClear = () => {
   flex: 0 0 auto;
   color: var(--el-text-color-secondary);
   font-size: 12px;
+}
+
+:global(.customer-autocomplete-popper .el-autocomplete-suggestion__wrap) {
+  max-height: 360px;
+  overflow-y: auto;
 }
 </style>

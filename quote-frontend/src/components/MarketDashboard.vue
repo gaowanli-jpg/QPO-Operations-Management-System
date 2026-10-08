@@ -21,15 +21,15 @@
                   <el-row :gutter="20" justify="center">
                     <el-col :xs="24" :sm="22" :md="14" :lg="10" :xl="9" class="customer-input-col">
                       <el-form-item label="客户" required>
-                        <div class="customer-autocomplete-with-action">
-                          <CustomerAutocomplete
+                        <CustomerAutocomplete
                             :model-value="rfqCustomerLabel"
                             customer-scope="market-rfq"
+                            permission="market:rfq:customer-select"
+                            full-width
                             placeholder="输入客户编码、简称或名称"
                             @select="selectExistingCustomer"
-                          />
-                          <el-button v-permission="'market:rfq:customer-select'" class="existing-customer-button" @click="openRfqCustomerPicker">选择客户</el-button>
-                        </div>
+                            @open-picker="openRfqCustomerPicker"
+                        />
                       </el-form-item>
                     </el-col>
                   </el-row>
@@ -146,15 +146,15 @@
                   <el-row :gutter="20" justify="center">
                     <el-col :xs="24" :md="14" :lg="10" class="customer-input-col">
                       <el-form-item label="客户" required>
-                        <div class="customer-autocomplete-with-action">
-                          <CustomerAutocomplete
+                        <CustomerAutocomplete
                             :model-value="salesOrderCustomerLabel"
                             customer-scope="market-rfq"
+                            permission="market:rfq:customer-select"
+                            full-width
                             placeholder="输入客户编码、简称或名称"
                             @select="selectSalesOrderCustomer"
-                          />
-                          <el-button v-permission="'market:rfq:customer-select'" class="existing-customer-button" @click="openSalesOrderCustomerPicker">选择客户</el-button>
-                        </div>
+                            @open-picker="openSalesOrderCustomerPicker"
+                        />
                       </el-form-item>
                     </el-col>
                   </el-row>

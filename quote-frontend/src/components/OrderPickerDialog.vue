@@ -7,26 +7,13 @@
         :customer-code="selectedCustomerCode"
         :customer-scope="customerScope"
         :disabled="Boolean(lockedCustomerName)"
+        :permission="customerSelectPermission"
+        full-width
         placeholder="输入客户编码、简称或名称"
         @select="handleCustomerSelected"
         @clear="handleCustomerClear"
+        @open-picker="customerPickerVisible = true"
       />
-      <el-button
-        v-permission="customerSelectPermission"
-        class="customer-picker-trigger full-width"
-        :disabled="Boolean(lockedCustomerName)"
-        @click="customerPickerVisible = true"
-      >
-        <span class="customer-picker-content">
-          <span
-            :class="selectedCustomer ? 'customer-picker-text' : 'customer-picker-placeholder'"
-            :title="selectedCustomer || '请选择客户名称'"
-          >
-            {{ selectedCustomer || '请选择客户名称' }}
-          </span>
-          <span class="customer-picker-action">{{ lockedCustomerName ? '已锁定' : '选择客户' }}</span>
-        </span>
-      </el-button>
     </div>
 
     <div class="picker-step">
