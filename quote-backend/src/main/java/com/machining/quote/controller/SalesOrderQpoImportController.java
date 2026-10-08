@@ -64,11 +64,11 @@ public class SalesOrderQpoImportController {
             String internalProjectNo) {
         SalesOrderQpoImportDefaultsDTO defaults = new SalesOrderQpoImportDefaultsDTO();
         defaults.setSalesOrderDate(parseRequiredDate(salesOrderDate));
-        defaults.setCustomerOrderNo(requiredText(customerOrderNo, "客户订单号"));
+        defaults.setCustomerOrderNo(optionalText(customerOrderNo));
         defaults.setCustomerProjectNo(optionalText(customerProjectNo));
         defaults.setCustomerOrderTitle(optionalText(customerOrderTitle));
         defaults.setOrderType(requiredText(orderType, "订单类型"));
-        defaults.setInternalProjectNo(requiredText(internalProjectNo, "内部项目号"));
+        defaults.setInternalProjectNo(optionalText(internalProjectNo));
         return defaults;
     }
 

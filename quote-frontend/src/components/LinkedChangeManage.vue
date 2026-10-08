@@ -123,6 +123,8 @@
           :total="pagination.total"
           layout="total, sizes, prev, pager, next, jumper"
           background
+          :pager-count="7"
+          @size-change="pagination.page = 1"
           @change="loadRows"
         />
       </div>

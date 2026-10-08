@@ -104,6 +104,35 @@ class SalesOrderQpoImportDefaultsTest {
     }
 
     @Test
+    void controllerMapsBlankCustomerAndInternalProjectNumbersAsOptionalDefaults() {
+        SalesOrderQpoImportController controller = new SalesOrderQpoImportController();
+        SalesOrderQpoImportService service = mock(SalesOrderQpoImportService.class);
+        ReflectionTestUtils.setField(controller, "salesOrderQpoImportService", service);
+        MockMultipartFile excel = excel();
+        when(service.importQpo(
+                eq(excel),
+                eq(7L),
+                eq("SO01"),
+                any(SalesOrderQpoImportDefaultsDTO.class),
+                isNull(),
+                isNull(),
+                isNull(),
+                isNull()
+        )).thenReturn(new SalesOrderQpoImportResp());
+
+        controller.importQpo(
+                7L, "SO01", "2026-07-01", " ", "CP-001", "客户抬头", "正式订单", "\t",
+                excel, null, null, null, null);
+
+        var defaultsCaptor = org.mockito.ArgumentCaptor.forClass(SalesOrderQpoImportDefaultsDTO.class);
+        verify(service).importQpo(
+                eq(excel), eq(7L), eq("SO01"), defaultsCaptor.capture(),
+                isNull(), isNull(), isNull(), isNull());
+        assertThat(defaultsCaptor.getValue().getCustomerOrderNo()).isNull();
+        assertThat(defaultsCaptor.getValue().getInternalProjectNo()).isNull();
+    }
+
+    @Test
     void controllerRejectsMissingRequiredDefaultsWithClearMessages() {
         SalesOrderQpoImportController controller = new SalesOrderQpoImportController();
         ReflectionTestUtils.setField(controller, "salesOrderQpoImportService", mock(SalesOrderQpoImportService.class));
@@ -134,24 +163,8 @@ class SalesOrderQpoImportDefaultsTest {
                 " ",
                 "CP-001",
                 "客户抬头",
-                "正式订单",
-                "IP-001",
-                excel,
-                drawings,
-                versionDrawings,
-                null,
-                null))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("请填写客户订单号");
-        assertThatThrownBy(() -> controller.importQpo(
-                7L,
-                "SO01",
-                "2026-07-01",
-                "PO-001",
-                "CP-001",
-                "客户抬头",
                 " ",
-                "IP-001",
+                " ",
                 excel,
                 drawings,
                 versionDrawings,
@@ -159,22 +172,6 @@ class SalesOrderQpoImportDefaultsTest {
                 null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("请填写订单类型");
-        assertThatThrownBy(() -> controller.importQpo(
-                7L,
-                "SO01",
-                "2026-07-01",
-                "PO-001",
-                "CP-001",
-                "客户抬头",
-                "正式订单",
-                " ",
-                excel,
-                drawings,
-                versionDrawings,
-                null,
-                null))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("请填写内部项目号");
     }
 
     @Test
@@ -182,8 +179,7 @@ class SalesOrderQpoImportDefaultsTest {
         SalesOrderQpoImportService service = service();
         SalesOrderQpoImportDefaultsDTO defaults = new SalesOrderQpoImportDefaultsDTO();
         defaults.setSalesOrderDate(LocalDate.of(2026, 7, 1));
-        defaults.setCustomerOrderNo("PO-001");
-        defaults.setOrderType("正式订单");
+        defaults.setOrderType(" ");
 
         assertThatThrownBy(() -> service.importQpo(
                 excel(),
@@ -193,7 +189,7 @@ class SalesOrderQpoImportDefaultsTest {
                 List.of(),
                 List.of()))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("请填写内部项目号");
+                .hasMessage("请填写订单类型");
 
         verifyNoInteractions(
                 customerMapper(service),
@@ -207,6 +203,64 @@ class SalesOrderQpoImportDefaultsTest {
                 deliveryService(service),
                 dataScopeService(service),
                 parser(service));
+    }
+
+    @Test
+    void serviceImportsWithoutOptionalNumbersAndSkipsAutomaticDeliveryTickets() throws Exception {
+        SalesOrderQpoImportService service = service();
+        SalesOrderQpoImportDefaultsDTO defaults = new SalesOrderQpoImportDefaultsDTO();
+        defaults.setSalesOrderDate(LocalDate.of(2026, 7, 1));
+        defaults.setOrderType("正式订单");
+
+        SalesOrderQpoOrderGroupDTO group = new SalesOrderQpoOrderGroupDTO();
+        group.setGroupKey("|");
+        group.setSalesOrderDate(defaults.getSalesOrderDate());
+        group.setOrderType(defaults.getOrderType());
+        group.setLines(List.of(line(1, defaults.getSalesOrderDate(), null, null, null, "正式订单", null, "P-001")));
+        SalesOrderQpoExcelParseResult parseResult = new SalesOrderQpoExcelParseResult();
+        parseResult.setOrders(List.of(group));
+        parseResult.setOrderCount(1);
+        parseResult.setLineCount(1);
+        parseResult.setSourceRowCount(1);
+
+        when(customerMapper(service).selectById(7L)).thenReturn(customer());
+        when(parser(service).parse(any(), same(defaults))).thenReturn(parseResult);
+        when(headerMapper(service).selectCount(any())).thenReturn(0L);
+        doAnswer(invocation -> {
+            SalesOrderImportBatch batch = invocation.getArgument(0);
+            batch.setId(201L);
+            return 1;
+        }).when(batchMapper(service)).insert(any(SalesOrderImportBatch.class));
+        doAnswer(invocation -> {
+            SalesOrderHeader header = invocation.getArgument(0);
+            header.setId(301L);
+            return 1;
+        }).when(headerMapper(service)).insert(any(SalesOrderHeader.class));
+        doAnswer(invocation -> {
+            SalesOrderImportRecord record = invocation.getArgument(0);
+            record.setId(401L);
+            return 1;
+        }).when(recordMapper(service)).insert(any(SalesOrderImportRecord.class));
+
+        SalesOrderQpoImportResp response = service.importQpo(excel(), 7L, "SO01", defaults, List.of(), List.of());
+
+        assertThat(response.isSuccess()).isTrue();
+        assertThat(response.getRows()).hasSize(1);
+        assertThat(response.getRows().get(0).getCustomerOrderNo()).isNull();
+        assertThat(response.getRows().get(0).getInternalProjectNo()).isNull();
+        assertThat(response.getRows().get(0).getAutoDeliveryTicketCount()).isZero();
+        assertThat(response.getRows().get(0).getWarningMessage()).contains("未自动生成提单");
+        verify(deliveryService(service), org.mockito.Mockito.never()).generateImportedSalesOrderTickets(301L);
+
+        var headerCaptor = org.mockito.ArgumentCaptor.forClass(SalesOrderHeader.class);
+        verify(headerMapper(service)).insert(headerCaptor.capture());
+        assertThat(headerCaptor.getValue().getCustomerOrderNo()).isNull();
+        assertThat(headerCaptor.getValue().getInternalProjectNo()).isNull();
+
+        var itemCaptor = org.mockito.ArgumentCaptor.forClass(SalesOrderItem.class);
+        verify(itemMapper(service)).insert(itemCaptor.capture());
+        assertThat(itemCaptor.getValue().getCustomerOrderNo()).isNull();
+        assertThat(itemCaptor.getValue().getInternalProjectNo()).isNull();
     }
 
     @Test

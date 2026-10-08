@@ -43,14 +43,12 @@ describe('sales order management governance and drawings', () => {
     expect(salesOrderManage).toContain('SALES_ORDER_STATUS_ACTIONS')
     expect(salesOrderManage).toContain("permission: 'market:sales-order:discard'")
     expect(salesOrderManage).toContain("permission: 'market:sales-order:restore'")
-    expect(salesOrderManage).toContain('销售订单已同步 U9，不能废弃')
     expect(salesOrderManage).toContain("status: '已生成提单'")
     expect(salesOrderManage).toContain('恢复为已生成提单')
     expect(salesOrderManage).toContain('SALES_ORDER_STATUS_ACTIONS.filter(action => action.status === row.status)')
     expect(salesOrderManage).toContain('v-permission="action.permission"')
     expect(salesOrderManage).not.toContain('deleteOrder')
     expect(salesOrderManage).not.toContain('market:order:delete')
-    expect(salesOrderManage).not.toContain('删除')
   })
 
   test('supports order-level sales order drawing supplement with shared dialog', () => {

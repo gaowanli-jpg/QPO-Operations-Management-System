@@ -169,33 +169,44 @@
               </div>
               <div class="form-box step-panel">
                 <el-form :model="salesOrderForm" label-width="120px" class="customer-form sales-order-form">
-                  <el-row :gutter="20" justify="center">
-                    <el-col :xs="24" :sm="18" :md="10" :lg="7" class="document-type-col">
-                      <el-form-item label="单据类型编码" required>
-                        <el-input
-                          v-model.trim="salesOrderForm.documentTypeCode"
-                          placeholder="SO06"
-                          maxlength="50"
-                          clearable
-                          :disabled="isPending(IMPORT_SALES_ORDER_ACTION_KEY)"
-                        />
-                      </el-form-item>
-                    </el-col>
-                  </el-row>
+                  <div class="sales-order-required-grid">
+                    <el-form-item label="单据类型编码" required>
+                      <el-input
+                        v-model.trim="salesOrderForm.documentTypeCode"
+                        placeholder="SO06"
+                        maxlength="50"
+                        clearable
+                        :disabled="isPending(IMPORT_SALES_ORDER_ACTION_KEY)"
+                      />
+                    </el-form-item>
+                    <el-form-item label="下单日期" required>
+                      <el-date-picker
+                        v-model="salesOrderForm.salesOrderDate"
+                        type="date"
+                        value-format="YYYY-MM-DD"
+                        placeholder="请选择下单日期"
+                        class="full-width"
+                        :disabled="isPending(IMPORT_SALES_ORDER_ACTION_KEY)"
+                      />
+                    </el-form-item>
+                    <el-form-item label="订单类型" required>
+                      <el-select
+                        v-model="salesOrderForm.orderType"
+                        placeholder="请选择订单类型"
+                        clearable
+                        class="full-width"
+                        :disabled="isPending(IMPORT_SALES_ORDER_ACTION_KEY)"
+                      >
+                        <el-option label="预测订单" value="预测订单" />
+                        <el-option label="备货订单" value="备货订单" />
+                        <el-option label="正式订单" value="正式订单" />
+                      </el-select>
+                    </el-form-item>
+                  </div>
                   <div class="sales-order-default-group">
-                    <div class="sales-order-default-title">订单默认信息</div>
-                    <div class="sales-order-default-grid">
-                      <el-form-item label="下单日期" required>
-                        <el-date-picker
-                          v-model="salesOrderForm.salesOrderDate"
-                          type="date"
-                          value-format="YYYY-MM-DD"
-                          placeholder="请选择下单日期"
-                          class="full-width"
-                          :disabled="isPending(IMPORT_SALES_ORDER_ACTION_KEY)"
-                        />
-                      </el-form-item>
-                      <el-form-item label="客户订单号" required>
+                    <div class="sales-order-default-title">订单默认信息（可选）</div>
+                    <div class="sales-order-optional-grid">
+                      <el-form-item label="客户订单号">
                         <el-input
                           v-model.trim="salesOrderForm.customerOrderNo"
                           placeholder="请输入客户订单号"
@@ -222,20 +233,7 @@
                           :disabled="isPending(IMPORT_SALES_ORDER_ACTION_KEY)"
                         />
                       </el-form-item>
-                      <el-form-item label="订单类型" required>
-                        <el-select
-                          v-model="salesOrderForm.orderType"
-                          placeholder="请选择订单类型"
-                          clearable
-                          class="full-width"
-                          :disabled="isPending(IMPORT_SALES_ORDER_ACTION_KEY)"
-                        >
-                          <el-option label="预测订单" value="预测订单" />
-                          <el-option label="备货订单" value="备货订单" />
-                          <el-option label="正式订单" value="正式订单" />
-                        </el-select>
-                      </el-form-item>
-                      <el-form-item label="内部项目号" required>
+                      <el-form-item label="内部项目号">
                         <el-input
                           v-model.trim="salesOrderForm.internalProjectNo"
                           placeholder="请输入内部项目号"
@@ -704,9 +702,7 @@ const submitSalesOrderImport = async () => {
   const internalProjectNo = salesOrderForm.internalProjectNo.trim()
   if (!documentTypeCode) return ElMessage.warning('请填写单据类型编码！')
   if (!salesOrderForm.salesOrderDate) return ElMessage.warning('请选择销售订单下单日期！')
-  if (!customerOrderNo) return ElMessage.warning('请填写客户订单号！')
   if (!salesOrderForm.orderType) return ElMessage.warning('请选择订单类型！')
-  if (!internalProjectNo) return ElMessage.warning('请填写内部项目号！')
   if (!salesOrderFile.value) return ElMessage.warning('请上传销售订单 Excel！')
 
   return runAction(IMPORT_SALES_ORDER_ACTION_KEY, async () => {
@@ -942,13 +938,20 @@ const submitRfqPackage = async () => {
   font-weight: 700;
 }
 
-.sales-order-default-grid {
+.sales-order-required-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px 20px;
 }
 
-.sales-order-default-grid :deep(.el-form-item__content) {
+.sales-order-optional-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 20px;
+}
+
+.sales-order-required-grid :deep(.el-form-item__content),
+.sales-order-optional-grid :deep(.el-form-item__content) {
   min-width: 0;
 }
 
@@ -1092,7 +1095,14 @@ const submitRfqPackage = async () => {
     grid-template-columns: 1fr;
   }
 
-  .sales-order-default-grid {
+  .sales-order-required-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 600px) {
+  .sales-order-required-grid,
+  .sales-order-optional-grid {
     grid-template-columns: 1fr;
   }
 

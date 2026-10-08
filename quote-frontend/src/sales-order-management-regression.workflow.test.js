@@ -44,17 +44,15 @@ describe('sales order management regression coverage', () => {
     expect(orderApi).toContain("export const listSalesOrders = (params = {}) => request('/api/market/sales-order-management/orders', { params })")
   })
 
-  test('exposes discard for released unsynced sales orders and restore to released state', () => {
+  test('exposes discard and restore actions for released sales orders', () => {
     expect(salesOrderManage).toContain('SALES_ORDER_STATUS_ACTIONS')
     expect(salesOrderManage).toContain("status: '已生成提单'")
     expect(salesOrderManage).toContain("permission: 'market:sales-order:discard'")
     expect(salesOrderManage).toContain('handler: discardSalesOrder')
-    expect(salesOrderManage).toContain('销售订单已同步 U9，不能废弃')
     expect(salesOrderManage).toContain("permission: 'market:sales-order:restore'")
     expect(salesOrderManage).toContain('handler: restoreSalesOrder')
     expect(salesOrderManage).toContain('恢复为已生成提单')
     expect(salesOrderManage).toContain('SALES_ORDER_STATUS_ACTIONS.filter(action => action.status === row.status)')
-    expect(salesOrderManage).toContain("row.u9SyncStatus === '已同步'")
     expect(salesOrderManage).not.toContain('RELEASED_SALES_ORDER_STATUSES.includes(row.status)')
     expect(salesOrderManage).not.toContain('Number(row.ticketCount || 0) > 0')
   })

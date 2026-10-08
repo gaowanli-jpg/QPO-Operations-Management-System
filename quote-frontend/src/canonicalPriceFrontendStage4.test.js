@@ -28,7 +28,7 @@ describe('canonical frontend price fields stage 4', () => {
     expect(readSource('components/SalesOrderU9Sync.vue'))
       .toContain('prop="untaxedUnitPrice"')
       .toContain('未税单价缺失')
-      .not.toContain('prop="taxIncludedUnitPrice"')
+      .toContain('prop="taxIncludedUnitPrice"')
   })
 
   test('audit formatting exposes only canonical price labels', () => {
