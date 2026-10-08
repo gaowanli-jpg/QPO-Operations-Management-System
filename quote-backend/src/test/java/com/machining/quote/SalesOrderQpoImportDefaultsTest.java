@@ -206,17 +206,25 @@ class SalesOrderQpoImportDefaultsTest {
     }
 
     @Test
-    void serviceImportsWithoutOptionalNumbersAndSkipsAutomaticDeliveryTickets() throws Exception {
+    void serviceRejectsImportWhenEitherEffectiveIdentifierIsMissingBeforeAnyWrites() {
+        assertImportRejectedForMissingIdentifiers(null, "IP-001");
+        assertImportRejectedForMissingIdentifiers("PO-001", null);
+    }
+
+    @Test
+    void serviceImportsWhenExcelProvidesIdentifiersAndPageDefaultsAreBlank() throws Exception {
         SalesOrderQpoImportService service = service();
         SalesOrderQpoImportDefaultsDTO defaults = new SalesOrderQpoImportDefaultsDTO();
         defaults.setSalesOrderDate(LocalDate.of(2026, 7, 1));
         defaults.setOrderType("正式订单");
 
         SalesOrderQpoOrderGroupDTO group = new SalesOrderQpoOrderGroupDTO();
-        group.setGroupKey("|");
+        group.setGroupKey("EXCEL-PO|EXCEL-IP");
         group.setSalesOrderDate(defaults.getSalesOrderDate());
+        group.setCustomerOrderNo("EXCEL-PO");
         group.setOrderType(defaults.getOrderType());
-        group.setLines(List.of(line(1, defaults.getSalesOrderDate(), null, null, null, "正式订单", null, "P-001")));
+        group.setInternalProjectNo("EXCEL-IP");
+        group.setLines(List.of(line(1, defaults.getSalesOrderDate(), "EXCEL-PO", null, null, "正式订单", "EXCEL-IP", "P-001")));
         SalesOrderQpoExcelParseResult parseResult = new SalesOrderQpoExcelParseResult();
         parseResult.setOrders(List.of(group));
         parseResult.setOrderCount(1);
@@ -246,21 +254,86 @@ class SalesOrderQpoImportDefaultsTest {
 
         assertThat(response.isSuccess()).isTrue();
         assertThat(response.getRows()).hasSize(1);
-        assertThat(response.getRows().get(0).getCustomerOrderNo()).isNull();
-        assertThat(response.getRows().get(0).getInternalProjectNo()).isNull();
+        assertThat(response.getRows().get(0).getCustomerOrderNo()).isEqualTo("EXCEL-PO");
+        assertThat(response.getRows().get(0).getInternalProjectNo()).isEqualTo("EXCEL-IP");
         assertThat(response.getRows().get(0).getAutoDeliveryTicketCount()).isZero();
-        assertThat(response.getRows().get(0).getWarningMessage()).contains("未自动生成提单");
-        verify(deliveryService(service), org.mockito.Mockito.never()).generateImportedSalesOrderTickets(301L);
+        assertThat(response.getRows().get(0).getWarningMessage()).doesNotContain("编号有缺失");
+        verify(deliveryService(service)).generateImportedSalesOrderTickets(301L);
 
         var headerCaptor = org.mockito.ArgumentCaptor.forClass(SalesOrderHeader.class);
         verify(headerMapper(service)).insert(headerCaptor.capture());
-        assertThat(headerCaptor.getValue().getCustomerOrderNo()).isNull();
-        assertThat(headerCaptor.getValue().getInternalProjectNo()).isNull();
+        assertThat(headerCaptor.getValue().getCustomerOrderNo()).isEqualTo("EXCEL-PO");
+        assertThat(headerCaptor.getValue().getInternalProjectNo()).isEqualTo("EXCEL-IP");
 
         var itemCaptor = org.mockito.ArgumentCaptor.forClass(SalesOrderItem.class);
         verify(itemMapper(service)).insert(itemCaptor.capture());
-        assertThat(itemCaptor.getValue().getCustomerOrderNo()).isNull();
-        assertThat(itemCaptor.getValue().getInternalProjectNo()).isNull();
+        assertThat(itemCaptor.getValue().getCustomerOrderNo()).isEqualTo("EXCEL-PO");
+        assertThat(itemCaptor.getValue().getInternalProjectNo()).isEqualTo("EXCEL-IP");
+    }
+
+    private void assertImportRejectedForMissingIdentifiers(String customerOrderNo, String internalProjectNo) {
+        SalesOrderQpoImportService service = service();
+        SalesOrderQpoImportDefaultsDTO defaults = new SalesOrderQpoImportDefaultsDTO();
+        defaults.setSalesOrderDate(LocalDate.of(2026, 7, 1));
+        defaults.setOrderType("正式订单");
+
+        SalesOrderQpoOrderGroupDTO group = new SalesOrderQpoOrderGroupDTO();
+        group.setGroupKey(String.valueOf(customerOrderNo) + "|" + internalProjectNo);
+        group.setSalesOrderDate(defaults.getSalesOrderDate());
+        group.setCustomerOrderNo(customerOrderNo);
+        group.setOrderType(defaults.getOrderType());
+        group.setInternalProjectNo(internalProjectNo);
+        group.setLines(List.of(line(
+                1,
+                defaults.getSalesOrderDate(),
+                customerOrderNo,
+                null,
+                null,
+                defaults.getOrderType(),
+                internalProjectNo,
+                "P-001")));
+        SalesOrderQpoExcelParseResult parseResult = new SalesOrderQpoExcelParseResult();
+        parseResult.setOrders(List.of(group));
+        parseResult.setOrderCount(1);
+        parseResult.setLineCount(1);
+        parseResult.setSourceRowCount(1);
+
+        when(customerMapper(service).selectById(7L)).thenReturn(customer());
+        when(parser(service).parse(any(), same(defaults))).thenReturn(parseResult);
+
+        SalesOrderQpoOrderGroupDTO validGroup = new SalesOrderQpoOrderGroupDTO();
+        validGroup.setGroupKey("VALID-PO|VALID-IP");
+        validGroup.setSalesOrderDate(defaults.getSalesOrderDate());
+        validGroup.setCustomerOrderNo("VALID-PO");
+        validGroup.setOrderType(defaults.getOrderType());
+        validGroup.setInternalProjectNo("VALID-IP");
+        validGroup.setLines(List.of(line(
+                1,
+                defaults.getSalesOrderDate(),
+                "VALID-PO",
+                null,
+                null,
+                defaults.getOrderType(),
+                "VALID-IP",
+                "P-VALID")));
+        parseResult.setOrders(List.of(validGroup, group));
+        parseResult.setOrderCount(2);
+        parseResult.setLineCount(2);
+        parseResult.setSourceRowCount(2);
+
+        assertThatThrownBy(() -> service.importQpo(excel(), 7L, "SO01", defaults, List.of(), List.of()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("编号有缺失，请补齐内部项目号或客户订单号。");
+
+        verifyNoInteractions(
+                batchMapper(service),
+                recordMapper(service),
+                headerMapper(service),
+                itemMapper(service),
+                auditService(service),
+                businessFileService(service),
+                autoSnapshotCompletionService(service),
+                deliveryService(service));
     }
 
     @Test

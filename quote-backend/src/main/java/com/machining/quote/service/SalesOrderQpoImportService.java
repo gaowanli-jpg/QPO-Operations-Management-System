@@ -51,7 +51,7 @@ public class SalesOrderQpoImportService {
     private static final String UNMATCHED = "未匹配";
     private static final String MATERIAL_UNCONFIRMED = "未确认";
     private static final String WAITING_SNAPSHOT_MESSAGE = "已导入销售订单，未补齐历史生产快照";
-    private static final String AUTO_DELIVERY_SKIPPED_MESSAGE = "客户订单号或内部项目号未填写，销售订单已导入但未自动生成提单。";
+    private static final String MISSING_DELIVERY_IDENTIFIERS_MESSAGE = "编号有缺失，请补齐内部项目号或客户订单号。";
 
     @Autowired
     private SalesOrderQpoExcelParser excelParser;
@@ -153,6 +153,7 @@ public class SalesOrderQpoImportService {
         if (parseResult.getOrderCount() <= 0 || parseResult.getOrders().isEmpty()) {
             throw new IllegalArgumentException("销售订单表格没有可导入的订单");
         }
+        validateDeliveryIdentifiers(parseResult);
         DrawingBindingResult drawingBinding = bindDrawings(customer, batchNo, parseResult, drawings, versionDrawings, drawingFolderFiles, drawingFolderName);
 
         SalesOrderImportBatch batch = createBatch(batchNo, sourceFileName, parseResult);
@@ -450,18 +451,19 @@ public class SalesOrderQpoImportService {
         if (deliveryService == null || header == null || header.getId() == null) {
             return new AutoDeliverySummary(0, "");
         }
-        if (hasMissingDeliveryIdentifiers(group)) {
-            log.info("Sales order import auto delivery skipped sourceOrderId={} reason=missing_customer_order_no_or_internal_project_no",
-                    header.getId());
-            return new AutoDeliverySummary(0, AUTO_DELIVERY_SKIPPED_MESSAGE);
-        }
         List<OrderDeliveryTicket> tickets = deliveryService.generateImportedSalesOrderTickets(header.getId());
         submitAutoMesForSalesOrderImport(header, tickets);
         return new AutoDeliverySummary(tickets == null ? 0 : tickets.size(), "");
     }
 
+    private void validateDeliveryIdentifiers(SalesOrderQpoExcelParseResult parseResult) {
+        if (parseResult.getOrders().stream().anyMatch(this::hasMissingDeliveryIdentifiers)) {
+            throw new IllegalArgumentException(MISSING_DELIVERY_IDENTIFIERS_MESSAGE);
+        }
+    }
+
     private boolean hasMissingDeliveryIdentifiers(SalesOrderQpoOrderGroupDTO group) {
-        if (group == null || group.getLines() == null) {
+        if (group == null || group.getLines() == null || group.getLines().isEmpty()) {
             return true;
         }
         return group.getLines().stream().anyMatch(line -> line == null
