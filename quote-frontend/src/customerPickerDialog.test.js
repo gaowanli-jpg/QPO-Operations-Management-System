@@ -82,7 +82,7 @@ describe('QPO customer picker dialog', () => {
     expect(source).toContain("import CustomerPickerDialog from './CustomerPickerDialog.vue'")
     expect(source).toContain(':model-value="rfqCustomerLabel"')
     expect(source).toContain("import CustomerAutocomplete from './CustomerAutocomplete.vue'")
-    expect(source).toContain('@open-picker="openRfqCustomerPicker"') 
+    expect(source).toContain('@open-picker="openRfqCustomerPicker"')
     expect(source).toContain('@select="selectExistingCustomer"')
     expect(source).toContain('rfqForm.customerId = customer?.id || null')
     expect(source).toContain('rfqForm.customerCode = customer?.customerCode || \'\'')
@@ -90,7 +90,7 @@ describe('QPO customer picker dialog', () => {
     expect(source).toContain('rfqForm.customerName = resolveCustomerName(customer)')
     expect(source).toContain('const rfqCustomerLabel = computed(() =>')
     expect(source).toContain('customer-scope="market-rfq"')
-    expect(source).toContain('v-permission="\'market:rfq:customer-select\'"')
+    expect(source).toContain('permission="market:rfq:customer-select"')
     expect(source).not.toContain('readonly')
     expect(source).not.toContain('閫夋嫨宸叉湁瀹㈡埛')
   })
@@ -127,7 +127,7 @@ describe('QPO customer picker dialog', () => {
     expect(orderPicker).toContain('customerSelectPermission')
     expect(orderPicker).toContain(':permission="customerSelectPermission"')
     expect(orderManage).toContain('v-permission="\'market:order:customer-select\'"')
-    expect(salesOrderManage).toContain('v-permission="\'market:sales-order:customer-select\'"')
+    expect(salesOrderManage).toContain('permission="market:sales-order:customer-select"')
   })
 
   test('delivered, production, and locked item modules use their own customer selection scopes', () => {
@@ -184,5 +184,3 @@ describe('QPO customer picker dialog', () => {
     expect(marketRelease).not.toContain('getMarketSummary')
   })
 })
-
-
