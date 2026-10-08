@@ -190,7 +190,7 @@ class WmsReservationPlanServiceTest {
     }
 
     @Test
-    void prepareAddsCustomerProjectAndOrderNumbersToRequestItemsAndRejectsConflictingAggregates() {
+    void prepareSplitsGroupsByCustomerProjectAndAggregatesProductWithinEachGroup() {
         Fixture fixture = fixture();
         fixture.ticket(ticket(101, "MAT-A", 2, null, null, "remark-101", "", "", "P-101"));
         fixture.ticket(ticket(102, "MAT-A", 3, null, null, "remark-102", "", "", "P-102"));
@@ -215,28 +215,51 @@ class WmsReservationPlanServiceTest {
             assertThat(item.getCustomerOrderNo()).isEqualTo("CO-001");
         });
 
-        Fixture conflictFixture = fixture();
-        conflictFixture.ticket(ticket(201, "MAT-A", 2, null, null));
-        conflictFixture.ticket(ticket(202, "MAT-A", 3, null, null));
+        Fixture projectFixture = fixture();
+        projectFixture.ticket(ticket(201, "MAT-A", 2, null, null));
+        projectFixture.ticket(ticket(202, "MAT-A", 3, null, null));
+        projectFixture.ticket(ticket(203, "MAT-A", 4, null, null));
         SalesOrderItem conflictA = item(2001L, 601L, 10);
         conflictA.setCustomerProjectNo("CP-A");
         conflictA.setCustomerOrderNo("CO-001");
         SalesOrderItem conflictB = item(2002L, 601L, 20);
-        conflictB.setCustomerProjectNo("CP-B");
+        conflictB.setCustomerProjectNo("CP-A");
         conflictB.setCustomerOrderNo("CO-001");
-        conflictFixture.sourceTicketItem(201, conflictA);
-        conflictFixture.sourceTicketItem(202, conflictB);
-        conflictFixture.header(header(601L, "SO-601", "DOC-601"));
+        SalesOrderItem conflictC = item(2003L, 601L, 30);
+        conflictC.setCustomerProjectNo("CP-B");
+        conflictC.setCustomerOrderNo("CO-001");
+        projectFixture.sourceTicketItem(201, conflictA);
+        projectFixture.sourceTicketItem(202, conflictB);
+        projectFixture.sourceTicketItem(203, conflictC);
+        projectFixture.header(header(601L, "SO-601", "DOC-601"));
 
-        WmsReservationPlanService.ReservationPlan conflictPlan = conflictFixture.service.prepare(List.of(201, 202));
+        WmsReservationPlanService.ReservationPlan projectPlan = projectFixture.service.prepare(List.of(203, 202, 201));
 
-        assertThat(conflictPlan.getGroups()).isEmpty();
-        assertThat(conflictPlan.getFailures())
-                .extracting(WmsReservationPlanService.RowFailure::getTicketId)
+        assertThat(projectPlan.getFailures()).isEmpty();
+        assertThat(projectPlan.getGroups()).hasSize(2);
+        WmsReservationPlanService.ReservationGroup projectA = projectPlan.getGroups().get(0);
+        assertThat(projectA.getSaleNo()).isEqualTo("CO-001");
+        assertThat(projectA.getRequest().getItems()).singleElement().satisfies(item -> {
+            assertThat(item.getProductCode()).isEqualTo("MAT-A");
+            assertThat(item.getReserveCount()).isEqualByComparingTo("5");
+            assertThat(item.getCustomerProjectNo()).isEqualTo("CP-A");
+            assertThat(item.getCustomerOrderNo()).isEqualTo("CO-001");
+        });
+        assertThat(projectA.getTickets())
+                .extracting(WmsReservationPlanService.TicketReservation::getTicketId)
                 .containsExactly(201, 202);
-        assertThat(conflictPlan.getFailures())
-                .extracting(WmsReservationPlanService.RowFailure::getMessage)
-                .allSatisfy(message -> assertThat(message).contains("customerProjectNo"));
+
+        WmsReservationPlanService.ReservationGroup projectB = projectPlan.getGroups().get(1);
+        assertThat(projectB.getSaleNo()).isEqualTo("CO-001");
+        assertThat(projectB.getRequest().getItems()).singleElement().satisfies(item -> {
+            assertThat(item.getProductCode()).isEqualTo("MAT-A");
+            assertThat(item.getReserveCount()).isEqualByComparingTo("4");
+            assertThat(item.getCustomerProjectNo()).isEqualTo("CP-B");
+            assertThat(item.getCustomerOrderNo()).isEqualTo("CO-001");
+        });
+        assertThat(projectB.getTickets())
+                .extracting(WmsReservationPlanService.TicketReservation::getTicketId)
+                .containsExactly(203);
     }
 
     @Test

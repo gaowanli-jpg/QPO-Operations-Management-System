@@ -40,7 +40,7 @@
 | `items[].customerProjectNo` | 客户项目号，按销售订单行、销售订单头、提单行快照依次兜底。 |
 | `items[].customerOrderNo` | 客户订单号，与外层 `saleNo` 使用同一解析结果。 |
 
-同一客户订单号、同一 `productCode` 聚合时，`customerProjectNo` 和 `customerOrderNo` 必须一致；不一致的 ticket 作为行级失败，不进入 WMS 请求。
+QPO 按销售订单、客户订单号和客户项目号拆分独立请求批次，再在批次内按 `productCode` 聚合。同一客户订单号、同一物料号但客户项目号不同的 ticket 分属不同批次，分别调用 WMS 并使用各自的 `externalBizId`；同一批次内的 `customerProjectNo` 和 `customerOrderNo` 一致。
 
 ## 3. 响应契约
 

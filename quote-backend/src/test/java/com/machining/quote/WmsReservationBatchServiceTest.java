@@ -32,19 +32,23 @@ import static org.mockito.Mockito.when;
 class WmsReservationBatchServiceTest {
     @Test
     @SuppressWarnings("unchecked")
-    void allocationGroupsBySalesOrderSendsOncePerGroupAndContinuesAfterGroupFailure() {
+    void allocationProcessesDifferentProjectGroupsIndependentlyAndContinuesAfterGroupFailure() {
         Fixture fixture = fixture();
-        WmsReservationPlanService.ReservationGroup first = group("SO-1",
-                item("MAT-A", "5"), ticketReservation(101, "MAT-A", "2"), ticketReservation(102, "MAT-A", "3"));
-        WmsReservationPlanService.ReservationGroup second = group("SO-2",
-                item("MAT-B", "4"), ticketReservation(201, "MAT-B", "4"));
+        WmsReservationPlanService.ReservationItem firstItem = item("MAT-A", "5");
+        firstItem.setCustomerProjectNo("CP-1");
+        WmsReservationPlanService.ReservationGroup first = group("CO-1",
+                firstItem, ticketReservation(101, "MAT-A", "2"), ticketReservation(102, "MAT-A", "3"));
+        WmsReservationPlanService.ReservationItem secondItem = item("MAT-A", "4");
+        secondItem.setCustomerProjectNo("CP-2");
+        WmsReservationPlanService.ReservationGroup second = group("CO-1",
+                secondItem, ticketReservation(201, "MAT-A", "4"));
         WmsReservationPlanService.ReservationPlan plan = plan(first, second);
         when(fixture.planService.prepare(List.of(101, 102, 201))).thenReturn(plan);
         when(fixture.stateService.reserveBatch(9001L, first)).thenReturn(context(501L, "QPO-WMS-1", first));
         when(fixture.stateService.reserveBatch(9001L, second)).thenReturn(context(502L, "QPO-WMS-2", second));
-        when(fixture.stateService.sendWithReplay(501L)).thenReturn(success("SO-1", "QPO-WMS-1"));
+        when(fixture.stateService.sendWithReplay(501L)).thenReturn(success("CO-1", "QPO-WMS-1"));
         when(fixture.stateService.sendWithReplay(502L))
-                .thenThrow(callException(DataCenterCallException.FailureCertainty.DEFINITE_FAILURE, "WMS rejected SO-2"));
+                .thenThrow(callException(DataCenterCallException.FailureCertainty.DEFINITE_FAILURE, "WMS rejected CO-1"));
 
         Map<String, Object> result = fixture.service.allocateBatch(List.of(101, 102, 201), 9001L);
 
@@ -62,6 +66,10 @@ class WmsReservationBatchServiceTest {
                 .containsExactly("SUCCESS", "SUCCESS", "FAILED");
         assertThat(rows).extracting(row -> row.get("batchId"))
                 .containsExactly(501L, 501L, 502L);
+        assertThat(rows).extracting(row -> row.get("externalBizId"))
+                .containsExactly("QPO-WMS-1", "QPO-WMS-1", "QPO-WMS-2");
+        verify(fixture.stateService).reserveBatch(9001L, first);
+        verify(fixture.stateService).reserveBatch(9001L, second);
         verify(fixture.stateService, times(2)).sendWithReplay(any());
         verify(fixture.stateService).applyResponse(501L);
         verify(fixture.stateService, never()).applyResponse(502L);

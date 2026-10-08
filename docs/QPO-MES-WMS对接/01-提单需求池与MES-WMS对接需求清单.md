@@ -534,7 +534,7 @@ docs/QPO-MES-WMS对接/02-MES-WMS对接开发文档.md
 - QPO 只通过数据中心 endpoint `WMS_INVENTORY_ALLOCATE` 调用 WMS，链路为 `QPO -> 数据中心 -> WMS`。
 - 数据中心路径为 `/api/v1/wms/admin-api/wms/datacenter/sale-lading/reserve`。
 - 请求字段为 `externalBizId`、`saleNo`、`items[].productCode`、`items[].reserveCount`、`items[].remark`、`items[].customerProjectNo`、`items[].customerOrderNo`；其中 `saleNo` 字段名沿用 WMS 现有接口，QPO 实际传客户订单号。
-- 同一客户订单号、同一物料聚合时，客户项目号和客户订单号必须一致；不一致的 ticket 作为行级失败，不发送 WMS。
+- QPO 按销售订单、客户订单号和客户项目号拆分独立请求批次，再在批次内按物料号聚合；因此同一客户订单号、同一物料号可在不同项目批次中分别处理，每个批次使用独立 `externalBizId`。批次内同一物料的客户项目号和客户订单号一致。
 - 响应字段为 `saleOrderNo`、`externalBizId`、`items[].productCode`、`items[].reserveCount`、`items[].stockCount`、`items[].inProductionCount`、`items[].frozenCount`、`items[].surplusCount`。
 - `inProductionCount` 归入“在产覆盖”，库存覆盖为 `frozenCount - inProductionCount`，缺口为 `surplusCount`。
 - QPO 按销售订单分组、按 `productCode` 聚合，再按 `sales_order_item.line_no ASC, ticket.id ASC` 稳定拆回 ticket。

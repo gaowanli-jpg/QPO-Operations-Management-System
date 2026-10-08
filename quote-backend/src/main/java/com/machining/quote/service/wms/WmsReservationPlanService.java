@@ -53,7 +53,10 @@ public class WmsReservationPlanService {
             if (prepared == null) {
                 continue;
             }
-            byGroup.computeIfAbsent(new GroupKey(prepared.getSaleOrderId(), prepared.getSaleNo()), ignored -> new ArrayList<>())
+            byGroup.computeIfAbsent(new GroupKey(
+                    prepared.getSaleOrderId(),
+                    prepared.getSaleNo(),
+                    prepared.getCustomerProjectNo()), ignored -> new ArrayList<>())
                     .add(prepared);
         }
         byGroup.entrySet().stream()
@@ -335,14 +338,18 @@ public class WmsReservationPlanService {
         return trimmed.isEmpty() ? null : trimmed;
     }
 
-    private record GroupKey(Long saleOrderId, String saleNo) implements Comparable<GroupKey> {
+    private record GroupKey(Long saleOrderId, String saleNo, String customerProjectNo) implements Comparable<GroupKey> {
         @Override
         public int compareTo(GroupKey other) {
             int idCompare = Comparator.nullsLast(Long::compareTo).compare(saleOrderId, other.saleOrderId);
             if (idCompare != 0) {
                 return idCompare;
             }
-            return saleNo.compareTo(other.saleNo);
+            int saleNoCompare = saleNo.compareTo(other.saleNo);
+            if (saleNoCompare != 0) {
+                return saleNoCompare;
+            }
+            return Comparator.nullsLast(String::compareTo).compare(customerProjectNo, other.customerProjectNo);
         }
     }
 

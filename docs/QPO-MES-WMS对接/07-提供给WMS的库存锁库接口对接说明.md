@@ -55,7 +55,7 @@
 | `items[].customerProjectNo` | 否 | 客户项目号，QPO 按销售订单行、销售订单头、提单行快照依次兜底。 |
 | `items[].customerOrderNo` | 是 | 客户订单号，与外层 `saleNo` 使用同一解析结果。 |
 
-同一请求中 `productCode` 不允许重复；QPO 在发送前已经按 `productCode ASC` 规范化排序并生成 SHA-256 指纹。若同一客户订单号、同一物料被多个 ticket 聚合，但解析出的 `customerProjectNo` 或 `customerOrderNo` 不一致，QPO 不发送该物料，按行级失败返回给页面。
+同一请求中 `productCode` 不允许重复；QPO 在发送前已经按 `productCode ASC` 规范化排序并生成 SHA-256 指纹。QPO 先按销售订单、客户订单号和客户项目号拆分独立请求批次，再在每批次内按 `productCode` 聚合。同一客户订单号和物料号若对应不同客户项目号，将分别进入不同请求并使用不同 `externalBizId`；批次内同一物料的 `customerProjectNo` 和 `customerOrderNo` 一致。
 
 ## 3. 响应体
 
