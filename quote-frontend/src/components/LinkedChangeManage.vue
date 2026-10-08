@@ -14,6 +14,7 @@
     <section class="erp-toolbar linked-change-filter-toolbar">
       <div class="linked-change-toolbar-main">
         <div class="erp-toolbar-group linked-change-primary-filters">
+          <CustomerAutocomplete v-model="filters.customerName" :customer-code="filters.customerCode" customer-scope="linked-change" @select="handleCustomerSelected" @clear="handleCustomerClear" />
           <el-button v-permission="'change:linked-change:customer-select'" class="customer-picker-trigger" @click="customerPickerVisible = true">
             <span class="customer-picker-content">
               <span
@@ -214,6 +215,7 @@ import { Refresh, Search } from '@element-plus/icons-vue'
 import { useAuthStore } from '../stores/authStore'
 import { handleLinkedChange, listLinkedChanges, reopenLinkedChange } from '../services/linkedChangeApi'
 import CustomerPickerDialog from './CustomerPickerDialog.vue'
+import CustomerAutocomplete from './CustomerAutocomplete.vue'
 
 const VIEW_PERMISSION = 'change:linked-change:view'
 const HANDLE_PERMISSION = 'change:linked-change:handle'

@@ -130,7 +130,7 @@ describe('LockedItemManage guardrails', () => {
     expect(pageSource).toContain('customer-scope="locked-item"')
     expect(pageSource).toContain('v-permission="\'market:locked-item:customer-select\'"')
     expect(pageSource).toContain('@select="handleCustomerSelected"')
-    expect(primarySource).not.toContain('v-model="filters.customerName"')
+    expect(primarySource).toContain('v-model="filters.customerName"')
 
     for (const token of [
       'filters.partNo',

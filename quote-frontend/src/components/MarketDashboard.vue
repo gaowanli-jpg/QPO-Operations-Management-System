@@ -21,17 +21,15 @@
                   <el-row :gutter="20" justify="center">
                     <el-col :xs="24" :sm="22" :md="14" :lg="10" :xl="9" class="customer-input-col">
                       <el-form-item label="客户" required>
-                        <el-input
-                          :model-value="rfqCustomerLabel"
-                          readonly
-                          placeholder="请选择客户主数据"
-                        >
-                          <template #append>
-                            <el-button v-permission="'market:rfq:customer-select'" class="existing-customer-button" @click="openRfqCustomerPicker">
-                              选择客户
-                            </el-button>
-                          </template>
-                        </el-input>
+                        <div class="customer-autocomplete-with-action">
+                          <CustomerAutocomplete
+                            :model-value="rfqCustomerLabel"
+                            customer-scope="market-rfq"
+                            placeholder="输入客户编码、简称或名称"
+                            @select="selectExistingCustomer"
+                          />
+                          <el-button v-permission="'market:rfq:customer-select'" class="existing-customer-button" @click="openRfqCustomerPicker">选择客户</el-button>
+                        </div>
                       </el-form-item>
                     </el-col>
                   </el-row>
@@ -148,21 +146,15 @@
                   <el-row :gutter="20" justify="center">
                     <el-col :xs="24" :md="14" :lg="10" class="customer-input-col">
                       <el-form-item label="客户" required>
-                        <el-input
-                          :model-value="salesOrderCustomerLabel"
-                          readonly
-                          placeholder="请选择客户主数据"
-                        >
-                          <template #append>
-                            <el-button
-                              v-permission="'market:rfq:customer-select'"
-                              class="existing-customer-button"
-                              @click="openSalesOrderCustomerPicker"
-                            >
-                              选择客户
-                            </el-button>
-                          </template>
-                        </el-input>
+                        <div class="customer-autocomplete-with-action">
+                          <CustomerAutocomplete
+                            :model-value="salesOrderCustomerLabel"
+                            customer-scope="market-rfq"
+                            placeholder="输入客户编码、简称或名称"
+                            @select="selectSalesOrderCustomer"
+                          />
+                          <el-button v-permission="'market:rfq:customer-select'" class="existing-customer-button" @click="openSalesOrderCustomerPicker">选择客户</el-button>
+                        </div>
                       </el-form-item>
                     </el-col>
                   </el-row>
@@ -452,6 +444,7 @@ import { computed, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Download } from '@element-plus/icons-vue'
 import CustomerPickerDialog from './CustomerPickerDialog.vue'
+import CustomerAutocomplete from './CustomerAutocomplete.vue'
 import ImportDrawingUploadPanel from './import/ImportDrawingUploadPanel.vue'
 import {
   downloadRfqImportTemplate,

@@ -2,6 +2,15 @@
   <el-dialog v-model="visible" :title="title" width="900px" @closed="resetPicker">
     <div class="picker-step">
       <div class="step-title">1. 选择客户</div>
+      <CustomerAutocomplete
+        v-model="selectedCustomer"
+        :customer-code="selectedCustomerCode"
+        :customer-scope="customerScope"
+        :disabled="Boolean(lockedCustomerName)"
+        placeholder="输入客户编码、简称或名称"
+        @select="handleCustomerSelected"
+        @clear="handleCustomerClear"
+      />
       <el-button
         v-permission="customerSelectPermission"
         class="customer-picker-trigger full-width"
@@ -124,6 +133,7 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import CustomerPickerDialog from './CustomerPickerDialog.vue'
+import CustomerAutocomplete from './CustomerAutocomplete.vue'
 import { listMarketOrders } from '../services/marketApi'
 import { listSetupOrders, listSupplementalPricingOrders } from '../services/engineerApi'
 import { listSalesOrderChangeOrders } from '../services/salesOrderChangeApi'
@@ -369,6 +379,11 @@ const resolveCustomerCode = (customer) => typeof customer === 'string' ? custome
 const handleCustomerSelected = (customer) => {
   selectedCustomer.value = resolveCustomerName(customer)
   selectedCustomerCode.value = resolveCustomerCode(customer)
+}
+
+const handleCustomerClear = () => {
+  selectedCustomer.value = ''
+  selectedCustomerCode.value = ''
 }
 
 const loadOrders = async () => {

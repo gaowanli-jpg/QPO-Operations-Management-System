@@ -210,7 +210,7 @@ describe('DeliveredItemManage foundation page', () => {
     expect(source).toContain('customer-scope="delivered-item"')
     expect(source).toContain('v-permission="\'market:delivered-item:customer-select\'"')
     expect(source).toContain('@select="handleCustomerSelected"')
-    expect(toolbarSource).not.toContain('v-model="filters.customerName"')
+    expect(toolbarSource).toContain('v-model="filters.customerName"')
 
     expect(source).toContain('delivered-toolbar-main')
     expect(source).toContain('delivered-primary-filters')

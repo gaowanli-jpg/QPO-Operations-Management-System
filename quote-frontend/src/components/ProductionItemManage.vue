@@ -14,6 +14,7 @@
           <el-radio-group v-model="viewMode" size="small">
             <el-radio-button v-for="option in viewModeOptions" :key="option.value" :label="option.value">{{ option.label }}</el-radio-button>
           </el-radio-group>
+          <CustomerAutocomplete v-model="filters.customerName" :customer-code="filters.customerCode" customer-scope="production-item" @select="handleCustomerSelected" @clear="handleCustomerClear" />
           <el-button v-permission="'market:production-item:customer-select'" class="customer-picker-trigger" @click="customerPickerVisible = true">
             <span class="customer-picker-content">
               <span
@@ -322,6 +323,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import CustomerPickerDialog from './CustomerPickerDialog.vue'
+import CustomerAutocomplete from './CustomerAutocomplete.vue'
 import {
   batchDiscardProductionItems,
   batchRestoreProductionItems,

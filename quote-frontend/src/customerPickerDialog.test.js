@@ -81,8 +81,8 @@ describe('QPO customer picker dialog', () => {
 
     expect(source).toContain("import CustomerPickerDialog from './CustomerPickerDialog.vue'")
     expect(source).toContain(':model-value="rfqCustomerLabel"')
-    expect(source).toContain('readonly')
-    expect(source).toContain('placeholder="请选择客户主数据"')
+    expect(source).toContain("import CustomerAutocomplete from './CustomerAutocomplete.vue'")
+    expect(source).toContain('placeholder="输入客户编码、简称或名称"')
     expect(source).toContain('选择客户')
     expect(source).toContain('@select="selectExistingCustomer"')
     expect(source).toContain('rfqForm.customerId = customer?.id || null')
@@ -92,7 +92,7 @@ describe('QPO customer picker dialog', () => {
     expect(source).toContain('const rfqCustomerLabel = computed(() =>')
     expect(source).toContain('customer-scope="market-rfq"')
     expect(source).toContain('v-permission="\'market:rfq:customer-select\'"')
-    expect(source).not.toContain('v-model="rfqForm.customerName"')
+    expect(source).not.toContain('readonly')
     expect(source).not.toContain('选择已有客户')
   })
 

@@ -9,6 +9,7 @@
 
     <section class="erp-toolbar">
       <div class="erp-toolbar-group sales-order-filter-group">
+        <CustomerAutocomplete v-model="filters.customerName" :customer-code="filters.customerCode" customer-scope="sales-order" @select="handleCustomerSelected" @clear="handleCustomerClear" />
         <el-button v-permission="'market:sales-order:customer-select'" class="customer-picker-trigger" @click="customerPickerVisible = true">
           <span class="customer-picker-content">
             <span
@@ -821,6 +822,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import CustomerPickerDialog from './CustomerPickerDialog.vue'
+import CustomerAutocomplete from './CustomerAutocomplete.vue'
 import SupplementDrawingDialog from './order/SupplementDrawingDialog.vue'
 import SalesOrderItemDataReplacementDialog from './sales-order/SalesOrderItemDataReplacementDialog.vue'
 import DrawingFolderViewer from './common/DrawingFolderViewer.vue'

@@ -13,6 +13,7 @@
           <el-radio-group v-model="viewMode" size="small">
             <el-radio-button v-for="option in viewModeOptions" :key="option.value" :label="option.value">{{ option.label }}</el-radio-button>
           </el-radio-group>
+          <CustomerAutocomplete v-model="filters.customerName" :customer-code="filters.customerCode" customer-scope="delivered-item" @select="handleCustomerSelected" @clear="handleCustomerClear" />
           <el-button v-permission="'market:delivered-item:customer-select'" class="customer-picker-trigger" @click="customerPickerVisible = true">
             <span class="customer-picker-content">
               <span
@@ -404,6 +405,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { isDrawingFolderUrl, openAuthenticatedFileInNewWindow } from '../api'
 import CustomerPickerDialog from './CustomerPickerDialog.vue'
+import CustomerAutocomplete from './CustomerAutocomplete.vue'
 import DrawingFolderViewer from './common/DrawingFolderViewer.vue'
 import {
   batchDiscardDeliveredItems,
