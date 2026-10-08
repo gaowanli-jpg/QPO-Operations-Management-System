@@ -46,7 +46,7 @@ public class SalesOrderProductionTaskNoticeExportService {
     private static final int FIRST_DATA_COLUMN = 1;
     private static final int LAST_DATA_COLUMN = 34;
     private static final int COLUMN_WIDTH_UNIT = 256;
-    private static final int MAX_TOTAL_ADAPTIVE_GROWTH = 36 * COLUMN_WIDTH_UNIT;
+    private static final int MAX_TOTAL_ADAPTIVE_GROWTH = 12 * COLUMN_WIDTH_UNIT;
     private static final float DEFAULT_DATA_ROW_HEIGHT_POINTS = 14.4F;
     private static final List<AdaptiveTextField> ADAPTIVE_TEXT_FIELDS = List.of(
             new AdaptiveTextField("H", "I", 22, SalesOrderItem::getInternalProjectNo),

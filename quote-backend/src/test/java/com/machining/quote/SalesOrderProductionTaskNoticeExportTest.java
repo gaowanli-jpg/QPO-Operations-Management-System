@@ -329,6 +329,7 @@ class SalesOrderProductionTaskNoticeExportTest {
                         .as("%s should wrap long notice text", column)
                         .isTrue();
             }
+            assertThat(columnWidth(sheet, "B", "AI")).isLessThanOrEqualTo(146 * 256);
             assertThat(columnWidth(sheet, "H", "I")).isGreaterThan(12 * 256);
             assertThat(hasMergedRegion(sheet, "H12:I12")).isTrue();
             assertThat(text(sheet, 16, "AB")).isEqualTo("表单编号：SOQPO-915");
