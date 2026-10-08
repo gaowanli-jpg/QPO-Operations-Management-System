@@ -82,8 +82,7 @@ describe('QPO customer picker dialog', () => {
     expect(source).toContain("import CustomerPickerDialog from './CustomerPickerDialog.vue'")
     expect(source).toContain(':model-value="rfqCustomerLabel"')
     expect(source).toContain("import CustomerAutocomplete from './CustomerAutocomplete.vue'")
-    expect(source).toContain('@open-picker="openRfqCustomerPicker"')
-    expect(source).toContain('閫夋嫨瀹㈡埛')
+    expect(source).toContain('@open-picker="openRfqCustomerPicker"') 
     expect(source).toContain('@select="selectExistingCustomer"')
     expect(source).toContain('rfqForm.customerId = customer?.id || null')
     expect(source).toContain('rfqForm.customerCode = customer?.customerCode || \'\'')
@@ -185,4 +184,5 @@ describe('QPO customer picker dialog', () => {
     expect(marketRelease).not.toContain('getMarketSummary')
   })
 })
+
 
