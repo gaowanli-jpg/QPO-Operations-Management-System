@@ -9,6 +9,7 @@ import com.machining.quote.mapper.SalesOrderItemMapper;
 import com.machining.quote.service.AuditService;
 import com.machining.quote.service.DataScopeService;
 import com.machining.quote.service.SalesOrderProductionTaskNoticeExportService;
+import org.apache.poi.ss.usermodel.PrintSetup;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
@@ -331,6 +332,9 @@ class SalesOrderProductionTaskNoticeExportTest {
             assertThat(columnWidth(sheet, "H", "I")).isGreaterThan(12 * 256);
             assertThat(hasMergedRegion(sheet, "H12:I12")).isTrue();
             assertThat(text(sheet, 16, "AB")).isEqualTo("表单编号：SOQPO-915");
+            assertThat(sheet.getPrintSetup().getLandscape()).isTrue();
+            assertThat(sheet.getPrintSetup().getPaperSize()).isEqualTo(PrintSetup.A4_PAPERSIZE);
+            assertThat(sheet.getFitToPage()).isTrue();
         }
     }
 

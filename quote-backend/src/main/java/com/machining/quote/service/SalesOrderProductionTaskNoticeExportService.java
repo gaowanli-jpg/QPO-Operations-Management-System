@@ -8,6 +8,7 @@ import com.machining.quote.mapper.SalesOrderHeaderMapper;
 import com.machining.quote.mapper.SalesOrderItemMapper;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
+import org.apache.poi.ss.usermodel.PrintSetup;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
@@ -135,6 +136,7 @@ public class SalesOrderProductionTaskNoticeExportService {
             if (sheet == null) {
                 throw new RuntimeException("生产任务通知单模板缺少工作表");
             }
+            applyPrintSetup(sheet);
             resizeTemplateDataRows(sheet, items.size());
             writeHeader(sheet, order, items.size());
             writeItems(sheet, items);
@@ -150,6 +152,16 @@ public class SalesOrderProductionTaskNoticeExportService {
             throw new RuntimeException("生产任务通知单模板不存在");
         }
         return inputStream;
+    }
+
+    private void applyPrintSetup(Sheet sheet) {
+        sheet.setFitToPage(true);
+        sheet.setAutobreaks(true);
+        PrintSetup printSetup = sheet.getPrintSetup();
+        printSetup.setLandscape(true);
+        printSetup.setPaperSize(PrintSetup.A4_PAPERSIZE);
+        printSetup.setFitWidth((short) 1);
+        printSetup.setFitHeight((short) 0);
     }
 
     private void writeHeader(Sheet sheet, SalesOrderHeader order, int itemCount) {
