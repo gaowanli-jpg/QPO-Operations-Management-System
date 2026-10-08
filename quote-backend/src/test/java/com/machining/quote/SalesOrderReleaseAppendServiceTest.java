@@ -170,6 +170,72 @@ class SalesOrderReleaseAppendServiceTest extends SalesOrderQpoImportTestSupport 
     }
 
     @Test
+    void appendsWhenExcelProvidesIdentifiersMissingFromTargetHeader() throws Exception {
+        SalesOrderQpoExcelParser parser = mock(SalesOrderQpoExcelParser.class);
+        SalesOrderHeaderMapper headerMapper = mock(SalesOrderHeaderMapper.class);
+        SalesOrderItemMapper itemMapper = mock(SalesOrderItemMapper.class);
+        DataScopeService dataScopeService = mock(DataScopeService.class);
+        SalesOrderAutoSnapshotCompletionService snapshotCompletionService = mock(SalesOrderAutoSnapshotCompletionService.class);
+        DeliveryService deliveryService = mock(DeliveryService.class);
+        AuditService auditService = mock(AuditService.class);
+        BusinessFileService fileService = mock(BusinessFileService.class);
+        SalesOrderReleaseAppendService service = service(
+                parser,
+                headerMapper,
+                itemMapper,
+                dataScopeService,
+                snapshotCompletionService,
+                deliveryService,
+                auditService,
+                fileService
+        );
+        SalesOrderHeader target = targetSalesOrder(301L, "未同步");
+        target.setCustomerOrderNo(null);
+        target.setInternalProjectNo(null);
+        SalesOrderQpoExcelParseResult parsed = appendParseResult();
+        parsed.getOrders().forEach(group -> group.getLines().forEach(line -> {
+            line.setCustomerOrderNo("EXCEL-PO");
+            line.setInternalProjectNo("EXCEL-INTERNAL");
+        }));
+        when(headerMapper.selectByIdForUpdate(301L)).thenReturn(target);
+        when(itemMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of());
+        when(parser.parse(any(InputStream.class), any(SalesOrderQpoImportDefaultsDTO.class))).thenReturn(parsed);
+        ArgumentCaptor<SalesOrderItem> insertedCaptor = ArgumentCaptor.forClass(SalesOrderItem.class);
+        AtomicLong nextInsertedId = new AtomicLong(501L);
+        org.mockito.Mockito.doAnswer(invocation -> {
+            SalesOrderItem item = invocation.getArgument(0);
+            item.setId(nextInsertedId.getAndIncrement());
+            return 1;
+        }).when(itemMapper).insert(insertedCaptor.capture());
+        when(deliveryService.generateImportedSalesOrderTicketsForItems(301L, List.of(501L, 502L), "SALES_ORDER_APPEND_RELEASE"))
+                .thenReturn(List.of());
+
+        SalesOrderReleaseAppendResp response = service.appendItems(
+                301L,
+                new MockMultipartFile(
+                        "excelFile",
+                        "append-sales-order.xlsx",
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        "xlsx".getBytes(StandardCharsets.UTF_8)
+                ),
+                List.of(),
+                List.of()
+        );
+
+        assertThat(response.isSuccess()).isTrue();
+        assertThat(insertedCaptor.getAllValues())
+                .hasSize(2)
+                .allSatisfy(item -> {
+                    assertThat(item.getCustomerOrderNo()).isEqualTo("EXCEL-PO");
+                    assertThat(item.getInternalProjectNo()).isEqualTo("EXCEL-INTERNAL");
+                });
+        ArgumentCaptor<SalesOrderQpoImportDefaultsDTO> defaultsCaptor = ArgumentCaptor.forClass(SalesOrderQpoImportDefaultsDTO.class);
+        verify(parser).parse(any(InputStream.class), defaultsCaptor.capture());
+        assertThat(defaultsCaptor.getValue().getCustomerOrderNo()).isNull();
+        assertThat(defaultsCaptor.getValue().getInternalProjectNo()).isNull();
+    }
+
+    @Test
     @SuppressWarnings("unchecked")
     void appendItemsWithDrawingFolderBindsOnlyNewItemsAndStoresTargetFolderMetadata() throws Exception {
         SalesOrderQpoExcelParser parser = mock(SalesOrderQpoExcelParser.class);
@@ -288,6 +354,61 @@ class SalesOrderReleaseAppendServiceTest extends SalesOrderQpoImportTestSupport 
                 List.of(),
                 List.of()
         )).hasMessageContaining("不能追加到已同步或同步中的销售订单");
+    }
+
+    @Test
+    void rejectsAppendWhenEitherEffectiveIdentifierIsMissingBeforeWriting() throws Exception {
+        assertAppendRejectedForMissingIdentifier(null, "TARGET-INTERNAL");
+        assertAppendRejectedForMissingIdentifier("TARGET-PO", null);
+    }
+
+    private void assertAppendRejectedForMissingIdentifier(String customerOrderNo, String internalProjectNo) throws Exception {
+        SalesOrderQpoExcelParser parser = mock(SalesOrderQpoExcelParser.class);
+        SalesOrderHeaderMapper headerMapper = mock(SalesOrderHeaderMapper.class);
+        SalesOrderItemMapper itemMapper = mock(SalesOrderItemMapper.class);
+        DataScopeService dataScopeService = mock(DataScopeService.class);
+        SalesOrderAutoSnapshotCompletionService snapshotCompletionService = mock(SalesOrderAutoSnapshotCompletionService.class);
+        DeliveryService deliveryService = mock(DeliveryService.class);
+        AuditService auditService = mock(AuditService.class);
+        BusinessFileService fileService = mock(BusinessFileService.class);
+        SalesOrderReleaseAppendService service = service(
+                parser,
+                headerMapper,
+                itemMapper,
+                dataScopeService,
+                snapshotCompletionService,
+                deliveryService,
+                auditService,
+                fileService
+        );
+        SalesOrderHeader target = targetSalesOrder(301L, "未同步");
+        target.setCustomerOrderNo(customerOrderNo);
+        target.setInternalProjectNo(internalProjectNo);
+        when(headerMapper.selectByIdForUpdate(301L)).thenReturn(target);
+        when(parser.parse(any(InputStream.class), any(SalesOrderQpoImportDefaultsDTO.class))).thenReturn(appendParseResult());
+
+        MockMultipartFile drawingFolder = new MockMultipartFile(
+                "drawingFolderFiles",
+                "folder/append-pack.pdf",
+                "application/pdf",
+                "pdf".getBytes(StandardCharsets.UTF_8)
+        );
+        assertThatThrownBy(() -> service.appendItems(
+                301L,
+                new MockMultipartFile(
+                        "excelFile",
+                        "append-sales-order.xlsx",
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        "xlsx".getBytes(StandardCharsets.UTF_8)
+                ),
+                List.of(),
+                List.of(),
+                List.of(drawingFolder),
+                "追加图纸"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("编号有缺失，请补齐内部项目号或客户订单号。");
+
+        org.mockito.Mockito.verifyNoInteractions(itemMapper, fileService, snapshotCompletionService, deliveryService, auditService);
     }
 
     private SalesOrderReleaseAppendService service(

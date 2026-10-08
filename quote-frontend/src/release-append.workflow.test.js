@@ -46,6 +46,7 @@ describe('release append module', () => {
     expect(component).toContain("formData.append('drawingFolderFiles', file)")
     expect(component).toContain("formData.append('drawingFolderName'")
     expect(component).toContain('追加销售提单')
+    expect(component).toContain("ElMessage.error(readActionError(error, '追加提单失败，请稍后重试。'))")
     expect(component).toContain('customer-scope="release-append"')
     expect(component).toContain('order-scope="release-append"')
     expect(component).toContain('market:release-append:create')

@@ -44,6 +44,7 @@ import java.util.Set;
 @Service
 public class SalesOrderReleaseAppendService {
     private static final Logger log = LoggerFactory.getLogger(SalesOrderReleaseAppendService.class);
+    private static final String MISSING_DELIVERY_IDENTIFIERS_MESSAGE = "编号有缺失，请补齐内部项目号或客户订单号。";
     private static final String U9_UNSYNCED = "未同步";
     private static final String U9_FAILED = "同步失败";
     private static final String U9_SYNCED = "已同步";
@@ -154,6 +155,7 @@ public class SalesOrderReleaseAppendService {
         if (parseResult.getLineCount() <= 0 || parseResult.getOrders().isEmpty()) {
             throw new IllegalArgumentException("销售订单表格没有可追加的零件行");
         }
+        validateDeliveryIdentifiers(parseResult, target);
         String sourceFileName = safeFileName(excelFile.getOriginalFilename());
         String batchNo = nextBatchNo();
         DrawingBindingResult drawingBinding = bindDrawings(target, batchNo, parseResult, drawings, versionDrawings, drawingFolderFiles, drawingFolderName);
@@ -228,12 +230,23 @@ public class SalesOrderReleaseAppendService {
     private SalesOrderQpoImportDefaultsDTO defaultsFromTarget(SalesOrderHeader target) {
         SalesOrderQpoImportDefaultsDTO defaults = new SalesOrderQpoImportDefaultsDTO();
         defaults.setSalesOrderDate(target.getSalesOrderDate());
-        defaults.setCustomerOrderNo(requiredText(target.getCustomerOrderNo(), "目标销售订单客户订单号不能为空"));
+        defaults.setCustomerOrderNo(trimToNull(target.getCustomerOrderNo()));
         defaults.setCustomerProjectNo(trimToNull(target.getCustomerProjectNo()));
         defaults.setCustomerOrderTitle(trimToNull(target.getCustomerOrderTitle()));
         defaults.setOrderType(requiredText(target.getOrderType(), "目标销售订单订单类型不能为空"));
-        defaults.setInternalProjectNo(requiredText(target.getInternalProjectNo(), "目标销售订单内部项目号不能为空"));
+        defaults.setInternalProjectNo(trimToNull(target.getInternalProjectNo()));
         return defaults;
+    }
+
+    private void validateDeliveryIdentifiers(SalesOrderQpoExcelParseResult parseResult, SalesOrderHeader target) {
+        boolean missingIdentifier = safeGroups(parseResult).stream()
+                .flatMap(group -> safeLines(group).stream())
+                .anyMatch(line -> line == null
+                        || (isBlank(line.getCustomerOrderNo()) && isBlank(target.getCustomerOrderNo()))
+                        || (isBlank(line.getInternalProjectNo()) && isBlank(target.getInternalProjectNo())));
+        if (missingIdentifier) {
+            throw new IllegalArgumentException(MISSING_DELIVERY_IDENTIFIERS_MESSAGE);
+        }
     }
 
     private SalesOrderQpoExcelParseResult parse(MultipartFile excelFile, SalesOrderQpoImportDefaultsDTO defaults) {
