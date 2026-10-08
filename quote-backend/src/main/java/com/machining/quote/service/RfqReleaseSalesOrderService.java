@@ -56,6 +56,7 @@ import java.util.stream.Collectors;
 @Service
 public class RfqReleaseSalesOrderService {
     private static final Logger log = LoggerFactory.getLogger(RfqReleaseSalesOrderService.class);
+    private static final String MISSING_DELIVERY_IDENTIFIERS_MESSAGE = "编号有缺失，请补齐内部项目号或客户订单号。";
     private static final String SOURCE_RFQ_RELEASE = "RFQ_RELEASE";
     private static final String SOURCE_RFQ = "RFQ";
     private static final String HEADER_RELEASED = "已生成提单";
@@ -331,7 +332,10 @@ public class RfqReleaseSalesOrderService {
         String customerOrderTitle = firstText(item.getCustomerOrderTitle(), context.customerOrderTitle());
         String orderType = firstText(item.getOrderType(), context.orderType());
         String internalProjectNo = firstText(item.getInternalProjectNo(), context.internalProjectNo());
-        if (salesOrderDate == null || isBlank(customerOrderNo) || isBlank(orderType) || isBlank(internalProjectNo)) {
+        if (isBlank(customerOrderNo) || isBlank(internalProjectNo)) {
+            throw new RuntimeException(MISSING_DELIVERY_IDENTIFIERS_MESSAGE);
+        }
+        if (salesOrderDate == null || isBlank(orderType)) {
             throw new RuntimeException("零件 " + itemLabel(item) + " 的有效订单属性不完整");
         }
         if (!ALLOWED_ORDER_TYPES.contains(orderType)) {

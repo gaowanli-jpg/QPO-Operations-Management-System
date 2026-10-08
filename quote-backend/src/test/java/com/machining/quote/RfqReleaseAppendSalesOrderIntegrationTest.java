@@ -222,6 +222,30 @@ class RfqReleaseAppendSalesOrderIntegrationTest {
     }
 
     @Test
+    void rejectsAppendWhenEffectiveCustomerOrderOrInternalProjectNumberIsMissingBeforeWrites() {
+        assertAppendRejectedForMissingIdentifiers("CUSTOMER_ORDER", "append-missing-po");
+        assertAppendRejectedForMissingIdentifiers("INTERNAL_PROJECT", "append-missing-internal");
+    }
+
+    private void assertAppendRejectedForMissingIdentifiers(String missingIdentifier, String batchKeyPrefix) {
+        String suffix = String.valueOf(System.nanoTime());
+        String customerCode = "APPEND-MISSING-" + suffix;
+        String customerOrderNo = "CUSTOMER_ORDER".equals(missingIdentifier) ? null : "TARGET-PO";
+        String internalProjectNo = "INTERNAL_PROJECT".equals(missingIdentifier) ? null : "TARGET-INTERNAL";
+        SalesOrderHeader target = targetSalesOrder(
+                customerCode, "同步失败", customerOrderNo, internalProjectNo);
+        OrderRfq rfq = rfq(target, "APPEND-MISSING-RFQ-" + suffix);
+        ItemQuoteVersion item = rfqItem(rfq, "APPEND-MISSING-PART-" + suffix, 1, 10, false);
+
+        assertThatThrownBy(() -> deliveryService.appendRfqReleaseToSalesOrder(
+                appendRequest(target, rfq, item, null, batchKeyPrefix + "-" + suffix)))
+                .hasMessage("编号有缺失，请补齐内部项目号或客户订单号。");
+
+        assertThat(salesItems(target.getId())).isEmpty();
+        assertThat(ticketCount(rfq.getId())).isZero();
+    }
+
+    @Test
     void appendTargetListIncludesBlankUnsyncedStatusAndFiltersBlockedTargets() {
         String suffix = String.valueOf(System.nanoTime());
         String customerCode = "APPEND-LIST-" + suffix;
@@ -250,6 +274,14 @@ class RfqReleaseAppendSalesOrderIntegrationTest {
     }
 
     private SalesOrderHeader targetSalesOrder(String customerCode, String u9SyncStatus) {
+        return targetSalesOrder(customerCode, u9SyncStatus, "TARGET-PO", "TARGET-INTERNAL");
+    }
+
+    private SalesOrderHeader targetSalesOrder(
+            String customerCode,
+            String u9SyncStatus,
+            String customerOrderNo,
+            String internalProjectNo) {
         SalesOrderHeader header = new SalesOrderHeader();
         header.setSalesOrderNo("SO-APPEND-" + System.nanoTime());
         header.setDocumentNo(header.getSalesOrderNo());
@@ -259,11 +291,11 @@ class RfqReleaseAppendSalesOrderIntegrationTest {
         header.setCustomerName("追加客户");
         header.setSourceType("DIRECT_IMPORT");
         header.setSalesOrderDate(LocalDate.of(2026, 8, 20));
-        header.setCustomerOrderNo("TARGET-PO");
+        header.setCustomerOrderNo(customerOrderNo);
         header.setCustomerProjectNo("TARGET-CP");
         header.setCustomerOrderTitle("TARGET-TITLE");
         header.setOrderType("备货订单");
-        header.setInternalProjectNo("TARGET-INTERNAL");
+        header.setInternalProjectNo(internalProjectNo);
         header.setStatus(QuoteStatusWorkflow.RELEASED);
         header.setU9SyncStatus(u9SyncStatus);
         header.setU9SyncMessage("旧 U9 失败摘要");
