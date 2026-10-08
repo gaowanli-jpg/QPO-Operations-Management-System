@@ -128,7 +128,7 @@ describe('LockedItemManage guardrails', () => {
     expect(pageSource).toContain("import CustomerPickerDialog from './CustomerPickerDialog.vue'")
     expect(pageSource).toContain('<CustomerPickerDialog')
     expect(pageSource).toContain('customer-scope="locked-item"')
-    expect(pageSource).toContain('v-permission="\'market:locked-item:customer-select\'"')
+    expect(pageSource).toContain('permission="market:locked-item:customer-select"')
     expect(pageSource).toContain('@select="handleCustomerSelected"')
     expect(primarySource).toContain('v-model="filters.customerName"')
 

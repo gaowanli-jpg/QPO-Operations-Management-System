@@ -13,19 +13,15 @@
           <el-radio-group v-model="viewMode" size="small">
             <el-radio-button v-for="option in viewModeOptions" :key="option.value" :label="option.value">{{ option.label }}</el-radio-button>
           </el-radio-group>
-          <CustomerAutocomplete v-model="filters.customerName" :customer-code="filters.customerCode" customer-scope="delivered-item" @select="handleCustomerSelected" @clear="handleCustomerClear" />
-          <el-button v-permission="'market:delivered-item:customer-select'" class="customer-picker-trigger" @click="customerPickerVisible = true">
-            <span class="customer-picker-content">
-              <span
-                :class="filters.customerName ? 'customer-picker-text' : 'customer-picker-placeholder'"
-                :title="filters.customerName || '先选择客户'"
-              >
-                {{ filters.customerName || '先选择客户' }}
-              </span>
-              <span class="customer-picker-action">选择客户</span>
-            </span>
-          </el-button>
-          <el-button v-if="filters.customerName" plain @click="handleCustomerClear">清除客户</el-button>
+          <CustomerAutocomplete
+            v-model="filters.customerName"
+            :customer-code="filters.customerCode"
+            customer-scope="delivered-item"
+            permission="market:delivered-item:customer-select"
+            @select="handleCustomerSelected"
+            @clear="handleCustomerClear"
+            @open-picker="customerPickerVisible = true"
+          />
           <el-input v-model="filters.partNo" clearable placeholder="图号" class="filter-input" @keyup.enter="handleSearch" @clear="handleSearch" />
           <el-input v-model="filters.version" clearable placeholder="版本" class="filter-input small" @keyup.enter="handleSearch" @clear="handleSearch" />
           <el-select v-model="filters.flowStage" clearable placeholder="流程状态" class="filter-select flow-stage-select" @change="handleFlowStageChange" @clear="handleFlowStageChange">

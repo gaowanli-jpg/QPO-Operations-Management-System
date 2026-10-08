@@ -126,7 +126,7 @@ describe('QPO customer picker dialog', () => {
 
     expect(orderPicker).toContain('customerSelectPermission')
     expect(orderPicker).toContain(':permission="customerSelectPermission"')
-    expect(orderManage).toContain('v-permission="\'market:order:customer-select\'"')
+    expect(orderManage).toContain('permission="market:order:customer-select"')
     expect(salesOrderManage).toContain('permission="market:sales-order:customer-select"')
   })
 
@@ -137,21 +137,21 @@ describe('QPO customer picker dialog', () => {
 
     expect(deliveredManage).toContain("import CustomerPickerDialog from './CustomerPickerDialog.vue'")
     expect(deliveredManage).toContain('customer-scope="delivered-item"')
-    expect(deliveredManage).toContain('v-permission="\'market:delivered-item:customer-select\'"')
+    expect(deliveredManage).toContain('permission="market:delivered-item:customer-select"')
     expect(deliveredManage).toContain('@select="handleCustomerSelected"')
     expect(deliveredManage).toContain('filters.customerCode = resolveCustomerCode(customer)')
     expect(deliveredManage).toContain('filters.customerName = resolveCustomerName(customer)')
 
     expect(productionManage).toContain("import CustomerPickerDialog from './CustomerPickerDialog.vue'")
     expect(productionManage).toContain('customer-scope="production-item"')
-    expect(productionManage).toContain('v-permission="\'market:production-item:customer-select\'"')
+    expect(productionManage).toContain('permission="market:production-item:customer-select"')
     expect(productionManage).toContain('@select="handleCustomerSelected"')
     expect(productionManage).toContain('filters.customerCode = resolveCustomerCode(customer)')
     expect(productionManage).toContain('filters.customerName = resolveCustomerName(customer)')
 
     expect(lockedManage).toContain("import CustomerPickerDialog from './CustomerPickerDialog.vue'")
     expect(lockedManage).toContain('customer-scope="locked-item"')
-    expect(lockedManage).toContain('v-permission="\'market:locked-item:customer-select\'"')
+    expect(lockedManage).toContain('permission="market:locked-item:customer-select"')
     expect(lockedManage).toContain('@select="handleCustomerSelected"')
     expect(lockedManage).toContain('filters.customerCode = resolveCustomerCode(customer)')
     expect(lockedManage).toContain('filters.customerName = resolveCustomerName(customer)')
@@ -167,7 +167,7 @@ describe('QPO customer picker dialog', () => {
     ]
 
     for (const source of pages) {
-      expect(source).toContain('CustomerAutocomplete')
+      expect(source).toContain('@open-picker="customerPickerVisible = true"')
     }
   })
 

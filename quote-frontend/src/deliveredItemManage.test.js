@@ -208,7 +208,7 @@ describe('DeliveredItemManage foundation page', () => {
     expect(source).toContain("import CustomerPickerDialog from './CustomerPickerDialog.vue'")
     expect(source).toContain('<CustomerPickerDialog')
     expect(source).toContain('customer-scope="delivered-item"')
-    expect(source).toContain('v-permission="\'market:delivered-item:customer-select\'"')
+    expect(source).toContain('permission="market:delivered-item:customer-select"')
     expect(source).toContain('@select="handleCustomerSelected"')
     expect(toolbarSource).toContain('v-model="filters.customerName"')
 

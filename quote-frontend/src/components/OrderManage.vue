@@ -9,19 +9,15 @@
 
     <section class="erp-toolbar">
       <div class="erp-toolbar-group order-filter-group">
-        <CustomerAutocomplete v-model="selectedCustomer" :customer-code="selectedCustomerCode" customer-scope="market-order" @select="handleCustomerSelected" @clear="handleCustomerClear" />
-        <el-button v-permission="'market:order:customer-select'" class="customer-picker-trigger" @click="customerPickerVisible = true">
-          <span class="customer-picker-content">
-            <span
-              :class="selectedCustomer ? 'customer-picker-text' : 'customer-picker-placeholder'"
-              :title="selectedCustomer || '全部客户'"
-            >
-              {{ selectedCustomer || '全部客户' }}
-            </span>
-            <span class="customer-picker-action">选择客户</span>
-          </span>
-        </el-button>
-        <el-button v-if="selectedCustomer" plain @click="handleCustomerClear">清除客户</el-button>
+        <CustomerAutocomplete
+          v-model="selectedCustomer"
+          :customer-code="selectedCustomerCode"
+          customer-scope="market-order"
+          permission="market:order:customer-select"
+          @select="handleCustomerSelected"
+          @clear="handleCustomerClear"
+          @open-picker="customerPickerVisible = true"
+        />
         <el-select
           v-model="statusFilter"
           clearable

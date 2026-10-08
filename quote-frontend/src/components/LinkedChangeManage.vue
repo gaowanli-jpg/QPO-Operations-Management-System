@@ -14,19 +14,15 @@
     <section class="erp-toolbar linked-change-filter-toolbar">
       <div class="linked-change-toolbar-main">
         <div class="erp-toolbar-group linked-change-primary-filters">
-          <CustomerAutocomplete v-model="filters.customerName" :customer-code="filters.customerCode" customer-scope="linked-change" @select="handleCustomerSelected" @clear="handleCustomerClear" />
-          <el-button v-permission="'change:linked-change:customer-select'" class="customer-picker-trigger" @click="customerPickerVisible = true">
-            <span class="customer-picker-content">
-              <span
-                :class="filters.customerName ? 'customer-picker-text' : 'customer-picker-placeholder'"
-                :title="filters.customerName || '选择客户'"
-              >
-                {{ filters.customerName || '选择客户' }}
-              </span>
-              <span class="customer-picker-action">选择客户</span>
-            </span>
-          </el-button>
-          <el-button v-if="filters.customerName" plain @click="clearCustomer">清除客户</el-button>
+          <CustomerAutocomplete
+            v-model="filters.customerName"
+            :customer-code="filters.customerCode"
+            customer-scope="linked-change"
+            permission="change:linked-change:customer-select"
+            @select="handleCustomerSelected"
+            @clear="clearCustomer"
+            @open-picker="customerPickerVisible = true"
+          />
           <el-input v-model="filters.salesOrderNo" clearable placeholder="销售订单号" class="filter-input" @keyup.enter="search" @clear="search" />
           <el-input v-model="filters.partNo" clearable placeholder="图号" class="filter-input" @keyup.enter="search" @clear="search" />
           <el-input v-model="filters.version" clearable placeholder="版本" class="filter-input small" @keyup.enter="search" @clear="search" />

@@ -20,7 +20,7 @@ describe('ProductionItemManage split workbench', () => {
     expect(appSource).toContain("'/production-items': { title: '待产零件', permission: 'market:production-item:view'")
     expect(orderApiSource).toContain("'production-item': '/api/order-delivery/production-items/customers'")
     expect(pageSource).toContain('customer-scope="production-item"')
-    expect(pageSource).toContain(`v-permission="'market:production-item:customer-select'"`)
+    expect(pageSource).toContain('permission="market:production-item:customer-select"')
   })
 
   test('loads only production item rows through the production item API', () => {
