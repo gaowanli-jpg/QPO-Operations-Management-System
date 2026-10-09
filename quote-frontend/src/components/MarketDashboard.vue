@@ -197,7 +197,6 @@
                         class="full-width"
                         :disabled="isPending(IMPORT_SALES_ORDER_ACTION_KEY)"
                       >
-                        <el-option label="预测订单" value="预测订单" />
                         <el-option label="备货订单" value="备货订单" />
                         <el-option label="正式订单" value="正式订单" />
                       </el-select>
@@ -486,7 +485,7 @@ const salesOrderForm = reactive({
   customerOrderNo: '',
   customerProjectNo: '',
   customerOrderTitle: '',
-  orderType: '',
+  orderType: '正式订单',
   internalProjectNo: ''
 })
 const salesOrderFile = ref(null)
@@ -756,7 +755,7 @@ const submitSalesOrderImport = async () => {
           salesOrderForm.customerOrderNo = ''
           salesOrderForm.customerProjectNo = ''
           salesOrderForm.customerOrderTitle = ''
-          salesOrderForm.orderType = ''
+          salesOrderForm.orderType = '正式订单'
           salesOrderForm.internalProjectNo = ''
           salesOrderFile.value = null
           salesOrderDrawingFiles.value = []

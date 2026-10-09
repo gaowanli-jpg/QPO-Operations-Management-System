@@ -206,6 +206,55 @@ class SalesOrderQpoImportDefaultsTest {
     }
 
     @Test
+    void serviceOverloadRejectsForecastDefaultBeforeAnyImportWork() {
+        SalesOrderQpoImportService service = service();
+        SalesOrderQpoImportDefaultsDTO defaults = defaults();
+        defaults.setOrderType("预测订单");
+
+        assertThatThrownBy(() -> service.importQpo(
+                excel(), 7L, "SO01", defaults, List.of(), List.of()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("订单类型只能是正式订单或备货订单");
+
+        verifyNoInteractions(
+                customerMapper(service),
+                batchMapper(service),
+                recordMapper(service),
+                headerMapper(service),
+                itemMapper(service),
+                auditService(service),
+                businessFileService(service),
+                autoSnapshotCompletionService(service),
+                deliveryService(service),
+                dataScopeService(service),
+                parser(service));
+    }
+
+    @Test
+    void serviceRejectsForecastOrderTypeBeforeAnyImportWrites() {
+        SalesOrderQpoImportService service = service();
+        SalesOrderQpoImportDefaultsDTO defaults = defaults();
+        SalesOrderQpoExcelParseResult parseResult = parseResultWithLineOverride();
+        parseResult.getOrders().get(0).getLines().get(0).setOrderType("预测订单");
+        when(customerMapper(service).selectById(7L)).thenReturn(customer());
+        when(parser(service).parse(any(), same(defaults))).thenReturn(parseResult);
+
+        assertThatThrownBy(() -> service.importQpo(excel(), 7L, "SO01", defaults, List.of(), List.of()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("订单类型只能是正式订单或备货订单");
+
+        verifyNoInteractions(
+                batchMapper(service),
+                recordMapper(service),
+                headerMapper(service),
+                itemMapper(service),
+                auditService(service),
+                businessFileService(service),
+                autoSnapshotCompletionService(service),
+                deliveryService(service));
+    }
+
+    @Test
     void serviceRejectsImportWhenEitherEffectiveIdentifierIsMissingBeforeAnyWrites() {
         assertImportRejectedForMissingIdentifiers(null, "IP-001");
         assertImportRejectedForMissingIdentifiers("PO-001", null);
@@ -222,9 +271,9 @@ class SalesOrderQpoImportDefaultsTest {
         group.setGroupKey("EXCEL-PO|EXCEL-IP");
         group.setSalesOrderDate(defaults.getSalesOrderDate());
         group.setCustomerOrderNo("EXCEL-PO");
-        group.setOrderType(defaults.getOrderType());
+        group.setOrderType(null);
         group.setInternalProjectNo("EXCEL-IP");
-        group.setLines(List.of(line(1, defaults.getSalesOrderDate(), "EXCEL-PO", null, null, "正式订单", "EXCEL-IP", "P-001")));
+        group.setLines(List.of(line(1, defaults.getSalesOrderDate(), "EXCEL-PO", null, null, null, "EXCEL-IP", "P-001")));
         SalesOrderQpoExcelParseResult parseResult = new SalesOrderQpoExcelParseResult();
         parseResult.setOrders(List.of(group));
         parseResult.setOrderCount(1);
@@ -264,11 +313,13 @@ class SalesOrderQpoImportDefaultsTest {
         verify(headerMapper(service)).insert(headerCaptor.capture());
         assertThat(headerCaptor.getValue().getCustomerOrderNo()).isEqualTo("EXCEL-PO");
         assertThat(headerCaptor.getValue().getInternalProjectNo()).isEqualTo("EXCEL-IP");
+        assertThat(headerCaptor.getValue().getOrderType()).isEqualTo("正式订单");
 
         var itemCaptor = org.mockito.ArgumentCaptor.forClass(SalesOrderItem.class);
         verify(itemMapper(service)).insert(itemCaptor.capture());
         assertThat(itemCaptor.getValue().getCustomerOrderNo()).isEqualTo("EXCEL-PO");
         assertThat(itemCaptor.getValue().getInternalProjectNo()).isEqualTo("EXCEL-IP");
+        assertThat(itemCaptor.getValue().getOrderType()).isEqualTo("正式订单");
     }
 
     private void assertImportRejectedForMissingIdentifiers(String customerOrderNo, String internalProjectNo) {
@@ -380,7 +431,7 @@ class SalesOrderQpoImportDefaultsTest {
         assertThat(overrideItem.getCustomerOrderNo()).isEqualTo("B-PO");
         assertThat(overrideItem.getCustomerProjectNo()).isEqualTo("B-CP");
         assertThat(overrideItem.getCustomerOrderTitle()).isEqualTo("B-TITLE");
-        assertThat(overrideItem.getOrderType()).isEqualTo("样品订单");
+        assertThat(overrideItem.getOrderType()).isEqualTo("备货订单");
         assertThat(overrideItem.getInternalProjectNo()).isEqualTo("B-IP");
 
         SalesOrderItem fallbackItem = itemCaptor.getAllValues().get(1);
@@ -444,7 +495,7 @@ class SalesOrderQpoImportDefaultsTest {
         group.setOrderType("正式订单");
         group.setInternalProjectNo("A-IP");
         group.setLines(List.of(
-                line(1, LocalDate.of(2026, 7, 2), "B-PO", "B-CP", "B-TITLE", "样品订单", "B-IP", "P-001"),
+                line(1, LocalDate.of(2026, 7, 2), "B-PO", "B-CP", "B-TITLE", "备货订单", "B-IP", "P-001"),
                 line(2, LocalDate.of(2026, 7, 1), "A-PO", "A-CP", "A-TITLE", "正式订单", "A-IP", "P-002")
         ));
 

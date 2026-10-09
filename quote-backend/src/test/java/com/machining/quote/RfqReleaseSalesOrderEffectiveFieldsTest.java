@@ -14,6 +14,26 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class RfqReleaseSalesOrderEffectiveFieldsTest {
     @Test
+    void rejectsForecastOrderTypeFromExistingItemWhenGeneratingNewTicket() {
+        ItemQuoteVersion item = new ItemQuoteVersion();
+        item.setId(701);
+        item.setRfqId(301);
+        item.setPartNo("RFQ-PART-001");
+        item.setCustomerOrderNo("CUSTOMER-PO");
+        item.setInternalProjectNo("INTERNAL-PROJECT");
+        item.setOrderType("预测订单");
+
+        RfqReleaseBatchValidationService.BatchContext context = new RfqReleaseBatchValidationService.BatchContext(
+                List.of(301), Map.of(), "C001", "ACME", "ACME Manufacturing", "SO06",
+                LocalDate.of(2026, 10, 8), "Customer title", "正式订单", "INTERNAL-PROJECT", "CUSTOMER-PO",
+                "CUSTOMER-PROJECT", "PROJECT-001", "计划", "release-batch-key", "release-batch-summary", "request-hash");
+
+        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(
+                new RfqReleaseSalesOrderService(), "effectiveFields", item, context))
+                .hasMessageContaining("订单类型不合法：预测订单");
+    }
+
+    @Test
     void reportsUnifiedMessageWhenEffectiveCustomerOrderNumberIsMissing() {
         assertMissingIdentifiers(null, "TARGET-INTERNAL");
     }

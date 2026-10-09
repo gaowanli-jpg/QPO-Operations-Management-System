@@ -73,7 +73,7 @@ public class RfqReleaseSalesOrderService {
     private static final String RELATION_SPECIFIED = "已指定父子关系";
     private static final String RELATION_UNSPECIFIED = "未指定父子关系";
     private static final String RELATION_NOT_APPLICABLE = "不适用";
-    private static final Set<String> ALLOWED_ORDER_TYPES = Set.of("预测订单", "备货订单", "正式订单");
+    private static final Set<String> ALLOWED_ORDER_TYPES = Set.of("备货订单", "正式订单");
 
     @Autowired
     private RfqReleaseBatchValidationService validationService;

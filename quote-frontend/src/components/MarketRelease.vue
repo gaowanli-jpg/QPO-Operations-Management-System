@@ -112,7 +112,6 @@
                 </el-form-item>
                 <el-form-item label="订单类型" required>
                   <el-select v-model="releaseForm.orderType" class="full-width release-order-type-select" placeholder="请选择订单类型" clearable>
-                    <el-option label="预测订单" value="预测订单" />
                     <el-option label="备货订单" value="备货订单" />
                     <el-option label="正式订单" value="正式订单" />
                   </el-select>
@@ -575,7 +574,6 @@
                       :disabled="!canEditReleaseItemOrderFields(row)"
                       class="row-order-type-select"
                     >
-                      <el-option label="预测订单" value="预测订单" />
                       <el-option label="备货订单" value="备货订单" />
                       <el-option label="正式订单" value="正式订单" />
                     </el-select>
@@ -824,7 +822,7 @@ const releaseForm = reactive({
   documentTypeCode: 'SO06',
   salesOrderDate: today,
   customerOrderTitle: '',
-  orderType: '',
+  orderType: '正式订单',
   internalProjectNo: '',
   customerOrderNo: '',
   customerProjectNo: '',
@@ -1035,7 +1033,7 @@ const resetReleaseFormForOrders = () => {
   releaseForm.documentTypeCode = 'SO06'
   releaseForm.salesOrderDate = today
   releaseForm.customerOrderTitle = ''
-  releaseForm.orderType = ''
+  releaseForm.orderType = '正式订单'
   releaseForm.internalProjectNo = ''
   releaseForm.customerOrderNo = ''
   releaseForm.customerProjectNo = ''

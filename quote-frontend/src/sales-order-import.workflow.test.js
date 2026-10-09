@@ -113,9 +113,11 @@ describe('sales order import panel', () => {
     expect(optionalFields).toContain('label="内部项目号"')
     expect(optionalFields).not.toContain('label="内部项目号" required')
     expect(documentStep).toContain('v-model.trim="salesOrderForm.internalProjectNo"')
-    expect(documentStep).toContain('<el-option label="预测订单" value="预测订单" />')
+    expect(documentStep).not.toContain('<el-option label="预测订单" value="预测订单" />')
     expect(documentStep).toContain('<el-option label="备货订单" value="备货订单" />')
     expect(documentStep).toContain('<el-option label="正式订单" value="正式订单" />')
+    expect(marketDashboard).toContain("orderType: '正式订单'")
+    expect(marketDashboard).toContain("salesOrderForm.orderType = '正式订单'")
   })
 
   test('sales order import validates required order defaults before submit', () => {

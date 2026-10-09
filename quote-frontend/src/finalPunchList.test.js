@@ -70,9 +70,11 @@ describe('QPO final UI punch-list polish', () => {
 
     expect(marketRelease).toContain('v-model="releaseForm.orderType"')
     expect(marketRelease).toContain('release-order-type-select')
-    expect(marketRelease).toContain('预测订单')
+    expect(marketRelease).not.toContain('预测订单')
     expect(marketRelease).toContain('备货订单')
     expect(marketRelease).toContain('正式订单')
+    expect(marketRelease).toContain("orderType: '正式订单'")
+    expect(marketRelease).toContain("releaseForm.orderType = '正式订单'")
     expect(marketRelease).toContain("if (!releaseForm.orderType) return ElMessage.warning('请选择订单类型后再生成正式提单。')")
     expect(marketRelease).toContain('orderType: releaseForm.orderType')
   })

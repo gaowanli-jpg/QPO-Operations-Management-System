@@ -70,6 +70,15 @@ class RfqReleaseBatchValidationServiceTest {
     }
 
     @Test
+    void rejectsForecastOrderTypeForNewRelease() {
+        DeliveryGenerateReq req = request(List.of(101), List.of(line(101, 1001, 1)));
+        req.setOrderType("预测订单");
+
+        assertThatThrownBy(() -> service.validate(req))
+                .hasMessage("订单类型不合法：预测订单");
+    }
+
+    @Test
     void allowsAppendToResolveRequiredIdentifiersFromSelectedItemsButKeepsNormalReleaseStrict() {
         OrderRfq first = order(101, "客户A", QuoteStatusWorkflow.QUOTED);
         when(orderMapper.selectBatchIds(List.of(101))).thenReturn(List.of(first));

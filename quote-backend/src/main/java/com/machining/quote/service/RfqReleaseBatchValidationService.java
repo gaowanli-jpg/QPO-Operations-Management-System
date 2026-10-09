@@ -321,6 +321,6 @@ public class RfqReleaseBatchValidationService {
 
     private static final class SetHolder {
         private static final java.util.Set<String> ALLOWED_ORDER_TYPES =
-                java.util.Set.of("预测订单", "备货订单", "正式订单");
+                java.util.Set.of("备货订单", "正式订单");
     }
 }

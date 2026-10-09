@@ -72,7 +72,7 @@ class SalesOrderQpoImportParserTest {
         SalesOrderQpoExcelParseResult result = parser.parse(
                 new ByteArrayInputStream(workbookBytes(fullHeaders(), List.of(
                         row(1, LocalDate.of(2026, 7, 2), "ROW-PO-001", "ROW-CP-001", "ROW-TITLE",
-                                "样品订单", "ROW-IP-001", null, null, "P-001", 10, null, null, null,
+                                "备货订单", "ROW-IP-001", null, null, "P-001", 10, null, null, null,
                                 "A", null, null, null, null),
                         row(2, null, null, null, null, null, null, null, null, "P-002", 5, null,
                                 null, null, "B", null, null, null, null)
@@ -96,7 +96,7 @@ class SalesOrderQpoImportParserTest {
         assertThat(firstLine.getCustomerOrderNo()).isEqualTo("ROW-PO-001");
         assertThat(firstLine.getCustomerProjectNo()).isEqualTo("ROW-CP-001");
         assertThat(firstLine.getCustomerOrderTitle()).isEqualTo("ROW-TITLE");
-        assertThat(firstLine.getOrderType()).isEqualTo("样品订单");
+        assertThat(firstLine.getOrderType()).isEqualTo("备货订单");
         assertThat(firstLine.getInternalProjectNo()).isEqualTo("ROW-IP-001");
 
         SalesOrderQpoExcelLineDTO secondLine = group.getLines().get(1);
@@ -113,7 +113,7 @@ class SalesOrderQpoImportParserTest {
         SalesOrderQpoExcelParseResult result = parser.parse(
                 new ByteArrayInputStream(workbookBytes(fullHeaders(), List.of(
                         row(10, LocalDate.of(2026, 7, 2), "ROW-PO-001", "ROW-CP-001", "ROW-TITLE",
-                                "样品订单", "ROW-IP-001", null, null, "P-001", 10, null, null, null,
+                                "备货订单", "ROW-IP-001", null, null, "P-001", 10, null, null, null,
                                 "A", null, null, null, null),
                         row(10, null, null, null, null, null, null, null, null, "P-002", 5, null,
                                 null, null, "B", null, null, null, null),
@@ -166,7 +166,7 @@ class SalesOrderQpoImportParserTest {
         SalesOrderQpoExcelParseResult result = parser.parse(
                 new ByteArrayInputStream(workbookBytes(fullHeaders(), List.of(
                         row(1, LocalDate.of(2026, 7, 2), "ROW-PO-001", "ROW-CP-001", "ROW-TITLE",
-                                "样品订单", "ROW-IP-001", null, null, "P-PRICE-001", 3, null, null, null,
+                                "备货订单", "ROW-IP-001", null, null, "P-PRICE-001", 3, null, null, null,
                                 "A", "12.34", "10.50", null, null)
                 ))),
                 defaults());

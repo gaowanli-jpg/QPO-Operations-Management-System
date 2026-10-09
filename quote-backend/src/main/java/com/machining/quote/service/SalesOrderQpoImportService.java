@@ -52,6 +52,8 @@ public class SalesOrderQpoImportService {
     private static final String MATERIAL_UNCONFIRMED = "未确认";
     private static final String WAITING_SNAPSHOT_MESSAGE = "已导入销售订单，未补齐历史生产快照";
     private static final String MISSING_DELIVERY_IDENTIFIERS_MESSAGE = "编号有缺失，请补齐内部项目号或客户订单号。";
+    private static final String INVALID_ORDER_TYPE_MESSAGE = "订单类型只能是正式订单或备货订单";
+    private static final Set<String> ALLOWED_ORDER_TYPES = Set.of("正式订单", "备货订单");
 
     @Autowired
     private SalesOrderQpoExcelParser excelParser;
@@ -153,6 +155,7 @@ public class SalesOrderQpoImportService {
         if (parseResult.getOrderCount() <= 0 || parseResult.getOrders().isEmpty()) {
             throw new IllegalArgumentException("销售订单表格没有可导入的订单");
         }
+        validateOrderTypes(parseResult, defaults);
         validateDeliveryIdentifiers(parseResult);
         DrawingBindingResult drawingBinding = bindDrawings(customer, batchNo, parseResult, drawings, versionDrawings, drawingFolderFiles, drawingFolderName);
 
@@ -460,6 +463,39 @@ public class SalesOrderQpoImportService {
         if (parseResult.getOrders().stream().anyMatch(this::hasMissingDeliveryIdentifiers)) {
             throw new IllegalArgumentException(MISSING_DELIVERY_IDENTIFIERS_MESSAGE);
         }
+    }
+
+    private void validateOrderTypes(SalesOrderQpoExcelParseResult parseResult, SalesOrderQpoImportDefaultsDTO defaults) {
+        String defaultOrderType = isBlank(defaults.getOrderType()) ? null : defaults.getOrderType().trim();
+        for (SalesOrderQpoOrderGroupDTO group : parseResult.getOrders()) {
+            if (group == null || group.getLines() == null || group.getLines().isEmpty()) {
+                throw new IllegalArgumentException(INVALID_ORDER_TYPE_MESSAGE);
+            }
+            String groupOrderType = resolveOrderType(group.getOrderType(), defaultOrderType);
+            if (!isAllowedOrderType(groupOrderType)) {
+                throw new IllegalArgumentException(INVALID_ORDER_TYPE_MESSAGE);
+            }
+            group.setOrderType(groupOrderType);
+            for (SalesOrderQpoExcelLineDTO line : group.getLines()) {
+                if (line == null) {
+                    throw new IllegalArgumentException(INVALID_ORDER_TYPE_MESSAGE);
+                }
+                String lineOrderType = resolveOrderType(line.getOrderType(), defaultOrderType);
+                if (!isAllowedOrderType(lineOrderType)) {
+                    throw new IllegalArgumentException(INVALID_ORDER_TYPE_MESSAGE);
+                }
+                line.setOrderType(lineOrderType);
+            }
+        }
+    }
+
+    private String resolveOrderType(String orderType, String fallback) {
+        String normalized = isBlank(orderType) ? null : orderType.trim();
+        return normalized == null ? fallback : normalized;
+    }
+
+    private boolean isAllowedOrderType(String orderType) {
+        return orderType != null && ALLOWED_ORDER_TYPES.contains(orderType);
     }
 
     private boolean hasMissingDeliveryIdentifiers(SalesOrderQpoOrderGroupDTO group) {
@@ -786,6 +822,9 @@ public class SalesOrderQpoImportService {
         }
         if (isBlank(defaults.getOrderType())) {
             throw new IllegalArgumentException("请填写订单类型");
+        }
+        if (!isAllowedOrderType(isBlank(defaults.getOrderType()) ? null : defaults.getOrderType().trim())) {
+            throw new IllegalArgumentException(INVALID_ORDER_TYPE_MESSAGE);
         }
     }
 
