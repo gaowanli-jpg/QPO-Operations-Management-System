@@ -2,9 +2,11 @@ package com.machining.quote.service.wms;
 
 import com.machining.quote.dto.wms.WmsSaleLadingReserveResp;
 import com.machining.quote.entity.OrderDeliveryTicket;
+import com.machining.quote.entity.OrderDeliveryTicketAllocation;
 import com.machining.quote.entity.WmsReservationBatch;
 import com.machining.quote.entity.WmsReservationTicket;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
+import com.machining.quote.mapper.OrderDeliveryTicketAllocationMapper;
 import com.machining.quote.mapper.WmsReservationBatchMapper;
 import com.machining.quote.mapper.WmsReservationTicketMapper;
 import com.machining.quote.service.DataCenterCallException;
@@ -43,6 +45,8 @@ public class WmsReservationBatchService {
     private WmsReservationBatchMapper batchMapper;
     @Autowired
     private OrderDeliveryTicketMapper ticketSourceMapper;
+    @Autowired
+    private OrderDeliveryTicketAllocationMapper allocationMapper;
     @Autowired(required = false)
     private DataScopeService dataScopeService;
 
@@ -175,19 +179,43 @@ public class WmsReservationBatchService {
     private String newBatchSkipReason(Integer ticketId) {
         OrderDeliveryTicket ticket = ticketSourceMapper.selectById(ticketId);
         if (ticket == null) {
-            return null;
+            return "Delivery ticket does not exist";
         }
         if (Boolean.TRUE.equals(ticket.getDiscarded())) {
             return "Delivery ticket is discarded";
         }
+        if (!"SUCCESS".equalsIgnoreCase(ticket.getMesSyncStatus())
+                || ticket.getMaterialNo() == null || ticket.getMaterialNo().isBlank()) {
+            return "MES material number is not confirmed";
+        }
         String status = normalizeStatus(ticket.getWmsAllocateStatus());
+        if (status.isEmpty()) {
+            status = "PENDING";
+        }
         if (STATUS_SUCCESS.equals(status)) {
             return "WMS reservation already completed";
         }
-        if ("PROCESSING".equals(status)) {
-            return "WMS reservation is processing";
+        if (status != null && !"PENDING".equals(status) && !STATUS_FAILED.equals(status)) {
+            return "WMS reservation status requires recovery review";
+        }
+        List<OrderDeliveryTicketAllocation> allocations = allocationMapper.selectByTicketId(ticketId);
+        if (allocations != null && allocations.stream().anyMatch(this::hasStartedMesProduction)) {
+            return "MES production has already started or completed";
         }
         return null;
+    }
+
+    private boolean hasStartedMesProduction(OrderDeliveryTicketAllocation allocation) {
+        if (allocation == null
+                || !"PRODUCTION_REQUIRED".equalsIgnoreCase(allocation.getAllocationType())
+                || !"ACTIVE".equalsIgnoreCase(allocation.getStatus())) {
+            return false;
+        }
+        String status = normalizeStatus(allocation.getMesProductionStatus());
+        return "PROCESSING".equals(status)
+                || "SUBMITTING".equals(status)
+                || "RESULT_UNKNOWN".equals(status)
+                || STATUS_SUCCESS.equals(status);
     }
 
     private List<Row> groupRows(WmsReservationPlanService.ReservationGroup group,

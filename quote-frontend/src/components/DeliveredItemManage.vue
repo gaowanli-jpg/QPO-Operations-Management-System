@@ -3,7 +3,7 @@
     <header class="erp-page-header">
       <div>
         <h1 class="erp-page-title">已提零件</h1>
-        <p class="erp-page-description">仅展示尚未完成物料号获取和锁库流程的提单零件；完成锁库后的结果请在锁库零件模块查看。</p>
+        <p class="erp-page-description">仅展示尚未完成物料号获取的提单零件；物料号成功后进入待产零件，库存信息改为在销售订单详情按订单获取。</p>
       </div>
     </header>
 
@@ -44,16 +44,6 @@
             @click="handleBatchMesSync"
           >
             批量获取物料号
-          </el-button>
-          <el-button
-            v-permission="DELIVERED_ITEM_WMS_ALLOCATE_PERMISSION"
-            type="primary"
-            plain
-            :disabled="selectedTicketIds.length === 0 || isBatchWmsAllocationPending"
-            :loading="isBatchWmsAllocationPending"
-            @click="handleBatchWmsAllocation"
-          >
-            批量获取库存数据
           </el-button>
           <el-button
             v-permission="DELIVERED_ITEM_DISCARD_PERMISSION"
@@ -99,9 +89,6 @@
         <el-select v-model="filters.mesSyncStatus" clearable placeholder="MES状态" class="filter-select" @change="handleTechnicalStatusChange" @clear="handleTechnicalStatusChange">
           <el-option v-for="option in syncStatusOptions" :key="option.value" :label="option.label" :value="option.value" />
         </el-select>
-        <el-select v-model="filters.wmsAllocateStatus" clearable placeholder="WMS状态" class="filter-select" @change="handleTechnicalStatusChange" @clear="handleTechnicalStatusChange">
-          <el-option v-for="option in syncStatusOptions" :key="option.value" :label="option.label" :value="option.value" />
-        </el-select>
       </div>
     </section>
 
@@ -134,35 +121,6 @@
       </div>
     </section>
 
-    <section v-if="wmsBatchResult" class="erp-table-surface wms-batch-result-surface">
-      <div class="erp-table-header wms-batch-result-header">
-        <div>
-          <h3>WMS 批量库存结果</h3>
-          <p>任务已提交后按后台任务结果展示；结果待核对和本地写入待修复可再次勾选触发后端恢复原批次。</p>
-        </div>
-        <div class="wms-batch-result-actions">
-          <el-button text @click="closeWmsBatchResult">关闭结果</el-button>
-        </div>
-      </div>
-      <div class="wms-batch-result-stats">
-        <div v-for="stat in wmsBatchStats" :key="stat.label" class="wms-batch-result-stat">
-          <span>{{ stat.label }}</span>
-          <strong>{{ stat.value }}</strong>
-        </div>
-      </div>
-      <div v-if="wmsBatchRows.length" class="wms-batch-result-details">
-        <div v-for="row in wmsBatchRows" :key="`wms-batch-${row.ticketId || row.batchId || row.externalBizId || row.message}`" class="wms-batch-result-row">
-          <span class="result-row-id">提单ID：{{ row.ticketId || '-' }}</span>
-          <span class="result-row-code">batchId：{{ row.batchId || '-' }}</span>
-          <span class="result-row-code">bizId：{{ row.externalBizId || '-' }}</span>
-          <el-tag :type="wmsBatchRowTagType(row.status)" size="small">{{ wmsBatchRowStatusText(row.status) }}</el-tag>
-          <el-tooltip :content="row.message || '-'" placement="top">
-            <span class="result-row-message">{{ row.message || '-' }}</span>
-          </el-tooltip>
-        </div>
-      </div>
-    </section>
-
     <section class="erp-table-surface delivered-table-surface">
       <div class="erp-table-body">
         <el-table
@@ -171,7 +129,7 @@
           stripe
           height="600"
           v-loading="loading"
-          empty-text="暂无未完成流程的已提零件，完成锁库后的结果请在锁库零件模块查看。"
+          empty-text="暂无未获取物料号的已提零件，物料号成功后请到待产零件模块处理。"
           @selection-change="handleSelectionChange"
         >
           <el-table-column type="selection" width="46" fixed align="center" />
@@ -411,7 +369,6 @@ import {
   getDeliveryIntegrationTask,
   listDeliveredItems,
   restoreDeliveredItem,
-  submitWmsAllocationBatch,
   syncMesMaterialBatch
 } from '../services/deliveredItemApi'
 import { usePendingAction } from '../composables/usePendingAction'
@@ -423,7 +380,6 @@ const { isPending, runAction } = usePendingAction()
 const DELIVERED_ITEM_VIEW_PERMISSION = 'market:delivered-item:view'
 const DELIVERED_ITEM_FILE_PREVIEW_PERMISSION = 'market:delivered-item:file-preview'
 const DELIVERED_ITEM_MES_SYNC_PERMISSION = 'market:delivered-item:mes-sync'
-const DELIVERED_ITEM_WMS_ALLOCATE_PERMISSION = 'market:delivered-item:wms-allocate'
 const DELIVERED_ITEM_DISCARD_PERMISSION = 'market:delivered-item:discard'
 const DELIVERED_ITEM_RESTORE_PERMISSION = 'market:delivered-item:restore'
 const LOCKED_ITEM_VIEW_PERMISSION = 'market:locked-item:view'
@@ -432,8 +388,7 @@ const SALES_ORDER_VIEW_PERMISSION = 'market:sales-order:view'
 const deliveredActionKeys = {
   batchDiscard: () => 'delivery:discard:batch',
   batchRestore: () => 'delivery:restore:batch',
-  batchMesSync: () => 'delivery:mes-sync:batch',
-  batchWmsAllocation: () => 'delivery:wms-allocation:batch'
+  batchMesSync: () => 'delivery:mes-sync:batch'
 }
 
 const filters = reactive({
@@ -447,7 +402,6 @@ const filters = reactive({
   customerOrderNo: '',
   customerProjectNo: '',
   mesSyncStatus: '',
-  wmsAllocateStatus: '',
   dateRange: []
 })
 const syncStatusOptions = [
@@ -464,10 +418,7 @@ const flowStageOptions = [
   { value: 'NEED_MATERIAL', label: '待获取物料号' },
   { value: 'MES_PROCESSING', label: '物料号处理中' },
   { value: 'MES_CALLBACK_PENDING', label: '待MES回调' },
-  { value: 'MES_FAILED', label: '物料号失败' },
-  { value: 'NEED_WMS', label: '待获取库存' },
-  { value: 'WMS_PROCESSING', label: '库存处理中' },
-  { value: 'WMS_FAILED', label: '库存失败' }
+  { value: 'MES_FAILED', label: '物料号失败' }
 ]
 const viewModeOptions = [
   { label: '待处理', value: 'ACTIVE' },
@@ -487,7 +438,6 @@ const folderViewerVisible = ref(false)
 const currentDrawingFolderUrl = ref('')
 const currentDrawingFolderTitle = ref('')
 const mesBatchResult = ref(null)
-const wmsBatchResult = ref(null)
 const advancedFiltersVisible = ref(false)
 const viewMode = ref('ACTIVE')
 const isActiveView = computed(() => viewMode.value === 'ACTIVE')
@@ -548,7 +498,6 @@ const handleResetFilters = async () => {
     customerOrderNo: '',
     customerProjectNo: '',
     mesSyncStatus: '',
-    wmsAllocateStatus: '',
     dateRange: []
   })
   await handleSearch()
@@ -557,13 +506,12 @@ const handleResetFilters = async () => {
 const handleFlowStageChange = async () => {
   if (filters.flowStage) {
     filters.mesSyncStatus = ''
-    filters.wmsAllocateStatus = ''
   }
   await handleSearch()
 }
 
 const handleTechnicalStatusChange = async () => {
-  if (filters.mesSyncStatus || filters.wmsAllocateStatus) {
+  if (filters.mesSyncStatus) {
     filters.flowStage = ''
   }
   await handleSearch()
@@ -706,8 +654,6 @@ const openDrawingPreview = async (row) => {
 
 const isBatchMesSyncPending = computed(() => isPending(deliveredActionKeys.batchMesSync()))
 
-const isBatchWmsAllocationPending = computed(() => isPending(deliveredActionKeys.batchWmsAllocation()))
-
 const handleBatchMesSync = async () => {
   if (selectedTicketIds.value.length === 0) {
     return ElMessage.warning('请先选择需要获取物料号的已提零件。')
@@ -734,36 +680,6 @@ const handleBatchMesSync = async () => {
     } catch (error) {
       console.error(error)
       ElMessage.error(error.response?.data?.message || error.message || '批量 MES 物料号任务提交失败。')
-    }
-  })
-}
-
-const handleBatchWmsAllocation = async () => {
-  if (selectedTicketIds.value.length === 0) {
-    return ElMessage.warning('请先选择需要获取库存数据的已提零件。')
-  }
-  wmsBatchResult.value = null
-  try {
-    await ElMessageBox.confirm(`确认批量向 WMS 获取 ${selectedCountText()} 的库存数据？缺少物料号、已成功或处理中的行会自动跳过。`, '批量获取WMS库存数据', {
-      confirmButtonText: '确认提交',
-      cancelButtonText: '取消',
-      type: 'warning'
-    })
-  } catch {
-    return
-  }
-
-  return runAction(deliveredActionKeys.batchWmsAllocation(), async () => {
-    try {
-      const task = await submitWmsAllocationBatch(selectedTicketIds.value)
-      const taskId = taskIdOf(task)
-      ElMessage.success(taskId ? `WMS 库存任务已提交，任务ID：${taskId}` : 'WMS 库存任务已提交')
-      wmsBatchResult.value = wmsBatchResultOf(task) || await waitWmsBatchTaskResult(taskId)
-      selectedRows.value = []
-      await loadItems()
-    } catch (error) {
-      console.error(error)
-      ElMessage.error(error.response?.data?.message || error.message || '批量 WMS 库存任务提交失败。')
     }
   })
 }
@@ -882,16 +798,12 @@ const mesBatchResultOf = (task) => {
   return null
 }
 
-const wmsBatchResultOf = (task) => mesBatchResultOf(task)
-
 const resultRowsOf = (result, primaryKey = 'results') => {
   const rows = result?.[primaryKey] || result?.rows || result?.results || []
   return Array.isArray(rows) ? rows : []
 }
 
 const mesMaterialBatchRows = computed(() => resultRowsOf(mesBatchResult.value, 'results'))
-
-const wmsBatchRows = computed(() => resultRowsOf(wmsBatchResult.value, 'results'))
 
 const numberCount = (value) => Number.isFinite(Number(value)) ? Number(value) : 0
 
@@ -944,23 +856,6 @@ const closeMesBatchResult = () => {
   mesBatchResult.value = null
 }
 
-const wmsBatchStats = computed(() => {
-  const result = wmsBatchResult.value || {}
-  const rows = wmsBatchRows.value
-  return [
-    { label: '批次数', value: numberCount(result.batchCount) || distinctRowValueCount(rows, row => row?.batchId || row?.externalBizId) },
-    { label: '成功', value: numberCount(result.successCount) || countRowsByStatus(rows, ['SUCCESS']) },
-    { label: '失败', value: numberCount(result.failedCount) || countRowsByStatus(rows, ['FAILED']) },
-    { label: '待核对', value: numberCount(result.unknownCount) || numberCount(result.resultUnknownCount) || countRowsByStatus(rows, ['RESULT_UNKNOWN']) },
-    { label: '应用失败', value: numberCount(result.applyFailedCount) || countRowsByStatus(rows, ['APPLY_FAILED']) },
-    { label: '跳过', value: numberCount(result.skippedCount) || countRowsByStatus(rows, ['SKIPPED']) }
-  ]
-})
-
-const closeWmsBatchResult = () => {
-  wmsBatchResult.value = null
-}
-
 const mesMaterialRowStatusText = (value) => ({
   SUCCESS: '成功',
   FAILED: '失败',
@@ -979,22 +874,6 @@ const mesMaterialRowTagType = (value) => ({
   RESULT_UNKNOWN: 'warning'
 }[String(value || '').toUpperCase()] || 'info')
 
-const wmsBatchRowStatusText = (value) => ({
-  SUCCESS: '成功',
-  FAILED: '失败',
-  SKIPPED: '跳过',
-  RESULT_UNKNOWN: '结果待核对',
-  APPLY_FAILED: '本地写入待修复'
-}[String(value || '').toUpperCase()] || formatDash(value))
-
-const wmsBatchRowTagType = (value) => ({
-  SUCCESS: 'success',
-  FAILED: 'danger',
-  SKIPPED: 'info',
-  RESULT_UNKNOWN: 'warning',
-  APPLY_FAILED: 'danger'
-}[String(value || '').toUpperCase()] || 'info')
-
 const waitFor = (milliseconds) => new Promise(resolve => globalThis.setTimeout(resolve, milliseconds))
 
 const waitMesBatchTaskResult = async (taskId) => {
@@ -1011,26 +890,6 @@ const waitMesBatchTaskResult = async (taskId) => {
       }
     } catch (error) {
       console.warn('MES batch task result polling failed', error)
-      return null
-    }
-  }
-  return null
-}
-
-const waitWmsBatchTaskResult = async (taskId) => {
-  if (!taskId) return null
-  const delays = [300, 700, 1000, 1200, 1500]
-  for (const delayMs of delays) {
-    await waitFor(delayMs)
-    try {
-      const latestTask = await getDeliveryIntegrationTask(taskId)
-      const result = wmsBatchResultOf(latestTask)
-      if (result) return result
-      if (['SUCCESS', 'FAILED'].includes(String(latestTask?.status || '').toUpperCase())) {
-        return null
-      }
-    } catch (error) {
-      console.warn('WMS batch task result polling failed', error)
       return null
     }
   }

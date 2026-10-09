@@ -140,13 +140,16 @@ class DeliveredItemQueryBackendTest {
                         "listCustomers"
                 );
         assertThat(source)
-                .as("Flow stage is a backend business filter so the frontend does not combine MES/WMS statuses")
+                .as("Flow stage is a backend business filter so the frontend does not combine MES statuses")
                 .contains(
                         "FLOW_STAGE_NEED_MATERIAL",
+                        "COALESCE(ticket.mes_sync_status, 'PENDING') <> 'SUCCESS'"
+                )
+                .as("WMS is no longer a delivered-item pool filter because material success immediately leaves the pool")
+                .doesNotContain(
                         "FLOW_STAGE_NEED_WMS",
-                        "COALESCE(ticket.mes_sync_status, 'PENDING') <> 'SUCCESS'",
-                        "NULLIF(BTRIM(ticket.material_no), '') IS NOT NULL",
-                        "query.eq(\"ticket.mes_sync_status\", \"SUCCESS\")",
+                        "FLOW_STAGE_WMS_PROCESSING",
+                        "FLOW_STAGE_WMS_FAILED",
                         "COALESCE(ticket.wms_allocate_status, 'PENDING') <> 'SUCCESS'"
                 );
         assertThat(source)
@@ -169,10 +172,12 @@ class DeliveredItemQueryBackendTest {
                         "FLOW_SCOPE_COMPLETED",
                         "FLOW_SCOPE_ALL",
                         "NULLIF(BTRIM(ticket.material_no), '') IS NULL",
-                        "COALESCE(ticket.mes_sync_status, 'PENDING') <> 'SUCCESS'",
+                        "COALESCE(ticket.mes_sync_status, 'PENDING') <> 'SUCCESS'"
+                )
+                .as("Active pool rows are exactly the tickets whose material number is not confirmed yet")
+                .doesNotContain(
                         "COALESCE(ticket.wms_allocate_status, 'PENDING') <> 'SUCCESS'",
-                        "NOT EXISTS (SELECT 1 FROM order_delivery_ticket_allocation alloc_done WHERE alloc_done.ticket_id = ticket.id)",
-                        "EXISTS (SELECT 1 FROM order_delivery_ticket_allocation alloc_done WHERE alloc_done.ticket_id = ticket.id)"
+                        "order_delivery_ticket_allocation alloc_done"
                 );
         assertThat(service)
                 .as("Detail lookups must remain usable from locked items and audit traces")

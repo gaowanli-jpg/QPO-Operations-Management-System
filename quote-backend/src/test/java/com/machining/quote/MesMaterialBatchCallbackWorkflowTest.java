@@ -130,6 +130,57 @@ class MesMaterialBatchCallbackWorkflowTest {
     }
 
     @Test
+    void staleSuccessfulCallbackIsAcknowledgedWhenTicketAlreadyHasConfirmedMaterialNo() {
+        Fixture fixture = fixture();
+        MesMaterialBatchItem item = batchItem("FAILED", null);
+        item.setMesTaskNo("MP-OLD-TASK");
+        OrderDeliveryTicket ticket = ticket("SUCCESS", "MAT-CURRENT", "QPO-MATL-NEWER");
+        when(fixture.batchMapper.selectOne(any(Wrapper.class))).thenReturn(batch("FAILED"));
+        when(fixture.batchItemMapper.selectList(any(Wrapper.class))).thenReturn(List.of(item));
+        when(fixture.requestMapper.selectOne(any(Wrapper.class))).thenReturn(request("FAILED"));
+        when(fixture.ticketMapper.selectById(123)).thenReturn(ticket);
+        MesMaterialCallbackReq.Item callback = successItem("MAT-OLD");
+        callback.setTaskNo("MP-UNRELATED-TASK");
+
+        MesMaterialCallbackResp response = fixture.service.handleMaterialBatchCallback(batchCallback(callback));
+
+        assertThat(response.getSuccess()).isTrue();
+        assertThat(response.getCode()).isEqualTo(0);
+        assertThat(response.getData())
+                .containsEntry("appliedCount", 0)
+                .containsEntry("duplicateCount", 1);
+        verify(fixture.batchMapper, never()).updateById(any());
+        verify(fixture.batchItemMapper, never()).updateById(any());
+        verify(fixture.ticketMapper, never()).updateById(any());
+        verify(fixture.requestMapper, never()).update(any(), any());
+        verify(fixture.salesOrderItemMapper, never()).updateById(any());
+    }
+
+    @Test
+    void staleFailedCallbackIsAcknowledgedWhenTicketAlreadyHasConfirmedMaterialNo() {
+        Fixture fixture = fixture();
+        MesMaterialBatchItem item = batchItem("FAILED", null);
+        OrderDeliveryTicket ticket = ticket("SUCCESS", "MAT-CURRENT", "QPO-MATL-NEWER");
+        when(fixture.batchMapper.selectOne(any(Wrapper.class))).thenReturn(batch("FAILED"));
+        when(fixture.batchItemMapper.selectList(any(Wrapper.class))).thenReturn(List.of(item));
+        when(fixture.requestMapper.selectOne(any(Wrapper.class))).thenReturn(request("FAILED"));
+        when(fixture.ticketMapper.selectById(123)).thenReturn(ticket);
+
+        MesMaterialCallbackResp response = fixture.service.handleMaterialBatchCallback(batchCallback(failedItem("Old task failed")));
+
+        assertThat(response.getSuccess()).isTrue();
+        assertThat(response.getCode()).isEqualTo(0);
+        assertThat(response.getData())
+                .containsEntry("appliedCount", 0)
+                .containsEntry("duplicateCount", 1);
+        verify(fixture.batchMapper, never()).updateById(any());
+        verify(fixture.batchItemMapper, never()).updateById(any());
+        verify(fixture.ticketMapper, never()).updateById(any());
+        verify(fixture.requestMapper, never()).update(any(), any());
+        verify(fixture.salesOrderItemMapper, never()).updateById(any());
+    }
+
+    @Test
     void singleIncrementalCallbackLeavesBatchPartialWhenOtherRowsRemainPending() {
         Fixture fixture = fixture();
         MesMaterialBatchItem first = batchItem("CALLBACK_PENDING", null);
@@ -192,17 +243,18 @@ class MesMaterialBatchCallbackWorkflowTest {
     }
 
     @Test
-    void conflictingSuccessfulProductCodeIsRejectedWithConflictAndNoWrites() {
+    void differentProductCodeIsIgnoredWhenTicketAlreadyHasConfirmedMaterialNo() {
         Fixture fixture = fixture();
         when(fixture.batchMapper.selectOne(any(Wrapper.class))).thenReturn(batch("SUCCESS"));
         when(fixture.batchItemMapper.selectList(any(Wrapper.class))).thenReturn(List.of(batchItem("SUCCESS", "MAT-OLD")));
         when(fixture.requestMapper.selectOne(any(Wrapper.class))).thenReturn(request("SUCCESS"));
         when(fixture.ticketMapper.selectById(123)).thenReturn(ticket("SUCCESS", "MAT-OLD", LINE_ID));
 
-        assertThatThrownBy(() -> fixture.service.handleMaterialBatchCallback(batchCallback(successItem("MAT-NEW"))))
-                .isInstanceOf(MesMaterialCallbackException.class)
-                .satisfies(error -> assertThat(((MesMaterialCallbackException) error).getStatus()).isEqualTo(HttpStatus.CONFLICT));
+        MesMaterialCallbackResp response = fixture.service.handleMaterialBatchCallback(batchCallback(successItem("MAT-NEW")));
 
+        assertThat(response.getSuccess()).isTrue();
+        assertThat(response.getCode()).isEqualTo(0);
+        assertThat(response.getData()).containsEntry("appliedCount", 0).containsEntry("duplicateCount", 1);
         verify(fixture.batchItemMapper, never()).updateById(any());
         verify(fixture.ticketMapper, never()).updateById(any());
         verify(fixture.requestMapper, never()).update(any(), any());

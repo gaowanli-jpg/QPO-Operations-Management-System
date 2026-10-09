@@ -106,6 +106,10 @@ export const listSalesOrderItems = (salesOrderId, params = {}) => request(`/api/
 
 export const listSalesOrderTickets = (salesOrderId, params = {}) => request(`/api/market/sales-order-management/orders/${salesOrderId}/tickets`, { params })
 
+export const submitSalesOrderWmsAllocationBatch = (salesOrderId) => request(`/api/market/sales-order-management/orders/${salesOrderId}/wms-allocation/batch`, {
+  method: 'POST'
+})
+
 export const listSalesOrderProcessSheets = (salesOrderId, params = {}) => request(`/api/market/sales-order-management/orders/${salesOrderId}/process-sheets`, { params })
 
 export const getSalesOrderDrawingSummary = (salesOrderId) => request(`/api/market/sales-order-management/orders/${salesOrderId}/drawing-summary`)

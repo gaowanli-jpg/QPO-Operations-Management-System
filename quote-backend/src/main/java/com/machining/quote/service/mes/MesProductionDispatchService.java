@@ -28,6 +28,7 @@ import com.machining.quote.mapper.SalesOrderHeaderMapper;
 import com.machining.quote.mapper.SalesOrderItemAssemblyRelationMapper;
 import com.machining.quote.mapper.SalesOrderItemMapper;
 import com.machining.quote.service.AuditService;
+import com.machining.quote.service.DataCenterCallException;
 import com.machining.quote.service.DataScopeService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -336,8 +337,18 @@ public class MesProductionDispatchService {
                                 plan.itemKey(),
                                 BigDecimal.valueOf(plan.item().getDemandQty())))
                         .toList());
-        MesBatchStateService.ProductionBatchReservationResult reservationResult =
-                mesBatchStateService.reserveProductionBatch(proposedBizId, reservation);
+        MesBatchStateService.ProductionBatchReservationResult reservationResult;
+        try {
+            reservationResult = mesBatchStateService.reserveProductionBatch(proposedBizId, reservation);
+        } catch (RuntimeException error) {
+            String message = safeMessage(error);
+            for (ProductionDispatchPlan plan : plans) {
+                rowsByAllocationId.put(plan.allocation().getId(), row(
+                        plan.allocation().getId(), STATUS_SKIPPED, message,
+                        resultSummary(plan.allocation(), null, null)));
+            }
+            return;
+        }
         MesIntegrationBatch batch = reservationResult.batch();
         request.setBizId(batch.getBizId());
         Map<Integer, MesProductionBatchItem> batchItemByAllocationId = indexProductionBatchItems(reservationResult.items());
@@ -363,19 +374,27 @@ public class MesProductionDispatchService {
                     batch.getBizId(), taskId, plans.size(), System.currentTimeMillis() - startedAt);
         } catch (RuntimeException error) {
             String message = safeMessage(error);
+            boolean resultUnknown = error instanceof DataCenterCallException dataCenterError
+                    && dataCenterError.getCertainty() == DataCenterCallException.FailureCertainty.RESULT_UNKNOWN;
+            String rowStatus = resultUnknown ? STATUS_RESULT_UNKNOWN : STATUS_FAILED;
             for (ProductionDispatchPlan plan : plans) {
                 MesProductionBatchItem batchItem = batchItemByAllocationId.get(plan.allocation().getId());
                 String requestId = batchItem == null ? null : batchItem.getLineRequestId();
-                markFailed(plan.allocation(), requestId, message);
-                updateProductionBatchItem(batchItem, STATUS_FAILED, null, message);
+                if (resultUnknown) {
+                    markResultUnknown(plan.allocation(), requestId, message);
+                } else {
+                    markFailed(plan.allocation(), requestId, message);
+                }
+                updateProductionBatchItem(batchItem, rowStatus, null, message);
                 Map<String, Object> result = withBizId(resultSummary(plan.allocation(), requestId, null), batch.getBizId());
                 result.put("errorMessage", abbreviate(message));
-                rowsByAllocationId.put(plan.allocation().getId(), row(plan.allocation().getId(), STATUS_FAILED, message, result));
-                recordAudit("PRODUCTION_ITEM_MES_PRODUCTION_FAILED", plan.allocation(), taskId, result, message);
+                rowsByAllocationId.put(plan.allocation().getId(), row(plan.allocation().getId(), rowStatus, message, result));
+                recordAudit(resultUnknown ? "PRODUCTION_ITEM_MES_PRODUCTION_RESULT_UNKNOWN"
+                        : "PRODUCTION_ITEM_MES_PRODUCTION_FAILED", plan.allocation(), taskId, result, message);
             }
-            updateBatch(batch, STATUS_FAILED, null, message, true);
-            log.error("MES production batch dispatch failed bizId={} taskId={} itemCount={} durationMs={}",
-                    batch.getBizId(), taskId, plans.size(), System.currentTimeMillis() - startedAt, error);
+            updateBatch(batch, rowStatus, null, message, !resultUnknown);
+            log.error("MES production batch dispatch failed bizId={} taskId={} itemCount={} status={} durationMs={}",
+                    batch.getBizId(), taskId, plans.size(), rowStatus, System.currentTimeMillis() - startedAt, error);
         }
     }
 

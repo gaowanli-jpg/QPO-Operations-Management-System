@@ -43,6 +43,8 @@ public class MesMaterialDedupService {
     private AuditService auditService;
     @Autowired
     private SourceItemMaterialNoSyncService sourceItemMaterialNoSyncService;
+    @Autowired(required = false)
+    private ProductionAllocationLifecycleService productionAllocationLifecycleService;
 
     public String buildDedupKey(OrderDeliveryTicket ticket) {
         String partNo = normalizeKeyPart(ticket == null ? null : ticket.getPartNo());
@@ -191,23 +193,36 @@ public class MesMaterialDedupService {
         if (follower == null) {
             throw new RuntimeException("Follower delivery ticket not found: " + waiter.getWaiterTicketId());
         }
-        OrderDeliveryTicket ticketUpdate = new OrderDeliveryTicket();
-        ticketUpdate.setId(follower.getId());
-        ticketUpdate.setMesSyncStatus(targetStatus);
-        ticketUpdate.setMesSyncMessage(fanoutMessage(targetStatus, message));
-        ticketUpdate.setMesExternalTaskId(trimToNull(externalTraceId));
+        String followerMessage = fanoutMessage(targetStatus, message);
         SourceItemMaterialNoSyncService.MaterialNoSyncResult sourceSyncResult =
                 SourceItemMaterialNoSyncService.MaterialNoSyncResult.empty();
         if (STATUS_SUCCESS.equals(targetStatus)) {
             sourceSyncResult = syncSourceItemMaterialNo(
-                    follower, materialNo, ticketUpdate.getMesSyncMessage());
-            ticketUpdate.setMaterialNo(materialNo);
-            ticketUpdate.setMesSyncedAt(LocalDateTime.now());
+                    follower, materialNo, followerMessage);
+            if (productionAllocationLifecycleService != null) {
+                productionAllocationLifecycleService.recordMaterialSuccess(
+                        follower.getId(), materialNo, followerMessage, follower.getMesRequestId(), externalTraceId, false);
+            } else {
+                OrderDeliveryTicket ticketUpdate = new OrderDeliveryTicket();
+                ticketUpdate.setId(follower.getId());
+                ticketUpdate.setMesSyncStatus(targetStatus);
+                ticketUpdate.setMesSyncMessage(followerMessage);
+                ticketUpdate.setMesExternalTaskId(trimToNull(externalTraceId));
+                ticketUpdate.setMaterialNo(materialNo);
+                ticketUpdate.setMesSyncedAt(LocalDateTime.now());
+                ticketMapper.updateById(ticketUpdate);
+            }
+        } else {
+            OrderDeliveryTicket ticketUpdate = new OrderDeliveryTicket();
+            ticketUpdate.setId(follower.getId());
+            ticketUpdate.setMesSyncStatus(targetStatus);
+            ticketUpdate.setMesSyncMessage(followerMessage);
+            ticketUpdate.setMesExternalTaskId(trimToNull(externalTraceId));
+            ticketMapper.updateById(ticketUpdate);
         }
-        ticketMapper.updateById(ticketUpdate);
         OrderDeliveryTicketMesWaiter waiterUpdate = new OrderDeliveryTicketMesWaiter();
         waiterUpdate.setWaitStatus(targetStatus);
-        waiterUpdate.setWaitMessage(ticketUpdate.getMesSyncMessage());
+        waiterUpdate.setWaitMessage(followerMessage);
         waiterUpdate.setUpdatedAt(LocalDateTime.now());
         if (STATUS_SUCCESS.equals(targetStatus)) {
             waiterUpdate.setMaterialNo(materialNo);

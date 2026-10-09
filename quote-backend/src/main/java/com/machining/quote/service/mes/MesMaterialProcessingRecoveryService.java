@@ -49,6 +49,8 @@ public class MesMaterialProcessingRecoveryService {
 
     @Autowired(required = false)
     private SourceItemMaterialNoSyncService sourceSyncService;
+    @Autowired(required = false)
+    private ProductionAllocationLifecycleService productionAllocationLifecycleService;
 
     public RecoveryResult recoverProcessing(OrderDeliveryTicket ticket, Long taskId) {
         if (ticket == null || !STATUS_PROCESSING.equalsIgnoreCase(trim(ticket.getMesSyncStatus()))) {
@@ -110,16 +112,22 @@ public class MesMaterialProcessingRecoveryService {
         if (sourceSyncService != null) {
             sourceSyncService.syncConfirmedMaterialNo(ticket, materialNo, message);
         }
-        OrderDeliveryTicket update = new OrderDeliveryTicket();
-        update.setId(ticket.getId());
-        update.setMaterialNo(materialNo);
-        update.setMesSyncStatus(STATUS_SUCCESS);
-        update.setMesSyncMessage(message);
-        update.setMesSyncedAt(LocalDateTime.now());
-        update.setMesRequestId(firstNonBlank(ticket.getMesRequestId(), context.request.getMesRequestId()));
-        update.setMesExternalTaskId(trimToNull(context.request.getMesExternalTaskId()));
-        if (ticketMapper != null) {
-            ticketMapper.updateById(update);
+        String mesRequestId = firstNonBlank(ticket.getMesRequestId(), context.request.getMesRequestId());
+        if (productionAllocationLifecycleService != null) {
+            productionAllocationLifecycleService.recordMaterialSuccess(
+                    ticket.getId(), materialNo, message, mesRequestId, context.request.getMesExternalTaskId(), false);
+        } else {
+            OrderDeliveryTicket update = new OrderDeliveryTicket();
+            update.setId(ticket.getId());
+            update.setMaterialNo(materialNo);
+            update.setMesSyncStatus(STATUS_SUCCESS);
+            update.setMesSyncMessage(message);
+            update.setMesSyncedAt(LocalDateTime.now());
+            update.setMesRequestId(mesRequestId);
+            update.setMesExternalTaskId(trimToNull(context.request.getMesExternalTaskId()));
+            if (ticketMapper != null) {
+                ticketMapper.updateById(update);
+            }
         }
         markCurrentWaiter(context.waiter, STATUS_SUCCESS, materialNo, message);
         log.info("MES material processing recovered as success ticketId={} taskId={} mesRequestId={} materialNo={}",

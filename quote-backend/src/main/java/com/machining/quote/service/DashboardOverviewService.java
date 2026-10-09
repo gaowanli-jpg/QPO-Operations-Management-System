@@ -214,11 +214,7 @@ public class DashboardOverviewService {
         query.and(active -> active
                 .apply("NULLIF(BTRIM(ticket.material_no), '') IS NULL")
                 .or()
-                .apply("COALESCE(ticket.mes_sync_status, 'PENDING') <> 'SUCCESS'")
-                .or()
-                .apply("COALESCE(ticket.wms_allocate_status, 'PENDING') <> 'SUCCESS'")
-                .or()
-                .apply("NOT EXISTS (SELECT 1 FROM order_delivery_ticket_allocation alloc_done WHERE alloc_done.ticket_id = ticket.id)"));
+                .apply("COALESCE(ticket.mes_sync_status, 'PENDING') <> 'SUCCESS'"));
         applyDeliveryTicketScope(query);
         return query;
     }
@@ -239,7 +235,12 @@ public class DashboardOverviewService {
         excludeDiscardedDeliveryTicket(query);
         query.apply("NULLIF(BTRIM(ticket.material_no), '') IS NOT NULL");
         query.eq("ticket.mes_sync_status", "SUCCESS");
-        query.apply("COALESCE(ticket.wms_allocate_status, 'PENDING') <> 'SUCCESS'");
+        query.apply("COALESCE(ticket.wms_allocate_status, 'PENDING') IN ('PENDING', 'FAILED')");
+        query.apply("NOT EXISTS (SELECT 1 FROM order_delivery_ticket_allocation alloc "
+                + "WHERE alloc.ticket_id = ticket.id "
+                + "AND alloc.allocation_type = 'PRODUCTION_REQUIRED' "
+                + "AND COALESCE(alloc.status, 'ACTIVE') = 'ACTIVE' "
+                + "AND alloc.mes_production_status IN ('PROCESSING', 'SUBMITTING', 'RESULT_UNKNOWN', 'SUCCESS'))");
         applyDeliveryTicketScope(query);
         return query;
     }
@@ -264,6 +265,7 @@ public class DashboardOverviewService {
         QueryWrapper<Object> query = new QueryWrapper<>();
         excludeDiscardedAllocation(query);
         query.eq("alloc.allocation_type", "PRODUCTION_REQUIRED");
+        query.apply("COALESCE(alloc.status, 'ACTIVE') = 'ACTIVE'");
         query.and(wrapper -> wrapper.isNull("alloc.mes_production_status").or().ne("alloc.mes_production_status", "SUCCESS"));
         applyDeliveryTicketScope(query);
         return query;
@@ -273,6 +275,7 @@ public class DashboardOverviewService {
         QueryWrapper<Object> query = new QueryWrapper<>();
         excludeDiscardedAllocation(query);
         query.eq("alloc.allocation_type", "PRODUCTION_REQUIRED");
+        query.apply("COALESCE(alloc.status, 'ACTIVE') = 'ACTIVE'");
         query.eq("alloc.mes_production_status", "FAILED");
         applyDeliveryTicketScope(query);
         return query;
@@ -462,8 +465,8 @@ public class DashboardOverviewService {
                         "/release", query("sourceType", "RFQ", "status", QuoteStatusWorkflow.QUOTED), "market:release:view", "success"),
                 todoCard("materialTodo", "待物料号已提零件", deliveredNeedMaterial, "行", "进入已提零件获取物料号",
                         "/delivered-items", query("flowStage", "NEED_MATERIAL"), "market:delivered-item:view", "warning"),
-                todoCard("wmsTodo", "待锁库已提零件", deliveredNeedWms, "行", "进入已提零件获取库存信息",
-                        "/delivered-items", query("flowStage", "NEED_WMS"), "market:delivered-item:view", "warning"),
+                todoCard("wmsTodo", "待获取库存零件", deliveredNeedWms, "行", "进入销售订单详情批量获取库存信息",
+                        "/sales-orders", null, "market:sales-order:wms-allocate", "warning"),
                 todoCard("mesProductionTodo", "待下发 MES 生产", lockedProductionTodo, "行", "进入待产零件下发 MES 生产",
                         "/production-items", query("mesProductionStatus", "PENDING"), "market:production-item:view", "info"),
                 todoCard("u9SyncReady", "可同步 U9 订单", u9Ready, "单", "整单物料号就绪后进入 U9 同步",
@@ -508,8 +511,8 @@ public class DashboardOverviewService {
                         "进入已提零件排查或重新获取物料号", "/delivered-items",
                         query("flowStage", "MES_FAILED"), "market:delivered-item:view", "danger"),
                 attentionItem("wmsFailed", "WMS 库存失败", wmsFailed, "行",
-                        "进入已提零件重试库存信息获取", "/delivered-items",
-                        query("flowStage", "WMS_FAILED"), "market:delivered-item:view", "danger"),
+                        "进入销售订单详情重试库存信息获取", "/sales-orders",
+                        null, "market:sales-order:wms-allocate", "danger"),
                 attentionItem("u9Failed", "U9 同步失败", u9Failed, "单",
                         "销售订单同步 U9 失败，可进入 U9 同步重试", "/u9-sync",
                         query("u9SyncStatus", "同步失败"), "market:u9-sync:view", "danger"),

@@ -704,6 +704,44 @@
           </el-tab-pane>
 
           <el-tab-pane label="提单行" name="tickets">
+            <div class="erp-toolbar-group">
+              <el-button
+                v-permission="SALES_ORDER_WMS_ALLOCATE_PERMISSION"
+                type="primary"
+                plain
+                :loading="wmsAllocationPending"
+                @click="handleWmsAllocation"
+              >
+                获取库存信息
+              </el-button>
+              <span class="erp-toolbar-description">对当前销售订单全部关联提单（含 RFQ 派生提单）获取库存信息，不受分页影响。</span>
+            </div>
+            <div v-if="wmsAllocationTask" class="sales-order-wms-task-result">
+              <div class="erp-toolbar-group">
+                <el-tag :type="wmsTaskTagType(wmsAllocationTask.status)" effect="plain">
+                  {{ wmsTaskStatusText(wmsAllocationTask.status) }}
+                </el-tag>
+                <span>库存任务 #{{ wmsAllocationTask.id }} · {{ wmsAllocationTask.errorMessage || '可选库存获取不会影响未获取库存零件的 MES 全量生产。' }}</span>
+                <el-button
+                  v-if="['PENDING', 'RUNNING'].includes(String(wmsAllocationTask.status || '').toUpperCase())"
+                  size="small"
+                  :loading="wmsAllocationRefreshing"
+                  @click="() => refreshWmsAllocationTask()"
+                >
+                  刷新任务
+                </el-button>
+              </div>
+              <el-table v-if="wmsAllocationRows.length" :data="wmsAllocationRows" border size="small" max-height="220">
+                <el-table-column prop="ticketId" label="提单行" width="100" />
+                <el-table-column label="处理结果" width="120">
+                  <template #default="{ row }">
+                    <el-tag :type="wmsTaskTagType(row.status)" size="small">{{ wmsTaskStatusText(row.status) }}</el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="message" label="说明" min-width="240" show-overflow-tooltip />
+                <el-table-column prop="externalBizId" label="WMS批次号" min-width="180" show-overflow-tooltip />
+              </el-table>
+            </div>
             <el-table :data="detailTicketList" border stripe height="330" v-loading="detailTicketsLoading">
               <el-table-column prop="internalProjectNo" label="内部项目号" min-width="130" show-overflow-tooltip />
               <el-table-column prop="partNo" label="图号" min-width="150" show-overflow-tooltip />
@@ -849,8 +887,10 @@ import {
   restoreSalesOrderItemForU9Change,
   resetSalesOrderU9SyncStatus,
   replaceSalesOrderDrawings,
+  submitSalesOrderWmsAllocationBatch,
   supplementSalesOrderDrawings
 } from '../services/orderApi'
+import { getTask } from '../services/taskApi'
 
 const { isPending, runAction } = usePendingAction()
 const route = useRoute()
@@ -858,6 +898,7 @@ const route = useRoute()
 const SALES_ORDER_STATUSES = ['已报价', '部分已提单', '已生成提单', '废弃']
 const SALES_ORDER_TYPES = ['预测订单', '备货订单', '正式订单']
 const SALES_ORDER_UPDATE_PERMISSION = 'market:sales-order:update'
+const SALES_ORDER_WMS_ALLOCATE_PERMISSION = 'market:sales-order:wms-allocate'
 const SALES_ORDER_EDIT_LOCKED_U9_STATUSES = ['同步中', '结果待确认']
 const SALES_ORDER_PRICE_CONVERSIONS = {
   UNTAXED_TO_TAX_INCLUDED: {
@@ -886,7 +927,8 @@ const salesOrderActionKeys = {
   itemDetailExport: (orderId) => `sales-order:item-detail-export:${orderId || 'none'}`,
   supplementDrawings: (orderId) => `sales-order:supplement-drawings:${orderId || 'none'}`,
   salesOrderDrawingReplace: (orderId) => `sales-order:drawing-replace:${orderId || 'none'}`,
-  productionTaskNoticeExport: (orderId) => `sales-order:production-task-notice-export:${orderId || 'none'}`
+  productionTaskNoticeExport: (orderId) => `sales-order:production-task-notice-export:${orderId || 'none'}`,
+  wmsAllocation: (orderId) => `sales-order:wms-allocation:${orderId || 'none'}`
 }
 const SALES_ORDER_HEADER_EDITABLE_FIELDS = [
   'documentTypeCode',
@@ -967,6 +1009,8 @@ const orderDetail = ref(null)
 const activeDetailTab = ref('items')
 const detailItemList = ref([])
 const detailTicketList = ref([])
+const wmsAllocationTask = ref(null)
+const wmsAllocationRefreshing = ref(false)
 const detailProcessSheetList = ref([])
 const drawingSummary = ref(null)
 const detailItemsLoading = ref(false)
@@ -1146,6 +1190,7 @@ const resetDetailPagination = () => {
   detailProcessSheetPagination.page = 1
   detailItemList.value = []
   detailTicketList.value = []
+  wmsAllocationTask.value = null
   detailProcessSheetList.value = []
   detailItemTotal.value = 0
   detailTicketTotal.value = 0
@@ -1239,6 +1284,103 @@ const fetchDetailTickets = async () => {
     ElMessage.error('销售订单提单行加载失败。')
   } finally {
     detailTicketsLoading.value = false
+  }
+}
+
+const wmsAllocationPending = computed(() => isPending(salesOrderActionKeys.wmsAllocation(orderDetail.value?.orderInfo?.id))
+  || ['PENDING', 'RUNNING'].includes(String(wmsAllocationTask.value?.status || '').toUpperCase()))
+
+const wmsAllocationRows = computed(() => {
+  const result = parseTaskResult(wmsAllocationTask.value)
+  const rows = result?.results || result?.rows || []
+  return Array.isArray(rows) ? rows : []
+})
+
+const parseTaskResult = (task) => {
+  const result = task?.resultJson || task?.result || task?.task?.resultJson
+  if (!result) return null
+  if (typeof result === 'object') return result
+  if (typeof result === 'string') {
+    try {
+      const parsed = JSON.parse(result)
+      return parsed && typeof parsed === 'object' ? parsed : null
+    } catch {
+      return null
+    }
+  }
+  return null
+}
+
+const wmsTaskStatusText = (value) => ({
+  PENDING: '排队中',
+  RUNNING: '处理中',
+  SUCCESS: '已完成',
+  FAILED: '任务失败',
+  RESULT_UNKNOWN: '结果待核对',
+  APPLY_FAILED: '本地应用待修复',
+  SKIPPED: '跳过',
+  FAILED_ITEM: '失败'
+}[String(value || '').toUpperCase()] || String(value || '未知状态'))
+
+const wmsTaskTagType = (value) => ({
+  SUCCESS: 'success',
+  FAILED: 'danger',
+  FAILED_ITEM: 'danger',
+  APPLY_FAILED: 'danger',
+  RESULT_UNKNOWN: 'warning',
+  PENDING: 'info',
+  RUNNING: 'warning',
+  SKIPPED: 'info'
+}[String(value || '').toUpperCase()] || 'info')
+
+const handleWmsAllocation = async () => {
+  const salesOrderId = orderDetail.value?.orderInfo?.id
+  if (!salesOrderId) return
+  try {
+    await ElMessageBox.confirm(
+      '确认对该销售订单全部关联提单获取库存信息？获取成功的数量将从待产数量中拆分为锁库数量，未获取库存的零件仍可全量下发 MES 生产。',
+      '获取库存信息',
+      { confirmButtonText: '确认提交', cancelButtonText: '取消', type: 'warning' }
+    )
+  } catch {
+    return
+  }
+  return runAction(salesOrderActionKeys.wmsAllocation(salesOrderId), async () => {
+    try {
+      const task = await submitSalesOrderWmsAllocationBatch(salesOrderId)
+      const taskId = task?.id || task?.taskId
+      wmsAllocationTask.value = task
+      ElMessage.success(taskId ? `库存信息获取任务已提交，任务ID：${taskId}` : '库存信息获取任务已提交')
+      await fetchDetailTickets()
+      if (taskId) await refreshWmsAllocationTask(true)
+    } catch (error) {
+      console.error(error)
+      ElMessage.error(error.response?.data?.message || error.message || '库存信息获取任务提交失败。')
+    }
+  })
+}
+
+const waitForWmsTask = (milliseconds) => new Promise(resolve => globalThis.setTimeout(resolve, milliseconds))
+
+const refreshWmsAllocationTask = async (pollUntilComplete = false) => {
+  const taskId = wmsAllocationTask.value?.id || wmsAllocationTask.value?.taskId
+  if (!taskId || wmsAllocationRefreshing.value) return
+  wmsAllocationRefreshing.value = true
+  try {
+    const attempts = pollUntilComplete ? 20 : 1
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+      const latestTask = await getTask(taskId)
+      wmsAllocationTask.value = latestTask?.task || latestTask
+      const status = String(wmsAllocationTask.value?.status || '').toUpperCase()
+      if (!['PENDING', 'RUNNING'].includes(status)) break
+      if (attempt + 1 < attempts) await waitForWmsTask(1500)
+    }
+    await fetchDetailTickets()
+  } catch (error) {
+    console.warn('Sales order WMS task refresh failed', error)
+    if (!pollUntilComplete) ElMessage.warning(error.response?.data?.message || '任务状态刷新失败，请稍后重试。')
+  } finally {
+    wmsAllocationRefreshing.value = false
   }
 }
 

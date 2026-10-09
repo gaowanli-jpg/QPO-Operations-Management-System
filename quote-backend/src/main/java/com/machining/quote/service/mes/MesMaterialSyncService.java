@@ -88,6 +88,8 @@ public class MesMaterialSyncService {
     private AuditService auditService;
     @Autowired(required = false)
     private MesMaterialDedupService dedupService;
+    @Autowired(required = false)
+    private ProductionAllocationLifecycleService productionAllocationLifecycleService;
     @Autowired
     private SourceItemMaterialNoSyncService sourceItemMaterialNoSyncService;
 
@@ -193,6 +195,11 @@ public class MesMaterialSyncService {
             OrderDeliveryTicketMesRequest request = loadMesRequest(batchItem.getLineRequestId());
             OrderDeliveryTicket ticket = loadTicket(batchItem.getTicketId());
             validateMaterialBatchCallbackAssociation(batch, batchItem, request, ticket, row);
+            if (hasConfirmedMaterialNo(ticket)) {
+                duplicateCount++;
+                continue;
+            }
+            validateCurrentMaterialCallbackRequest(batchItem, request, ticket, row);
             BatchCallbackDisposition disposition = disposition(batchItem, row);
             if (disposition.duplicate()) {
                 duplicateCount++;
@@ -363,6 +370,19 @@ public class MesMaterialSyncService {
         if (request.getTicketId() == null || !request.getTicketId().equals(batchItem.getTicketId())) {
             throw callbackError(HttpStatus.CONFLICT, "MES material callback request ticket mismatch");
         }
+    }
+
+    private boolean hasConfirmedMaterialNo(OrderDeliveryTicket ticket) {
+        return ticket != null
+                && STATUS_SUCCESS.equalsIgnoreCase(trimToNull(ticket.getMesSyncStatus()))
+                && !isBlank(ticket.getMaterialNo());
+    }
+
+    private void validateCurrentMaterialCallbackRequest(
+            MesMaterialBatchItem batchItem,
+            OrderDeliveryTicketMesRequest request,
+            OrderDeliveryTicket ticket,
+            MaterialBatchCallbackRow row) {
         String currentLineRequestId = trimToNull(ticket.getMesRequestId());
         if (!batchItem.getLineRequestId().equals(currentLineRequestId)) {
             throw callbackError(HttpStatus.CONFLICT, "Stale MES material callback cannot overwrite the current request");
@@ -1382,15 +1402,20 @@ public class MesMaterialSyncService {
         String syncMessage = isBlank(message) ? "MES material resolved" : message.trim();
         SourceItemMaterialNoSyncService.MaterialNoSyncResult sourceSyncResult =
                 syncSourceItemMaterialNo(ticket, materialNo, syncMessage);
-        OrderDeliveryTicket update = new OrderDeliveryTicket();
-        update.setId(ticket.getId());
-        update.setMaterialNo(materialNo);
-        update.setMesSyncStatus(STATUS_SUCCESS);
-        update.setMesSyncMessage(syncMessage);
-        update.setMesSyncedAt(LocalDateTime.now());
-        update.setMesRequestId(mesRequestId);
-        update.setMesExternalTaskId(trimToNull(externalTraceId));
-        ticketMapper.updateById(update);
+        if (productionAllocationLifecycleService != null) {
+            productionAllocationLifecycleService.recordMaterialSuccess(
+                    ticket.getId(), materialNo, syncMessage, mesRequestId, externalTraceId, false);
+        } else {
+            OrderDeliveryTicket update = new OrderDeliveryTicket();
+            update.setId(ticket.getId());
+            update.setMaterialNo(materialNo);
+            update.setMesSyncStatus(STATUS_SUCCESS);
+            update.setMesSyncMessage(syncMessage);
+            update.setMesSyncedAt(LocalDateTime.now());
+            update.setMesRequestId(mesRequestId);
+            update.setMesExternalTaskId(trimToNull(externalTraceId));
+            ticketMapper.updateById(update);
+        }
         return sourceSyncResult;
     }
 
@@ -1405,17 +1430,23 @@ public class MesMaterialSyncService {
     }
 
     private void markCallbackSuccess(OrderDeliveryTicket ticket, String mesRequestId, String materialNo, String message, String externalTraceId) {
-        OrderDeliveryTicket update = new OrderDeliveryTicket();
-        update.setId(ticket.getId());
-        update.setMaterialNo(materialNo);
-        update.setMesSyncStatus(STATUS_SUCCESS);
-        update.setMesSyncMessage(isBlank(message) ? "MES material callback resolved" : message.trim());
-        update.setMesSyncedAt(LocalDateTime.now());
-        update.setMesRequestId(mesRequestId);
-        update.setMesExternalTaskId(trimToNull(externalTraceId));
-        update.setMesCallbackReceivedAt(LocalDateTime.now());
-        update.setMesCallbackMessage(abbreviate(message));
-        ticketMapper.updateById(update);
+        String callbackMessage = isBlank(message) ? "MES material callback resolved" : message.trim();
+        if (productionAllocationLifecycleService != null) {
+            productionAllocationLifecycleService.recordMaterialSuccess(
+                    ticket.getId(), materialNo, callbackMessage, mesRequestId, externalTraceId, true);
+        } else {
+            OrderDeliveryTicket update = new OrderDeliveryTicket();
+            update.setId(ticket.getId());
+            update.setMaterialNo(materialNo);
+            update.setMesSyncStatus(STATUS_SUCCESS);
+            update.setMesSyncMessage(callbackMessage);
+            update.setMesSyncedAt(LocalDateTime.now());
+            update.setMesRequestId(mesRequestId);
+            update.setMesExternalTaskId(trimToNull(externalTraceId));
+            update.setMesCallbackReceivedAt(LocalDateTime.now());
+            update.setMesCallbackMessage(abbreviate(message));
+            ticketMapper.updateById(update);
+        }
     }
 
     private SourceItemMaterialNoSyncService.MaterialNoSyncResult syncSourceItemMaterialNoForCallback(

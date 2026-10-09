@@ -38,7 +38,7 @@ class DashboardOverviewStage3Test {
         DataScopeService dataScopeService = mock(DataScopeService.class);
         PermissionService permissionService = mock(PermissionService.class);
         DashboardOverviewService service = service(mapper, dataScopeService, permissionService,
-                permissions(false, "market:delivered-item:view"));
+                permissions(false, "market:delivered-item:view", "market:sales-order:wms-allocate"));
 
         when(mapper.countDeliveredActive(any())).thenReturn(12L);
         when(mapper.countDeliveredNeedMaterial(any())).thenReturn(7L);

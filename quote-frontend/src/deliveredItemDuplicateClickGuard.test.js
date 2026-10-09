@@ -24,30 +24,30 @@ const deferred = () => {
 }
 
 describe('delivery duplicate click guards', () => {
-  test('delivered item MES and WMS toolbar actions use batch-scoped pending keys', () => {
-    const source = readSource('components', 'DeliveredItemManage.vue')
+  test('delivered item MES and sales-order WMS actions use scoped pending keys', () => {
+    const deliveredSource = readSource('components', 'DeliveredItemManage.vue')
+    const salesOrderSource = readSource('components', 'SalesOrderManage.vue')
 
-    expect(source).toContain("import { usePendingAction } from '../composables/usePendingAction'")
-    expect(source).toContain('const { isPending, runAction } = usePendingAction()')
-    expect(source).toContain("batchMesSync: () => 'delivery:mes-sync:batch'")
-    expect(source).toContain("batchWmsAllocation: () => 'delivery:wms-allocation:batch'")
-    expect(source).toContain(':loading="isBatchMesSyncPending"')
-    expect(source).toContain(':loading="isBatchWmsAllocationPending"')
-    expect(source).toContain(':disabled="selectedTicketIds.length === 0 || isBatchMesSyncPending"')
-    expect(source).toContain(':disabled="selectedTicketIds.length === 0 || isBatchWmsAllocationPending"')
-    expect(source).not.toContain('mesSync: (ticketId) => `delivery:mes-sync:${ticketId}`')
-    expect(source).not.toContain('wmsAllocation: (ticketId) => `delivery:wms-allocation:${ticketId}`')
+    expect(deliveredSource).toContain("import { usePendingAction } from '../composables/usePendingAction'")
+    expect(deliveredSource).toContain('const { isPending, runAction } = usePendingAction()')
+    expect(deliveredSource).toContain("batchMesSync: () => 'delivery:mes-sync:batch'")
+    expect(deliveredSource).toContain(':loading="isBatchMesSyncPending"')
+    expect(deliveredSource).not.toContain('batchWmsAllocation')
+    expect(salesOrderSource).toContain("wmsAllocation: (orderId) => `sales-order:wms-allocation:${orderId || 'none'}`")
+    expect(salesOrderSource).toContain(':loading="wmsAllocationPending"')
+    expect(salesOrderSource).toContain('const wmsAllocationPending = computed(() => isPending(salesOrderActionKeys.wmsAllocation')
   })
 
-  test('delivered item MES and WMS batch handlers wrap submissions in runAction', () => {
-    const source = readSource('components', 'DeliveredItemManage.vue')
-    const mesBlock = blockBetween(source, 'const handleBatchMesSync = async () =>', 'const handleBatchWmsAllocation = async () =>')
-    const wmsBlock = blockBetween(source, 'const handleBatchWmsAllocation = async () =>', 'const openLockedItems = (row) =>')
+  test('delivered item MES and sales-order WMS handlers wrap submissions in runAction', () => {
+    const deliveredSource = readSource('components', 'DeliveredItemManage.vue')
+    const salesOrderSource = readSource('components', 'SalesOrderManage.vue')
+    const mesBlock = blockBetween(deliveredSource, 'const handleBatchMesSync = async () =>', 'const openLockedItems = (row) =>')
+    const wmsBlock = blockBetween(salesOrderSource, 'const handleWmsAllocation = async () =>', 'const fetchDetailProcessSheets = async () =>')
 
     expect(mesBlock).toContain('return runAction(deliveredActionKeys.batchMesSync(), async () =>')
     expect(mesBlock).toContain('await syncMesMaterialBatch(selectedTicketIds.value)')
-    expect(wmsBlock).toContain('return runAction(deliveredActionKeys.batchWmsAllocation(), async () =>')
-    expect(wmsBlock).toContain('await submitWmsAllocationBatch(selectedTicketIds.value)')
+    expect(wmsBlock).toContain('return runAction(salesOrderActionKeys.wmsAllocation(salesOrderId), async () =>')
+    expect(wmsBlock).toContain('await submitSalesOrderWmsAllocationBatch(salesOrderId)')
   })
 
   test('delivery document exports use button-level pending loading', () => {

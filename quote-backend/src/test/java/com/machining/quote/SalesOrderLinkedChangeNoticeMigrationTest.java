@@ -49,7 +49,7 @@ class SalesOrderLinkedChangeNoticeMigrationTest {
                     .mapToInt(matcher -> Integer.parseInt(matcher.group(1)))
                     .max().orElse(0);
         }
-        assertThat(maxVersion).isEqualTo(56);
+        assertThat(maxVersion).isEqualTo(57);
 
         Path migration = MIGRATION_DIR.resolve("V56__sales_order_linked_change_notice_filter_fields.sql");
         assertThat(migration).exists();
@@ -60,6 +60,23 @@ class SalesOrderLinkedChangeNoticeMigrationTest {
                 .contains("sales_order_item")
                 .contains("sales_order_header")
                 .contains("CREATE INDEX")
+                .doesNotContain("V1__qpo_baseline_schema.sql", "V2__qpo_baseline_seed_data.sql");
+    }
+
+    @Test
+    void version57AddsOptionalWmsAllocationWithoutChangingBaselines() throws Exception {
+        Path migration = MIGRATION_DIR.resolve("V57__sales_order_optional_wms_allocation.sql");
+        assertThat(migration).exists();
+        String sql = Files.readString(migration, StandardCharsets.UTF_8);
+        assertThat(sql)
+                .contains("allocation_source")
+                .contains("MES_MATERIAL")
+                .contains("WMS_RESERVATION")
+                .contains("PRODUCTION_REQUIRED")
+                .contains("RESULT_UNKNOWN")
+                .contains("APPLY_FAILED")
+                .contains("market:sales-order:wms-allocate")
+                .contains("existing_role.role_code")
                 .doesNotContain("V1__qpo_baseline_schema.sql", "V2__qpo_baseline_seed_data.sql");
     }
 }

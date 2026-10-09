@@ -53,6 +53,8 @@ public class SystemTaskService {
     @Autowired(required = false)
     private DeliveryIntegrationBatchService deliveryIntegrationBatchService;
     @Autowired(required = false)
+    private SalesOrderWmsAllocationService salesOrderWmsAllocationService;
+    @Autowired(required = false)
     private SystemTaskGuardService taskGuardService;
     @Autowired
     @Qualifier("systemTaskExecutor")
@@ -145,6 +147,39 @@ public class SystemTaskService {
         recordTaskSubmitAudit("DELIVERY_WMS_ALLOCATION_SUBMIT", "DELIVERY", task, request);
         log.info("WMS allocation batch submitted taskId={} ticketCount={}", task.getId(), taskTicketIds.size());
         taskExecutor.execute(() -> runTask(task.getId(), () -> deliveryIntegrationBatchService.allocateWmsBatch(taskTicketIds, task.getId())));
+        return taskMapper.selectById(task.getId());
+    }
+
+    public SystemTask submitSalesOrderWmsAllocationTask(Long salesOrderId) {
+        if (deliveryIntegrationBatchService == null) {
+            throw new RuntimeException("WMS allocation service is unavailable");
+        }
+        if (salesOrderWmsAllocationService == null) {
+            throw new RuntimeException("Sales order WMS allocation service is unavailable");
+        }
+        salesOrderWmsAllocationService.assertCanAccessSalesOrder(salesOrderId);
+        List<Integer> allTicketIds = salesOrderWmsAllocationService.resolveTicketIds(salesOrderId);
+        List<Integer> eligibleTicketIds = salesOrderWmsAllocationService.resolveEligibleTicketIds(salesOrderId);
+        if (eligibleTicketIds.isEmpty()) {
+            throw new RuntimeException("当前销售订单没有可获取库存信息的零件");
+        }
+        List<Integer> taskTicketIds = deliveryIntegrationBatchService.normalizeTicketIds(allTicketIds);
+        deliveryIntegrationBatchService.assertCanAccessTickets(taskTicketIds);
+        Map<String, Object> request = new LinkedHashMap<>();
+        request.put("salesOrderId", salesOrderId);
+        request.put("ticketIds", taskTicketIds);
+        request.put("ticketCount", taskTicketIds.size());
+        request.put("eligibleTicketCount", eligibleTicketIds.size());
+        SystemTask task = createTask("WMS_ALLOCATION_BATCH", request);
+        Map<String, Object> auditSummary = new LinkedHashMap<>();
+        auditSummary.put("salesOrderId", salesOrderId);
+        auditSummary.put("ticketCount", taskTicketIds.size());
+        auditSummary.put("eligibleTicketCount", eligibleTicketIds.size());
+        recordTaskSubmitAudit("SALES_ORDER_WMS_ALLOCATION_SUBMIT", "MARKET", task, auditSummary);
+        log.info("Sales order WMS allocation submitted taskId={} salesOrderId={} ticketCount={}",
+                task.getId(), salesOrderId, taskTicketIds.size());
+        taskExecutor.execute(() -> runTask(task.getId(),
+                () -> deliveryIntegrationBatchService.allocateWmsBatch(taskTicketIds, task.getId())));
         return taskMapper.selectById(task.getId());
     }
 

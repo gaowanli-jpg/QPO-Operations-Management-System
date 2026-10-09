@@ -50,7 +50,10 @@ class MesMaterialCallbackDocumentationCharacterizationTest {
                         "批量 envelope 契约",
                         "即使只有 1 个零件，也必须放在 `items` 数组中回调",
                         "`items[].productCode`",
-                        "缺少 `items`")
+                        "缺少 `items`",
+                        "`mes_sync_status=SUCCESS` 且 `material_no` 非空",
+                        "不更新任何业务记录",
+                        "按成功响应计入 `duplicateCount`")
                 .doesNotContain("扁平 JSON 契约");
     }
 

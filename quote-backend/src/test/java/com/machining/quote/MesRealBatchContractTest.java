@@ -3,6 +3,8 @@ package com.machining.quote;
 import com.machining.quote.entity.MesIntegrationBatch;
 import com.machining.quote.entity.MesMaterialBatchItem;
 import com.machining.quote.entity.MesProductionBatchItem;
+import com.machining.quote.entity.OrderDeliveryTicket;
+import com.machining.quote.entity.OrderDeliveryTicketAllocation;
 import com.machining.quote.mapper.MesIntegrationBatchMapper;
 import com.machining.quote.mapper.MesIntegrationReconcileRunMapper;
 import com.machining.quote.mapper.MesMaterialBatchItemMapper;
@@ -180,6 +182,22 @@ class MesRealBatchContractTest {
             item.setId(item.getAllocationId().longValue() + 9000L);
             return 1;
         });
+
+        OrderDeliveryTicket productionTicket = new OrderDeliveryTicket();
+        productionTicket.setId(301);
+        productionTicket.setMaterialNo("SY100399000001");
+        productionTicket.setMesSyncStatus("SUCCESS");
+        when(ticketMapper.selectByIdForUpdate(301)).thenReturn(productionTicket);
+        OrderDeliveryTicketAllocation productionAllocation = new OrderDeliveryTicketAllocation();
+        productionAllocation.setId(201);
+        productionAllocation.setTicketId(301);
+        productionAllocation.setAllocationType("PRODUCTION_REQUIRED");
+        productionAllocation.setStatus("ACTIVE");
+        productionAllocation.setQty(5);
+        productionAllocation.setMesProductionStatus("PENDING");
+        when(allocationMapper.selectById(201)).thenReturn(productionAllocation);
+        when(allocationMapper.selectByIdForUpdate(201)).thenReturn(productionAllocation);
+        when(allocationMapper.markMesProductionLineReserved(any(Integer.class), any(String.class))).thenReturn(1);
 
         MesBatchStateService service = new MesBatchStateService(
                 batchMapper,

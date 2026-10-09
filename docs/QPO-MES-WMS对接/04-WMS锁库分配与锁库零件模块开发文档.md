@@ -3,6 +3,8 @@
 > 现行链路：`QPO -> 数据中心 -> WMS`。QPO 只保留批量任务 `WMS_ALLOCATION_BATCH`，底层只调用数据中心 endpoint `WMS_INVENTORY_ALLOCATE`。
 > WMS 业务接口：`POST /api/v1/wms/admin-api/wms/datacenter/sale-lading/reserve`。
 
+> 2026-10-09 可选库存获取收口：物料号成功即创建全量 `PRODUCTION_REQUIRED` allocation 并进入待产池。WMS 获取库存改由销售订单详情按整单关联提单触发；成功后替代 / 拆分默认生产分配。已提零件页的旧批量接口与权限保留为兼容入口，页面不再显示。
+
 ## 1. 当前结论
 
 - 已提零件模块不再存在单条 WMS 直连任务；用户单选、多选都提交同一个批量入口。
@@ -88,7 +90,9 @@ sales_order_item.line_no ASC, ticket.id ASC
 - 在产覆盖：`inProductionCount`，写 `IN_PRODUCTION_LOCK`。
 - 待生产：`surplusCount`，写 `PRODUCTION_REQUIRED`。
 
-阶段 31 后，锁库零件模块只展示 `IN_STOCK_LOCK` 和 `IN_PRODUCTION_LOCK`；`PRODUCTION_REQUIRED` 行进入待产零件模块 `/production-items`，由待产零件页面负责后续 MES 生产下发。
+物料号获取成功后立即建立数量等于原提单数量的 `PRODUCTION_REQUIRED` allocation，并进入待产零件模块 `/production-items`。未获取 WMS 时，这一全量数量可以直接下发 MES。
+
+WMS 成功应用时，在同一事务内将该有效生产分配改为剩余待生产数量，并新增 `IN_STOCK_LOCK` / `IN_PRODUCTION_LOCK` 锁库行；WMS 全量覆盖时，原待产行标记为 `SUPERSEDED`，不保留有效待产行。有效 allocation 数量之和必须等于 `ticket_qty`。锁库零件模块只展示两种锁库类型，待产模块只展示状态为 `ACTIVE` 的 `PRODUCTION_REQUIRED` 行。
 
 `order_delivery_ticket_allocation` 是锁库结果池。`qty` 表示 allocation 拆分后的当前数量，`ticket_qty` 表示未锁库存前的原始提单数量，必须保存原始提单数量快照。WMS 成功后结果进入锁库零件模块，原始 ticket 不删除，通过 `ticketId` 反查原始 `order_delivery_ticket`，完成行从已提零件默认列表隐藏。
 
@@ -140,7 +144,7 @@ WMS 锁库不重新查询当前工艺字典，必须复制原始提单行的标�
 
 ## 9. 权限与审计
 
-批量触发权限仍为 `market:delivered-item:wms-allocate`，页面和后端都必须校验。审计动作：
+销售订单详情触发权限为 `market:sales-order:wms-allocate`，页面和后端都必须校验，并按销售订单数据范围授权。旧 `market:delivered-item:wms-allocate` 和 ticket 批量 API 保留兼容。销售订单任务审计动作是 `SALES_ORDER_WMS_ALLOCATION_SUBMIT`；原 WMS 批次结果审计动作仍使用下列兼容目录：
 
 | 动作 | 含义 |
 | --- | --- |

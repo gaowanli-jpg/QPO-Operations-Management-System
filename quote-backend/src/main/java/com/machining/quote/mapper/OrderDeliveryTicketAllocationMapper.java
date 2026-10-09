@@ -19,8 +19,14 @@ import java.time.LocalDateTime;
 
 @Mapper
 public interface OrderDeliveryTicketAllocationMapper extends BaseMapper<OrderDeliveryTicketAllocation> {
+    @Select("SELECT * FROM order_delivery_ticket_allocation WHERE ticket_id = #{ticketId} ORDER BY id ASC")
+    List<OrderDeliveryTicketAllocation> selectByTicketId(@Param("ticketId") Integer ticketId);
+
     @Select("SELECT * FROM order_delivery_ticket_allocation WHERE id = #{id} FOR UPDATE")
     OrderDeliveryTicketAllocation selectByIdForUpdate(@Param("id") Integer id);
+
+    @Select("SELECT * FROM order_delivery_ticket_allocation WHERE ticket_id = #{ticketId} ORDER BY id ASC FOR UPDATE")
+    List<OrderDeliveryTicketAllocation> selectByTicketIdForUpdate(@Param("ticketId") Integer ticketId);
 
     @Update("""
             <script>
@@ -81,6 +87,9 @@ public interface OrderDeliveryTicketAllocationMapper extends BaseMapper<OrderDel
                 mes_production_message = NULL,
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = #{allocationId}
+              AND allocation_type = 'PRODUCTION_REQUIRED'
+              AND COALESCE(status, 'ACTIVE') = 'ACTIVE'
+              AND COALESCE(mes_production_status, 'PENDING') IN ('PENDING', 'FAILED')
             """)
     int markMesProductionLineReserved(@Param("allocationId") Integer allocationId,
                                       @Param("lineRequestId") String lineRequestId);

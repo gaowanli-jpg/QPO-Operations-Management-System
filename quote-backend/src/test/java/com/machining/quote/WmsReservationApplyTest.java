@@ -88,17 +88,19 @@ class WmsReservationApplyTest {
         when(fixture.ticketMapper.selectByBatchId(501L)).thenReturn(List.of(ticket));
         when(fixture.ticketSourceMapper.selectByIdForUpdate(101)).thenReturn(deliveryTicket(101, "MAT-A", 5));
         when(fixture.allocationMapper.selectByWmsReservationTicketId(801L)).thenReturn(List.of());
+        OrderDeliveryTicketAllocation defaultProduction = productionAllocation(901, 101, 5);
+        when(fixture.allocationMapper.selectByTicketIdForUpdate(101)).thenReturn(List.of(defaultProduction));
 
         fixture.service.applyResponse(501L);
 
         ArgumentCaptor<OrderDeliveryTicketAllocation> allocationCaptor = ArgumentCaptor.forClass(OrderDeliveryTicketAllocation.class);
-        verify(fixture.allocationMapper, times(3)).insert(allocationCaptor.capture());
+        verify(fixture.allocationMapper, times(2)).insert(allocationCaptor.capture());
         assertThat(allocationCaptor.getAllValues()).extracting(OrderDeliveryTicketAllocation::getWmsReservationTicketId)
                 .containsOnly(801L);
         assertThat(allocationCaptor.getAllValues()).extracting(OrderDeliveryTicketAllocation::getAllocationType)
-                .containsExactly("IN_STOCK_LOCK", "IN_PRODUCTION_LOCK", "PRODUCTION_REQUIRED");
+                .containsExactly("IN_STOCK_LOCK", "IN_PRODUCTION_LOCK");
         assertThat(allocationCaptor.getAllValues()).extracting(OrderDeliveryTicketAllocation::getQty)
-                .containsExactly(2, 1, 2);
+                .containsExactly(2, 1);
         assertThat(allocationCaptor.getAllValues()).allSatisfy(row -> {
             assertThat(row.getTicketId()).isEqualTo(101);
             assertThat(row.getMaterialNo()).isEqualTo("MAT-A");
@@ -109,6 +111,14 @@ class WmsReservationApplyTest {
             assertThat(row.getMesProductionStatus()).isEqualTo("PENDING");
             assertThat(row.getStatus()).isEqualTo("ACTIVE");
         });
+
+        ArgumentCaptor<OrderDeliveryTicketAllocation> productionUpdate = ArgumentCaptor.forClass(OrderDeliveryTicketAllocation.class);
+        verify(fixture.allocationMapper).updateById(productionUpdate.capture());
+        assertThat(productionUpdate.getValue().getId()).isEqualTo(901);
+        assertThat(productionUpdate.getValue().getQty()).isEqualTo(2);
+        assertThat(productionUpdate.getValue().getAllocationSource()).isEqualTo("MES_MATERIAL");
+        assertThat(allocationCaptor.getAllValues().stream().mapToInt(OrderDeliveryTicketAllocation::getQty).sum()
+                + productionUpdate.getValue().getQty()).isEqualTo(5);
 
         ArgumentCaptor<OrderDeliveryTicket> ticketUpdate = ArgumentCaptor.forClass(OrderDeliveryTicket.class);
         verify(fixture.ticketSourceMapper).updateById(ticketUpdate.capture());
@@ -127,6 +137,38 @@ class WmsReservationApplyTest {
     }
 
     @Test
+    void fullInventoryCoverageSupersedesDefaultProductionRowWithoutCreatingZeroQuantityRow() {
+        Fixture fixture = fixture();
+        WmsSaleLadingReserveReq request = request("QPO-WMS-2", "SO-100", requestItem("MAT-A", "5", "remark"));
+        WmsReservationBatch batch = batch(502L, "RESPONSE_RECEIVED", request);
+        WmsReservationItem item = item(702L, "MAT-A", "5", "remark");
+        WmsReservationTicket ticket = reservationTicket(802L, 502L, 702L, 102, 1002L, 20, "MAT-A", "5");
+        ticket.setStockFrozenCount(new BigDecimal("3"));
+        ticket.setInProductionCount(new BigDecimal("2"));
+        ticket.setSurplusCount(BigDecimal.ZERO);
+        when(fixture.batchMapper.selectById(502L)).thenReturn(batch);
+        when(fixture.itemMapper.selectList(any())).thenReturn(List.of(item));
+        when(fixture.ticketMapper.selectByBatchId(502L)).thenReturn(List.of(ticket));
+        when(fixture.ticketSourceMapper.selectByIdForUpdate(102)).thenReturn(deliveryTicket(102, "MAT-A", 5));
+        when(fixture.allocationMapper.selectByWmsReservationTicketId(802L)).thenReturn(List.of());
+        when(fixture.allocationMapper.selectByTicketIdForUpdate(102))
+                .thenReturn(List.of(productionAllocation(902, 102, 5)));
+
+        fixture.service.applyResponse(502L);
+
+        ArgumentCaptor<OrderDeliveryTicketAllocation> newRows = ArgumentCaptor.forClass(OrderDeliveryTicketAllocation.class);
+        verify(fixture.allocationMapper, times(2)).insert(newRows.capture());
+        assertThat(newRows.getAllValues()).extracting(OrderDeliveryTicketAllocation::getAllocationType)
+                .containsExactly("IN_STOCK_LOCK", "IN_PRODUCTION_LOCK");
+        assertThat(newRows.getAllValues()).extracting(OrderDeliveryTicketAllocation::getQty).containsExactly(3, 2);
+        ArgumentCaptor<OrderDeliveryTicketAllocation> replacedRow = ArgumentCaptor.forClass(OrderDeliveryTicketAllocation.class);
+        verify(fixture.allocationMapper).updateById(replacedRow.capture());
+        assertThat(replacedRow.getValue().getId()).isEqualTo(902);
+        assertThat(replacedRow.getValue().getStatus()).isEqualTo("SUPERSEDED");
+        assertThat(newRows.getAllValues().stream().mapToInt(OrderDeliveryTicketAllocation::getQty).sum()).isEqualTo(5);
+    }
+
+    @Test
     void applyFailureMarksApplyFailedAndReplaySkipsExistingAllocationRows() {
         Fixture fixture = fixture();
         WmsSaleLadingReserveReq request = request("QPO-WMS-1", "SO-100", requestItem("MAT-A", "5", "remark"));
@@ -141,6 +183,8 @@ class WmsReservationApplyTest {
         when(fixture.ticketMapper.selectByBatchId(501L)).thenReturn(List.of(ticket));
         when(fixture.ticketSourceMapper.selectByIdForUpdate(101)).thenReturn(deliveryTicket(101, "MAT-A", 5));
         when(fixture.allocationMapper.selectByWmsReservationTicketId(801L)).thenReturn(List.of());
+        when(fixture.allocationMapper.selectByTicketIdForUpdate(101))
+                .thenReturn(List.of(productionAllocation(901, 101, 5)));
         doThrow(new RuntimeException("insert failed")).when(fixture.allocationMapper).insert(any(OrderDeliveryTicketAllocation.class));
 
         assertThatThrownBy(() -> fixture.service.applyResponse(501L))
@@ -155,6 +199,8 @@ class WmsReservationApplyTest {
         when(replayFixture.itemMapper.selectList(any())).thenReturn(List.of(item));
         when(replayFixture.ticketMapper.selectByBatchId(501L)).thenReturn(List.of(ticket));
         when(replayFixture.ticketSourceMapper.selectByIdForUpdate(101)).thenReturn(deliveryTicket(101, "MAT-A", 5));
+        when(replayFixture.allocationMapper.selectByTicketIdForUpdate(101))
+                .thenReturn(List.of(productionAllocation(901, 101, 5)));
         OrderDeliveryTicketAllocation existing = new OrderDeliveryTicketAllocation();
         existing.setWmsReservationTicketId(801L);
         existing.setAllocationType("IN_STOCK_LOCK");
@@ -162,10 +208,10 @@ class WmsReservationApplyTest {
 
         replayFixture.service.applyResponse(501L);
 
-        ArgumentCaptor<OrderDeliveryTicketAllocation> replayRows = ArgumentCaptor.forClass(OrderDeliveryTicketAllocation.class);
-        verify(replayFixture.allocationMapper).insert(replayRows.capture());
-        assertThat(replayRows.getValue().getAllocationType()).isEqualTo("PRODUCTION_REQUIRED");
-        assertThat(replayRows.getValue().getQty()).isEqualTo(3);
+        ArgumentCaptor<OrderDeliveryTicketAllocation> replayUpdate = ArgumentCaptor.forClass(OrderDeliveryTicketAllocation.class);
+        verify(replayFixture.allocationMapper).updateById(replayUpdate.capture());
+        assertThat(replayUpdate.getValue().getAllocationType()).isEqualTo("PRODUCTION_REQUIRED");
+        assertThat(replayUpdate.getValue().getQty()).isEqualTo(3);
     }
 
     private Fixture fixture() {
@@ -252,6 +298,19 @@ class WmsReservationApplyTest {
         ticket.setMaterialGrossWeight(12.3);
         ticket.setPartNetWeight(10.2);
         return ticket;
+    }
+
+    private OrderDeliveryTicketAllocation productionAllocation(Integer id, Integer ticketId, Integer qty) {
+        OrderDeliveryTicketAllocation allocation = new OrderDeliveryTicketAllocation();
+        allocation.setId(id);
+        allocation.setTicketId(ticketId);
+        allocation.setAllocationType("PRODUCTION_REQUIRED");
+        allocation.setAllocationSource("MES_MATERIAL");
+        allocation.setQty(qty);
+        allocation.setTicketQty(qty);
+        allocation.setStatus("ACTIVE");
+        allocation.setMesProductionStatus("PENDING");
+        return allocation;
     }
 
     private WmsSaleLadingReserveReq request(String externalBizId, String saleNo, WmsSaleLadingReserveReq.Item... items) {

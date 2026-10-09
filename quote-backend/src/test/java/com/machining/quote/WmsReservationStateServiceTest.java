@@ -7,6 +7,7 @@ import com.machining.quote.entity.WmsReservationBatch;
 import com.machining.quote.entity.WmsReservationItem;
 import com.machining.quote.entity.WmsReservationTicket;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
+import com.machining.quote.mapper.OrderDeliveryTicketAllocationMapper;
 import com.machining.quote.mapper.WmsReservationBatchMapper;
 import com.machining.quote.mapper.WmsReservationItemMapper;
 import com.machining.quote.mapper.WmsReservationTicketMapper;
@@ -391,6 +392,7 @@ class WmsReservationStateServiceTest {
         private final WmsReservationItemMapper itemMapper = mock(WmsReservationItemMapper.class);
         private final WmsReservationTicketMapper ticketMapper = mock(WmsReservationTicketMapper.class);
         private final OrderDeliveryTicketMapper ticketSourceMapper = mock(OrderDeliveryTicketMapper.class);
+        private final OrderDeliveryTicketAllocationMapper allocationMapper = mock(OrderDeliveryTicketAllocationMapper.class);
         private final WmsReservationClient client = mock(WmsReservationClient.class);
         private final WmsReservationStateService service = new WmsReservationStateService();
 
@@ -399,6 +401,7 @@ class WmsReservationStateServiceTest {
             ReflectionTestUtils.setField(service, "itemMapper", itemMapper);
             ReflectionTestUtils.setField(service, "ticketMapper", ticketMapper);
             ReflectionTestUtils.setField(service, "ticketSourceMapper", ticketSourceMapper);
+            ReflectionTestUtils.setField(service, "allocationMapper", allocationMapper);
             ReflectionTestUtils.setField(service, "client", client);
             ReflectionTestUtils.setField(service, "validator", new WmsReservationContractValidator());
             ReflectionTestUtils.setField(service, "fingerprintService", new WmsReservationFingerprintService());
@@ -419,6 +422,17 @@ class WmsReservationStateServiceTest {
                 ticket.setId(++ticketId[0]);
                 return 1;
             }).when(ticketMapper).insert(any(WmsReservationTicket.class));
+            doAnswer(invocation -> {
+                Integer id = invocation.getArgument(0);
+                OrderDeliveryTicket ticket = new OrderDeliveryTicket();
+                ticket.setId(id);
+                ticket.setQty(10);
+                ticket.setMaterialNo("MAT");
+                ticket.setMesSyncStatus("SUCCESS");
+                ticket.setWmsAllocateStatus("PENDING");
+                return ticket;
+            }).when(ticketSourceMapper).selectByIdForUpdate(any(Integer.class));
+            when(ticketSourceMapper.updateById(any(OrderDeliveryTicket.class))).thenReturn(1);
         }
     }
 }

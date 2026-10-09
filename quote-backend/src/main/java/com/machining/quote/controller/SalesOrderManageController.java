@@ -17,10 +17,12 @@ import com.machining.quote.dto.SalesOrderU9ItemDataReplacementPreviewDTO;
 import com.machining.quote.dto.SalesOrderU9ResyncResetResp;
 import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.SalesOrderItem;
+import com.machining.quote.entity.SystemTask;
 import com.machining.quote.service.SalesOrderItemDataReplacementService;
 import com.machining.quote.service.SalesOrderItemDetailExportService;
 import com.machining.quote.service.SalesOrderLinkedDiscardService;
 import com.machining.quote.service.SalesOrderManageService;
+import com.machining.quote.service.SystemTaskService;
 import com.machining.quote.service.SalesOrderMaintenanceService;
 import com.machining.quote.service.SalesOrderProductionTaskNoticeExportService;
 import com.machining.quote.service.SalesOrderU9SyncStateService;
@@ -60,6 +62,8 @@ public class SalesOrderManageController {
     private SalesOrderU9SyncStateService salesOrderU9SyncStateService;
     @Autowired
     private SalesOrderLinkedDiscardService salesOrderLinkedDiscardService;
+    @Autowired
+    private SystemTaskService systemTaskService;
 
     @GetMapping("/customers")
     @RequirePermission("market:sales-order:customer-select")
@@ -113,6 +117,12 @@ public class SalesOrderManageController {
             @RequestParam(value = "page", required = false) Integer page,
             @RequestParam(value = "pageSize", required = false) Integer pageSize) {
         return salesOrderManageService.pageOrderTickets(salesOrderId, page, pageSize);
+    }
+
+    @PostMapping("/orders/{salesOrderId}/wms-allocation/batch")
+    @RequirePermission("market:sales-order:wms-allocate")
+    public SystemTask submitWmsAllocationBatch(@PathVariable Long salesOrderId) {
+        return systemTaskService.submitSalesOrderWmsAllocationTask(salesOrderId);
     }
 
     @GetMapping("/orders/{salesOrderId}/process-sheets")

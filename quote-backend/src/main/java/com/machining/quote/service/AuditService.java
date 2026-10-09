@@ -209,6 +209,7 @@ public class AuditService {
         if ("SALES_ORDER_IMPORT_QPO".equalsIgnoreCase(action)) return "MARKET";
         if ("SALES_ORDER_DIRTY_SNAPSHOT_REPAIR".equalsIgnoreCase(action)) return "MARKET";
         if ("SALES_ORDER_UPDATE".equalsIgnoreCase(action)) return "MARKET";
+        if ("SALES_ORDER_WMS_ALLOCATION_SUBMIT".equalsIgnoreCase(action)) return "MARKET";
         if ("SALES_ORDER_ITEM_UPDATE".equalsIgnoreCase(action)) return "MARKET";
         if ("SALES_ORDER_ITEM_DATA_REPLACEMENT".equalsIgnoreCase(action)) return "MARKET";
         if ("SALES_ORDER_U9_SYNC".equalsIgnoreCase(action)) return "MARKET";
@@ -437,6 +438,7 @@ public class AuditService {
             case "DELIVERY_MES_MATERIAL_DEDUP_FANOUT" -> "分发同图号版本MES物料号";
             case "MES_INTEGRATION_BATCH_RECONCILE" -> "MES批次结果核对";
             case "DELIVERY_WMS_ALLOCATION_SUBMIT" -> "提交WMS锁库";
+            case "SALES_ORDER_WMS_ALLOCATION_SUBMIT" -> "销售订单获取WMS库存";
             case "DELIVERY_WMS_ALLOCATION_SUCCESS" -> "WMS锁库成功";
             case "DELIVERY_WMS_ALLOCATION_FAILED" -> "WMS锁库失败";
             case "DELIVERY_WMS_ALLOCATION_RESULT_UNKNOWN" -> "WMS锁库结果待核对";

@@ -17,11 +17,11 @@ describe('DeliveredItemManage foundation page', () => {
     }
   })
 
-  test('explains delivered items as the unfinished MES WMS work pool without local history moves', () => {
-    expect(source).toContain('仅展示尚未完成物料号获取和锁库流程的提单零件')
-    expect(source).toContain('完成锁库后的结果请在锁库零件模块查看')
-    expect(source).toContain('暂无未完成流程的已提零件')
-    expect(source).toContain('empty-text="暂无未完成流程的已提零件')
+  test('explains delivered items as the material-number work pool without local history moves', () => {
+    expect(source).toContain('仅展示尚未完成物料号获取的提单零件')
+    expect(source).toContain('库存信息改为在销售订单详情按订单获取')
+    expect(source).toContain('暂无未获取物料号的已提零件')
+    expect(source).toContain('empty-text="暂无未获取物料号的已提零件')
     expect(source).not.toContain('delivered-active-pool-tip')
     expect(source).not.toContain("flowScope: 'ALL'")
     expect(source).not.toContain('flowScope: "ALL"')
@@ -77,18 +77,16 @@ describe('DeliveredItemManage foundation page', () => {
     expect(source).toContain('prop="id" label="提单ID" width="96" fixed align="center" show-overflow-tooltip')
   })
 
-  test('supports selecting delivered items for batch MES and WMS tasks', () => {
+  test('supports selecting delivered items for the batch MES material-number task', () => {
     expect(source).toContain('@selection-change="handleSelectionChange"')
     expect(source).toContain('type="selection"')
     expect(source).toContain('type="selection" width="46" fixed align="center"')
     expect(source).toContain('selectedRows')
     expect(source).toContain('selectedTicketIds')
     expect(source).toContain('batchMesSync')
-    expect(source).toContain('batchWmsAllocation')
     expect(source).toContain('handleBatchMesSync')
-    expect(source).toContain('handleBatchWmsAllocation')
     expect(source).toContain('syncMesMaterialBatch')
-    expect(source).toContain('submitWmsAllocationBatch')
+    expect(source).not.toContain('submitWmsAllocationBatch')
   })
 
   test('supports module-local discarded view and reasoned restore workflow', () => {
@@ -128,13 +126,13 @@ describe('DeliveredItemManage foundation page', () => {
     expect(source).toContain('selectedRows.value = []')
   })
 
-  test('keeps WMS allocation as a batch toolbar action and locked-result entry as row navigation', () => {
-    expect(source).toContain('DELIVERED_ITEM_WMS_ALLOCATE_PERMISSION')
-    expect(source).toContain('market:delivered-item:wms-allocate')
-    expect(source).toContain('submitWmsAllocationBatch')
-    expect(source).toContain('handleBatchWmsAllocation')
-    expect(source).not.toContain('wmsAllocationAction(row)')
-    expect(source).not.toContain('@click="handleWmsAllocation(row)"')
+  test('moves WMS allocation out of the delivered item page and keeps locked-result navigation', () => {
+    expect(source).not.toContain('DELIVERED_ITEM_WMS_ALLOCATE_PERMISSION')
+    expect(source).not.toContain('market:delivered-item:wms-allocate')
+    expect(source).not.toContain('submitWmsAllocationBatch')
+    expect(source).not.toContain('handleBatchWmsAllocation')
+    expect(source).not.toContain('批量获取库存数据')
+    expect(source).not.toContain('wmsBatchResult')
     expect(source).toContain('查看锁库')
   })
 
@@ -238,7 +236,6 @@ describe('DeliveredItemManage foundation page', () => {
       'filters.customerOrderNo',
       'filters.customerProjectNo',
       'filters.mesSyncStatus',
-      'filters.wmsAllocateStatus',
       'filters.dateRange'
     ]) {
       expect(advancedSource).toContain(advancedToken)
@@ -264,11 +261,9 @@ describe('DeliveredItemManage foundation page', () => {
     expect(primarySource).not.toContain('handleBatchWmsAllocation')
 
     expect(actionSource).toContain('DELIVERED_ITEM_MES_SYNC_PERMISSION')
-    expect(actionSource).toContain('DELIVERED_ITEM_WMS_ALLOCATE_PERMISSION')
     expect(actionSource).toContain('handleBatchMesSync')
-    expect(actionSource).toContain('handleBatchWmsAllocation')
     expect(actionSource).toContain('批量获取物料号')
-    expect(actionSource).toContain('批量获取库存数据')
+    expect(actionSource).not.toContain('批量获取库存数据')
   })
 
   test('styles delivered item filters as a layered workbench toolbar', () => {
@@ -294,16 +289,19 @@ describe('DeliveredItemManage foundation page', () => {
     expect(responsiveStyle).toContain('width: 100%')
   })
 
-  test('sends flow stage filters to backend for precise MES and WMS business stages', () => {
-    for (const label of ['全部未完成', '待获取物料号', '物料号处理中', '待MES回调', '物料号失败', '待获取库存', '库存处理中', '库存失败']) {
+  test('sends flow stage filters to backend for precise MES material-number stages', () => {
+    for (const label of ['全部未完成', '待获取物料号', '物料号处理中', '待MES回调', '物料号失败']) {
       expect(source).toContain(`label: '${label}'`)
+    }
+    for (const label of ['待获取库存', '库存处理中', '库存失败']) {
+      expect(source).not.toContain(`label: '${label}'`)
     }
 
     expect(source).toContain(".filter(([key, value]) => key !== 'dateRange'")
     expect(source).toContain('params.flowStage = filters.flowStage')
     expect(source).not.toContain('flowStageStatusMap')
     expect(source).not.toContain('Object.assign(params, flowStageParams)')
-    expect(source).toContain('if (filters.mesSyncStatus || filters.wmsAllocateStatus)')
+    expect(source).toContain('if (filters.mesSyncStatus)')
     expect(source).toContain("filters.flowStage = ''")
   })
 
@@ -321,7 +319,6 @@ describe('DeliveredItemManage foundation page', () => {
       "customerOrderNo: ''",
       "customerProjectNo: ''",
       "mesSyncStatus: ''",
-      "wmsAllocateStatus: ''",
       'dateRange: []'
     ]) {
       expect(resetSource).toContain(resetToken)

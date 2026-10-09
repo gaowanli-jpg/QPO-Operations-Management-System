@@ -3,6 +3,8 @@ package com.machining.quote.service.mes;
 import com.machining.quote.entity.MesIntegrationBatch;
 import com.machining.quote.entity.MesMaterialBatchItem;
 import com.machining.quote.entity.MesProductionBatchItem;
+import com.machining.quote.entity.OrderDeliveryTicket;
+import com.machining.quote.entity.OrderDeliveryTicketAllocation;
 import com.machining.quote.mapper.MesIntegrationBatchMapper;
 import com.machining.quote.mapper.MesIntegrationReconcileRunMapper;
 import com.machining.quote.mapper.MesMaterialBatchItemMapper;
@@ -10,6 +12,7 @@ import com.machining.quote.mapper.MesProductionBatchItemMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketAllocationMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMesRequestMapper;
+import com.machining.quote.mapper.WmsReservationTicketMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -41,6 +44,7 @@ public class MesBatchStateService {
     private final OrderDeliveryTicketAllocationMapper allocationMapper;
     private final OrderDeliveryTicketMesRequestMapper mesRequestMapper;
     private final MesBatchFingerprintService fingerprintService;
+    private final WmsReservationTicketMapper wmsReservationTicketMapper;
 
     public MesBatchStateService(MesIntegrationBatchMapper batchMapper,
                                 MesMaterialBatchItemMapper materialBatchItemMapper,
@@ -50,6 +54,20 @@ public class MesBatchStateService {
                                 OrderDeliveryTicketAllocationMapper allocationMapper,
                                 OrderDeliveryTicketMesRequestMapper mesRequestMapper,
                                 MesBatchFingerprintService fingerprintService) {
+        this(batchMapper, materialBatchItemMapper, productionBatchItemMapper, reconcileRunMapper,
+                ticketMapper, allocationMapper, mesRequestMapper, fingerprintService, null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public MesBatchStateService(MesIntegrationBatchMapper batchMapper,
+                                MesMaterialBatchItemMapper materialBatchItemMapper,
+                                MesProductionBatchItemMapper productionBatchItemMapper,
+                                MesIntegrationReconcileRunMapper reconcileRunMapper,
+                                OrderDeliveryTicketMapper ticketMapper,
+                                OrderDeliveryTicketAllocationMapper allocationMapper,
+                                OrderDeliveryTicketMesRequestMapper mesRequestMapper,
+                                MesBatchFingerprintService fingerprintService,
+                                WmsReservationTicketMapper wmsReservationTicketMapper) {
         this.batchMapper = batchMapper;
         this.materialBatchItemMapper = materialBatchItemMapper;
         this.productionBatchItemMapper = productionBatchItemMapper;
@@ -58,6 +76,7 @@ public class MesBatchStateService {
         this.allocationMapper = allocationMapper;
         this.mesRequestMapper = mesRequestMapper;
         this.fingerprintService = fingerprintService;
+        this.wmsReservationTicketMapper = wmsReservationTicketMapper;
     }
 
     @Transactional
@@ -108,6 +127,7 @@ public class MesBatchStateService {
     @Transactional
     public ProductionBatchReservationResult reserveProductionBatch(String bizId, ProductionBatchReservation reservation) {
         requireItems(reservation.items(), "production batch items");
+        lockProductionTickets(reservation.items());
         MesIntegrationBatch batch = newBatch(
                 BATCH_TYPE_PRODUCTION,
                 trimToEmpty(bizId),
@@ -131,11 +151,70 @@ public class MesBatchStateService {
             item.setItemKey(trimToEmpty(source.itemKey()));
             item.setDemandQty(source.demandQty());
             item.setStatus(STATUS_RESERVED);
+            reserveProductionAllocation(source, item.getLineRequestId());
             productionBatchItemMapper.insert(item);
-            allocationMapper.markMesProductionLineReserved(source.allocationId(), item.getLineRequestId());
             items.add(item);
         }
         return new ProductionBatchReservationResult(batch, List.copyOf(items));
+    }
+
+    private void lockProductionTickets(List<ProductionItemReservation> reservations) {
+        List<Integer> ticketIds = reservations.stream()
+                .map(ProductionItemReservation::allocationId)
+                .map(allocationMapper::selectById)
+                .filter(java.util.Objects::nonNull)
+                .map(OrderDeliveryTicketAllocation::getTicketId)
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .sorted()
+                .toList();
+        for (Integer ticketId : ticketIds) {
+            OrderDeliveryTicket ticket = ticketMapper.selectByIdForUpdate(ticketId);
+            if (ticket == null || Boolean.TRUE.equals(ticket.getDiscarded())) {
+                throw new IllegalStateException("Delivery ticket is unavailable before MES reservation ticketId=" + ticketId);
+            }
+            if (!"SUCCESS".equalsIgnoreCase(ticket.getMesSyncStatus())
+                    || ticket.getMaterialNo() == null || ticket.getMaterialNo().isBlank()) {
+                throw new IllegalStateException("MES material number is not confirmed ticketId=" + ticketId);
+            }
+            if (wmsReservationTicketMapper != null
+                    && wmsReservationTicketMapper.selectActiveByTicketId(ticketId) != null) {
+                throw new IllegalStateException("WMS inventory operation is still active for ticketId=" + ticketId);
+            }
+        }
+    }
+
+    private void reserveProductionAllocation(ProductionItemReservation source, String lineRequestId) {
+        OrderDeliveryTicketAllocation observed = allocationMapper.selectById(source.allocationId());
+        if (observed == null || observed.getTicketId() == null) {
+            throw new IllegalStateException("Production allocation does not exist allocationId=" + source.allocationId());
+        }
+        OrderDeliveryTicket ticket = ticketMapper.selectByIdForUpdate(observed.getTicketId());
+        if (ticket == null || Boolean.TRUE.equals(ticket.getDiscarded())) {
+            throw new IllegalStateException("Delivery ticket is unavailable before MES reservation ticketId=" + observed.getTicketId());
+        }
+        if (wmsReservationTicketMapper != null
+                && wmsReservationTicketMapper.selectActiveByTicketId(observed.getTicketId()) != null) {
+            throw new IllegalStateException("WMS inventory operation is still active for ticketId=" + observed.getTicketId());
+        }
+        OrderDeliveryTicketAllocation allocation = allocationMapper.selectByIdForUpdate(source.allocationId());
+        if (allocation == null
+                || !"PRODUCTION_REQUIRED".equals(allocation.getAllocationType())
+                || !"ACTIVE".equalsIgnoreCase(allocation.getStatus())
+                || allocation.getQty() == null
+                || BigDecimal.valueOf(allocation.getQty()).compareTo(source.demandQty()) != 0) {
+            throw new IllegalStateException("Production allocation changed before MES reservation allocationId=" + source.allocationId());
+        }
+        String status = allocation.getMesProductionStatus();
+        if (status != null && !status.isBlank()
+                && !"PENDING".equalsIgnoreCase(status)
+                && !"FAILED".equalsIgnoreCase(status)) {
+            throw new IllegalStateException("MES production allocation is not available allocationId=" + source.allocationId()
+                    + " status=" + status);
+        }
+        if (allocationMapper.markMesProductionLineReserved(source.allocationId(), lineRequestId) <= 0) {
+            throw new IllegalStateException("Production allocation was concurrently reserved allocationId=" + source.allocationId());
+        }
     }
 
     private MesIntegrationBatch newBatch(String batchType,

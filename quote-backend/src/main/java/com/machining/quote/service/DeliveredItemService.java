@@ -32,9 +32,6 @@ public class DeliveredItemService {
     private static final String FLOW_STAGE_MES_PROCESSING = "MES_PROCESSING";
     private static final String FLOW_STAGE_MES_CALLBACK_PENDING = "MES_CALLBACK_PENDING";
     private static final String FLOW_STAGE_MES_FAILED = "MES_FAILED";
-    private static final String FLOW_STAGE_NEED_WMS = "NEED_WMS";
-    private static final String FLOW_STAGE_WMS_PROCESSING = "WMS_PROCESSING";
-    private static final String FLOW_STAGE_WMS_FAILED = "WMS_FAILED";
     private static final String STATUS_CALLBACK_PENDING = "CALLBACK_PENDING";
 
     @Autowired
@@ -342,13 +339,6 @@ public class DeliveredItemService {
             case FLOW_STAGE_MES_PROCESSING -> query.eq("ticket.mes_sync_status", "PROCESSING");
             case FLOW_STAGE_MES_CALLBACK_PENDING -> query.eq("ticket.mes_sync_status", "CALLBACK_PENDING");
             case FLOW_STAGE_MES_FAILED -> query.eq("ticket.mes_sync_status", "FAILED");
-            case FLOW_STAGE_NEED_WMS -> {
-                query.apply("NULLIF(BTRIM(ticket.material_no), '') IS NOT NULL");
-                query.eq("ticket.mes_sync_status", "SUCCESS");
-                query.apply("COALESCE(ticket.wms_allocate_status, 'PENDING') <> 'SUCCESS'");
-            }
-            case FLOW_STAGE_WMS_PROCESSING -> query.eq("ticket.wms_allocate_status", "PROCESSING");
-            case FLOW_STAGE_WMS_FAILED -> query.eq("ticket.wms_allocate_status", "FAILED");
             default -> {
             }
         }
@@ -362,18 +352,12 @@ public class DeliveredItemService {
         if (FLOW_SCOPE_COMPLETED.equals(scope)) {
             query.apply("NULLIF(BTRIM(ticket.material_no), '') IS NOT NULL");
             query.eq("ticket.mes_sync_status", "SUCCESS");
-            query.eq("ticket.wms_allocate_status", "SUCCESS");
-            query.apply("EXISTS (SELECT 1 FROM order_delivery_ticket_allocation alloc_done WHERE alloc_done.ticket_id = ticket.id)");
             return;
         }
         query.and(active -> active
                 .apply("NULLIF(BTRIM(ticket.material_no), '') IS NULL")
                 .or()
-                .apply("COALESCE(ticket.mes_sync_status, 'PENDING') <> 'SUCCESS'")
-                .or()
-                .apply("COALESCE(ticket.wms_allocate_status, 'PENDING') <> 'SUCCESS'")
-                .or()
-                .apply("NOT EXISTS (SELECT 1 FROM order_delivery_ticket_allocation alloc_done WHERE alloc_done.ticket_id = ticket.id)"));
+                .apply("COALESCE(ticket.mes_sync_status, 'PENDING') <> 'SUCCESS'"));
     }
 
     private String normalizeFlowScope(String flowScope) {
@@ -395,10 +379,7 @@ public class DeliveredItemService {
         if (FLOW_STAGE_NEED_MATERIAL.equals(normalized)
                 || FLOW_STAGE_MES_PROCESSING.equals(normalized)
                 || FLOW_STAGE_MES_CALLBACK_PENDING.equals(normalized)
-                || FLOW_STAGE_MES_FAILED.equals(normalized)
-                || FLOW_STAGE_NEED_WMS.equals(normalized)
-                || FLOW_STAGE_WMS_PROCESSING.equals(normalized)
-                || FLOW_STAGE_WMS_FAILED.equals(normalized)) {
+                || FLOW_STAGE_MES_FAILED.equals(normalized)) {
             return normalized;
         }
         return "";

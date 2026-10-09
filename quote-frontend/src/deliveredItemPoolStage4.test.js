@@ -11,10 +11,10 @@ const wmsDoc = readFileSync(resolve(currentDir, '..', '..', 'docs', 'QPO-MES-WMS
 const permissionDoc = readFileSync(resolve(currentDir, '..', '..', 'docs', 'QPO权限用户体系', '02-权限点清单与现有角色映射.md'), 'utf8')
 
 describe('Delivered item active pool stage 4 closure', () => {
-  test('keeps delivered item page as the unfinished MES WMS work pool', () => {
-    expect(deliveredPageSource).toContain('仅展示尚未完成物料号获取和锁库流程的提单零件')
-    expect(deliveredPageSource).toContain('完成锁库后的结果请在锁库零件模块查看')
-    expect(deliveredPageSource).toContain('暂无未完成流程的已提零件')
+  test('keeps delivered item page as the unfinished material-number work pool', () => {
+    expect(deliveredPageSource).toContain('仅展示尚未完成物料号获取的提单零件')
+    expect(deliveredPageSource).toContain('库存信息改为在销售订单详情按订单获取')
+    expect(deliveredPageSource).toContain('暂无未获取物料号的已提零件')
     expect(deliveredPageSource).not.toContain('delivered-active-pool-tip')
     expect(deliveredPageSource).not.toContain("flowScope: 'ALL'")
     expect(deliveredPageSource).not.toContain('items.value = (response.records || []).filter')

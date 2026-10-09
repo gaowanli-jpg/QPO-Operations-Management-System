@@ -60,6 +60,7 @@ class AuditActionCatalogCharacterizationTest {
         assertThat(AuditService.inferModule("DICT_PRICING_MARKUP_FEE_UPDATE")).isEqualTo("DICT");
         assertThat(AuditService.inferModule("DICT_PRICING_MARKUP_FEE_DELETE")).isEqualTo("DICT");
         assertThat(AuditService.inferModule("SALES_ORDER_UPDATE")).isEqualTo("MARKET");
+        assertThat(AuditService.inferModule("SALES_ORDER_WMS_ALLOCATION_SUBMIT")).isEqualTo("MARKET");
         assertThat(AuditService.inferModule("SALES_ORDER_ITEM_UPDATE")).isEqualTo("MARKET");
         assertThat(AuditService.inferModule("SALES_ORDER_ITEM_DATA_REPLACEMENT")).isEqualTo("MARKET");
         assertThat(AuditService.inferModule("SALES_ORDER_ITEM_LINKED_DISCARD")).isEqualTo("MARKET");
@@ -103,6 +104,7 @@ class AuditActionCatalogCharacterizationTest {
         assertThat(AuditService.labelForAction("DICT_PRICING_MARKUP_FEE_UPDATE")).isNotEqualTo("DICT_PRICING_MARKUP_FEE_UPDATE");
         assertThat(AuditService.labelForAction("DICT_PRICING_MARKUP_FEE_DELETE")).isNotEqualTo("DICT_PRICING_MARKUP_FEE_DELETE");
         assertThat(AuditService.labelForAction("SALES_ORDER_UPDATE")).isNotEqualTo("SALES_ORDER_UPDATE");
+        assertThat(AuditService.labelForAction("SALES_ORDER_WMS_ALLOCATION_SUBMIT")).isEqualTo("销售订单获取WMS库存");
         assertThat(AuditService.labelForAction("SALES_ORDER_ITEM_UPDATE")).isNotEqualTo("SALES_ORDER_ITEM_UPDATE");
         assertThat(AuditService.labelForAction("SALES_ORDER_ITEM_DATA_REPLACEMENT")).isNotEqualTo("SALES_ORDER_ITEM_DATA_REPLACEMENT");
         assertThat(AuditService.labelForAction("SALES_ORDER_ITEM_LINKED_DISCARD")).isNotEqualTo("SALES_ORDER_ITEM_LINKED_DISCARD");

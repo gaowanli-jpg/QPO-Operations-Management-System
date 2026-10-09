@@ -1119,7 +1119,7 @@ ERP_DATA_CENTER_MES_PRODUCTION_DISPATCH_PATH=/api/v1/mes/openapi/demand/create
 - MES 回调使用机器到机器鉴权，不挂用户权限；MES 到数据中心和数据中心到 QPO 使用各自独立凭据。
 
 后端 `@RequirePermission` 是最终边界，前端隐藏按钮不能代替后端校验。
-QPO 回调属于数据中心到 QPO 的机器入站接口，不使用用户 JWT 或用户数据权限；安全边界是 HTTPS、QPO 独立 Bearer Token、批次/明细关联校验、当前请求校验和回调幂等。管理 QPO 下游回调 URL 和 token 继续复用 `system:config:inbound:update`、`system:config:inbound:token-rotate`，不新增用户权限。MES 到数据中心的鉴权由数据中心独立管理，不能复用或向 MES 暴露 QPO Token。
+QPO 回调属于数据中心到 QPO 的机器入站接口，不使用用户 JWT 或用户数据权限；安全边界是 HTTPS、QPO 独立 Bearer Token、批次/明细关联校验、未完成零件的当前请求校验和回调幂等。已成功取得物料号的零件收到有效历史回调时幂等成功应答且不更新数据。管理 QPO 下游回调 URL 和 token 继续复用 `system:config:inbound:update`、`system:config:inbound:token-rotate`，不新增用户权限。MES 到数据中心的鉴权由数据中心独立管理，不能复用或向 MES 暴露 QPO Token。
 
 ### 11.2 数据范围
 
@@ -1361,8 +1361,8 @@ Cookie=<真实值>
 - `PENDING_CREATE` 最终可进入 `SUCCESS`。
 - 回调按 `bizId + 图号 + 版本` 准确定位，并校验或补写 taskNo。
 - 同一 bizId 可分多次增量回调，单次非法时整次不写入。
-- 旧回调不能覆盖新请求。
-- 重复相同结果幂等成功，不同物料号冲突拒绝。
+- 未完成零件的旧回调不能覆盖新请求；已成功取得物料号的零件收到有效历史回调时成功应答且不更新数据。
+- 重复结果幂等成功；已完成零件不因迟到回调中的物料号差异而报错或覆盖当前值。
 - MES 能依据数据中心透传的 QPO 2xx/4xx/429/5xx 语义停止重试、告警或安全重试原请求。
 
 ### 阶段 5：生产需求真实批量编排
