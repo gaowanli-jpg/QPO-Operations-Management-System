@@ -7,7 +7,7 @@ public class SalesOrderSyncItemRow {
     private Long salesOrderId;
     private Integer lineNo;
     private String materialNo;
-    private Integer releasedQty;
+    private Integer qty;
     private String materialName;
     private String description;
     private String surfaceTreatment;

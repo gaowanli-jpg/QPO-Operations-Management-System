@@ -112,7 +112,7 @@ class SalesOrderIntegrationRegressionTest {
         assertThat(firstOrder.getOrderType()).isEqualTo("正式订单");
         assertThat(firstItem.getSaleOrderItemNo()).isEqualTo("1");
         assertThat(firstItem.getMaterialNo()).isEqualTo("MAT-001");
-        assertThat(firstItem.getReleasedQty()).isEqualTo(2);
+        assertThat(firstItem.getReleasedQty()).isEqualTo(12);
         assertThat(firstItem.getMaterialName()).isEqualTo("AL6061");
         assertThat(firstItem.getDescription()).isEqualTo("MES production demand item");
         assertThat(firstItem.getSurfaceTreatment()).isEqualTo("Anodized");
@@ -278,7 +278,7 @@ class SalesOrderIntegrationRegressionTest {
         row.setSalesOrderId(orderId);
         row.setLineNo(lineNo);
         row.setMaterialNo(materialNo);
-        row.setReleasedQty(2);
+        row.setQty(12);
         row.setMaterialName("AL6061");
         row.setDescription("MES production demand item");
         row.setSurfaceTreatment("Anodized");

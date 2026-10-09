@@ -132,7 +132,7 @@ class SalesOrderIntegrationContractTest {
         SalesOrderSyncItemDTO firstItem = order.getItems().get(0);
         assertThat(firstItem.getSaleOrderItemNo()).isEqualTo("1");
         assertThat(firstItem.getMaterialNo()).isEqualTo("MAT-001");
-        assertThat(firstItem.getReleasedQty()).isEqualTo(1);
+        assertThat(firstItem.getReleasedQty()).isEqualTo(7);
         assertThat(firstItem.getMaterialName()).isEqualTo("AL6061");
         assertThat(firstItem.getDescription()).isEqualTo("Part description");
         assertThat(firstItem.getSurfaceTreatment()).isEqualTo("Anodized");
@@ -141,7 +141,7 @@ class SalesOrderIntegrationContractTest {
         assertThat(firstItem.getCustomerProjectNo()).isEqualTo("CP-001");
         assertThat(objectMapper.writeValueAsString(firstItem))
                 .contains("\"surfaceTreatment\":\"Anodized\"")
-                .contains("\"releasedQty\":1")
+                .contains("\"releasedQty\":7")
                 .contains("\"materialName\":\"AL6061\"")
                 .contains("\"remark\":\"MES demand remark\"")
                 .contains("\"internalProjectNo\":\"IP-LINE-001\"")
@@ -345,7 +345,7 @@ class SalesOrderIntegrationContractTest {
 
     private void setMesDemandItemFields(SalesOrderSyncItemRow row) {
         ReflectionTestUtils.setField(row, "surfaceTreatment", "Anodized");
-        ReflectionTestUtils.setField(row, "releasedQty", 1);
+        row.setQty(7);
         ReflectionTestUtils.setField(row, "materialName", "AL6061");
         ReflectionTestUtils.setField(row, "remark", "MES demand remark");
         ReflectionTestUtils.setField(row, "internalProjectNo", "IP-LINE-001");

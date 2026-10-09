@@ -119,7 +119,7 @@ Authorization: Bearer {QPO_OPEN_API_TOKEN}
 | --- | --- | --- | --- |
 | `saleOrderItemNo` | string | 是 | 订单内稳定且唯一的明细编号，来自 QPO 系统生成的销售订单行号；订单内从 1 连续递增。 |
 | `materialNo` | string | 否 | 销售物料号 / MES 物料编码，用于 MES 匹配物料；QPO 销售订单可能先于 MES 物料号生成，未获取物料号时返回空值 / `null`。 |
-| `releasedQty` | decimal | 是 | 已提数量，固定来自 QPO `sales_order_item.released_qty`。 |
+| `releasedQty` | integer | 是 | 兼容现有调用方的字段名，实际值来自 QPO 销售订单数量 `sales_order_item.qty`，与销售订单详情可编辑数量一致；不是已提数量。 |
 | `description` | string | 否 | 明细描述。 |
 | `surfaceTreatment` | string | 否 | 表面处理要求。 |
 | `remark` | string | 否 | 明细级备注。 |
@@ -240,4 +240,4 @@ HTTP/1.1 400 Bad Request
 - 图纸 URL、工艺路线、材料 JSON、费用 JSON。
 - 客户详细字段，但订单级 `customerCode` 和 `supplierCode` 作为 MES 对接业务字段返回。
 - QPO 内部 ID、治理字段、U9 内部追踪字段。
-- 明细图号、版本、原始销售数量 `qty`。
+- 明细图号、版本；销售订单数量通过兼容字段 `releasedQty` 返回，不使用 `qty` 作为 JSON 字段名。

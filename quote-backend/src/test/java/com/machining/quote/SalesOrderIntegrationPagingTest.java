@@ -138,6 +138,8 @@ class SalesOrderIntegrationPagingTest {
                 .contains("cm.supplier_code AS supplier_code")
                 .contains("LEFT JOIN customer_master cm ON cm.id = so.customer_id")
                 .contains("OR (so.customer_id IS NULL AND cm.customer_code = so.customer_code)")
+                .contains("GREATEST(COALESCE(soi.qty, 0), 0) AS qty")
+                .doesNotContain("soi.released_qty")
                 .contains("so.created_at >= #{req.createdFrom}")
                 .contains("so.created_at &lt;= #{req.createdTo}")
                 .contains("oc.changed_at >= #{req.updatedFrom}")

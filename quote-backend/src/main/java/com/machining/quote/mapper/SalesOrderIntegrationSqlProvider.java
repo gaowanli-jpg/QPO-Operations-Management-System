@@ -85,7 +85,7 @@ public class SalesOrderIntegrationSqlProvider {
                   soi.internal_project_no,
                   soi.customer_order_no,
                   soi.customer_project_no,
-                  GREATEST(COALESCE(soi.released_qty, 0), 0) AS released_qty
+                  GREATEST(COALESCE(soi.qty, 0), 0) AS qty
                 FROM sales_order_item soi
                 WHERE soi.sales_order_id IN
                   <foreach collection='orderIds' item='orderId' open='(' separator=',' close=')'>

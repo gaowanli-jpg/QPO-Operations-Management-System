@@ -113,7 +113,7 @@ public class SalesOrderIntegrationSyncService {
         SalesOrderSyncItemDTO record = new SalesOrderSyncItemDTO();
         record.setSaleOrderItemNo(String.valueOf(item.getLineNo()));
         record.setMaterialNo(item.getMaterialNo());
-        record.setReleasedQty(nonNegative(item.getReleasedQty()));
+        record.setReleasedQty(nonNegative(item.getQty()));
         record.setMaterialName(item.getMaterialName());
         record.setDescription(item.getDescription());
         record.setSurfaceTreatment(item.getSurfaceTreatment());
