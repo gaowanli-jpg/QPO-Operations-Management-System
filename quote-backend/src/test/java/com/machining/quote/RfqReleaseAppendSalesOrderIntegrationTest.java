@@ -222,6 +222,28 @@ class RfqReleaseAppendSalesOrderIntegrationTest {
     }
 
     @Test
+    void appendUsesSelectedRfqItemIdentifiersWhenTargetHeaderIdentifiersAreMissing() {
+        String suffix = String.valueOf(System.nanoTime());
+        SalesOrderHeader target = targetSalesOrder("APPEND-ITEM-IDENTIFIERS-" + suffix, "未同步", null, null);
+        OrderRfq rfq = rfq(target, "APPEND-ITEM-IDENTIFIERS-RFQ-" + suffix);
+        ItemQuoteVersion item = rfqItem(rfq, "APPEND-ITEM-IDENTIFIERS-PART-" + suffix, 1, 10, false);
+        item.setCustomerOrderNo("ROW-PO");
+        item.setInternalProjectNo("ROW-INTERNAL");
+        itemMapper.updateById(item);
+
+        DeliveryBatchResultDTO result = deliveryService.appendRfqReleaseToSalesOrder(
+                appendRequest(target, rfq, item, null, "append-item-identifiers-" + suffix));
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(salesItems(target.getId()))
+                .singleElement()
+                .satisfies(salesItem -> {
+                    assertThat(salesItem.getCustomerOrderNo()).isEqualTo("ROW-PO");
+                    assertThat(salesItem.getInternalProjectNo()).isEqualTo("ROW-INTERNAL");
+                });
+    }
+
+    @Test
     void rejectsAppendWhenEffectiveCustomerOrderOrInternalProjectNumberIsMissingBeforeWrites() {
         assertAppendRejectedForMissingIdentifiers("CUSTOMER_ORDER", "append-missing-po");
         assertAppendRejectedForMissingIdentifiers("INTERNAL_PROJECT", "append-missing-internal");

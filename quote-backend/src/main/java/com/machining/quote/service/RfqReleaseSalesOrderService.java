@@ -165,7 +165,7 @@ public class RfqReleaseSalesOrderService {
         SalesOrderHeader target = lockAndValidateAppendTarget(req.getTargetSalesOrderId());
         headerMapper.lockReleaseBatch("rfq-release-append-target:" + target.getId());
         DeliveryGenerateReq delegatedReq = toDelegatedAppendRequest(req, target, appendBatchKey);
-        RfqReleaseBatchValidationService.BatchContext context = validationService.validate(delegatedReq);
+        RfqReleaseBatchValidationService.BatchContext context = validationService.validateForAppend(delegatedReq);
         if (!Objects.equals(trimToNull(target.getCustomerCode()), context.customerCode())) {
             throw new RuntimeException("只能追加到同一客户的销售订单");
         }

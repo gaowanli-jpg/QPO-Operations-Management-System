@@ -70,6 +70,22 @@ class RfqReleaseBatchValidationServiceTest {
     }
 
     @Test
+    void allowsAppendToResolveRequiredIdentifiersFromSelectedItemsButKeepsNormalReleaseStrict() {
+        OrderRfq first = order(101, "客户A", QuoteStatusWorkflow.QUOTED);
+        when(orderMapper.selectBatchIds(List.of(101))).thenReturn(List.of(first));
+        DeliveryGenerateReq req = request(List.of(101), List.of(line(101, 1001, 1)));
+        req.setCustomerOrderNo(null);
+        req.setInternalProjectNo(null);
+
+        RfqReleaseBatchValidationService.BatchContext appendContext = service.validateForAppend(req);
+
+        assertThat(appendContext.customerOrderNo()).isNull();
+        assertThat(appendContext.internalProjectNo()).isNull();
+        assertThatThrownBy(() -> service.validate(req))
+                .hasMessage("内部项目号不能为空");
+    }
+
+    @Test
     void rejectsCrossCustomerAndNonQuotedBatches() {
         OrderRfq first = order(101, "客户A", QuoteStatusWorkflow.QUOTED);
         OrderRfq second = order(102, "客户B", QuoteStatusWorkflow.QUOTED);

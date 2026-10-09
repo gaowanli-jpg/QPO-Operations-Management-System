@@ -35,11 +35,15 @@ public class RfqReleaseBatchValidationService {
     private DataScopeService dataScopeService;
 
     public BatchContext validate(DeliveryGenerateReq req) {
-        return validate(req, false);
+        return validate(req, false, false);
+    }
+
+    public BatchContext validateForAppend(DeliveryGenerateReq req) {
+        return validate(req, false, true);
     }
 
     public BatchContext validateReplay(DeliveryGenerateReq req) {
-        return validate(req, true);
+        return validate(req, true, false);
     }
 
     public String requireReleaseBatchKey(DeliveryGenerateReq req) {
@@ -49,7 +53,7 @@ public class RfqReleaseBatchValidationService {
         return normalizeRequired(req.getReleaseBatchKey(), "提单批次键", MAX_BATCH_KEY_LENGTH);
     }
 
-    private BatchContext validate(DeliveryGenerateReq req, boolean replay) {
+    private BatchContext validate(DeliveryGenerateReq req, boolean replay, boolean allowItemLevelIdentifiers) {
         if (req == null) {
             throw new RuntimeException("提单参数不能为空");
         }
@@ -68,8 +72,12 @@ public class RfqReleaseBatchValidationService {
             throw new RuntimeException("下单日期不能为空");
         }
         String orderType = normalizeRequired(req.getOrderType(), "订单类型", MAX_TEXT_LENGTH);
-        String internalProjectNo = normalizeRequired(req.getInternalProjectNo(), "内部项目号", MAX_TEXT_LENGTH);
-        String customerOrderNo = normalizeRequired(req.getCustomerOrderNo(), "客户订单号", MAX_TEXT_LENGTH);
+        String internalProjectNo = allowItemLevelIdentifiers
+                ? normalizeOptional(req.getInternalProjectNo(), "内部项目号", MAX_TEXT_LENGTH)
+                : normalizeRequired(req.getInternalProjectNo(), "内部项目号", MAX_TEXT_LENGTH);
+        String customerOrderNo = allowItemLevelIdentifiers
+                ? normalizeOptional(req.getCustomerOrderNo(), "客户订单号", MAX_TEXT_LENGTH)
+                : normalizeRequired(req.getCustomerOrderNo(), "客户订单号", MAX_TEXT_LENGTH);
         String customerProjectNo = normalizeOptional(req.getCustomerProjectNo(), "客户项目号", MAX_TEXT_LENGTH);
         String customerOrderTitle = normalizeOptional(req.getCustomerOrderTitle(), "客户下单抬头", MAX_TITLE_LENGTH);
         String projectNo = normalizeOptional(req.getProjectNo(), "项目号", MAX_TEXT_LENGTH);
