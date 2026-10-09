@@ -342,6 +342,23 @@ public class MesProductionDispatchService {
             reservationResult = mesBatchStateService.reserveProductionBatch(proposedBizId, reservation);
         } catch (RuntimeException error) {
             String message = safeMessage(error);
+            Integer blockedTicketId = wmsBlockedTicketId(error);
+            ProductionDispatchPlan blockedPlan = blockedTicketId == null
+                    ? null
+                    : plans.stream()
+                            .filter(plan -> Objects.equals(plan.allocation().getTicketId(), blockedTicketId))
+                            .findFirst()
+                            .orElse(null);
+            if (blockedPlan != null) {
+                rowsByAllocationId.put(blockedPlan.allocation().getId(), row(
+                        blockedPlan.allocation().getId(), STATUS_SKIPPED, message,
+                        resultSummary(blockedPlan.allocation(), null, null)));
+                List<ProductionDispatchPlan> remainingPlans = plans.stream()
+                        .filter(plan -> plan != blockedPlan)
+                        .toList();
+                dispatchPlanGroup(remainingPlans, taskId, rowsByAllocationId);
+                return;
+            }
             for (ProductionDispatchPlan plan : plans) {
                 rowsByAllocationId.put(plan.allocation().getId(), row(
                         plan.allocation().getId(), STATUS_SKIPPED, message,
@@ -395,6 +412,19 @@ public class MesProductionDispatchService {
             updateBatch(batch, rowStatus, null, message, !resultUnknown);
             log.error("MES production batch dispatch failed bizId={} taskId={} itemCount={} status={} durationMs={}",
                     batch.getBizId(), taskId, plans.size(), rowStatus, System.currentTimeMillis() - startedAt, error);
+        }
+    }
+
+    private Integer wmsBlockedTicketId(RuntimeException error) {
+        String prefix = "WMS inventory operation is still active for ticketId=";
+        String message = error == null ? null : error.getMessage();
+        if (message == null || !message.startsWith(prefix)) {
+            return null;
+        }
+        try {
+            return Integer.valueOf(message.substring(prefix.length()).trim());
+        } catch (NumberFormatException ignored) {
+            return null;
         }
     }
 

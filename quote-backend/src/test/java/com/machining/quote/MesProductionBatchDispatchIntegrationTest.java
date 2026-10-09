@@ -39,6 +39,41 @@ import static org.mockito.Mockito.when;
 class MesProductionBatchDispatchIntegrationTest {
     @Test
     @SuppressWarnings("unchecked")
+    void activeWmsTicketIsSkippedWithoutBlockingOtherLinesInTheSameMesGroup() {
+        Fixture fixture = fixture();
+        OrderDeliveryTicketAllocation wmsBusy = allocation(20, 120, "MAT-WMS-BUSY", 4, 9820L);
+        OrderDeliveryTicketAllocation available = allocation(21, 121, "MAT-AVAILABLE", 6, 9821L);
+        when(fixture.allocationMapper.selectById(20)).thenReturn(wmsBusy);
+        when(fixture.allocationMapper.selectById(21)).thenReturn(available);
+        when(fixture.salesItemMapper.selectByIdForUpdate(9820L)).thenReturn(salesItem(9820L, 10, 3001L, null));
+        when(fixture.salesItemMapper.selectByIdForUpdate(9821L)).thenReturn(salesItem(9821L, 20, 3001L, null));
+        when(fixture.headerMapper.selectById(3001L)).thenReturn(header(3001L, "SO-DOC-1"));
+        when(fixture.batchStateService.reserveProductionBatch(any(String.class), any(MesBatchStateService.ProductionBatchReservation.class)))
+                .thenThrow(new IllegalStateException("WMS inventory operation is still active for ticketId=120"))
+                .thenReturn(reservation("QPO-DEM-AVAILABLE", line(21, "QPO-DEML-AVAILABLE", "MAT-AVAILABLE")));
+        when(fixture.client.dispatch(any())).thenReturn(success("QPO-DEM-AVAILABLE",
+                item("SO-DOC-1", "20", "MAT-AVAILABLE", "PLAN-AVAILABLE")));
+
+        Map<String, Object> result = fixture.service.dispatchBatch(List.of(20, 21), 9920L);
+
+        assertThat(result)
+                .containsEntry("successCount", 1)
+                .containsEntry("skippedCount", 1)
+                .containsEntry("failedCount", 0);
+        List<Map<String, Object>> rows = (List<Map<String, Object>>) result.get("rows");
+        assertThat(rows).anySatisfy(row -> assertThat(row)
+                .containsEntry("allocationId", 20)
+                .containsEntry("status", "SKIPPED"));
+        ArgumentCaptor<MesProductionDispatchReq> requestCaptor = ArgumentCaptor.forClass(MesProductionDispatchReq.class);
+        verify(fixture.client).dispatch(requestCaptor.capture());
+        assertThat(requestCaptor.getValue().getItems()).extracting(MesProductionDispatchReq.Item::getProductCode)
+                .containsExactly("MAT-AVAILABLE");
+        verify(fixture.batchStateService, times(2))
+                .reserveProductionBatch(any(String.class), any(MesBatchStateService.ProductionBatchReservation.class));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
     void dispatchesSameSalesOrderGroupInOneRealDemandBatchAndWritesPlanNumbers() {
         Fixture fixture = fixture();
         OrderDeliveryTicketAllocation first = allocation(1, 101, "MAT-001", 4, 9001L);
