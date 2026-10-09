@@ -9,19 +9,21 @@ const deliveredPageSource = readFileSync(resolve(currentDir, 'components', 'Deli
 const orderApiSource = readFileSync(resolve(currentDir, 'services', 'orderApi.js'), 'utf8')
 
 describe('Sales order optional WMS allocation entry', () => {
-  test('exposes an order-level WMS allocation action in the ticket tab', () => {
+  test('exposes an order-level WMS allocation action in the allocation split tab', () => {
     expect(salesOrderPageSource).toContain("const SALES_ORDER_WMS_ALLOCATE_PERMISSION = 'market:sales-order:wms-allocate'")
     expect(salesOrderPageSource).toContain('v-permission="SALES_ORDER_WMS_ALLOCATE_PERMISSION"')
     expect(salesOrderPageSource).toContain('获取库存信息')
     expect(salesOrderPageSource).toContain('@click="handleWmsAllocation"')
     expect(salesOrderPageSource).toContain(':loading="wmsAllocationPending"')
+    expect(salesOrderPageSource).toContain('label="锁库拆行" name="allocationSplits"')
+    expect(salesOrderPageSource).toContain('listSalesOrderAllocationSplits')
   })
 
   test('submits the whole sales order instead of the current ticket page', () => {
     expect(orderApiSource).toContain('submitSalesOrderWmsAllocationBatch')
     expect(orderApiSource).toContain('/wms-allocation/batch')
     expect(salesOrderPageSource).toContain('submitSalesOrderWmsAllocationBatch(salesOrderId)')
-    expect(salesOrderPageSource).toContain('不受分页影响')
+    expect(salesOrderPageSource).toContain('按当前销售订单全部关联提单获取库存')
     expect(salesOrderPageSource).not.toContain('submitSalesOrderWmsAllocationBatch(detailTicketList')
   })
 
@@ -29,7 +31,16 @@ describe('Sales order optional WMS allocation entry', () => {
     expect(salesOrderPageSource).toContain('ElMessageBox.confirm')
     expect(salesOrderPageSource).toContain('库存信息获取任务已提交')
     expect(salesOrderPageSource).toContain('runAction(salesOrderActionKeys.wmsAllocation(salesOrderId)')
-    expect(salesOrderPageSource).toContain('await fetchDetailTickets()')
+    expect(salesOrderPageSource).toContain('await fetchAllocationSplits()')
+  })
+
+  test('keeps the ticket tab focused on the original ticket rows', () => {
+    const ticketTabStart = salesOrderPageSource.indexOf('label="提单行" name="tickets"')
+    const ticketTabEnd = salesOrderPageSource.indexOf('</el-tab-pane>', ticketTabStart)
+    const ticketTabSource = salesOrderPageSource.slice(ticketTabStart, ticketTabEnd)
+    expect(ticketTabSource).toContain(':data="detailTicketList"')
+    expect(ticketTabSource).not.toContain('wmsAllocationTask')
+    expect(ticketTabSource).not.toContain('handleWmsAllocation')
   })
 
   test('removes the WMS operation entry from the delivered item page', () => {

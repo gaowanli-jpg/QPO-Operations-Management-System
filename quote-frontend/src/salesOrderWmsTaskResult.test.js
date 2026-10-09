@@ -7,12 +7,14 @@ const currentDir = dirname(fileURLToPath(import.meta.url))
 const pageSource = readFileSync(resolve(currentDir, 'components', 'SalesOrderManage.vue'), 'utf8')
 
 describe('Sales order WMS task result feedback', () => {
-  test('keeps the submitted async task and per-ticket result rows in the order detail', () => {
+  test('keeps the submitted async task and per-ticket result rows in the allocation split tab', () => {
     expect(pageSource).toContain('const wmsAllocationTask = ref(null)')
     expect(pageSource).toContain('v-if="wmsAllocationTask"')
     expect(pageSource).toContain('wmsAllocationRows')
     expect(pageSource).toContain('prop="ticketId" label="提单行"')
     expect(pageSource).toContain('prop="message" label="说明"')
+    expect(pageSource).toContain('label="锁库拆行" name="allocationSplits"')
+    expect(pageSource).toContain(':data="allocationSplitList"')
   })
 
   test('reports submission and shows running, unknown, and local-apply recovery states', () => {

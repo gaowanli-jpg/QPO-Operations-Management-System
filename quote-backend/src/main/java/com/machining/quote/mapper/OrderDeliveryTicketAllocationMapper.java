@@ -10,6 +10,7 @@ import com.machining.quote.entity.OrderDeliveryTicketAllocation;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Result;
+import org.apache.ibatis.annotations.ResultMap;
 import org.apache.ibatis.annotations.Results;
 import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
@@ -21,6 +22,42 @@ import java.time.LocalDateTime;
 public interface OrderDeliveryTicketAllocationMapper extends BaseMapper<OrderDeliveryTicketAllocation> {
     @Select("SELECT * FROM order_delivery_ticket_allocation WHERE ticket_id = #{ticketId} ORDER BY id ASC")
     List<OrderDeliveryTicketAllocation> selectByTicketId(@Param("ticketId") Integer ticketId);
+
+    @Select("""
+            <script>
+            SELECT alloc.*
+            FROM order_delivery_ticket_allocation alloc
+            WHERE alloc.ticket_id IN
+            <foreach collection="ticketIds" item="ticketId" open="(" separator="," close=")">
+                #{ticketId}
+            </foreach>
+              AND alloc.allocation_type IN ('IN_STOCK_LOCK', 'IN_PRODUCTION_LOCK', 'PRODUCTION_REQUIRED')
+              AND COALESCE(alloc.status, 'ACTIVE') = 'ACTIVE'
+              AND COALESCE(alloc.discarded, FALSE) = FALSE
+            ORDER BY alloc.ticket_id ASC, alloc.id ASC
+            LIMIT #{limit} OFFSET #{offset}
+            </script>
+            """)
+    @ResultMap("lockedItemResultMap")
+    List<LockedItemDTO> selectSalesOrderAllocationSplits(
+            @Param("ticketIds") List<Integer> ticketIds,
+            @Param("limit") int limit,
+            @Param("offset") long offset);
+
+    @Select("""
+            <script>
+            SELECT COUNT(*)
+            FROM order_delivery_ticket_allocation alloc
+            WHERE alloc.ticket_id IN
+            <foreach collection="ticketIds" item="ticketId" open="(" separator="," close=")">
+                #{ticketId}
+            </foreach>
+              AND alloc.allocation_type IN ('IN_STOCK_LOCK', 'IN_PRODUCTION_LOCK', 'PRODUCTION_REQUIRED')
+              AND COALESCE(alloc.status, 'ACTIVE') = 'ACTIVE'
+              AND COALESCE(alloc.discarded, FALSE) = FALSE
+            </script>
+            """)
+    long countSalesOrderAllocationSplits(@Param("ticketIds") List<Integer> ticketIds);
 
     @Select("SELECT * FROM order_delivery_ticket_allocation WHERE id = #{id} FOR UPDATE")
     OrderDeliveryTicketAllocation selectByIdForUpdate(@Param("id") Integer id);

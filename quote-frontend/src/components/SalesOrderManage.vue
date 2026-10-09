@@ -703,8 +703,8 @@
             />
           </el-tab-pane>
 
-          <el-tab-pane label="提单行" name="tickets">
-            <div class="erp-toolbar-group">
+          <el-tab-pane label="锁库拆行" name="allocationSplits">
+            <div class="erp-toolbar-group allocation-split-toolbar">
               <el-button
                 v-permission="SALES_ORDER_WMS_ALLOCATE_PERMISSION"
                 type="primary"
@@ -714,7 +714,7 @@
               >
                 获取库存信息
               </el-button>
-              <span class="erp-toolbar-description">对当前销售订单全部关联提单（含 RFQ 派生提单）获取库存信息，不受分页影响。</span>
+              <span class="erp-toolbar-description">按当前销售订单全部关联提单获取库存，结果会拆分为锁库数量和剩余待产数量。</span>
             </div>
             <div v-if="wmsAllocationTask" class="sales-order-wms-task-result">
               <div class="erp-toolbar-group">
@@ -742,6 +742,38 @@
                 <el-table-column prop="externalBizId" label="WMS批次号" min-width="180" show-overflow-tooltip />
               </el-table>
             </div>
+            <el-table :data="allocationSplitList" border stripe height="330" v-loading="allocationSplitsLoading">
+              <el-table-column prop="ticketId" label="提单行" width="100" />
+              <el-table-column prop="allocationType" label="拆行类型" width="130">
+                <template #default="{ row }">{{ allocationTypeText(row.allocationType) }}</template>
+              </el-table-column>
+              <el-table-column prop="partNo" label="图号" min-width="150" show-overflow-tooltip />
+              <el-table-column prop="version" label="版本" width="80" align="center" />
+              <el-table-column prop="materialNo" label="物料号" min-width="130" show-overflow-tooltip />
+              <el-table-column prop="qty" label="拆分数量" width="100" align="center" />
+              <el-table-column prop="ticketQty" label="提单总量" width="100" align="center" />
+              <el-table-column prop="internalProjectNo" label="内部项目号" min-width="140" show-overflow-tooltip />
+              <el-table-column prop="customerOrderNo" label="客户订单号" min-width="140" show-overflow-tooltip />
+              <el-table-column prop="customerProjectNo" label="客户项目号" min-width="140" show-overflow-tooltip />
+              <el-table-column prop="wmsReservationTicketId" label="WMS锁库行" width="110" />
+              <el-table-column prop="mesProductionStatus" label="MES生产状态" width="130" />
+              <el-table-column prop="stockPickingStatus" label="提库存工单" width="130" />
+            </el-table>
+            <div class="erp-pagination detail-pagination">
+              <el-pagination
+                v-model:current-page="allocationSplitPagination.page"
+                v-model:page-size="allocationSplitPagination.pageSize"
+                :page-sizes="[20, 50, 100]"
+                layout="total, sizes, prev, pager, next, jumper"
+                :total="allocationSplitTotal"
+                background
+                :pager-count="7"
+                @size-change="allocationSplitPagination.page = 1"
+              />
+            </div>
+          </el-tab-pane>
+
+          <el-tab-pane label="提单行" name="tickets">
             <el-table :data="detailTicketList" border stripe height="330" v-loading="detailTicketsLoading">
               <el-table-column prop="internalProjectNo" label="内部项目号" min-width="130" show-overflow-tooltip />
               <el-table-column prop="partNo" label="图号" min-width="150" show-overflow-tooltip />
@@ -874,6 +906,7 @@ import {
   downloadSalesOrderProductionTaskNotice,
   getSalesOrder,
   getSalesOrderDrawingSummary,
+  listSalesOrderAllocationSplits,
   listSalesOrderItems,
   listSalesOrders,
   listSalesOrderProcessSheets,
@@ -896,7 +929,7 @@ const { isPending, runAction } = usePendingAction()
 const route = useRoute()
 
 const SALES_ORDER_STATUSES = ['已报价', '部分已提单', '已生成提单', '废弃']
-const SALES_ORDER_TYPES = ['预测订单', '备货订单', '正式订单']
+const SALES_ORDER_TYPES = ['备货订单', '正式订单']
 const SALES_ORDER_UPDATE_PERMISSION = 'market:sales-order:update'
 const SALES_ORDER_WMS_ALLOCATE_PERMISSION = 'market:sales-order:wms-allocate'
 const SALES_ORDER_EDIT_LOCKED_U9_STATUSES = ['同步中', '结果待确认']
@@ -1009,18 +1042,22 @@ const orderDetail = ref(null)
 const activeDetailTab = ref('items')
 const detailItemList = ref([])
 const detailTicketList = ref([])
+const allocationSplitList = ref([])
 const wmsAllocationTask = ref(null)
 const wmsAllocationRefreshing = ref(false)
 const detailProcessSheetList = ref([])
 const drawingSummary = ref(null)
 const detailItemsLoading = ref(false)
 const detailTicketsLoading = ref(false)
+const allocationSplitsLoading = ref(false)
 const detailProcessSheetsLoading = ref(false)
 const detailItemPagination = reactive({ page: 1, pageSize: 20 })
 const detailTicketPagination = reactive({ page: 1, pageSize: 20 })
+const allocationSplitPagination = reactive({ page: 1, pageSize: 20 })
 const detailProcessSheetPagination = reactive({ page: 1, pageSize: 20 })
 const detailItemTotal = ref(0)
 const detailTicketTotal = ref(0)
+const allocationSplitTotal = ref(0)
 const detailProcessSheetTotal = ref(0)
 const supplementVisible = ref(false)
 const supplementFiles = ref([])
@@ -1116,6 +1153,12 @@ watch(() => [detailTicketPagination.page, detailTicketPagination.pageSize], () =
   }
 })
 
+watch(() => [allocationSplitPagination.page, allocationSplitPagination.pageSize], () => {
+  if (detailVisible.value && activeDetailTab.value === 'allocationSplits') {
+    fetchAllocationSplits()
+  }
+})
+
 watch(() => [detailProcessSheetPagination.page, detailProcessSheetPagination.pageSize], () => {
   if (detailVisible.value && activeDetailTab.value === 'processSheets') {
     fetchDetailProcessSheets()
@@ -1187,13 +1230,16 @@ const resetDetailPagination = () => {
   activeDetailTab.value = 'items'
   detailItemPagination.page = 1
   detailTicketPagination.page = 1
+  allocationSplitPagination.page = 1
   detailProcessSheetPagination.page = 1
   detailItemList.value = []
   detailTicketList.value = []
+  allocationSplitList.value = []
   wmsAllocationTask.value = null
   detailProcessSheetList.value = []
   detailItemTotal.value = 0
   detailTicketTotal.value = 0
+  allocationSplitTotal.value = 0
   detailProcessSheetTotal.value = 0
   drawingSummary.value = null
   resetItemDrafts()
@@ -1287,6 +1333,25 @@ const fetchDetailTickets = async () => {
   }
 }
 
+const fetchAllocationSplits = async () => {
+  const salesOrderId = orderDetail.value?.orderInfo?.id
+  if (!salesOrderId) return
+  allocationSplitsLoading.value = true
+  try {
+    const response = await listSalesOrderAllocationSplits(salesOrderId, {
+      page: allocationSplitPagination.page,
+      pageSize: allocationSplitPagination.pageSize
+    })
+    allocationSplitList.value = response.records || []
+    allocationSplitTotal.value = Number(response.total ?? 0)
+  } catch (error) {
+    console.error(error)
+    ElMessage.error('销售订单锁库拆行加载失败。')
+  } finally {
+    allocationSplitsLoading.value = false
+  }
+}
+
 const wmsAllocationPending = computed(() => isPending(salesOrderActionKeys.wmsAllocation(orderDetail.value?.orderInfo?.id))
   || ['PENDING', 'RUNNING'].includes(String(wmsAllocationTask.value?.status || '').toUpperCase()))
 
@@ -1333,6 +1398,12 @@ const wmsTaskTagType = (value) => ({
   SKIPPED: 'info'
 }[String(value || '').toUpperCase()] || 'info')
 
+const allocationTypeText = (value) => ({
+  IN_STOCK_LOCK: '锁库待产',
+  IN_PRODUCTION_LOCK: '锁库生产中',
+  PRODUCTION_REQUIRED: '待产'
+}[String(value || '').toUpperCase()] || String(value || '-'))
+
 const handleWmsAllocation = async () => {
   const salesOrderId = orderDetail.value?.orderInfo?.id
   if (!salesOrderId) return
@@ -1351,7 +1422,7 @@ const handleWmsAllocation = async () => {
       const taskId = task?.id || task?.taskId
       wmsAllocationTask.value = task
       ElMessage.success(taskId ? `库存信息获取任务已提交，任务ID：${taskId}` : '库存信息获取任务已提交')
-      await fetchDetailTickets()
+      await fetchAllocationSplits()
       if (taskId) await refreshWmsAllocationTask(true)
     } catch (error) {
       console.error(error)
@@ -1375,7 +1446,7 @@ const refreshWmsAllocationTask = async (pollUntilComplete = false) => {
       if (!['PENDING', 'RUNNING'].includes(status)) break
       if (attempt + 1 < attempts) await waitForWmsTask(1500)
     }
-    await fetchDetailTickets()
+    await fetchAllocationSplits()
   } catch (error) {
     console.warn('Sales order WMS task refresh failed', error)
     if (!pollUntilComplete) ElMessage.warning(error.response?.data?.message || '任务状态刷新失败，请稍后重试。')
@@ -1406,6 +1477,8 @@ const fetchDetailProcessSheets = async () => {
 const fetchCurrentDetailTab = async () => {
   if (activeDetailTab.value === 'tickets') {
     await fetchDetailTickets()
+  } else if (activeDetailTab.value === 'allocationSplits') {
+    await fetchAllocationSplits()
   } else if (activeDetailTab.value === 'processSheets') {
     await fetchDetailProcessSheets()
   } else {

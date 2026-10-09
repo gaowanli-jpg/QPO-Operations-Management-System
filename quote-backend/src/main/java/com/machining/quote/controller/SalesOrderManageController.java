@@ -6,6 +6,7 @@ import com.machining.quote.dto.OrderStatusChangeReq;
 import com.machining.quote.dto.OrderStatusChangeResult;
 import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.ProcessSheetDTO;
+import com.machining.quote.dto.LockedItemDTO;
 import com.machining.quote.dto.SalesOrderItemDataReplacementConfirmResp;
 import com.machining.quote.dto.SalesOrderItemFieldReplacementReq;
 import com.machining.quote.dto.SalesOrderItemUpdateReq;
@@ -117,6 +118,15 @@ public class SalesOrderManageController {
             @RequestParam(value = "page", required = false) Integer page,
             @RequestParam(value = "pageSize", required = false) Integer pageSize) {
         return salesOrderManageService.pageOrderTickets(salesOrderId, page, pageSize);
+    }
+
+    @GetMapping("/orders/{salesOrderId}/allocation-splits")
+    @RequirePermission("market:sales-order:view")
+    public PageResult<LockedItemDTO> listOrderAllocationSplits(
+            @PathVariable Long salesOrderId,
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
+        return salesOrderManageService.pageOrderAllocationSplits(salesOrderId, page, pageSize);
     }
 
     @PostMapping("/orders/{salesOrderId}/wms-allocation/batch")

@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.machining.quote.config.AuthContext;
 import com.machining.quote.domain.QuoteStatusWorkflow;
 import com.machining.quote.dto.CustomerOptionDTO;
+import com.machining.quote.dto.LockedItemDTO;
 import com.machining.quote.dto.OrderStatusChangeReq;
 import com.machining.quote.dto.OrderStatusChangeResult;
 import com.machining.quote.dto.PageResult;
@@ -14,6 +15,7 @@ import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.SalesOrderHeader;
 import com.machining.quote.entity.SalesOrderItem;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
+import com.machining.quote.mapper.OrderDeliveryTicketAllocationMapper;
 import com.machining.quote.mapper.SalesOrderHeaderMapper;
 import com.machining.quote.mapper.SalesOrderItemMapper;
 import com.machining.quote.util.DrawingPartNoResolver;
@@ -57,6 +59,8 @@ public class SalesOrderManageService {
     private SalesOrderItemMapper salesOrderItemMapper;
     @Autowired
     private OrderDeliveryTicketMapper ticketMapper;
+    @Autowired
+    private OrderDeliveryTicketAllocationMapper allocationMapper;
     @Autowired(required = false)
     private DataScopeService dataScopeService;
     @Autowired(required = false)
@@ -151,6 +155,28 @@ public class SalesOrderManageService {
     public PageResult<OrderDeliveryTicket> pageOrderTickets(Long salesOrderId, Integer page, Integer pageSize) {
         requireSalesOrder(salesOrderId);
         return pageTicketsForSalesOrder(salesOrderId, page, pageSize);
+    }
+
+    public PageResult<LockedItemDTO> pageOrderAllocationSplits(Long salesOrderId, Integer page, Integer pageSize) {
+        requireSalesOrder(salesOrderId);
+        int safePage = safePage(page);
+        int safePageSize = safePageSize(pageSize);
+        List<Integer> ticketIds = ticketMapper.selectList(ticketQuery(salesOrderId)).stream()
+                .map(OrderDeliveryTicket::getId)
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .toList();
+        if (ticketIds.isEmpty()) {
+            return PageResult.of(List.of(), 0, safePage, safePageSize);
+        }
+        long total = allocationMapper.countSalesOrderAllocationSplits(ticketIds);
+        if (total == 0) {
+            return PageResult.of(List.of(), 0, safePage, safePageSize);
+        }
+        long offset = (long) (safePage - 1) * safePageSize;
+        List<LockedItemDTO> records = allocationMapper.selectSalesOrderAllocationSplits(
+                ticketIds, safePageSize, offset);
+        return PageResult.of(records, total, safePage, safePageSize);
     }
 
 
