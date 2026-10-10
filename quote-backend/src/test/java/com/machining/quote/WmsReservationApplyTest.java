@@ -60,8 +60,8 @@ class WmsReservationApplyTest {
 
         ArgumentCaptor<WmsReservationTicket> ticketUpdate = ArgumentCaptor.forClass(WmsReservationTicket.class);
         verify(fixture.ticketMapper, times(2)).updateById(ticketUpdate.capture());
-        assertThat(ticketUpdate.getAllValues()).extracting(WmsReservationTicket::getTicketId)
-                .containsExactly(101, 102);
+        assertThat(ticketUpdate.getAllValues()).extracting(WmsReservationTicket::getId)
+                .containsExactly(801L, 802L);
         assertThat(ticketUpdate.getAllValues()).extracting(ticket -> ticket.getStockFrozenCount().toPlainString()
                         + ":" + ticket.getInProductionCount().toPlainString()
                         + ":" + ticket.getSurplusCount().toPlainString())

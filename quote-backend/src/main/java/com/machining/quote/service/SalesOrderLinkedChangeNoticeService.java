@@ -12,6 +12,8 @@ import com.machining.quote.entity.OrderDeliveryTicketAllocation;
 import com.machining.quote.entity.SalesOrderHeader;
 import com.machining.quote.entity.SalesOrderItem;
 import com.machining.quote.entity.SalesOrderLinkedChangeNotice;
+import com.machining.quote.entity.WmsReservationBatch;
+import com.machining.quote.entity.WmsReservationTicket;
 import com.machining.quote.mapper.SalesOrderLinkedChangeNoticeMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -89,9 +91,24 @@ public class SalesOrderLinkedChangeNoticeService {
             String reason,
             LocalDateTime at,
             Long operatorId) {
+        return createForItem(order, item, tickets, allocations, List.of(), Map.of(),
+                triggerScope, reason, at, operatorId);
+    }
+
+    public int createForItem(
+            SalesOrderHeader order,
+            SalesOrderItem item,
+            List<OrderDeliveryTicket> tickets,
+            List<OrderDeliveryTicketAllocation> allocations,
+            List<WmsReservationTicket> reservationTickets,
+            Map<Long, WmsReservationBatch> reservationBatches,
+            String triggerScope,
+            String reason,
+            LocalDateTime at,
+            Long operatorId) {
         String eventKey = UUID.randomUUID().toString();
         SalesOrderLinkedChangeNotice snapshot = factory.create(order, item, tickets, allocations,
-                triggerScope, eventKey, reason, at, operatorId);
+                reservationTickets, reservationBatches, triggerScope, eventKey, reason, at, operatorId);
         return noticeMapper.insertBatch(List.of(snapshot));
     }
 
@@ -103,6 +120,20 @@ public class SalesOrderLinkedChangeNoticeService {
             String reason,
             LocalDateTime at,
             Long operatorId) {
+        return createForItems(order, items, ticketsByItem, allocationsByItem, Map.of(), Map.of(),
+                reason, at, operatorId);
+    }
+
+    public int createForItems(
+            SalesOrderHeader order,
+            List<SalesOrderItem> items,
+            Map<Long, List<OrderDeliveryTicket>> ticketsByItem,
+            Map<Long, List<OrderDeliveryTicketAllocation>> allocationsByItem,
+            Map<Long, List<WmsReservationTicket>> reservationTicketsByItem,
+            Map<Long, WmsReservationBatch> reservationBatches,
+            String reason,
+            LocalDateTime at,
+            Long operatorId) {
         if (items == null || items.isEmpty()) return 0;
         String eventKey = UUID.randomUUID().toString();
         List<SalesOrderLinkedChangeNotice> snapshots = new ArrayList<>(items.size());
@@ -110,7 +141,8 @@ public class SalesOrderLinkedChangeNoticeService {
             snapshots.add(factory.create(order, item,
                     ticketsByItem.getOrDefault(item.getId(), List.of()),
                     allocationsByItem.getOrDefault(item.getId(), List.of()),
-                    "ORDER", eventKey, reason, at, operatorId));
+                    reservationTicketsByItem.getOrDefault(item.getId(), List.of()),
+                    reservationBatches, "ORDER", eventKey, reason, at, operatorId));
         }
         return noticeMapper.insertBatch(snapshots);
     }

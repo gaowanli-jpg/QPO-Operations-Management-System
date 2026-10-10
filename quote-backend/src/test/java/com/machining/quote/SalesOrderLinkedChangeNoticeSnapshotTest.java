@@ -4,6 +4,8 @@ import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.OrderDeliveryTicketAllocation;
 import com.machining.quote.entity.SalesOrderHeader;
 import com.machining.quote.entity.SalesOrderItem;
+import com.machining.quote.entity.WmsReservationBatch;
+import com.machining.quote.entity.WmsReservationTicket;
 import com.machining.quote.service.SalesOrderLinkedChangeNoticeFactory;
 import org.junit.jupiter.api.Test;
 
@@ -92,6 +94,77 @@ class SalesOrderLinkedChangeNoticeSnapshotTest {
         assertThat(notice.getDownstreamImpactCount()).isEqualTo(2);
     }
 
+    @Test
+    void snapshotsAllocationBasedWmsResultAndExternalBusinessId() {
+        OrderDeliveryTicket ticket = ticket(24, "PENDING", null);
+        OrderDeliveryTicketAllocation locked = allocation(35, "IN_STOCK_LOCK", null, null, null);
+        locked.setStockPickingSyncedAt(null);
+        WmsReservationTicket reservation = reservation(88L, 35, 701L, "SUCCESS");
+        WmsReservationBatch batch = batch(701L, "QPO-WMS-701");
+
+        var notice = factory.create(order(), item(14L), List.of(ticket), List.of(locked),
+                List.of(reservation), java.util.Map.of(701L, batch),
+                "ITEM", "event-5", "已有锁库影响", LocalDateTime.now(), 7L);
+
+        assertThat(notice.getWmsSubmitted()).isTrue();
+        assertThat(notice.getWmsStatus()).isEqualTo("SUCCESS");
+        assertThat(notice.getWmsRequestId()).isEqualTo("QPO-WMS-701");
+        assertThat(notice.getDownstreamImpactCount()).isEqualTo(1);
+    }
+
+    @Test
+    void allocationLinkedWmsReservationTakesPrecedenceOverLegacyTicketStatus() {
+        OrderDeliveryTicket ticket = ticket(25, "SUCCESS", "legacy request");
+        OrderDeliveryTicketAllocation production = allocation(36, "PRODUCTION_REQUIRED", null, null, null);
+        SalesOrderItem item = item(15L);
+        item.setAllocationId(36L);
+        WmsReservationTicket reservation = reservation(89L, 36, 702L, "FAILED");
+        WmsReservationBatch batch = batch(702L, "QPO-WMS-702");
+
+        var notice = factory.create(order(), item, List.of(ticket), List.of(production),
+                List.of(reservation), java.util.Map.of(702L, batch),
+                "ITEM", "event-6", "WMS明确失败", LocalDateTime.now(), 7L);
+
+        assertThat(notice.getWmsSubmitted()).isTrue();
+        assertThat(notice.getWmsStatus()).isEqualTo("FAILED");
+        assertThat(notice.getWmsRequestId()).isEqualTo("QPO-WMS-702");
+    }
+
+    @Test
+    void allocationLinkedRowDoesNotFallBackToLegacyTicketReservation() {
+        OrderDeliveryTicket ticket = ticket(27, "SUCCESS", "legacy request");
+        OrderDeliveryTicketAllocation production = allocation(37, "PRODUCTION_REQUIRED", null, null, null);
+        SalesOrderItem item = item(17L);
+        item.setAllocationId(37L);
+        WmsReservationTicket legacyReservation = reservation(91L, null, 704L, "RESULT_UNKNOWN");
+        legacyReservation.setTicketId(27);
+        WmsReservationBatch batch = batch(704L, "QPO-WMS-704");
+
+        var notice = factory.create(order(), item, List.of(ticket), List.of(production),
+                List.of(legacyReservation), java.util.Map.of(704L, batch),
+                "ITEM", "event-8", "仅保留当前 allocation 影响", LocalDateTime.now(), 7L);
+
+        assertThat(notice.getWmsSubmitted()).isFalse();
+        assertThat(notice.getWmsStatus()).isEqualTo("NOT_OCCURRED");
+        assertThat(notice.getWmsRequestId()).isNull();
+    }
+
+    @Test
+    void legacyTicketReservationRemainsAvailableAsSnapshotFallback() {
+        OrderDeliveryTicket ticket = ticket(26, "SUCCESS", null);
+        WmsReservationTicket reservation = reservation(90L, null, 703L, "FAILED");
+        reservation.setTicketId(26);
+        WmsReservationBatch batch = batch(703L, "QPO-WMS-703");
+
+        var notice = factory.create(order(), item(16L), List.of(ticket), List.of(),
+                List.of(reservation), java.util.Map.of(703L, batch),
+                "ITEM", "event-7", "兼容历史 WMS 记录", LocalDateTime.now(), 7L);
+
+        assertThat(notice.getWmsSubmitted()).isTrue();
+        assertThat(notice.getWmsStatus()).isEqualTo("FAILED");
+        assertThat(notice.getWmsRequestId()).isEqualTo("QPO-WMS-703");
+    }
+
     private SalesOrderHeader order() {
         SalesOrderHeader order = new SalesOrderHeader();
         order.setId(1L);
@@ -138,5 +211,23 @@ class SalesOrderLinkedChangeNoticeSnapshotTest {
         allocation.setMesProductionSyncedAt(LocalDateTime.parse("2026-09-22T09:30:00"));
         allocation.setStockPickingSyncedAt(LocalDateTime.parse("2026-09-22T09:40:00"));
         return allocation;
+    }
+
+    private WmsReservationTicket reservation(Long id, Integer allocationId, Long batchId, String status) {
+        WmsReservationTicket reservation = new WmsReservationTicket();
+        reservation.setId(id);
+        reservation.setAllocationId(allocationId);
+        reservation.setBatchId(batchId);
+        reservation.setStatus(status);
+        reservation.setCreatedAt(LocalDateTime.parse("2026-09-22T09:30:00"));
+        return reservation;
+    }
+
+    private WmsReservationBatch batch(Long id, String externalBizId) {
+        WmsReservationBatch batch = new WmsReservationBatch();
+        batch.setId(id);
+        batch.setExternalBizId(externalBizId);
+        batch.setSubmittedAt(LocalDateTime.parse("2026-09-22T09:20:00"));
+        return batch;
     }
 }

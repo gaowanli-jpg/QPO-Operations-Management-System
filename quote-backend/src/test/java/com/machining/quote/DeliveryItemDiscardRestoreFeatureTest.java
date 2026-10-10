@@ -63,7 +63,7 @@ class DeliveryItemDiscardRestoreFeatureTest {
         String productionService = read(MAIN.resolve(Path.of("service", "ProductionItemService.java")));
         String systemTaskService = read(MAIN.resolve(Path.of("service", "SystemTaskService.java")));
         String mesProductionService = read(MAIN.resolve(Path.of("service", "mes", "MesProductionDispatchService.java")));
-        String wmsPlanService = read(MAIN.resolve(Path.of("service", "wms", "WmsReservationPlanService.java")));
+        String wmsBatchService = read(MAIN.resolve(Path.of("service", "wms", "WmsReservationBatchService.java")));
         String auditService = read(MAIN.resolve(Path.of("service", "AuditService.java")));
         String permissionService = read(MAIN.resolve(Path.of("service", "PermissionService.java")));
         String permissionDoc = read(PERMISSION_DOC);
@@ -135,7 +135,7 @@ class DeliveryItemDiscardRestoreFeatureTest {
         assertThat(systemTaskService)
                 .contains("filterDiscardedTicketIds", "filterDiscardedAllocationIds")
                 .doesNotContain("discardReason");
-        assertThat(wmsPlanService).contains("Boolean.TRUE.equals(ticket.getDiscarded())");
+        assertThat(wmsBatchService).contains("Boolean.TRUE.equals(allocation.getDiscarded())");
         assertThat(mesProductionService).contains("Boolean.TRUE.equals(allocation.getDiscarded())");
         assertThat(auditService).contains(
                 "DELIVERED_ITEM_DISCARD",

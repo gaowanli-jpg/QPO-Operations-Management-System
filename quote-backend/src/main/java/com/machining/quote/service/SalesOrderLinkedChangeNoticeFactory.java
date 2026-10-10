@@ -5,6 +5,8 @@ import com.machining.quote.entity.OrderDeliveryTicketAllocation;
 import com.machining.quote.entity.SalesOrderHeader;
 import com.machining.quote.entity.SalesOrderItem;
 import com.machining.quote.entity.SalesOrderLinkedChangeNotice;
+import com.machining.quote.entity.WmsReservationBatch;
+import com.machining.quote.entity.WmsReservationTicket;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
@@ -13,6 +15,8 @@ import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -32,11 +36,35 @@ public class SalesOrderLinkedChangeNoticeFactory {
             String reason,
             LocalDateTime at,
             Long operatorId) {
+        return create(order, item, tickets, allocations, List.of(), Map.of(), triggerScope,
+                eventKey, reason, at, operatorId);
+    }
+
+    public SalesOrderLinkedChangeNotice create(
+            SalesOrderHeader order,
+            SalesOrderItem item,
+            List<OrderDeliveryTicket> tickets,
+            List<OrderDeliveryTicketAllocation> allocations,
+            List<WmsReservationTicket> reservationTickets,
+            Map<Long, WmsReservationBatch> reservationBatches,
+            String triggerScope,
+            String eventKey,
+            String reason,
+            LocalDateTime at,
+            Long operatorId) {
         List<OrderDeliveryTicket> safeTickets = tickets == null ? List.of() : tickets;
         List<OrderDeliveryTicketAllocation> safeAllocations = allocations == null ? List.of() : allocations;
-        List<OrderDeliveryTicket> wmsTickets = safeTickets.stream()
-                .filter(ticket -> submitted(ticket.getWmsAllocateStatus(), ticket.getWmsAllocatedAt(), ticket.getWmsAllocateMessage()))
-                .toList();
+        List<WmsReservationTicket> safeReservationTickets = reservationTickets == null ? List.of() : reservationTickets;
+        Map<Long, WmsReservationBatch> safeReservationBatches = reservationBatches == null ? Map.of() : reservationBatches;
+        boolean allowLegacyTicketFallback = item == null || item.getAllocationId() == null;
+        List<WmsReservationTicket> wmsReservations = latestWmsReservations(
+                safeTickets, safeAllocations, safeReservationTickets,
+                allowLegacyTicketFallback);
+        List<OrderDeliveryTicket> wmsTickets = allowLegacyTicketFallback && wmsReservations.isEmpty()
+                ? safeTickets.stream()
+                        .filter(ticket -> submitted(ticket.getWmsAllocateStatus(), ticket.getWmsAllocatedAt(), ticket.getWmsAllocateMessage()))
+                        .toList()
+                : List.of();
         List<OrderDeliveryTicketAllocation> productionRows = safeAllocations.stream()
                 .filter(row -> PRODUCTION_REQUIRED.equalsIgnoreCase(text(row.getAllocationType())))
                 .filter(row -> submitted(row.getMesProductionStatus(), row.getMesProductionSyncedAt())
@@ -69,9 +97,18 @@ public class SalesOrderLinkedChangeNoticeFactory {
         notice.setLinkedDiscardedAt(at);
         notice.setLinkedDiscardedBy(operatorId);
         notice.setLinkedDiscardReason(reason);
-        notice.setWmsSubmitted(!wmsTickets.isEmpty());
-        notice.setWmsStatus(summarize(wmsTickets.stream().map(OrderDeliveryTicket::getWmsAllocateStatus).toList(), !wmsTickets.isEmpty()));
-        notice.setWmsActionAt(latest(wmsTickets.stream().map(OrderDeliveryTicket::getWmsAllocatedAt).toList()));
+        notice.setWmsSubmitted(!wmsReservations.isEmpty() || !wmsTickets.isEmpty());
+        notice.setWmsStatus(wmsReservations.isEmpty()
+                ? summarize(wmsTickets.stream().map(OrderDeliveryTicket::getWmsAllocateStatus).toList(), !wmsTickets.isEmpty())
+                : summarize(wmsReservations.stream().map(WmsReservationTicket::getStatus).toList(), true));
+        notice.setWmsRequestId(join(wmsReservations.stream()
+                .map(reservation -> safeReservationBatches.get(reservation.getBatchId()))
+                .filter(Objects::nonNull)
+                .map(WmsReservationBatch::getExternalBizId)
+                .toList()));
+        notice.setWmsActionAt(wmsReservations.isEmpty()
+                ? latest(wmsTickets.stream().map(OrderDeliveryTicket::getWmsAllocatedAt).toList())
+                : latest(wmsReservations.stream().map(reservation -> reservationActionAt(reservation, safeReservationBatches)).toList()));
         notice.setMesProductionSubmitted(!productionRows.isEmpty());
         notice.setMesProductionStatus(summarize(productionRows.stream().map(OrderDeliveryTicketAllocation::getMesProductionStatus).toList(), !productionRows.isEmpty()));
         notice.setMesProductionRequestId(join(productionRows.stream()
@@ -82,7 +119,7 @@ public class SalesOrderLinkedChangeNoticeFactory {
         notice.setStockPickingBizId(join(stockRows.stream()
                 .flatMap(row -> java.util.stream.Stream.of(row.getStockPickingBizId(), row.getStockPickingExternalId())).toList()));
         notice.setStockPickingActionAt(latest(stockRows.stream().map(OrderDeliveryTicketAllocation::getStockPickingSyncedAt).toList()));
-        int impactCount = (wmsTickets.isEmpty() ? 0 : 1)
+        int impactCount = (wmsReservations.isEmpty() && wmsTickets.isEmpty() ? 0 : 1)
                 + (productionRows.isEmpty() ? 0 : 1)
                 + (stockRows.isEmpty() ? 0 : 1);
         notice.setDownstreamImpactCount(impactCount);
@@ -90,6 +127,56 @@ public class SalesOrderLinkedChangeNoticeFactory {
         notice.setCreatedAt(at);
         notice.setUpdatedAt(at);
         return notice;
+    }
+
+    private List<WmsReservationTicket> latestWmsReservations(
+            List<OrderDeliveryTicket> tickets,
+            List<OrderDeliveryTicketAllocation> allocations,
+            List<WmsReservationTicket> reservations,
+            boolean allowLegacyTicketFallback) {
+        Set<Integer> allocationIds = allocations.stream()
+                .map(OrderDeliveryTicketAllocation::getId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Set<Long> referencedIds = allocations.stream()
+                .map(OrderDeliveryTicketAllocation::getWmsReservationTicketId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<Long, WmsReservationTicket> exact = reservations.stream()
+                .filter(reservation -> referencedIds.contains(reservation.getId())
+                        || reservation.getAllocationId() != null
+                        && allocationIds.contains(reservation.getAllocationId()))
+                .collect(Collectors.toMap(WmsReservationTicket::getId, reservation -> reservation,
+                        (left, right) -> right));
+        if (!exact.isEmpty()) {
+            return new ArrayList<>(exact.values());
+        }
+        if (!allowLegacyTicketFallback) {
+            return List.of();
+        }
+        Set<Integer> ticketIds = tickets.stream()
+                .map(OrderDeliveryTicket::getId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        return reservations.stream()
+                .filter(reservation -> reservation.getAllocationId() == null
+                        && ticketIds.contains(reservation.getTicketId()))
+                .collect(Collectors.collectingAndThen(
+                        Collectors.toMap(WmsReservationTicket::getId, reservation -> reservation,
+                                (left, right) -> right),
+                        values -> new ArrayList<>(values.values())));
+    }
+
+    private LocalDateTime reservationActionAt(
+            WmsReservationTicket reservation,
+            Map<Long, WmsReservationBatch> reservationBatches) {
+        WmsReservationBatch batch = reservation.getBatchId() == null
+                ? null
+                : reservationBatches.get(reservation.getBatchId());
+        if (batch != null && batch.getSubmittedAt() != null) {
+            return batch.getSubmittedAt();
+        }
+        return reservation.getCreatedAt() == null ? reservation.getUpdatedAt() : reservation.getCreatedAt();
     }
 
     private boolean submitted(String status, LocalDateTime actionAt) {

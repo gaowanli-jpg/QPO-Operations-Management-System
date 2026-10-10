@@ -8,10 +8,13 @@ import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.OrderDeliveryTicketAllocation;
 import com.machining.quote.entity.SalesOrderHeader;
 import com.machining.quote.entity.SalesOrderItem;
+import com.machining.quote.entity.WmsReservationTicket;
 import com.machining.quote.mapper.OrderDeliveryTicketAllocationMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.SalesOrderHeaderMapper;
 import com.machining.quote.mapper.SalesOrderItemMapper;
+import com.machining.quote.mapper.WmsReservationBatchMapper;
+import com.machining.quote.mapper.WmsReservationTicketMapper;
 import com.machining.quote.service.AuditService;
 import com.machining.quote.service.SalesOrderLinkedDiscardService;
 import com.machining.quote.service.SalesOrderManageService;
@@ -138,6 +141,128 @@ class SalesOrderLinkedDiscardServiceTest {
         verify(fixture.salesOrderManageService, never()).discardItemForU9Change(any(), any(), any());
     }
 
+    @Test
+    void allocationLinkedSplitRowOnlyDiscardsItsExactAllocation() {
+        SalesOrderHeader order = order(104L, "未同步");
+        SalesOrderItem item = item(204L, 104L, 10);
+        item.setAllocationId(21L);
+        item.setSourceTicketId(11);
+        OrderDeliveryTicket sharedTicket = ticket(11, "M-11", "SUCCESS", "SUCCESS", false);
+        OrderDeliveryTicketAllocation selected = allocation(21, 11, "PRODUCTION_REQUIRED", "PENDING", null, false);
+        OrderDeliveryTicketAllocation siblingLocked = allocation(22, 11, "IN_STOCK_LOCK", null, "FAILED", false);
+        OrderDeliveryTicketAllocation siblingProduction = allocation(23, 11, "PRODUCTION_REQUIRED", "FAILED", null, false);
+        Fixture fixture = fixture(order, item, List.of(sharedTicket),
+                List.of(selected, siblingLocked, siblingProduction));
+
+        SalesOrderLinkedDiscardResult result = fixture.service.discard(104L, 204L, reason("只废弃当前拆分行"));
+
+        assertThat(result.getDeliveredItemCount()).isZero();
+        assertThat(result.getProductionItemCount()).isEqualTo(1);
+        assertThat(selected.getDiscarded()).isTrue();
+        assertThat(siblingLocked.getDiscarded()).isFalse();
+        assertThat(siblingProduction.getDiscarded()).isFalse();
+        assertThat(sharedTicket.getDiscarded()).isFalse();
+        verify(fixture.allocationMapper).updateById(selected);
+        verify(fixture.allocationMapper, never()).updateById(siblingLocked);
+        verify(fixture.allocationMapper, never()).updateById(siblingProduction);
+        verify(fixture.ticketMapper, never()).updateById(sharedTicket);
+    }
+
+    @Test
+    void orderRelationsMapSplitAllocationsByExactSalesOrderItemLink() {
+        SalesOrderHeader order = order(107L, "未同步");
+        SalesOrderItem productionItem = item(207L, 107L, 10);
+        productionItem.setAllocationId(21L);
+        productionItem.setSourceTicketId(11);
+        SalesOrderItem lockedItem = item(208L, 107L, 11);
+        lockedItem.setAllocationId(22L);
+        OrderDeliveryTicket sharedTicket = ticket(11, "M-11", "SUCCESS", "SUCCESS", false);
+        sharedTicket.setSourceOrderId(107L);
+        sharedTicket.setSourceItemId(207L);
+        OrderDeliveryTicketAllocation production = allocation(21, 11, "PRODUCTION_REQUIRED", "PENDING", null, false);
+        OrderDeliveryTicketAllocation locked = allocation(22, 11, "IN_STOCK_LOCK", null, "FAILED", false);
+        OrderDeliveryTicketAllocation unrelatedSibling = allocation(23, 11, "IN_PRODUCTION_LOCK", null, "FAILED", false);
+        Fixture fixture = fixture(order, productionItem, List.of(sharedTicket),
+                List.of(production, locked, unrelatedSibling));
+
+        Object relations = ReflectionTestUtils.invokeMethod(fixture.service, "lockOrderRelations", order,
+                List.of(productionItem, lockedItem));
+        @SuppressWarnings("unchecked")
+        var allocationsByItem = (java.util.Map<Long, java.util.Map<Integer, OrderDeliveryTicketAllocation>>)
+                ReflectionTestUtils.getField(relations, "allocationsByItem");
+
+        assertThat(allocationsByItem.get(productionItem.getId())).containsOnlyKeys(21);
+        assertThat(allocationsByItem.get(lockedItem.getId())).containsOnlyKeys(22);
+    }
+
+    @Test
+    void unresolvedWmsReservationStatusesBlockLinkedDiscard() {
+        for (String status : List.of("RESERVED", "SUBMITTING", "RESULT_UNKNOWN", "RESPONSE_RECEIVED", "APPLY_FAILED")) {
+            SalesOrderHeader order = order(105L, "未同步");
+            SalesOrderItem item = item(205L, 105L, 10);
+            item.setAllocationId(21L);
+            OrderDeliveryTicketAllocation allocation = allocation(21, 11, "PRODUCTION_REQUIRED", "PENDING", null, false);
+            Fixture fixture = fixture(order, item, List.of(), List.of(allocation));
+            WmsReservationTicket active = new WmsReservationTicket();
+            active.setId(601L);
+            active.setAllocationId(21);
+            active.setStatus(status);
+            when(fixture.wmsReservationTicketMapper.selectLatestForLinkedChange(anyList(), anyList()))
+                    .thenReturn(List.of(active));
+
+            assertThatThrownBy(() -> fixture.service.discard(105L, 205L, reason("暂缓")))
+                    .isInstanceOf(RuntimeException.class)
+                    .hasMessageContaining("WMS库存获取仍在处理中");
+
+            assertThat(allocation.getDiscarded()).isFalse();
+            verify(fixture.salesOrderManageService, never()).discardItemForU9Change(any(), any(), any());
+            verify(fixture.allocationMapper, never()).updateById(any(OrderDeliveryTicketAllocation.class));
+        }
+    }
+
+    @Test
+    void unresolvedWmsReservationAlsoBlocksLinkedRestore() {
+        SalesOrderHeader order = order(106L, "未同步");
+        SalesOrderItem item = item(206L, 106L, 10);
+        item.setAllocationId(21L);
+        item.setLinkedDiscarded(true);
+        OrderDeliveryTicketAllocation allocation = allocation(21, 11, "PRODUCTION_REQUIRED", "FAILED", null, true);
+        allocation.setDiscardSource(SalesOrderLinkedDiscardService.LINKED_DISCARD_SOURCE);
+        allocation.setDiscardSourceSalesOrderItemId(item.getId());
+        Fixture fixture = fixture(order, item, List.of(), List.of(allocation));
+        WmsReservationTicket active = new WmsReservationTicket();
+        active.setId(602L);
+        active.setAllocationId(21);
+        active.setStatus("APPLY_FAILED");
+        when(fixture.wmsReservationTicketMapper.selectLatestForLinkedChange(anyList(), anyList()))
+                .thenReturn(List.of(active));
+
+        assertThatThrownBy(() -> fixture.service.restore(106L, 206L, reason("暂缓")))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("WMS库存获取仍在处理中");
+
+        assertThat(allocation.getDiscarded()).isTrue();
+        verify(fixture.allocationMapper, never()).updateById(any(OrderDeliveryTicketAllocation.class));
+    }
+
+    @Test
+    void allocationLinkedRowIgnoresLegacyTicketWmsStatus() {
+        SalesOrderHeader order = order(108L, "未同步");
+        SalesOrderItem item = item(208L, 108L, 10);
+        item.setAllocationId(24L);
+        item.setSourceTicketId(12);
+        OrderDeliveryTicket legacyTicket = ticket(12, "M-12", "SUCCESS", "RESULT_UNKNOWN", false);
+        OrderDeliveryTicketAllocation allocation = allocation(24, 12, "PRODUCTION_REQUIRED", "PENDING", null, false);
+        Fixture fixture = fixture(order, item, List.of(legacyTicket), List.of(allocation));
+
+        SalesOrderLinkedDiscardResult result = fixture.service.discard(108L, 208L, reason("仅处理当前 allocation"));
+
+        assertThat(result.isLinkedDiscarded()).isTrue();
+        assertThat(allocation.getDiscarded()).isTrue();
+        verify(fixture.allocationMapper).updateById(allocation);
+        verify(fixture.ticketMapper, never()).updateById(legacyTicket);
+    }
+
     private Fixture fixture(
             SalesOrderHeader order,
             SalesOrderItem item,
@@ -147,6 +272,8 @@ class SalesOrderLinkedDiscardServiceTest {
         SalesOrderItemMapper itemMapper = mock(SalesOrderItemMapper.class);
         OrderDeliveryTicketMapper ticketMapper = mock(OrderDeliveryTicketMapper.class);
         OrderDeliveryTicketAllocationMapper allocationMapper = mock(OrderDeliveryTicketAllocationMapper.class);
+        WmsReservationTicketMapper wmsReservationTicketMapper = mock(WmsReservationTicketMapper.class);
+        WmsReservationBatchMapper wmsReservationBatchMapper = mock(WmsReservationBatchMapper.class);
         SalesOrderManageService salesOrderManageService = mock(SalesOrderManageService.class);
         AuditService auditService = mock(AuditService.class);
 
@@ -169,10 +296,12 @@ class SalesOrderLinkedDiscardServiceTest {
         ReflectionTestUtils.setField(service, "itemMapper", itemMapper);
         ReflectionTestUtils.setField(service, "ticketMapper", ticketMapper);
         ReflectionTestUtils.setField(service, "allocationMapper", allocationMapper);
+        ReflectionTestUtils.setField(service, "wmsReservationTicketMapper", wmsReservationTicketMapper);
+        ReflectionTestUtils.setField(service, "wmsReservationBatchMapper", wmsReservationBatchMapper);
         ReflectionTestUtils.setField(service, "salesOrderManageService", salesOrderManageService);
         ReflectionTestUtils.setField(service, "auditService", auditService);
         return new Fixture(service, headerMapper, itemMapper, ticketMapper, allocationMapper,
-                salesOrderManageService, auditService);
+                wmsReservationTicketMapper, wmsReservationBatchMapper, salesOrderManageService, auditService);
     }
 
     private OrderStatusChangeReq reason(String value) {
@@ -240,6 +369,8 @@ class SalesOrderLinkedDiscardServiceTest {
             SalesOrderItemMapper itemMapper,
             OrderDeliveryTicketMapper ticketMapper,
             OrderDeliveryTicketAllocationMapper allocationMapper,
+            WmsReservationTicketMapper wmsReservationTicketMapper,
+            WmsReservationBatchMapper wmsReservationBatchMapper,
             SalesOrderManageService salesOrderManageService,
             AuditService auditService) {
     }

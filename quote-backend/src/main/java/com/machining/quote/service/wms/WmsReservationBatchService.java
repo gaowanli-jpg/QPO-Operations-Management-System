@@ -51,6 +51,8 @@ public class WmsReservationBatchService {
 
     public Map<String, Object> allocateBatch(List<Integer> ticketIds, Long taskId) {
         List<Integer> normalizedTicketIds = normalizeIds(ticketIds, "at least one delivered item is required");
+        long startedAt = System.currentTimeMillis();
+        log.info("WMS reservation batch started taskId={} ticketCount={}", taskId, normalizedTicketIds.size());
         List<Row> rows = new ArrayList<>();
         LinkedHashSet<Long> recoveryBatchIds = new LinkedHashSet<>();
         LinkedHashSet<Integer> legacyTicketIds = new LinkedHashSet<>();
@@ -79,7 +81,18 @@ public class WmsReservationBatchService {
             rows.addAll(recoverBatch(batchId));
         }
         rows.addAll(allocateAllocations(allocationIds, taskId));
-        return summary(taskId, rows);
+        Map<String, Object> summary = summary(taskId, rows);
+        log.info("WMS reservation batch completed taskId={} ticketCount={} durationMs={} batchCount={} successCount={} failedCount={} unknownCount={} applyFailedCount={} skippedCount={}",
+                taskId,
+                normalizedTicketIds.size(),
+                durationMs(startedAt),
+                summary.get("batchCount"),
+                summary.get("successCount"),
+                summary.get("failedCount"),
+                summary.get("unknownCount"),
+                summary.get("applyFailedCount"),
+                summary.get("skippedCount"));
+        return summary;
     }
 
     public Map<String, Object> allocateAllocationBatch(List<Integer> allocationIds, Long taskId) {

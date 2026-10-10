@@ -11,6 +11,8 @@ import com.machining.quote.mapper.OrderDeliveryTicketAllocationMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.SalesOrderHeaderMapper;
 import com.machining.quote.mapper.SalesOrderItemMapper;
+import com.machining.quote.mapper.WmsReservationBatchMapper;
+import com.machining.quote.mapper.WmsReservationTicketMapper;
 import com.machining.quote.service.AuditService;
 import com.machining.quote.service.SalesOrderLinkedDiscardService;
 import com.machining.quote.service.SalesOrderManageService;
@@ -88,6 +90,8 @@ class SalesOrderLinkedDiscardBatchServiceTest {
         SalesOrderItemMapper itemMapper = mock(SalesOrderItemMapper.class);
         OrderDeliveryTicketMapper ticketMapper = mock(OrderDeliveryTicketMapper.class);
         OrderDeliveryTicketAllocationMapper allocationMapper = mock(OrderDeliveryTicketAllocationMapper.class);
+        WmsReservationTicketMapper wmsReservationTicketMapper = mock(WmsReservationTicketMapper.class);
+        WmsReservationBatchMapper wmsReservationBatchMapper = mock(WmsReservationBatchMapper.class);
         SalesOrderManageService salesOrderManageService = mock(SalesOrderManageService.class);
         AuditService auditService = mock(AuditService.class);
 
@@ -112,9 +116,12 @@ class SalesOrderLinkedDiscardBatchServiceTest {
         ReflectionTestUtils.setField(service, "itemMapper", itemMapper);
         ReflectionTestUtils.setField(service, "ticketMapper", ticketMapper);
         ReflectionTestUtils.setField(service, "allocationMapper", allocationMapper);
+        ReflectionTestUtils.setField(service, "wmsReservationTicketMapper", wmsReservationTicketMapper);
+        ReflectionTestUtils.setField(service, "wmsReservationBatchMapper", wmsReservationBatchMapper);
         ReflectionTestUtils.setField(service, "salesOrderManageService", salesOrderManageService);
         ReflectionTestUtils.setField(service, "auditService", auditService);
-        return new Fixture(service, headerMapper, itemMapper, ticketMapper, allocationMapper, auditService);
+        return new Fixture(service, headerMapper, itemMapper, ticketMapper, allocationMapper,
+                wmsReservationTicketMapper, wmsReservationBatchMapper, auditService);
     }
 
     private SalesOrderHeader order(Long id, String status, String u9Status) {
@@ -185,6 +192,8 @@ class SalesOrderLinkedDiscardBatchServiceTest {
             SalesOrderItemMapper itemMapper,
             OrderDeliveryTicketMapper ticketMapper,
             OrderDeliveryTicketAllocationMapper allocationMapper,
+            WmsReservationTicketMapper wmsReservationTicketMapper,
+            WmsReservationBatchMapper wmsReservationBatchMapper,
             AuditService auditService) {
     }
 }

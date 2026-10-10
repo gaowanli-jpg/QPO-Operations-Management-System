@@ -39,7 +39,7 @@ class SalesOrderLinkedChangeNoticeMigrationTest {
     }
 
     @Test
-    void historicalOrderFieldFiltersRemainAndMigrationSequenceIncludesV58() throws Exception {
+    void historicalOrderFieldFiltersRemainAndMigrationSequenceIncludesCurrentMigrations() throws Exception {
         Pattern versionPattern = Pattern.compile("^V(\\d+)__.+\\.sql$");
         int maxVersion;
         try (var files = Files.list(MIGRATION_DIR)) {
@@ -49,7 +49,7 @@ class SalesOrderLinkedChangeNoticeMigrationTest {
                     .mapToInt(matcher -> Integer.parseInt(matcher.group(1)))
                     .max().orElse(0);
         }
-        assertThat(maxVersion).isEqualTo(58);
+        assertThat(maxVersion).isEqualTo(59);
 
         Path migration = MIGRATION_DIR.resolve("V56__sales_order_linked_change_notice_filter_fields.sql");
         assertThat(migration).exists();

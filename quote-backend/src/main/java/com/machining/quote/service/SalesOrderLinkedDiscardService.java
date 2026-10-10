@@ -12,10 +12,14 @@ import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.OrderDeliveryTicketAllocation;
 import com.machining.quote.entity.SalesOrderHeader;
 import com.machining.quote.entity.SalesOrderItem;
+import com.machining.quote.entity.WmsReservationBatch;
+import com.machining.quote.entity.WmsReservationTicket;
 import com.machining.quote.mapper.OrderDeliveryTicketAllocationMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.SalesOrderHeaderMapper;
 import com.machining.quote.mapper.SalesOrderItemMapper;
+import com.machining.quote.mapper.WmsReservationBatchMapper;
+import com.machining.quote.mapper.WmsReservationTicketMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,6 +32,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 public class SalesOrderLinkedDiscardService {
@@ -41,6 +46,8 @@ public class SalesOrderLinkedDiscardService {
     private static final String STATUS_SUCCESS = "SUCCESS";
     private static final String PRODUCTION_REQUIRED = "PRODUCTION_REQUIRED";
     private static final Set<String> LOCKED_ALLOCATION_TYPES = Set.of("IN_STOCK_LOCK", "IN_PRODUCTION_LOCK");
+    private static final Set<String> ACTIVE_WMS_RESERVATION_STATUSES = Set.of(
+            "RESERVED", "SUBMITTING", "RESULT_UNKNOWN", "RESPONSE_RECEIVED", "APPLY_FAILED");
 
     @Autowired
     private SalesOrderHeaderMapper headerMapper;
@@ -50,6 +57,10 @@ public class SalesOrderLinkedDiscardService {
     private OrderDeliveryTicketMapper ticketMapper;
     @Autowired
     private OrderDeliveryTicketAllocationMapper allocationMapper;
+    @Autowired
+    private WmsReservationTicketMapper wmsReservationTicketMapper;
+    @Autowired
+    private WmsReservationBatchMapper wmsReservationBatchMapper;
     @Autowired
     private SalesOrderManageService salesOrderManageService;
     @Autowired(required = false)
@@ -71,12 +82,19 @@ public class SalesOrderLinkedDiscardService {
 
         List<OrderDeliveryTicket> tickets = lockRelatedTickets(order, item);
         List<OrderDeliveryTicketAllocation> allocations = lockRelatedAllocations(order, item, tickets);
+        Map<Long, List<OrderDeliveryTicket>> ticketsByItem = Map.of(item.getId(), tickets);
+        Map<Long, List<OrderDeliveryTicketAllocation>> allocationsByItem = Map.of(item.getId(), allocations);
+        WmsNoticeRelations wmsRelations = loadWmsNoticeRelations(List.of(item), ticketsByItem, allocationsByItem);
+        assertNoActiveWmsReservations(wmsRelations, tickets);
         List<OrderDeliveryTicket> ticketTargets = new ArrayList<>();
         List<OrderDeliveryTicketAllocation> allocationTargets = new ArrayList<>();
         int skippedCompleted = 0;
         int skippedAlreadyDiscarded = 0;
 
         for (OrderDeliveryTicket ticket : tickets) {
+            if (item.getAllocationId() != null) {
+                continue;
+            }
             if (Boolean.TRUE.equals(ticket.getDiscarded())) {
                 skippedAlreadyDiscarded++;
             } else if (isCompletedTicket(ticket, allocations)) {
@@ -108,7 +126,8 @@ public class SalesOrderLinkedDiscardService {
         Long operatorId = currentUserId();
         if (linkedChangeNoticeService != null) {
             linkedChangeNoticeService.createForItem(order, item, tickets, allocations,
-                    "ITEM", reason, now, operatorId);
+                    wmsRelations.reservationTicketsByItem.getOrDefault(item.getId(), List.of()),
+                    wmsRelations.batchesById, "ITEM", reason, now, operatorId);
         }
         for (OrderDeliveryTicket ticket : ticketTargets) {
             ticket.setDiscarded(true);
@@ -155,6 +174,10 @@ public class SalesOrderLinkedDiscardService {
 
         List<OrderDeliveryTicket> tickets = lockRelatedTickets(order, item);
         List<OrderDeliveryTicketAllocation> allocations = lockRelatedAllocations(order, item, tickets);
+        Map<Long, List<OrderDeliveryTicket>> ticketsByItem = Map.of(item.getId(), tickets);
+        Map<Long, List<OrderDeliveryTicketAllocation>> allocationsByItem = Map.of(item.getId(), allocations);
+        WmsNoticeRelations wmsRelations = loadWmsNoticeRelations(List.of(item), ticketsByItem, allocationsByItem);
+        assertNoActiveWmsReservations(wmsRelations, tickets);
         LocalDateTime now = LocalDateTime.now();
         Long operatorId = currentUserId();
         int restoredTickets = 0;
@@ -162,6 +185,9 @@ public class SalesOrderLinkedDiscardService {
         int skippedCompleted = 0;
         int skippedAlreadyDiscarded = 0;
         for (OrderDeliveryTicket ticket : tickets) {
+            if (item.getAllocationId() != null) {
+                continue;
+            }
             if (!isLinkedDiscarded(ticket, item)) {
                 if (Boolean.TRUE.equals(ticket.getDiscarded())) {
                     skippedAlreadyDiscarded++;
@@ -238,6 +264,7 @@ public class SalesOrderLinkedDiscardService {
         String fromStatus = order.getStatus();
         List<SalesOrderItem> items = lockOrderItems(order);
         BatchRelations relations = lockOrderRelations(order, items);
+        assertNoActiveWmsReservations(relations.wmsRelations, relations.tickets);
         List<SalesOrderItem> targetItems = items.stream()
                 .filter(item -> !Boolean.TRUE.equals(item.getLinkedDiscarded()))
                 .toList();
@@ -249,7 +276,9 @@ public class SalesOrderLinkedDiscardService {
         Long operatorId = currentUserId();
         if (linkedChangeNoticeService != null) {
             linkedChangeNoticeService.createForItems(order, targetItems,
-                    ticketRowsByItem(relations), allocationRowsByItem(relations), reason, now, operatorId);
+                    ticketRowsByItem(relations), allocationRowsByItem(relations),
+                    relations.wmsRelations.reservationTicketsByItem, relations.wmsRelations.batchesById,
+                    reason, now, operatorId);
         }
         updateLinkedDiscardTargets(targets, reason, operatorId, now);
 
@@ -317,6 +346,7 @@ public class SalesOrderLinkedDiscardService {
         String fromStatus = order.getStatus();
         List<SalesOrderItem> items = lockOrderItems(order);
         BatchRelations relations = lockOrderRelations(order, items);
+        assertNoActiveWmsReservations(relations.wmsRelations, relations.tickets);
         List<SalesOrderItem> targetItems = items.stream()
                 .filter(item -> Boolean.TRUE.equals(item.getLinkedDiscarded()))
                 .toList();
@@ -403,12 +433,19 @@ public class SalesOrderLinkedDiscardService {
 
     private BatchRelations lockOrderRelations(SalesOrderHeader order, List<SalesOrderItem> items) {
         if (items == null || items.isEmpty()) {
-            return new BatchRelations(List.of(), List.of(), Map.of(), Map.of());
+            return new BatchRelations(List.of(), List.of(), Map.of(), Map.of(),
+                    new WmsNoticeRelations(Map.of(), Map.of(), List.of(), Set.of()));
         }
         Set<Long> itemIds = items.stream()
                 .map(SalesOrderItem::getId)
                 .filter(Objects::nonNull)
                 .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+        Set<Long> legacyItemIds = items.stream()
+                .filter(item -> item.getAllocationId() == null)
+                .map(SalesOrderItem::getId)
+                .filter(Objects::nonNull)
+                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+        Map<Integer, Long> sourceTicketToItem = uniqueSourceTicketItemMap(items);
         Set<Integer> sourceTicketIds = items.stream()
                 .map(SalesOrderItem::getSourceTicketId)
                 .filter(Objects::nonNull)
@@ -436,28 +473,48 @@ public class SalesOrderLinkedDiscardService {
             }
         }
 
-        Set<Integer> ticketIds = tickets.stream()
-                .map(OrderDeliveryTicket::getId)
+        Set<Integer> exactAllocationIds = items.stream()
+                .map(SalesOrderItem::getAllocationId)
                 .filter(Objects::nonNull)
+                .map(Math::toIntExact)
                 .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+        Set<Integer> legacyTicketIds = new LinkedHashSet<>();
+        for (OrderDeliveryTicket ticket : tickets) {
+            Long itemId = relatedSalesOrderItemId(order, ticket, sourceTicketToItem, itemIds);
+            if (itemId != null && legacyItemIds.contains(itemId) && ticket.getId() != null) {
+                legacyTicketIds.add(ticket.getId());
+            }
+        }
+
         QueryWrapper<OrderDeliveryTicketAllocation> allocationQuery = new QueryWrapper<>();
         allocationQuery.and(wrapper -> {
-            if (ticketIds.isEmpty()) {
-                wrapper.apply("1 = 0");
-            } else {
-                wrapper.in("ticket_id", ticketIds);
+            wrapper.apply("1 = 0");
+            if (!exactAllocationIds.isEmpty()) {
+                wrapper.or().in("id", exactAllocationIds);
             }
-            wrapper.or(direct -> direct.eq("source_type", "SALES_ORDER")
-                    .eq("source_order_id", order.getId())
-                    .in("source_item_id", itemIds));
+            if (!legacyTicketIds.isEmpty()) {
+                wrapper.or().in("ticket_id", legacyTicketIds);
+            }
+            if (!legacyItemIds.isEmpty()) {
+                wrapper.or(direct -> direct.eq("source_type", "SALES_ORDER")
+                        .eq("source_order_id", order.getId())
+                        .in("source_item_id", legacyItemIds));
+            }
         }).orderByAsc("id").last("FOR UPDATE");
         List<OrderDeliveryTicketAllocation> allocations = allocationMapper.selectList(allocationQuery);
         allocations = allocations == null ? List.of() : allocations;
+        Set<Integer> loadedAllocationIds = allocations.stream()
+                .map(OrderDeliveryTicketAllocation::getId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        if (!loadedAllocationIds.containsAll(exactAllocationIds)) {
+            throw new RuntimeException("销售订单零件关联的 allocation 不存在，请刷新后重试");
+        }
 
-        Map<Integer, Long> sourceTicketToItem = items.stream()
-                .filter(item -> item.getSourceTicketId() != null && item.getId() != null)
-                .collect(java.util.stream.Collectors.toMap(
-                        SalesOrderItem::getSourceTicketId,
+        Map<Integer, Long> exactAllocationToItem = items.stream()
+                .filter(item -> item.getAllocationId() != null && item.getId() != null)
+                .collect(Collectors.toMap(
+                        item -> Math.toIntExact(item.getAllocationId()),
                         SalesOrderItem::getId,
                         (left, right) -> left,
                         LinkedHashMap::new));
@@ -469,37 +526,36 @@ public class SalesOrderLinkedDiscardService {
         }
         Map<Integer, Long> ticketToItem = new LinkedHashMap<>();
         for (OrderDeliveryTicket ticket : tickets) {
-            Long itemId = null;
-            if ("SALES_ORDER".equalsIgnoreCase(text(ticket.getSourceType()))
-                    && Objects.equals(order.getId(), ticket.getSourceOrderId())) {
-                itemId = ticket.getSourceItemId();
-            }
-            if (itemId == null) {
-                itemId = sourceTicketToItem.get(ticket.getId());
-            }
+            Long itemId = relatedSalesOrderItemId(order, ticket, sourceTicketToItem, itemIds);
             if (itemId != null && ticketsByItem.containsKey(itemId) && ticket.getId() != null) {
                 ticketsByItem.get(itemId).put(ticket.getId(), ticket);
                 ticketToItem.put(ticket.getId(), itemId);
             }
         }
         for (OrderDeliveryTicketAllocation allocation : allocations) {
-            Long itemId = null;
-            if ("SALES_ORDER".equalsIgnoreCase(text(allocation.getSourceType()))
-                    && Objects.equals(order.getId(), allocation.getSourceOrderId())) {
+            Long itemId = allocation.getId() == null ? null : exactAllocationToItem.get(allocation.getId());
+            if (itemId == null
+                    && "SALES_ORDER".equalsIgnoreCase(text(allocation.getSourceType()))
+                    && Objects.equals(order.getId(), allocation.getSourceOrderId())
+                    && legacyItemIds.contains(allocation.getSourceItemId())) {
                 itemId = allocation.getSourceItemId();
             }
-            if (itemId == null) {
+            if (itemId == null && legacyItemIds.contains(ticketToItem.get(allocation.getTicketId()))) {
                 itemId = ticketToItem.get(allocation.getTicketId());
             }
             if (itemId != null && allocationsByItem.containsKey(itemId) && allocation.getId() != null) {
                 allocationsByItem.get(itemId).put(allocation.getId(), allocation);
             }
         }
+        Map<Long, List<OrderDeliveryTicket>> ticketRowsByItem = toRowsByItem(ticketsByItem);
+        Map<Long, List<OrderDeliveryTicketAllocation>> allocationRowsByItem = toRowsByItem(allocationsByItem);
+        WmsNoticeRelations wmsRelations = loadWmsNoticeRelations(items, ticketRowsByItem, allocationRowsByItem);
         return new BatchRelations(
                 tickets,
                 allocations,
                 ticketsByItem,
-                allocationsByItem);
+                allocationsByItem,
+                wmsRelations);
     }
 
     private BatchTargets collectDiscardTargets(List<SalesOrderItem> items, BatchRelations relations) {
@@ -510,6 +566,9 @@ public class SalesOrderLinkedDiscardService {
             List<OrderDeliveryTicketAllocation> allocations = relations.allocationsByItem
                     .getOrDefault(item.getId(), Map.of()).values().stream().toList();
             for (OrderDeliveryTicket ticket : tickets) {
+                if (item.getAllocationId() != null) {
+                    continue;
+                }
                 if (Boolean.TRUE.equals(ticket.getDiscarded())) {
                     targets.skippedAlreadyDiscardedCount++;
                 } else if (isCompletedTicket(ticket, relations.allocations)) {
@@ -544,6 +603,9 @@ public class SalesOrderLinkedDiscardService {
             List<OrderDeliveryTicketAllocation> allocations = relations.allocationsByItem
                     .getOrDefault(item.getId(), Map.of()).values().stream().toList();
             for (OrderDeliveryTicket ticket : tickets) {
+                if (item.getAllocationId() != null) {
+                    continue;
+                }
                 if (!isLinkedDiscarded(ticket, item)) {
                     if (Boolean.TRUE.equals(ticket.getDiscarded())) {
                         targets.skippedAlreadyDiscardedCount++;
@@ -587,6 +649,181 @@ public class SalesOrderLinkedDiscardService {
     private Map<Long, List<OrderDeliveryTicketAllocation>> allocationRowsByItem(BatchRelations relations) {
         Map<Long, List<OrderDeliveryTicketAllocation>> rows = new LinkedHashMap<>();
         relations.allocationsByItem.forEach((itemId, allocations) -> rows.put(itemId, new ArrayList<>(allocations.values())));
+        return rows;
+    }
+
+    private WmsNoticeRelations loadWmsNoticeRelations(
+            List<SalesOrderItem> items,
+            Map<Long, List<OrderDeliveryTicket>> ticketsByItem,
+            Map<Long, List<OrderDeliveryTicketAllocation>> allocationsByItem) {
+        if (items == null || items.isEmpty()) {
+            return new WmsNoticeRelations(Map.of(), Map.of(), List.of(), Set.of());
+        }
+        Map<Integer, Long> allocationToItem = new LinkedHashMap<>();
+        Map<Long, Long> reservationToItem = new LinkedHashMap<>();
+        Map<Integer, Set<Long>> ticketOwners = new LinkedHashMap<>();
+        Set<Long> allocationLinkedItemIds = items.stream()
+                .filter(item -> item.getAllocationId() != null)
+                .map(SalesOrderItem::getId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Set<Integer> legacyTicketIds = new LinkedHashSet<>();
+        Set<Integer> queryAllocationIds = new LinkedHashSet<>();
+        Set<Integer> queryTicketIds = new LinkedHashSet<>();
+        Set<Long> queryReservationIds = new LinkedHashSet<>();
+
+        for (SalesOrderItem item : items) {
+            if (item.getId() != null && item.getAllocationId() != null) {
+                int allocationId = Math.toIntExact(item.getAllocationId());
+                allocationToItem.put(allocationId, item.getId());
+                queryAllocationIds.add(allocationId);
+            }
+        }
+        for (Map.Entry<Long, List<OrderDeliveryTicket>> entry : ticketsByItem.entrySet()) {
+            for (OrderDeliveryTicket ticket : entry.getValue()) {
+                if (ticket.getId() != null) {
+                    queryTicketIds.add(ticket.getId());
+                    if (!allocationLinkedItemIds.contains(entry.getKey())) {
+                        legacyTicketIds.add(ticket.getId());
+                        ticketOwners.computeIfAbsent(ticket.getId(), ignored -> new LinkedHashSet<>()).add(entry.getKey());
+                    }
+                }
+            }
+        }
+        for (Map.Entry<Long, List<OrderDeliveryTicketAllocation>> entry : allocationsByItem.entrySet()) {
+            for (OrderDeliveryTicketAllocation allocation : entry.getValue()) {
+                if (allocation.getId() != null) {
+                    queryAllocationIds.add(allocation.getId());
+                    allocationToItem.putIfAbsent(allocation.getId(), entry.getKey());
+                }
+                if (allocation.getWmsReservationTicketId() != null) {
+                    queryReservationIds.add(allocation.getWmsReservationTicketId());
+                    reservationToItem.put(allocation.getWmsReservationTicketId(), entry.getKey());
+                }
+                if (allocation.getTicketId() != null) {
+                    queryTicketIds.add(allocation.getTicketId());
+                    if (!allocationLinkedItemIds.contains(entry.getKey())) {
+                        legacyTicketIds.add(allocation.getTicketId());
+                    }
+                }
+            }
+        }
+
+        Map<Long, WmsReservationTicket> reservationsById = new LinkedHashMap<>();
+        if (!queryAllocationIds.isEmpty() || !queryTicketIds.isEmpty()) {
+            List<WmsReservationTicket> latest = wmsReservationTicketMapper.selectLatestForLinkedChange(
+                    new ArrayList<>(queryAllocationIds), new ArrayList<>(queryTicketIds));
+            for (WmsReservationTicket reservation : latest == null ? List.<WmsReservationTicket>of() : latest) {
+                if (reservation.getId() != null) {
+                    reservationsById.put(reservation.getId(), reservation);
+                }
+            }
+        }
+        if (!queryReservationIds.isEmpty()) {
+            List<WmsReservationTicket> linked = wmsReservationTicketMapper
+                    .selectLinkedChangeReservationsByIds(new ArrayList<>(queryReservationIds));
+            for (WmsReservationTicket reservation : linked == null ? List.<WmsReservationTicket>of() : linked) {
+                if (reservation.getId() != null) {
+                    reservationsById.put(reservation.getId(), reservation);
+                }
+            }
+        }
+
+        Map<Long, List<WmsReservationTicket>> reservationsByItem = new LinkedHashMap<>();
+        for (SalesOrderItem item : items) {
+            if (item.getId() != null) {
+                reservationsByItem.put(item.getId(), new ArrayList<>());
+            }
+        }
+        for (WmsReservationTicket reservation : reservationsById.values()) {
+            Long itemId = reservationToItem.get(reservation.getId());
+            if (itemId == null && reservation.getAllocationId() != null) {
+                itemId = allocationToItem.get(reservation.getAllocationId());
+            }
+            if (itemId == null && reservation.getAllocationId() == null && reservation.getTicketId() != null) {
+                Set<Long> owners = ticketOwners.getOrDefault(reservation.getTicketId(), Set.of());
+                if (owners.size() == 1) {
+                    itemId = owners.iterator().next();
+                }
+            }
+            if (itemId != null && reservationsByItem.containsKey(itemId)) {
+                reservationsByItem.get(itemId).add(reservation);
+            }
+        }
+
+        List<WmsReservationTicket> relevantReservations = reservationsByItem.values().stream()
+                .flatMap(List::stream)
+                .toList();
+        Set<Long> batchIds = relevantReservations.stream()
+                .map(WmsReservationTicket::getBatchId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        Map<Long, WmsReservationBatch> batchesById = new LinkedHashMap<>();
+        if (!batchIds.isEmpty()) {
+            List<WmsReservationBatch> batches = wmsReservationBatchMapper
+                    .selectLinkedChangeBatchesByIds(new ArrayList<>(batchIds));
+            for (WmsReservationBatch batch : batches == null ? List.<WmsReservationBatch>of() : batches) {
+                if (batch.getId() != null) {
+                    batchesById.put(batch.getId(), batch);
+                }
+            }
+        }
+        return new WmsNoticeRelations(reservationsByItem, batchesById,
+                relevantReservations, legacyTicketIds);
+    }
+
+    private void assertNoActiveWmsReservations(
+            WmsNoticeRelations wmsRelations,
+            List<OrderDeliveryTicket> relatedTickets) {
+        for (WmsReservationTicket reservation : wmsRelations.reservations) {
+            String status = text(reservation.getStatus()).toUpperCase(java.util.Locale.ROOT);
+            if (ACTIVE_WMS_RESERVATION_STATUSES.contains(status)) {
+                throw new RuntimeException("WMS库存获取仍在处理中或结果待核对，暂不能关联废弃或恢复，请等待结果收口后再处理");
+            }
+        }
+        for (OrderDeliveryTicket ticket : relatedTickets) {
+            if (ticket.getId() == null || !wmsRelations.legacyTicketIds.contains(ticket.getId())) {
+                continue;
+            }
+            String status = text(ticket.getWmsAllocateStatus()).toUpperCase(java.util.Locale.ROOT);
+            if (ACTIVE_WMS_RESERVATION_STATUSES.contains(status) || "PROCESSING".equals(status)) {
+                throw new RuntimeException("WMS库存获取仍在处理中或结果待核对，暂不能关联废弃或恢复，请等待结果收口后再处理");
+            }
+        }
+    }
+
+    private Map<Integer, Long> uniqueSourceTicketItemMap(List<SalesOrderItem> items) {
+        Map<Integer, Set<Long>> owners = new LinkedHashMap<>();
+        for (SalesOrderItem item : items) {
+            if (item.getSourceTicketId() != null && item.getId() != null) {
+                owners.computeIfAbsent(item.getSourceTicketId(), ignored -> new LinkedHashSet<>()).add(item.getId());
+            }
+        }
+        Map<Integer, Long> unique = new LinkedHashMap<>();
+        owners.forEach((ticketId, itemIds) -> {
+            if (itemIds.size() == 1) {
+                unique.put(ticketId, itemIds.iterator().next());
+            }
+        });
+        return unique;
+    }
+
+    private Long relatedSalesOrderItemId(
+            SalesOrderHeader order,
+            OrderDeliveryTicket ticket,
+            Map<Integer, Long> sourceTicketToItem,
+            Set<Long> itemIds) {
+        if ("SALES_ORDER".equalsIgnoreCase(text(ticket.getSourceType()))
+                && Objects.equals(order.getId(), ticket.getSourceOrderId())
+                && itemIds.contains(ticket.getSourceItemId())) {
+            return ticket.getSourceItemId();
+        }
+        return sourceTicketToItem.get(ticket.getId());
+    }
+
+    private <T> Map<Long, List<T>> toRowsByItem(Map<Long, Map<Integer, T>> rowsByItem) {
+        Map<Long, List<T>> rows = new LinkedHashMap<>();
+        rowsByItem.forEach((itemId, rowsById) -> rows.put(itemId, new ArrayList<>(rowsById.values())));
         return rows;
     }
 
@@ -692,7 +929,15 @@ public class SalesOrderLinkedDiscardService {
             List<OrderDeliveryTicket> tickets,
             List<OrderDeliveryTicketAllocation> allocations,
             Map<Long, Map<Integer, OrderDeliveryTicket>> ticketsByItem,
-            Map<Long, Map<Integer, OrderDeliveryTicketAllocation>> allocationsByItem) {
+            Map<Long, Map<Integer, OrderDeliveryTicketAllocation>> allocationsByItem,
+            WmsNoticeRelations wmsRelations) {
+    }
+
+    private record WmsNoticeRelations(
+            Map<Long, List<WmsReservationTicket>> reservationTicketsByItem,
+            Map<Long, WmsReservationBatch> batchesById,
+            List<WmsReservationTicket> reservations,
+            Set<Integer> legacyTicketIds) {
     }
 
     private static final class BatchTargets {
@@ -747,6 +992,14 @@ public class SalesOrderLinkedDiscardService {
             SalesOrderHeader order,
             SalesOrderItem item,
             List<OrderDeliveryTicket> tickets) {
+        if (item.getAllocationId() != null) {
+            OrderDeliveryTicketAllocation allocation = allocationMapper
+                    .selectByIdForUpdate(Math.toIntExact(item.getAllocationId()));
+            if (allocation == null) {
+                throw new RuntimeException("销售订单零件关联的 allocation 不存在，请刷新后重试");
+            }
+            return List.of(allocation);
+        }
         Set<Integer> ticketIds = tickets.stream()
                 .map(OrderDeliveryTicket::getId)
                 .filter(Objects::nonNull)
