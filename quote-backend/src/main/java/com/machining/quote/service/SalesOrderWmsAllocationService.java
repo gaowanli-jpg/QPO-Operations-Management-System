@@ -8,7 +8,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.LinkedHashSet;
 import java.util.Objects;
+import java.util.Set;
 
 @Service
 public class SalesOrderWmsAllocationService {
@@ -54,6 +56,35 @@ public class SalesOrderWmsAllocationService {
                 .filter(this::isEligible)
                 .map(OrderDeliveryTicketAllocation::getId)
                 .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+    }
+
+    public List<Integer> resolveSelectedAllocationIds(Long salesOrderId, List<Integer> requestedAllocationIds) {
+        requireAccessibleSalesOrder(salesOrderId);
+        Set<Integer> requested = normalizeIds(requestedAllocationIds);
+        if (requested.isEmpty()) {
+            throw new RuntimeException("至少选择一个待产零件");
+        }
+        Set<Integer> orderAllocationIds = allocationMapper.selectSalesOrderProductionAllocations(salesOrderId).stream()
+                .map(OrderDeliveryTicketAllocation::getId)
+                .filter(Objects::nonNull)
+                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+        List<Integer> outsideOrder = requested.stream()
+                .filter(id -> !orderAllocationIds.contains(id))
+                .toList();
+        if (!outsideOrder.isEmpty()) {
+            throw new RuntimeException("所选 Allocation 不属于当前销售订单：" + outsideOrder);
+        }
+        return requested.stream().toList();
+    }
+
+    public List<Integer> resolveEligibleAllocationIds(Long salesOrderId, List<Integer> requestedAllocationIds) {
+        Set<Integer> requested = new LinkedHashSet<>(resolveSelectedAllocationIds(salesOrderId, requestedAllocationIds));
+        return allocationMapper.selectSalesOrderProductionAllocations(salesOrderId).stream()
+                .filter(allocation -> allocation.getId() != null && requested.contains(allocation.getId()))
+                .filter(this::isEligible)
+                .map(OrderDeliveryTicketAllocation::getId)
                 .distinct()
                 .toList();
     }
@@ -114,5 +145,14 @@ public class SalesOrderWmsAllocationService {
     private String defaultText(String value, String fallback) {
         String trimmed = trim(value);
         return trimmed == null ? fallback : trimmed;
+    }
+
+    private Set<Integer> normalizeIds(List<Integer> ids) {
+        if (ids == null) {
+            return Set.of();
+        }
+        return ids.stream()
+                .filter(id -> id != null && id > 0)
+                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
     }
 }

@@ -151,6 +151,10 @@ public class SystemTaskService {
     }
 
     public SystemTask submitSalesOrderWmsAllocationTask(Long salesOrderId) {
+        return submitSalesOrderWmsAllocationTask(salesOrderId, null);
+    }
+
+    public SystemTask submitSalesOrderWmsAllocationTask(Long salesOrderId, List<Integer> requestedAllocationIds) {
         if (deliveryIntegrationBatchService == null) {
             throw new RuntimeException("WMS allocation service is unavailable");
         }
@@ -158,10 +162,17 @@ public class SystemTaskService {
             throw new RuntimeException("Sales order WMS allocation service is unavailable");
         }
         salesOrderWmsAllocationService.assertCanAccessSalesOrder(salesOrderId);
-        List<Integer> allAllocationIds = salesOrderWmsAllocationService.resolveAllocationIds(salesOrderId);
-        List<Integer> eligibleAllocationIds = salesOrderWmsAllocationService.resolveEligibleAllocationIds(salesOrderId);
+        boolean selectedMode = requestedAllocationIds != null && !requestedAllocationIds.isEmpty();
+        List<Integer> allAllocationIds = selectedMode
+                ? salesOrderWmsAllocationService.resolveSelectedAllocationIds(salesOrderId, requestedAllocationIds)
+                : salesOrderWmsAllocationService.resolveAllocationIds(salesOrderId);
+        List<Integer> eligibleAllocationIds = selectedMode
+                ? salesOrderWmsAllocationService.resolveEligibleAllocationIds(salesOrderId, requestedAllocationIds)
+                : salesOrderWmsAllocationService.resolveEligibleAllocationIds(salesOrderId);
         if (eligibleAllocationIds.isEmpty()) {
-            throw new RuntimeException("当前销售订单没有可获取库存信息的零件");
+            throw new RuntimeException(selectedMode
+                    ? "所选零件没有可获取库存信息的待产 Allocation"
+                    : "当前销售订单没有可获取库存信息的零件");
         }
         List<Integer> taskAllocationIds = allAllocationIds;
         Map<String, Object> request = new LinkedHashMap<>();
@@ -169,11 +180,15 @@ public class SystemTaskService {
         request.put("allocationIds", taskAllocationIds);
         request.put("allocationCount", taskAllocationIds.size());
         request.put("eligibleAllocationCount", eligibleAllocationIds.size());
+        request.put("selectionMode", selectedMode ? "SELECTED" : "ORDER");
+        request.put("requestedAllocationCount", selectedMode ? requestedAllocationIds.size() : taskAllocationIds.size());
         SystemTask task = createTask("WMS_ALLOCATION_BATCH", request);
         Map<String, Object> auditSummary = new LinkedHashMap<>();
         auditSummary.put("salesOrderId", salesOrderId);
         auditSummary.put("allocationCount", taskAllocationIds.size());
         auditSummary.put("eligibleAllocationCount", eligibleAllocationIds.size());
+        auditSummary.put("selectionMode", selectedMode ? "SELECTED" : "ORDER");
+        auditSummary.put("requestedAllocationCount", selectedMode ? requestedAllocationIds.size() : taskAllocationIds.size());
         recordTaskSubmitAudit("SALES_ORDER_WMS_ALLOCATION_SUBMIT", "MARKET", task, auditSummary);
         log.info("Sales order WMS allocation submitted taskId={} salesOrderId={} allocationCount={}",
                 task.getId(), salesOrderId, taskAllocationIds.size());

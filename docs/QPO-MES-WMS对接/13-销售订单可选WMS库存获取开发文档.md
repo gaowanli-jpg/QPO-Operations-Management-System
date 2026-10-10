@@ -66,3 +66,18 @@ MES 生产与 WMS 获取均先以稳定顺序锁定相同的 `order_delivery_tic
 V57 新增 allocation 来源字段、全量生产行回填、幂等唯一索引和销售订单 WMS 操作权限。V1/V2 与历史已执行迁移保持不变。
 
 重点回归覆盖物料号成功各入口幂等建行、WMS 全量 / 部分覆盖数量守恒、WMS 和 MES 并发互斥、订单分页外和 RFQ 派生提单、逐行跳过原因、旧接口权限兼容，以及迁移不处理 WMS 未决提单。
+
+## 7. 按选中 Allocation 获取库存
+
+锁库拆行表支持表头全选和单行选择。选择框只允许有效、数量大于 0、物料号已确认且尚未完成 MES/WMS 处理的 `PRODUCTION_REQUIRED` Allocation；锁入库、锁在产、零数量和已废弃行不能选中。
+
+批量按钮仍调用：
+
+```text
+POST /api/market/sales-order-management/orders/{salesOrderId}/wms-allocation/batch
+{
+  "allocationIds": [101, 102]
+}
+```
+
+空请求继续表示整单获取库存。选中请求只提交当前销售订单中的指定 Allocation，仍使用 `WMS_ALLOCATION_BATCH`、原有客户订单号 / 客户项目号分组、恢复和响应应用逻辑。选中行在提交后刷新锁库拆行和任务结果，未选中的待产行保持原状态。

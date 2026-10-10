@@ -108,9 +108,15 @@ export const listSalesOrderTickets = (salesOrderId, params = {}) => request(`/ap
 
 export const listSalesOrderAllocationSplits = (salesOrderId, params = {}) => request(`/api/market/sales-order-management/orders/${salesOrderId}/allocation-splits`, { params })
 
-export const submitSalesOrderWmsAllocationBatch = (salesOrderId) => request(`/api/market/sales-order-management/orders/${salesOrderId}/wms-allocation/batch`, {
-  method: 'POST'
-})
+export const submitSalesOrderWmsAllocationBatch = (salesOrderId, allocationIds = []) => {
+  const normalizedAllocationIds = Array.isArray(allocationIds)
+    ? allocationIds.filter(id => Number.isInteger(Number(id)) && Number(id) > 0).map(Number)
+    : []
+  return request(`/api/market/sales-order-management/orders/${salesOrderId}/wms-allocation/batch`, {
+    method: 'POST',
+    ...(normalizedAllocationIds.length ? { data: { allocationIds: normalizedAllocationIds } } : {})
+  })
+}
 
 export const saveSalesOrderAllocationSplits = (salesOrderId, payload = {}) => request(`/api/market/sales-order-management/orders/${salesOrderId}/allocation-splits/batch`, {
   method: 'POST',

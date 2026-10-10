@@ -11,6 +11,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -43,6 +44,13 @@ class SalesOrderWmsAllocationServiceTest {
                 "Allocation 104: Allocation is discarded",
                 "Allocation 106: MES production has started or completed",
                 "Allocation 107: Allocation quantity is not positive");
+        assertThat(service.resolveSelectedAllocationIds(77L, List.of(101, 105)))
+                .containsExactly(101, 105);
+        assertThat(service.resolveEligibleAllocationIds(77L, List.of(101, 103, 107)))
+                .containsExactly(101);
+        assertThatThrownBy(() -> service.resolveSelectedAllocationIds(77L, List.of(999)))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("不属于当前销售订单");
     }
 
     private OrderDeliveryTicketAllocation allocation(Integer id, String materialNo, Integer qty,

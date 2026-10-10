@@ -17,6 +17,7 @@ import com.machining.quote.dto.SalesOrderMaintenanceOrderUpdateReq;
 import com.machining.quote.dto.SalesOrderMaintenanceUpdateResp;
 import com.machining.quote.dto.SalesOrderU9ItemDataReplacementPreviewDTO;
 import com.machining.quote.dto.SalesOrderU9ResyncResetResp;
+import com.machining.quote.dto.SalesOrderWmsAllocationBatchReq;
 import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.SalesOrderItem;
 import com.machining.quote.entity.SystemTask;
@@ -132,8 +133,12 @@ public class SalesOrderManageController {
 
     @PostMapping("/orders/{salesOrderId}/wms-allocation/batch")
     @RequirePermission("market:sales-order:wms-allocate")
-    public SystemTask submitWmsAllocationBatch(@PathVariable Long salesOrderId) {
-        return systemTaskService.submitSalesOrderWmsAllocationTask(salesOrderId);
+    public SystemTask submitWmsAllocationBatch(
+            @PathVariable Long salesOrderId,
+            @RequestBody(required = false) SalesOrderWmsAllocationBatchReq req) {
+        return systemTaskService.submitSalesOrderWmsAllocationTask(
+                salesOrderId,
+                req == null ? null : req.getAllocationIds());
     }
 
     @GetMapping("/orders/{salesOrderId}/process-sheets")

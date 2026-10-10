@@ -730,6 +730,16 @@
                   获取库存信息
                 </el-button>
                 <el-button
+                  v-permission="SALES_ORDER_WMS_ALLOCATE_PERMISSION"
+                  type="primary"
+                  plain
+                  :loading="wmsAllocationPending"
+                  :disabled="selectedAllocationSplitIds.length === 0 || wmsAllocationPending"
+                  @click="handleSelectedWmsAllocation"
+                >
+                  批量获取库存信息
+                </el-button>
+                <el-button
                   v-permission="SALES_ORDER_UPDATE_PERMISSION"
                   type="success"
                   plain
@@ -768,7 +778,22 @@
                 <el-table-column prop="externalBizId" label="WMS批次号" min-width="180" show-overflow-tooltip />
               </el-table>
             </div>
-            <el-table :data="allocationSplitList" border stripe height="330" v-loading="allocationSplitsLoading">
+            <el-table
+              :data="allocationSplitList"
+              border
+              stripe
+              height="330"
+              v-loading="allocationSplitsLoading"
+              row-key="allocationId"
+              @selection-change="handleAllocationSplitSelectionChange"
+            >
+              <el-table-column
+                type="selection"
+                width="48"
+                fixed
+                align="center"
+                :selectable="isAllocationWmsSelectable"
+              />
               <el-table-column prop="salesOrderItemLineNo" label="销售订单行号" width="120" align="center" />
               <el-table-column prop="allocationId" label="Allocation" width="110" align="center" />
               <el-table-column prop="ticketId" label="提单行" width="100" />
@@ -1103,6 +1128,10 @@ const detailProcessSheetPagination = reactive({ page: 1, pageSize: 20 })
 const detailItemTotal = ref(0)
 const detailTicketTotal = ref(0)
 const allocationSplitTotal = ref(0)
+const selectedAllocationSplitRows = ref([])
+const selectedAllocationSplitIds = computed(() => selectedAllocationSplitRows.value
+  .map(row => Number(row?.allocationId))
+  .filter(id => Number.isInteger(id) && id > 0))
 const detailProcessSheetTotal = ref(0)
 const supplementVisible = ref(false)
 const supplementFiles = ref([])
@@ -1391,6 +1420,7 @@ const fetchAllocationSplits = async () => {
   const salesOrderId = orderDetail.value?.orderInfo?.id
   if (!salesOrderId) return
   allocationSplitsLoading.value = true
+  selectedAllocationSplitRows.value = []
   try {
     const response = await listSalesOrderAllocationSplits(salesOrderId, {
       page: allocationSplitPagination.page,
@@ -1414,6 +1444,18 @@ const fetchAllocationSplits = async () => {
 
 const wmsAllocationPending = computed(() => isPending(salesOrderActionKeys.wmsAllocation(orderDetail.value?.orderInfo?.id))
   || ['PENDING', 'RUNNING'].includes(String(wmsAllocationTask.value?.status || '').toUpperCase()))
+
+const isAllocationWmsSelectable = (row) => {
+  if (!row || String(row.allocationType || '').toUpperCase() !== 'PRODUCTION_REQUIRED') return false
+  if (Boolean(row.discarded) || Number(row.qty || 0) <= 0 || !String(row.materialNo || '').trim()) return false
+  if (row.wmsReservationTicketId) return false
+  return !['PROCESSING', 'SUBMITTING', 'RESULT_UNKNOWN', 'SUCCESS']
+    .includes(String(row.mesProductionStatus || '').toUpperCase())
+}
+
+const handleAllocationSplitSelectionChange = (rows) => {
+  selectedAllocationSplitRows.value = rows || []
+}
 
 const saveAllocationSplitChanges = async () => {
   const salesOrderId = orderDetail.value?.orderInfo?.id
@@ -1518,6 +1560,39 @@ const handleWmsAllocation = async () => {
     } catch (error) {
       console.error(error)
       ElMessage.error(error.response?.data?.message || error.message || '库存信息获取任务提交失败。')
+    }
+  })
+}
+
+const handleSelectedWmsAllocation = async () => {
+  const salesOrderId = orderDetail.value?.orderInfo?.id
+  const allocationIds = selectedAllocationSplitIds.value
+  if (!salesOrderId) return
+  if (!allocationIds.length) {
+    ElMessage.warning('请先选择需要获取库存信息的待产零件。')
+    return
+  }
+  try {
+    await ElMessageBox.confirm(
+      `确认仅对选中的 ${allocationIds.length} 条待产 Allocation 获取库存信息？未选中的零件保持当前状态。`,
+      '批量获取库存信息',
+      { confirmButtonText: '确认提交', cancelButtonText: '取消', type: 'warning' }
+    )
+  } catch {
+    return
+  }
+  return runAction(salesOrderActionKeys.wmsAllocation(salesOrderId), async () => {
+    try {
+      const task = await submitSalesOrderWmsAllocationBatch(salesOrderId, allocationIds)
+      const taskId = task?.id || task?.taskId
+      wmsAllocationTask.value = task
+      selectedAllocationSplitRows.value = []
+      ElMessage.success(taskId ? `选中零件库存信息获取任务已提交，任务ID：${taskId}` : '选中零件库存信息获取任务已提交')
+      await fetchAllocationSplits()
+      if (taskId) await refreshWmsAllocationTask(true)
+    } catch (error) {
+      console.error(error)
+      ElMessage.error(error.response?.data?.message || error.message || '选中零件库存信息获取任务提交失败。')
     }
   })
 }

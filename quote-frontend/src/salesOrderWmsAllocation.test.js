@@ -27,6 +27,16 @@ describe('Sales order optional WMS allocation entry', () => {
     expect(salesOrderPageSource).not.toContain('submitSalesOrderWmsAllocationBatch(detailTicketList')
   })
 
+  test('supports selecting production allocations for a partial WMS batch', () => {
+    expect(orderApiSource).toContain('data: { allocationIds: normalizedAllocationIds }')
+    expect(salesOrderPageSource).toContain('type="selection"')
+    expect(salesOrderPageSource).toContain('@selection-change="handleAllocationSplitSelectionChange"')
+    expect(salesOrderPageSource).toContain(':selectable="isAllocationWmsSelectable"')
+    expect(salesOrderPageSource).toContain('批量获取库存信息')
+    expect(salesOrderPageSource).toContain('submitSalesOrderWmsAllocationBatch(salesOrderId, allocationIds)')
+    expect(salesOrderPageSource).toContain('selectedAllocationSplitIds.length === 0')
+  })
+
   test('confirms, reports task submission, and refreshes allocation rows', () => {
     expect(salesOrderPageSource).toContain('ElMessageBox.confirm')
     expect(salesOrderPageSource).toContain('库存信息获取任务已提交')

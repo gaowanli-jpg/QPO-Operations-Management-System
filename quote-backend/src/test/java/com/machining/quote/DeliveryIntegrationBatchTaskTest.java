@@ -9,6 +9,7 @@ import com.machining.quote.service.DataScopeService;
 import com.machining.quote.service.DeliveryIntegrationBatchService;
 import com.machining.quote.service.mes.MesMaterialProcessingRecoveryService;
 import com.machining.quote.service.mes.MesMaterialSyncService;
+import com.machining.quote.service.SalesOrderWmsAllocationService;
 import com.machining.quote.service.SystemTaskService;
 import com.machining.quote.service.wms.WmsReservationBatchService;
 import org.junit.jupiter.api.Test;
@@ -116,6 +117,44 @@ class DeliveryIntegrationBatchTaskTest {
                 contains("taskId=802"),
                 isNull()
         );
+        verify(taskExecutor).execute(any(Runnable.class));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void submitSalesOrderWmsAllocationTaskKeepsOnlySelectedAllocations() {
+        SystemTaskService service = new SystemTaskService();
+        SystemTaskMapper taskMapper = mock(SystemTaskMapper.class);
+        ThreadPoolTaskExecutor taskExecutor = mock(ThreadPoolTaskExecutor.class);
+        AuditService auditService = mock(AuditService.class);
+        DeliveryIntegrationBatchService batchService = mock(DeliveryIntegrationBatchService.class);
+        SalesOrderWmsAllocationService salesOrderWmsAllocationService = mock(SalesOrderWmsAllocationService.class);
+        AtomicReference<SystemTask> inserted = new AtomicReference<>();
+        doAnswer(invocation -> {
+            SystemTask task = invocation.getArgument(0);
+            task.setId(803L);
+            inserted.set(task);
+            return 1;
+        }).when(taskMapper).insert(any(SystemTask.class));
+        when(taskMapper.selectById(803L)).thenAnswer(invocation -> inserted.get());
+        List<Integer> requested = List.of(401, 402);
+        when(salesOrderWmsAllocationService.resolveSelectedAllocationIds(77L, requested))
+                .thenReturn(requested);
+        when(salesOrderWmsAllocationService.resolveEligibleAllocationIds(77L, requested))
+                .thenReturn(List.of(401));
+        wireTaskService(service, taskMapper, taskExecutor, auditService, batchService);
+        ReflectionTestUtils.setField(service, "salesOrderWmsAllocationService", salesOrderWmsAllocationService);
+
+        SystemTask task = service.submitSalesOrderWmsAllocationTask(77L, requested);
+
+        assertThat(task.getId()).isEqualTo(803L);
+        Map<String, Object> requestJson = new LinkedHashMap<>((Map<String, Object>) task.getRequestJson());
+        assertThat(requestJson)
+                .containsEntry("allocationIds", requested)
+                .containsEntry("selectionMode", "SELECTED")
+                .containsEntry("requestedAllocationCount", 2)
+                .containsEntry("eligibleAllocationCount", 1);
+        verify(salesOrderWmsAllocationService).assertCanAccessSalesOrder(77L);
         verify(taskExecutor).execute(any(Runnable.class));
     }
 
