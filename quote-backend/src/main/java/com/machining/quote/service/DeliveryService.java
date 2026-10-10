@@ -87,7 +87,9 @@ public class DeliveryService {
 
     @Transactional
     public DeliveryBatchResultDTO appendRfqReleaseToSalesOrder(RfqReleaseAppendSalesOrderReq req) {
-        return rfqReleaseAppendSalesOrderService.appendToSalesOrder(req);
+        DeliveryBatchResultDTO result = rfqReleaseAppendSalesOrderService.appendToSalesOrder(req);
+        submitAutoMesForRfqRelease(result);
+        return result;
     }
 
     @Transactional

@@ -24,10 +24,12 @@ import com.machining.quote.mapper.SalesOrderItemAssemblyRelationMapper;
 import com.machining.quote.mapper.SalesOrderItemMapper;
 import com.machining.quote.mapper.SalesOrderSourceRfqMapper;
 import com.machining.quote.service.DeliveryService;
+import com.machining.quote.service.DeliveryAutoMesMaterialSyncService;
 import com.machining.quote.service.RfqReleaseAppendSalesOrderService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -40,6 +42,10 @@ import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 @SpringBootTest(properties = {
         "erp.auth.enabled=false",
@@ -68,6 +74,8 @@ class RfqReleaseAppendSalesOrderIntegrationTest {
     private OrderDeliveryTicketMapper ticketMapper;
     @Autowired
     private SalesOrderItemAssemblyRelationMapper salesAssemblyMapper;
+    @MockBean
+    private DeliveryAutoMesMaterialSyncService autoMesMaterialSyncService;
 
     @Test
     void appendsRfqReleaseLinesToExistingUnsyncedSalesOrderWithItemFieldsFirstAndReplaysIdempotently() {
@@ -95,6 +103,11 @@ class RfqReleaseAppendSalesOrderIntegrationTest {
         assertThat(result.getSalesOrderNo()).isEqualTo(target.getSalesOrderNo());
         assertThat(result.getTicketCount()).isEqualTo(2);
         assertThat(result.getSourceRfqIds()).containsExactly(rfq.getId());
+        verify(autoMesMaterialSyncService).submitAfterCommit(
+                eq(ReleaseSourceType.RFQ),
+                eq(target.getId()),
+                eq(result.getTicketIds()),
+                eq("RFQ_RELEASE"));
 
         SalesOrderHeader reloadedTarget = headerMapper.selectById(target.getId());
         assertThat(reloadedTarget.getCustomerOrderNo()).isEqualTo("TARGET-PO");
@@ -174,11 +187,13 @@ class RfqReleaseAppendSalesOrderIntegrationTest {
             assertThat(relation.getSourceChildItemId()).isEqualTo(child.getId());
         });
 
+        clearInvocations(autoMesMaterialSyncService);
         DeliveryBatchResultDTO replay = deliveryService.appendRfqReleaseToSalesOrder(req);
         assertThat(replay.isIdempotentReplay()).isTrue();
         assertThat(replay.getTicketIds()).containsExactlyElementsOf(result.getTicketIds());
         assertThat(salesItems(target.getId())).hasSize(3);
         assertThat(ticketCount(rfq.getId())).isEqualTo(2);
+        verifyNoInteractions(autoMesMaterialSyncService);
 
         ItemQuoteVersion reloadedParent = itemMapper.selectById(parent.getId());
         assertThat(reloadedParent.getCustomerOrderNo()).isEqualTo("ROW-PO-SHOULD-WIN");
