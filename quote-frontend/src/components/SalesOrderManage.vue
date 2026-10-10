@@ -408,15 +408,23 @@
               </el-table-column>
               <el-table-column prop="qty" label="数量" width="126" align="right" class-name="sales-order-item-qty-column">
                 <template #default="{ row }">
-                  <el-input-number
+                  <el-tooltip
                     v-if="itemDrafts[row.id]"
-                    v-model="itemDrafts[row.id].qty"
-                    class="item-edit-input item-edit-number"
-                    :controls="false"
-                    :min="0"
-                    :precision="0"
-                    :disabled="salesOrderEditLocked"
-                  />
+                    :disabled="!salesOrderItemQtyDisabledReason(row)"
+                    :content="salesOrderItemQtyDisabledReason(row)"
+                    placement="top"
+                  >
+                    <span class="sales-order-item-qty-input-trigger">
+                      <el-input-number
+                        v-model="itemDrafts[row.id].qty"
+                        class="item-edit-input item-edit-number"
+                        :controls="false"
+                        :min="0"
+                        :precision="0"
+                        :disabled="Boolean(salesOrderItemQtyDisabledReason(row))"
+                      />
+                    </span>
+                  </el-tooltip>
                   <span v-else>{{ row.qty || 0 }}</span>
                 </template>
               </el-table-column>
@@ -1139,6 +1147,10 @@ const replaceSalesOrderDrawingUploadPending = computed(() => isPending(salesOrde
 const itemDetailExportPending = computed(() => isPending(salesOrderActionKeys.itemDetailExport(orderDetail.value?.orderInfo?.id)))
 const productionTaskNoticeExportPending = computed(() => isPending(salesOrderActionKeys.productionTaskNoticeExport(orderDetail.value?.orderInfo?.id)))
 const salesOrderEditLocked = computed(() => SALES_ORDER_EDIT_LOCKED_U9_STATUSES.includes(String(orderDetail.value?.orderInfo?.u9SyncStatus || '').trim()))
+const salesOrderItemQtyDisabledReason = (row) => {
+  if (salesOrderEditLocked.value) return salesOrderEditLockedReason.value
+  return row?.allocationId == null ? '物料号获取成功并关联 Allocation 后才能修改数量' : ''
+}
 const salesOrderEditLockedReason = computed(() => salesOrderEditLocked.value ? `当前 U9 状态不允许修改销售订单：${orderDetail.value?.orderInfo?.u9SyncStatus || '-'}` : '')
 const salesOrderItemU9ChangeExclusionLocked = computed(() => ['同步中', '结果待确认'].includes(String(orderDetail.value?.orderInfo?.u9SyncStatus || '').trim()))
 const salesOrderItemU9ChangeExclusionLockedReason = computed(() => salesOrderItemU9ChangeExclusionLocked.value ? `当前 U9 状态不能废弃或恢复销售订单零件：${orderDetail.value?.orderInfo?.u9SyncStatus || '-'}` : '')
@@ -2457,6 +2469,11 @@ onMounted(() => {
 
 :deep(.sales-order-item-qty-column .cell) {
   text-overflow: clip;
+}
+
+.sales-order-item-qty-input-trigger {
+  display: inline-flex;
+  width: 100%;
 }
 
 :deep(.sales-order-item-qty-column .item-edit-number) {

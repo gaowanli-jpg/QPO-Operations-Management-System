@@ -318,6 +318,7 @@ public class SalesOrderMaintenanceService {
             SalesOrderItem item,
             SalesOrderItemUpdateLineReq line,
             LocalDateTime updatedAt) {
+        assertItemQuantityEditable(item, line);
         Set<String> changed = new LinkedHashSet<>();
         if (line.hasField(SalesOrderItemUpdateLineReq.FIELD_QTY)) {
             Integer qty = line.getQty();
@@ -387,6 +388,17 @@ public class SalesOrderMaintenanceService {
             persistItem(header, item, updatedAt);
         }
         return changed;
+    }
+
+    private void assertItemQuantityEditable(SalesOrderItem item, SalesOrderItemUpdateLineReq line) {
+        if (!line.hasField(SalesOrderItemUpdateLineReq.FIELD_QTY)) {
+            return;
+        }
+        Integer qty = line.getQty();
+        validateQty(qty);
+        if (!Objects.equals(item.getQty(), qty) && item.getAllocationId() == null) {
+            throw new RuntimeException("物料号获取成功并关联 Allocation 后才能修改数量");
+        }
     }
 
     private Set<String> applyOrderFields(SalesOrderHeader header, SalesOrderMaintenanceOrderUpdateReq req) {

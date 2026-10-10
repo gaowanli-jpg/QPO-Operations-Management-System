@@ -31,3 +31,7 @@ Flyway `V58__sales_order_item_allocation_link.sql` 追加字段、约束和索�
 ## 5. WMS 请求来源
 
 销售订单锁库拆行页仅对该订单有效、数量大于 `0` 的 `PRODUCTION_REQUIRED` Allocation 发起 WMS 请求。请求数量、快照、结果恢复和拆分恒等式都以 Allocation 为准；提单 ID 仅保留来源追溯。V59 为快照增加 `allocation_id`，活动请求按 Allocation 互斥；同一来源提单下的不同 Allocation 可以进入同一批次。历史 `allocation_id IS NULL` 快照仍使用原提单唯一性和恢复逻辑。
+
+## 6. 物料号成功前的销售订单数量编辑限制
+
+销售订单详情中，只有 `sales_order_item.allocation_id` 已关联 Allocation 的零件行才允许修改数量。物料号尚未成功并建立 Allocation 关联时，详情数量输入框禁用；后端零件保存接口同样拒绝数量变更。表格数据替换预览会跳过未关联 Allocation 零件行的数量字段，同一行其他有效字段仍可确认。关联建立后，数量编辑同步更新对应 Allocation；WMS 活动请求期间仍按既有并发保护拒绝编辑。该规则只限制数量，不影响其他零件字段。

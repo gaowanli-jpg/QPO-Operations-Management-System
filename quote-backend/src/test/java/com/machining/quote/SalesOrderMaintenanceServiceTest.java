@@ -142,10 +142,32 @@ class SalesOrderMaintenanceServiceTest {
     }
 
     @Test
+    void saveItemsRejectsQuantityChangesUntilAllocationIsLinked() {
+        Fixture fixture = fixture();
+        SalesOrderHeader header = header(101L, "PENDING");
+        SalesOrderItem item = item(1201L, 101L);
+        fixture.withOrder(header, List.of(item));
+
+        SalesOrderItemUpdateLineReq line = new SalesOrderItemUpdateLineReq();
+        line.setSalesOrderItemId(item.getId());
+        line.setQty(3);
+        SalesOrderItemUpdateReq req = new SalesOrderItemUpdateReq();
+        req.setItems(List.of(line));
+
+        assertThatThrownBy(() -> fixture.maintenanceService.saveItems(header.getId(), req))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("Allocation");
+
+        verify(fixture.itemMapper, never()).update(isNull(), any(UpdateWrapper.class));
+        verify(fixture.allocationLinkService, never()).syncAllocationQtyFromItem(any(), any(), any());
+    }
+
+    @Test
     void saveItemsUpdatesEditableFieldsWithoutDerivingTaxIncludedPriceFromUntaxedPrice() throws Exception {
         Fixture fixture = fixture();
         SalesOrderHeader header = header(11L, "未同步");
         SalesOrderItem item = item(201L, 11L);
+        item.setAllocationId(611L);
         item.setUntaxedUnitPrice(new BigDecimal("100.00"));
         item.setTaxIncludedUnitPrice(new BigDecimal("113.00"));
         item.setOrderType("预测订单");
@@ -475,10 +497,36 @@ class SalesOrderMaintenanceServiceTest {
     }
 
     @Test
+    void dataReplacementPreviewSkipsQuantityUntilAllocationIsLinked() throws Exception {
+        Fixture fixture = fixture();
+        SalesOrderHeader header = header(16L, "未同步");
+        SalesOrderItem item = item(302L, 16L);
+        fixture.withOrder(header, List.of(item));
+        byte[] excel = excel(
+                List.of("图号", "版本", "行号", "数量"),
+                List.of(item.getPartNo(), item.getVersion(), item.getLineNo(), 4));
+
+        SalesOrderU9ItemDataReplacementPreviewDTO preview = fixture.replacementService.preview(
+                header.getId(), new ByteArrayInputStream(excel));
+
+        assertThat(preview.isCanConfirm()).isFalse();
+        assertThat(preview.getSummary().getSkippedCount()).isEqualTo(1);
+        assertThat(preview.getRows()).singleElement().satisfies(row -> {
+            assertThat(row.getStatus()).isEqualTo(SalesOrderU9ItemDataReplacementRowStatus.SKIPPED);
+            assertThat(row.getChanges()).isEmpty();
+            assertThat(row.getReason()).contains("Allocation");
+        });
+    }
+
+    @Test
     void dataReplacementPreviewAndConfirmUseSalesOrderManagementActionAndDoNotTouchTickets() throws Exception {
         Fixture fixture = fixture();
         SalesOrderHeader header = header(15L, "未同步");
         SalesOrderItem item = item(301L, 15L);
+        item.setAllocationId(615L);
+        when(fixture.allocationLinkService.syncAllocationQtyFromItem(header, item, 2))
+                .thenReturn(new SalesOrderAllocationLinkService.AllocationQuantitySyncResult(
+                        615, item.getId(), 2, 4));
         item.setUntaxedUnitPrice(new BigDecimal("100.00"));
         item.setTaxIncludedUnitPrice(new BigDecimal("113.00"));
         item.setOrderType("预测订单");
@@ -519,6 +567,7 @@ class SalesOrderMaintenanceServiceTest {
         assertThat(item.getOrderType()).isEqualTo("正式订单");
         assertThat(item.getDescription()).isEqualTo("replacement description");
         assertThat(item.getStatus()).isEqualTo("已生成提单");
+        verify(fixture.allocationLinkService).syncAllocationQtyFromItem(header, item, 2);
         verify(fixture.ticketMapper, never()).update(any(), any());
         verifyAudit(fixture.auditService, "SALES_ORDER_ITEM_DATA_REPLACEMENT", header.getId());
     }
@@ -741,6 +790,7 @@ class SalesOrderMaintenanceServiceTest {
         ReflectionTestUtils.setField(maintenanceService, "auditService", fixture.auditService);
         ReflectionTestUtils.setField(replacementService, "excelParser", new SalesOrderItemDataReplacementExcelParser());
         ReflectionTestUtils.setField(replacementService, "maintenanceService", maintenanceService);
+        ReflectionTestUtils.setField(replacementService, "salesOrderAllocationLinkService", fixture.allocationLinkService);
         ReflectionTestUtils.setField(replacementService, "headerMapper", fixture.headerMapper);
         ReflectionTestUtils.setField(replacementService, "itemMapper", fixture.itemMapper);
         ReflectionTestUtils.setField(replacementService, "dataScopeService", fixture.dataScopeService);

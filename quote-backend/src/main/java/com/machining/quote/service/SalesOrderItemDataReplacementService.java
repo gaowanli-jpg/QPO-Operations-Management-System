@@ -52,6 +52,8 @@ public class SalesOrderItemDataReplacementService {
     @Autowired
     private SalesOrderMaintenanceService maintenanceService;
     @Autowired
+    private SalesOrderAllocationLinkService salesOrderAllocationLinkService;
+    @Autowired
     private SalesOrderHeaderMapper headerMapper;
     @Autowired
     private SalesOrderItemMapper itemMapper;
@@ -94,7 +96,9 @@ public class SalesOrderItemDataReplacementService {
             throw new IllegalArgumentException("当前替换数据不能确认，请重新预览");
         }
         ApplyResult applied = applyConfirmation(header, lockedItems, currentPreview);
-        auditSuccess(header, applied, currentPreview.getSummary(), System.currentTimeMillis() - startedAt);
+        long durationMs = System.currentTimeMillis() - startedAt;
+        auditSuccess(header, applied, currentPreview.getSummary(), durationMs);
+        auditAllocationQtySuccess(header, applied, durationMs);
 
         SalesOrderItemDataReplacementConfirmResp result = new SalesOrderItemDataReplacementConfirmResp();
         result.setSuccess(true);
@@ -175,11 +179,23 @@ public class SalesOrderItemDataReplacementService {
             row.setReason("U9 状态为" + trimToEmpty(u9SyncStatus) + "，不能替换销售订单零件行");
             return row;
         }
-        row.setChanges(changes(item, excelRow.getValues()));
-        row.setStatus(row.getChanges().isEmpty()
-                ? SalesOrderU9ItemDataReplacementRowStatus.UNCHANGED
+        List<SalesOrderU9ItemDataReplacementChangeDTO> rowChanges = changes(item, excelRow.getValues());
+        boolean quantityLocked = item.getAllocationId() == null
+                && rowChanges.stream().anyMatch(change -> SalesOrderItemUpdateLineReq.FIELD_QTY.equals(change.getField()));
+        if (quantityLocked) {
+            rowChanges = rowChanges.stream()
+                    .filter(change -> !SalesOrderItemUpdateLineReq.FIELD_QTY.equals(change.getField()))
+                    .toList();
+        }
+        row.setChanges(rowChanges);
+        row.setStatus(rowChanges.isEmpty()
+                ? (quantityLocked
+                        ? SalesOrderU9ItemDataReplacementRowStatus.SKIPPED
+                        : SalesOrderU9ItemDataReplacementRowStatus.UNCHANGED)
                 : SalesOrderU9ItemDataReplacementRowStatus.CHANGED);
-        row.setReason("");
+        row.setReason(quantityLocked
+                ? "数量字段已跳过：物料号获取成功并关联 Allocation 后才能修改数量"
+                : "");
         return row;
     }
 
@@ -218,6 +234,7 @@ public class SalesOrderItemDataReplacementService {
                         (left, right) -> left,
                         LinkedHashMap::new));
         Set<String> changedFields = new LinkedHashSet<>();
+        List<Map<String, Object>> allocationQtyChanges = new ArrayList<>();
         int updatedCount = 0;
         LocalDateTime now = LocalDateTime.now();
         for (SalesOrderU9ItemDataReplacementRowDTO row : preview.getRows()) {
@@ -230,14 +247,30 @@ public class SalesOrderItemDataReplacementService {
             }
             SalesOrderItemUpdateLineReq line = new SalesOrderItemUpdateLineReq();
             line.setSalesOrderItemId(item.getId());
+            Integer oldQty = item.getQty();
+            Set<String> rowChangedFields = new LinkedHashSet<>();
             for (SalesOrderU9ItemDataReplacementChangeDTO change : row.getChanges()) {
                 applyChange(line, change);
                 changedFields.add(change.getField());
+                rowChangedFields.add(change.getField());
             }
             maintenanceService.applyItemLine(header, item, line, now);
+            if (rowChangedFields.contains(SalesOrderItemUpdateLineReq.FIELD_QTY)) {
+                SalesOrderAllocationLinkService.AllocationQuantitySyncResult syncResult =
+                        salesOrderAllocationLinkService.syncAllocationQtyFromItem(header, item, oldQty);
+                if (syncResult != null) {
+                    Map<String, Object> change = new LinkedHashMap<>();
+                    change.put("allocationId", syncResult.allocationId());
+                    change.put("salesOrderItemId", syncResult.salesOrderItemId());
+                    change.put("salesOrderItemLineNo", item.getLineNo());
+                    change.put("oldQty", syncResult.oldQty());
+                    change.put("newQty", syncResult.newQty());
+                    allocationQtyChanges.add(change);
+                }
+            }
             updatedCount++;
         }
-        return new ApplyResult(updatedCount, changedFields);
+        return new ApplyResult(updatedCount, changedFields, allocationQtyChanges);
     }
 
     private void applyChange(SalesOrderItemUpdateLineReq line, SalesOrderU9ItemDataReplacementChangeDTO change) {
@@ -465,6 +498,27 @@ public class SalesOrderItemDataReplacementService {
                 null);
     }
 
+    private void auditAllocationQtySuccess(SalesOrderHeader header, ApplyResult applied, long durationMs) {
+        if (auditService == null || applied.allocationQtyChanges().isEmpty()) {
+            return;
+        }
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("salesOrderId", header.getId());
+        summary.put("salesOrderNo", header.getSalesOrderNo());
+        summary.put("changes", applied.allocationQtyChanges());
+        summary.put("durationMs", durationMs);
+        auditService.record(
+                "SALES_ORDER_ALLOCATION_QTY_UPDATE",
+                TARGET_TYPE,
+                header.getId(),
+                null,
+                summary,
+                "MARKET",
+                "SUCCESS",
+                AuditService.labelForAction("SALES_ORDER_ALLOCATION_QTY_UPDATE"),
+                null);
+    }
+
     private void appendToken(StringBuilder canonical, String key, Object value) {
         String text = canonicalValue(value);
         canonical.append(key.length()).append(':').append(key)
@@ -517,6 +571,9 @@ public class SalesOrderItemDataReplacementService {
     private record ItemKey(String partNo, String version) {
     }
 
-    private record ApplyResult(int updatedCount, Set<String> changedFields) {
+    private record ApplyResult(
+            int updatedCount,
+            Set<String> changedFields,
+            List<Map<String, Object>> allocationQtyChanges) {
     }
 }
