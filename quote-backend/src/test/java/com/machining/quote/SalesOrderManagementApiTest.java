@@ -42,6 +42,28 @@ class SalesOrderManagementApiTest {
     }
 
     @Test
+    void allocationSplitQuerySupportsPartNumberAndVersionFilters() throws IOException {
+        String controllerSource = read(CONTROLLER);
+        String serviceSource = read(SERVICE);
+
+        assertThat(controllerSource)
+                .contains(
+                        "@GetMapping(\"/orders/{salesOrderId}/allocation-splits\")",
+                        "@RequestParam(value = \"partNo\", required = false) String partNo",
+                        "@RequestParam(value = \"version\", required = false) String version",
+                        "salesOrderManageService.pageOrderAllocationSplits(",
+                        "salesOrderId, page, pageSize, partNo, version");
+        assertThat(serviceSource)
+                .contains(
+                        "String normalizedPartNo = normalizeSearchText(partNo)",
+                        "String normalizedVersion = normalizeSearchText(version)",
+                        "countSalesOrderAllocationSplits(",
+                        "salesOrderId, normalizedPartNo, normalizedVersion",
+                        "selectSalesOrderAllocationSplits(",
+                        "salesOrderId, safePageSize, offset, normalizedPartNo, normalizedVersion");
+    }
+
+    @Test
     void serviceReadsOnlyIndependentSalesOrderTablesBeforeSharedDownstreamQueries() throws IOException {
         String source = read(SERVICE);
 

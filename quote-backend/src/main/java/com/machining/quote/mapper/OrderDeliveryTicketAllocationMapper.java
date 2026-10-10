@@ -72,6 +72,12 @@ public interface OrderDeliveryTicketAllocationMapper extends BaseMapper<OrderDel
               AND alloc.allocation_type IN ('IN_STOCK_LOCK', 'IN_PRODUCTION_LOCK', 'PRODUCTION_REQUIRED')
               AND COALESCE(alloc.status, 'ACTIVE') = 'ACTIVE'
               AND COALESCE(alloc.discarded, FALSE) = FALSE
+            <if test="partNo != null and partNo != ''">
+              AND LOWER(COALESCE(alloc.part_no, '')) LIKE CONCAT('%', LOWER(#{partNo}), '%')
+            </if>
+            <if test="version != null and version != ''">
+              AND LOWER(COALESCE(alloc.version, '')) LIKE CONCAT('%', LOWER(#{version}), '%')
+            </if>
             ORDER BY alloc.ticket_id ASC, alloc.id ASC
             LIMIT #{limit} OFFSET #{offset}
             </script>
@@ -80,7 +86,9 @@ public interface OrderDeliveryTicketAllocationMapper extends BaseMapper<OrderDel
     List<LockedItemDTO> selectSalesOrderAllocationSplits(
             @Param("salesOrderId") Long salesOrderId,
             @Param("limit") int limit,
-            @Param("offset") long offset);
+            @Param("offset") long offset,
+            @Param("partNo") String partNo,
+            @Param("version") String version);
 
     @Select("""
             <script>
@@ -91,9 +99,18 @@ public interface OrderDeliveryTicketAllocationMapper extends BaseMapper<OrderDel
               AND alloc.allocation_type IN ('IN_STOCK_LOCK', 'IN_PRODUCTION_LOCK', 'PRODUCTION_REQUIRED')
               AND COALESCE(alloc.status, 'ACTIVE') = 'ACTIVE'
               AND COALESCE(alloc.discarded, FALSE) = FALSE
+            <if test="partNo != null and partNo != ''">
+              AND LOWER(COALESCE(alloc.part_no, '')) LIKE CONCAT('%', LOWER(#{partNo}), '%')
+            </if>
+            <if test="version != null and version != ''">
+              AND LOWER(COALESCE(alloc.version, '')) LIKE CONCAT('%', LOWER(#{version}), '%')
+            </if>
             </script>
             """)
-    long countSalesOrderAllocationSplits(@Param("salesOrderId") Long salesOrderId);
+    long countSalesOrderAllocationSplits(
+            @Param("salesOrderId") Long salesOrderId,
+            @Param("partNo") String partNo,
+            @Param("version") String version);
 
     @Select("SELECT * FROM order_delivery_ticket_allocation WHERE id = #{id} FOR UPDATE")
     OrderDeliveryTicketAllocation selectByIdForUpdate(@Param("id") Integer id);

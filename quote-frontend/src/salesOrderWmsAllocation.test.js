@@ -37,6 +37,15 @@ describe('Sales order optional WMS allocation entry', () => {
     expect(salesOrderPageSource).toContain('selectedAllocationSplitIds.length === 0')
   })
 
+  test('filters allocation splits by part number and version through the paged query', () => {
+    expect(salesOrderPageSource).toContain('v-model="allocationSplitFilters.partNo"')
+    expect(salesOrderPageSource).toContain('v-model="allocationSplitFilters.version"')
+    expect(salesOrderPageSource).toContain('@click="handleAllocationSplitSearch"')
+    expect(salesOrderPageSource).toContain('partNo: allocationSplitFilters.partNo')
+    expect(salesOrderPageSource).toContain('version: allocationSplitFilters.version')
+    expect(salesOrderPageSource).toContain('const handleAllocationSplitSearch = () =>')
+  })
+
   test('confirms, reports task submission, and refreshes allocation rows', () => {
     expect(salesOrderPageSource).toContain('ElMessageBox.confirm')
     expect(salesOrderPageSource).toContain('库存信息获取任务已提交')

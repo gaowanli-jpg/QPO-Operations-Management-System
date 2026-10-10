@@ -720,6 +720,23 @@
                 <span class="erp-toolbar-description">按本订单数量大于 0 的待产 Allocation 获取库存，结果会拆分为锁库数量和剩余待产数量。</span>
               </div>
               <div class="item-maintenance-action-buttons">
+                <div class="allocation-split-filters" @keyup.enter="handleAllocationSplitSearch">
+                  <el-input
+                    v-model="allocationSplitFilters.partNo"
+                    clearable
+                    size="small"
+                    placeholder="图号"
+                    aria-label="图号"
+                  />
+                  <el-input
+                    v-model="allocationSplitFilters.version"
+                    clearable
+                    size="small"
+                    placeholder="版本"
+                    aria-label="版本"
+                  />
+                  <el-button size="small" plain @click="handleAllocationSplitSearch">查询</el-button>
+                </div>
                 <el-button
                   v-permission="SALES_ORDER_WMS_ALLOCATE_PERMISSION"
                   type="primary"
@@ -1124,6 +1141,7 @@ const detailProcessSheetsLoading = ref(false)
 const detailItemPagination = reactive({ page: 1, pageSize: 20 })
 const detailTicketPagination = reactive({ page: 1, pageSize: 20 })
 const allocationSplitPagination = reactive({ page: 1, pageSize: 20 })
+const allocationSplitFilters = reactive({ partNo: '', version: '' })
 const detailProcessSheetPagination = reactive({ page: 1, pageSize: 20 })
 const detailItemTotal = ref(0)
 const detailTicketTotal = ref(0)
@@ -1313,6 +1331,8 @@ const resetDetailPagination = () => {
   detailItemPagination.page = 1
   detailTicketPagination.page = 1
   allocationSplitPagination.page = 1
+  allocationSplitFilters.partNo = ''
+  allocationSplitFilters.version = ''
   detailProcessSheetPagination.page = 1
   detailItemList.value = []
   detailTicketList.value = []
@@ -1424,7 +1444,9 @@ const fetchAllocationSplits = async () => {
   try {
     const response = await listSalesOrderAllocationSplits(salesOrderId, {
       page: allocationSplitPagination.page,
-      pageSize: allocationSplitPagination.pageSize
+      pageSize: allocationSplitPagination.pageSize,
+      partNo: allocationSplitFilters.partNo,
+      version: allocationSplitFilters.version
     })
     allocationSplitList.value = response.records || []
     allocationSplitTotal.value = Number(response.total ?? 0)
@@ -1440,6 +1462,14 @@ const fetchAllocationSplits = async () => {
   } finally {
     allocationSplitsLoading.value = false
   }
+}
+
+const handleAllocationSplitSearch = () => {
+  if (allocationSplitPagination.page === 1) {
+    fetchAllocationSplits()
+    return
+  }
+  allocationSplitPagination.page = 1
 }
 
 const wmsAllocationPending = computed(() => isPending(salesOrderActionKeys.wmsAllocation(orderDetail.value?.orderInfo?.id))
@@ -2535,6 +2565,17 @@ onMounted(() => {
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.allocation-split-filters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.allocation-split-filters :deep(.el-input) {
+  width: 140px;
 }
 
 .item-edit-input {

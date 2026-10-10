@@ -127,8 +127,11 @@ public class SalesOrderManageController {
     public PageResult<LockedItemDTO> listOrderAllocationSplits(
             @PathVariable Long salesOrderId,
             @RequestParam(value = "page", required = false) Integer page,
-            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
-        return salesOrderManageService.pageOrderAllocationSplits(salesOrderId, page, pageSize);
+            @RequestParam(value = "pageSize", required = false) Integer pageSize,
+            @RequestParam(value = "partNo", required = false) String partNo,
+            @RequestParam(value = "version", required = false) String version) {
+        return salesOrderManageService.pageOrderAllocationSplits(
+                salesOrderId, page, pageSize, partNo, version);
     }
 
     @PostMapping("/orders/{salesOrderId}/wms-allocation/batch")

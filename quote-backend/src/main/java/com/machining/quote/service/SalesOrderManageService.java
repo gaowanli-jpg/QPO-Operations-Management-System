@@ -158,18 +158,34 @@ public class SalesOrderManageService {
         return pageTicketsForSalesOrder(salesOrderId, page, pageSize);
     }
 
-    public PageResult<LockedItemDTO> pageOrderAllocationSplits(Long salesOrderId, Integer page, Integer pageSize) {
+    public PageResult<LockedItemDTO> pageOrderAllocationSplits(
+            Long salesOrderId,
+            Integer page,
+            Integer pageSize,
+            String partNo,
+            String version) {
         requireSalesOrder(salesOrderId);
         int safePage = safePage(page);
         int safePageSize = safePageSize(pageSize);
-        long total = allocationMapper.countSalesOrderAllocationSplits(salesOrderId);
+        String normalizedPartNo = normalizeSearchText(partNo);
+        String normalizedVersion = normalizeSearchText(version);
+        long total = allocationMapper.countSalesOrderAllocationSplits(
+                salesOrderId, normalizedPartNo, normalizedVersion);
         if (total == 0) {
             return PageResult.of(List.of(), 0, safePage, safePageSize);
         }
         long offset = (long) (safePage - 1) * safePageSize;
         List<LockedItemDTO> records = allocationMapper.selectSalesOrderAllocationSplits(
-                salesOrderId, safePageSize, offset);
+                salesOrderId, safePageSize, offset, normalizedPartNo, normalizedVersion);
         return PageResult.of(records, total, safePage, safePageSize);
+    }
+
+    private String normalizeSearchText(String value) {
+        if (value == null) {
+            return null;
+        }
+        String normalized = value.trim();
+        return normalized.isEmpty() ? null : normalized;
     }
 
 
