@@ -39,20 +39,20 @@ class WmsReservationBatchServiceTest {
         WmsReservationPlanService.ReservationItem firstItem = item("MAT-A", "5");
         firstItem.setCustomerProjectNo("CP-1");
         WmsReservationPlanService.ReservationGroup first = group("CO-1",
-                firstItem, ticketReservation(101, "MAT-A", "2"), ticketReservation(102, "MAT-A", "3"));
+                firstItem, allocationReservation(101, "MAT-A", "2"), allocationReservation(102, "MAT-A", "3"));
         WmsReservationPlanService.ReservationItem secondItem = item("MAT-A", "4");
         secondItem.setCustomerProjectNo("CP-2");
         WmsReservationPlanService.ReservationGroup second = group("CO-1",
-                secondItem, ticketReservation(201, "MAT-A", "4"));
+                secondItem, allocationReservation(201, "MAT-A", "4"));
         WmsReservationPlanService.ReservationPlan plan = plan(first, second);
-        when(fixture.planService.prepare(List.of(101, 102, 201))).thenReturn(plan);
+        when(fixture.planService.prepareAllocations(List.of(101, 102, 201))).thenReturn(plan);
         when(fixture.stateService.reserveBatch(9001L, first)).thenReturn(context(501L, "QPO-WMS-1", first));
         when(fixture.stateService.reserveBatch(9001L, second)).thenReturn(context(502L, "QPO-WMS-2", second));
         when(fixture.stateService.sendWithReplay(501L)).thenReturn(success("CO-1", "QPO-WMS-1"));
         when(fixture.stateService.sendWithReplay(502L))
                 .thenThrow(callException(DataCenterCallException.FailureCertainty.DEFINITE_FAILURE, "WMS rejected CO-1"));
 
-        Map<String, Object> result = fixture.service.allocateBatch(List.of(101, 102, 201), 9001L);
+        Map<String, Object> result = fixture.service.allocateAllocationBatch(List.of(101, 102, 201), 9001L);
 
         assertThat(result)
                 .containsEntry("taskType", "WMS_ALLOCATION_BATCH")
@@ -82,12 +82,12 @@ class WmsReservationBatchServiceTest {
         Fixture fixture = fixture();
         allowNewReservation(fixture, 101);
         WmsReservationPlanService.ReservationGroup group = group("SO-1",
-                item("MAT-A", "1"), ticketReservation(101, "MAT-A", "1"));
-        when(fixture.planService.prepare(List.of(101))).thenReturn(plan(group));
+                item("MAT-A", "1"), allocationReservation(101, "MAT-A", "1"));
+        when(fixture.planService.prepareAllocations(List.of(101))).thenReturn(plan(group));
         when(fixture.stateService.reserveBatch(9002L, group)).thenReturn(context(501L, "QPO-WMS-1", group));
         when(fixture.stateService.sendWithReplay(501L)).thenReturn(success("SO-1", "QPO-WMS-1"));
 
-        fixture.service.allocateBatch(List.of(101), 9002L);
+        fixture.service.allocateAllocationBatch(List.of(101), 9002L);
 
         verify(fixture.stateService).reserveBatch(9002L, group);
         verify(fixture.stateService).sendWithReplay(501L);
@@ -100,14 +100,14 @@ class WmsReservationBatchServiceTest {
         Fixture fixture = fixture();
         allowNewReservation(fixture, 101, 301);
         WmsReservationPlanService.ReservationGroup group = group("SO-1",
-                item("MAT-A", "1"), ticketReservation(101, "MAT-A", "1"));
+                item("MAT-A", "1"), allocationReservation(101, "MAT-A", "1"));
         WmsReservationPlanService.ReservationPlan plan = plan(group);
-        plan.getFailures().add(new WmsReservationPlanService.RowFailure(301, "materialNo is required"));
-        when(fixture.planService.prepare(List.of(101, 301))).thenReturn(plan);
+        plan.getFailures().add(new WmsReservationPlanService.RowFailure(301, 301, "materialNo is required"));
+        when(fixture.planService.prepareAllocations(List.of(101, 301))).thenReturn(plan);
         when(fixture.stateService.reserveBatch(9003L, group)).thenReturn(context(501L, "QPO-WMS-1", group));
         when(fixture.stateService.sendWithReplay(501L)).thenReturn(success("SO-1", "QPO-WMS-1"));
 
-        Map<String, Object> result = fixture.service.allocateBatch(List.of(101, 301), 9003L);
+        Map<String, Object> result = fixture.service.allocateAllocationBatch(List.of(101, 301), 9003L);
 
         assertThat(result).containsEntry("successCount", 1).containsEntry("failedCount", 1);
         List<Map<String, Object>> rows = (List<Map<String, Object>>) result.get("results");
@@ -123,7 +123,7 @@ class WmsReservationBatchServiceTest {
         Fixture fixture = fixture();
         WmsReservationTicket selectedActive = activeTicket(801L, 501L, 101, "RESULT_UNKNOWN");
         WmsReservationTicket sibling = activeTicket(802L, 501L, 102, "RESULT_UNKNOWN");
-        when(fixture.ticketMapper.selectActiveByTicketId(101)).thenReturn(selectedActive);
+        when(fixture.ticketMapper.selectActiveLegacyByTicketId(101)).thenReturn(selectedActive);
         when(fixture.ticketMapper.selectByBatchId(501L)).thenReturn(List.of(selectedActive, sibling));
         when(fixture.batchMapper.selectById(501L)).thenReturn(batch(501L, "RESULT_UNKNOWN", "SO-1", "QPO-WMS-1"));
         when(fixture.ticketSourceMapper.selectById(101)).thenReturn(ticket(101));
@@ -138,7 +138,7 @@ class WmsReservationBatchServiceTest {
                 .containsExactly(101, 102);
         verify(fixture.dataScopeService).assertCanAccessDeliveryTicket(ticket(101));
         verify(fixture.dataScopeService).assertCanAccessDeliveryTicket(ticket(102));
-        verify(fixture.planService, never()).prepare(any());
+        verify(fixture.planService, never()).prepareAllocations(any());
         verify(fixture.stateService, never()).reserveBatch(any(), any());
         verify(fixture.stateService).sendWithReplay(501L);
         verify(fixture.stateService).applyResponse(501L);
@@ -150,10 +150,10 @@ class WmsReservationBatchServiceTest {
         Fixture fixture = fixture();
         WmsReservationTicket applyFailed = activeTicket(801L, 501L, 101, "APPLY_FAILED");
         WmsReservationTicket success = activeTicket(901L, 601L, 201, "SUCCESS");
-        when(fixture.ticketMapper.selectActiveByTicketId(101)).thenReturn(applyFailed);
+        when(fixture.ticketMapper.selectActiveLegacyByTicketId(101)).thenReturn(applyFailed);
         when(fixture.ticketMapper.selectByBatchId(501L)).thenReturn(List.of(applyFailed));
         when(fixture.batchMapper.selectById(501L)).thenReturn(batch(501L, "APPLY_FAILED", "SO-1", "QPO-WMS-1"));
-        when(fixture.ticketMapper.selectActiveByTicketId(201)).thenReturn(success);
+        when(fixture.ticketMapper.selectActiveLegacyByTicketId(201)).thenReturn(success);
         when(fixture.ticketMapper.selectByBatchId(601L)).thenReturn(List.of(success));
         when(fixture.batchMapper.selectById(601L)).thenReturn(batch(601L, "SUCCESS", "SO-2", "QPO-WMS-2"));
         when(fixture.ticketSourceMapper.selectById(101)).thenReturn(ticket(101));
@@ -170,14 +170,46 @@ class WmsReservationBatchServiceTest {
         verify(fixture.stateService, never()).reserveBatch(any(), any());
     }
 
+    @Test
+    void allocationEntryRecoversLegacyTicketBatchBeforeCreatingNewAllocationRequest() {
+        Fixture fixture = fixture();
+        WmsReservationTicket legacyActive = activeTicket(801L, 501L, 101, "RESULT_UNKNOWN");
+        com.machining.quote.entity.OrderDeliveryTicketAllocation allocation =
+                new com.machining.quote.entity.OrderDeliveryTicketAllocation();
+        allocation.setId(1001);
+        allocation.setTicketId(101);
+        when(fixture.allocationMapper.selectById(1001)).thenReturn(allocation);
+        when(fixture.ticketMapper.selectActiveLegacyByTicketId(101)).thenReturn(legacyActive);
+        when(fixture.ticketMapper.selectByBatchId(501L)).thenReturn(List.of(legacyActive));
+        when(fixture.batchMapper.selectById(501L)).thenReturn(batch(501L, "RESULT_UNKNOWN", "SO-1", "QPO-WMS-1"));
+        when(fixture.ticketSourceMapper.selectById(101)).thenReturn(ticket(101));
+        when(fixture.stateService.sendWithReplay(501L)).thenReturn(success("SO-1", "QPO-WMS-1"));
+
+        Map<String, Object> result = fixture.service.allocateAllocationBatch(List.of(1001), 9006L);
+
+        assertThat(result).containsEntry("successCount", 1).containsEntry("totalCount", 1);
+        verify(fixture.stateService).sendWithReplay(501L);
+        verify(fixture.stateService).applyResponse(501L);
+        verify(fixture.planService, never()).prepareAllocations(any());
+        verify(fixture.stateService, never()).reserveBatch(any(), any());
+    }
+
     private Fixture fixture() {
         return new Fixture();
     }
 
-    private void allowNewReservation(Fixture fixture, Integer... ticketIds) {
-        for (Integer ticketId : ticketIds) {
-            when(fixture.ticketSourceMapper.selectById(ticketId)).thenReturn(ticket(ticketId));
-            when(fixture.allocationMapper.selectByTicketId(ticketId)).thenReturn(List.of());
+    private void allowNewReservation(Fixture fixture, Integer... allocationIds) {
+        for (Integer allocationId : allocationIds) {
+            com.machining.quote.entity.OrderDeliveryTicketAllocation allocation =
+                    new com.machining.quote.entity.OrderDeliveryTicketAllocation();
+            allocation.setId(allocationId);
+            allocation.setTicketId(allocationId);
+            allocation.setAllocationType("PRODUCTION_REQUIRED");
+            allocation.setStatus("ACTIVE");
+            allocation.setQty(5);
+            allocation.setMaterialNo("MAT-A");
+            allocation.setMesProductionStatus("PENDING");
+            when(fixture.allocationMapper.selectById(allocationId)).thenReturn(allocation);
         }
     }
 
@@ -190,12 +222,12 @@ class WmsReservationBatchServiceTest {
     private WmsReservationPlanService.ReservationGroup group(
             String saleNo,
             WmsReservationPlanService.ReservationItem item,
-            WmsReservationPlanService.TicketReservation... tickets) {
+            WmsReservationPlanService.AllocationReservation... allocations) {
         WmsReservationPlanService.ReservationGroup group = new WmsReservationPlanService.ReservationGroup();
         group.setSaleOrderId(Long.parseLong(saleNo.substring(saleNo.length() - 1)));
         group.setSaleNo(saleNo);
         group.getItems().add(item);
-        group.getTickets().addAll(List.of(tickets));
+        group.getAllocations().addAll(List.of(allocations));
         group.setRequestFingerprint("0".repeat(64));
         return group;
     }
@@ -208,14 +240,17 @@ class WmsReservationBatchServiceTest {
         return item;
     }
 
-    private WmsReservationPlanService.TicketReservation ticketReservation(Integer ticketId, String productCode, String qty) {
-        WmsReservationPlanService.TicketReservation ticket = new WmsReservationPlanService.TicketReservation();
-        ticket.setTicketId(ticketId);
-        ticket.setSalesOrderItemId(ticketId.longValue());
-        ticket.setSalesOrderLineNo(ticketId);
-        ticket.setProductCode(productCode);
-        ticket.setReserveCount(new BigDecimal(qty));
-        return ticket;
+    private WmsReservationPlanService.AllocationReservation allocationReservation(Integer allocationId,
+                                                                                  String productCode,
+                                                                                  String qty) {
+        WmsReservationPlanService.AllocationReservation allocation = new WmsReservationPlanService.AllocationReservation();
+        allocation.setAllocationId(allocationId);
+        allocation.setTicketId(allocationId);
+        allocation.setSalesOrderItemId(allocationId.longValue());
+        allocation.setSalesOrderLineNo(allocationId);
+        allocation.setProductCode(productCode);
+        allocation.setReserveCount(new BigDecimal(qty));
+        return allocation;
     }
 
     private WmsReservationStateService.ReservationBatchContext context(
@@ -223,8 +258,8 @@ class WmsReservationBatchServiceTest {
             String externalBizId,
             WmsReservationPlanService.ReservationGroup group) {
         return new WmsReservationStateService.ReservationBatchContext(batchId, externalBizId, null,
-                group.getTickets().stream()
-                        .map(ticket -> activeTicket(ticket.getTicketId().longValue(), batchId, ticket.getTicketId(), "RESERVED"))
+                group.getAllocations().stream()
+                        .map(allocation -> activeTicket(allocation.getAllocationId().longValue(), batchId, allocation.getTicketId(), "RESERVED"))
                         .toList());
     }
 

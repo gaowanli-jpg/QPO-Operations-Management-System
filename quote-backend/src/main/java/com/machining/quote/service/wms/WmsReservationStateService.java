@@ -1,12 +1,14 @@
 package com.machining.quote.service.wms;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import org.springframework.beans.BeanUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.machining.quote.dto.wms.WmsSaleLadingReserveReq;
 import com.machining.quote.dto.wms.WmsSaleLadingReserveResp;
 import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.OrderDeliveryTicketAllocation;
+import com.machining.quote.entity.SalesOrderItem;
 import com.machining.quote.entity.WmsReservationBatch;
 import com.machining.quote.entity.WmsReservationItem;
 import com.machining.quote.entity.WmsReservationTicket;
@@ -95,7 +97,7 @@ public class WmsReservationStateService {
     @Transactional
     public ReservationBatchContext reserveBatch(Long taskId, WmsReservationPlanService.ReservationGroup group) {
         requireGroup(group);
-        assertNoActiveTickets(group.getTickets());
+        assertNoActiveAllocations(group);
         WmsSaleLadingReserveReq request = requestSnapshot(group, newWmsBizId());
         String fingerprint = fingerprintService.fingerprint(request.getSaleNo(), request.getItems());
         if (!Objects.equals(fingerprint, group.getRequestFingerprint())) {
@@ -123,15 +125,16 @@ public class WmsReservationStateService {
         }
 
         List<WmsReservationTicket> tickets = new ArrayList<>();
-        for (WmsReservationPlanService.TicketReservation source : stableTickets(group.getTickets())) {
+        for (WmsReservationPlanService.AllocationReservation source : stableAllocations(group.getAllocations())) {
             Long itemId = itemIdByProduct.get(source.getProductCode());
             if (itemId == null) {
-                throw new IllegalStateException("WMS reservation ticket product has no batch item productCode=" + source.getProductCode());
+                throw new IllegalStateException("WMS reservation allocation product has no batch item productCode=" + source.getProductCode());
             }
             WmsReservationTicket ticket = new WmsReservationTicket();
             ticket.setBatchId(batch.getId());
             ticket.setBatchItemId(itemId);
             ticket.setTicketId(source.getTicketId());
+            ticket.setAllocationId(source.getAllocationId());
             ticket.setSalesOrderItemId(source.getSalesOrderItemId());
             ticket.setSalesOrderLineNo(source.getSalesOrderLineNo());
             ticket.setProductCode(source.getProductCode());
@@ -143,13 +146,6 @@ public class WmsReservationStateService {
             ticketMapper.insert(ticket);
             requireId(ticket.getId(), "WMS reservation ticket insert did not return id");
             tickets.add(ticket);
-            OrderDeliveryTicket ticketUpdate = new OrderDeliveryTicket();
-            ticketUpdate.setId(source.getTicketId());
-            ticketUpdate.setWmsAllocateStatus("PROCESSING");
-            ticketUpdate.setWmsAllocateMessage("库存信息获取处理中");
-            if (ticketSourceMapper.updateById(ticketUpdate) <= 0) {
-                throw new IllegalStateException("Unable to claim delivery ticket for WMS allocation ticketId=" + source.getTicketId());
-            }
         }
         return new ReservationBatchContext(batch.getId(), batch.getExternalBizId(), copyRequest(request), List.copyOf(tickets));
     }
@@ -199,17 +195,18 @@ public class WmsReservationStateService {
                 itemMapper.updateById(update);
             }
             WmsReservationPlanService.ReservationGroup group = toGroup(loadBatch(batchId), items, tickets);
-            List<WmsReservationPlanService.TicketAllocationSplit> splits = planService.split(group, responseData);
-            Map<Integer, WmsReservationPlanService.TicketAllocationSplit> splitByTicket = splits.stream()
-                    .collect(Collectors.toMap(WmsReservationPlanService.TicketAllocationSplit::getTicketId, Function.identity()));
+            List<WmsReservationPlanService.AllocationSplit> splits = planService.split(group, responseData);
+            Map<Long, WmsReservationPlanService.AllocationSplit> splitByReservation = splits.stream()
+                    .collect(Collectors.toMap(split -> reservationKey(split.getAllocationId(), split.getTicketId()), Function.identity()));
             for (WmsReservationTicket ticket : tickets) {
-                WmsReservationPlanService.TicketAllocationSplit split = splitByTicket.get(ticket.getTicketId());
+                WmsReservationPlanService.AllocationSplit split = splitByReservation.get(
+                        reservationKey(ticket.getAllocationId(), ticket.getTicketId()));
                 if (split == null) {
-                    throw new IllegalStateException("WMS reservation split missing ticketId=" + ticket.getTicketId());
+                    throw new IllegalStateException("WMS reservation split missing allocationId=" + ticket.getAllocationId()
+                            + " ticketId=" + ticket.getTicketId());
                 }
                 WmsReservationTicket update = new WmsReservationTicket();
                 update.setId(ticket.getId());
-                update.setTicketId(ticket.getTicketId());
                 update.setStockFrozenCount(split.getStockFrozenCount());
                 update.setInProductionCount(split.getInProductionCount());
                 update.setSurplusCount(split.getSurplusCount());
@@ -286,7 +283,11 @@ public class WmsReservationStateService {
         List<WmsReservationItem> items = loadItems(batchId);
         List<WmsReservationTicket> tickets = ticketMapper.selectByBatchId(batchId);
         for (WmsReservationTicket reservationTicket : tickets) {
-            applyTicket(reservationTicket);
+            if (reservationTicket.getAllocationId() == null) {
+                applyTicket(reservationTicket);
+            } else {
+                applyAllocation(reservationTicket);
+            }
         }
         for (WmsReservationItem item : items) {
             WmsReservationItem update = new WmsReservationItem();
@@ -336,6 +337,69 @@ public class WmsReservationStateService {
         ticketUpdate.setWmsAllocateMessage("WMS reservation applied");
         ticketUpdate.setWmsAllocatedAt(LocalDateTime.now());
         ticketSourceMapper.updateById(ticketUpdate);
+
+        WmsReservationTicket reservationUpdate = new WmsReservationTicket();
+        reservationUpdate.setId(reservationTicket.getId());
+        reservationUpdate.setStatus(STATUS_SUCCESS);
+        reservationUpdate.setAppliedAt(LocalDateTime.now());
+        reservationUpdate.setUpdatedAt(LocalDateTime.now());
+        ticketMapper.updateById(reservationUpdate);
+    }
+
+    private void applyAllocation(WmsReservationTicket reservationTicket) {
+        requireTicketBuckets(reservationTicket);
+        salesOrderAllocationLinkService.lockSalesOrderForAllocation(reservationTicket.getAllocationId());
+        OrderDeliveryTicketAllocation allocation = allocationMapper
+                .selectByIdForUpdate(reservationTicket.getAllocationId());
+        if (allocation == null
+                || !TYPE_PRODUCTION_REQUIRED.equalsIgnoreCase(trim(allocation.getAllocationType()))
+                || !ALLOCATION_ACTIVE.equalsIgnoreCase(trim(allocation.getStatus()))
+                || Boolean.TRUE.equals(allocation.getDiscarded())) {
+            throw new IllegalStateException("WMS source allocation is not an active production row allocationId="
+                    + reservationTicket.getAllocationId());
+        }
+        if (!Objects.equals(trim(allocation.getMaterialNo()), trim(reservationTicket.getProductCode()))) {
+            throw new IllegalStateException("WMS reservation material snapshot changed allocationId=" + allocation.getId());
+        }
+        if (allocation.getQty() == null
+                || BigDecimal.valueOf(allocation.getQty()).compareTo(reservationTicket.getReserveCount()) != 0) {
+            throw new IllegalStateException("WMS reservation quantity snapshot changed allocationId=" + allocation.getId());
+        }
+        if (hasStartedMesProduction(allocation)) {
+            throw new IllegalStateException("MES production started before WMS response was applied allocationId=" + allocation.getId());
+        }
+        BigDecimal splitTotal = reservationTicket.getStockFrozenCount()
+                .add(reservationTicket.getInProductionCount())
+                .add(reservationTicket.getSurplusCount());
+        if (splitTotal.compareTo(BigDecimal.valueOf(allocation.getQty())) != 0) {
+            throw new IllegalStateException("WMS allocation split does not preserve allocation quantity allocationId=" + allocation.getId());
+        }
+
+        Set<String> existingTypes = allocationMapper.selectByWmsReservationTicketId(reservationTicket.getId()).stream()
+                .map(OrderDeliveryTicketAllocation::getAllocationType)
+                .collect(Collectors.toCollection(HashSet::new));
+        insertPositiveAllocation(allocation, reservationTicket, TYPE_IN_STOCK,
+                reservationTicket.getStockFrozenCount(), existingTypes);
+        insertPositiveAllocation(allocation, reservationTicket, TYPE_IN_PRODUCTION,
+                reservationTicket.getInProductionCount(), existingTypes);
+
+        allocation.setQty(reservationTicket.getSurplusCount().intValueExact());
+        allocation.setWmsReservationTicketId(reservationTicket.getId());
+        allocation.setMesProductionStatus("PENDING");
+        allocation.setMesProductionRequestId(null);
+        allocation.setMesProductionExternalId(null);
+        allocation.setMesProductionSyncedAt(null);
+        allocation.setMesProductionMessage(null);
+        allocation.setUpdatedAt(LocalDateTime.now());
+        allocationMapper.updateById(allocation);
+
+        List<OrderDeliveryTicketAllocation> appliedAllocations = allocationMapper
+                .selectByWmsReservationTicketId(reservationTicket.getId());
+        if (appliedAllocations.stream().noneMatch(row -> Objects.equals(row.getId(), allocation.getId()))) {
+            appliedAllocations = new ArrayList<>(appliedAllocations);
+            appliedAllocations.add(allocation);
+        }
+        salesOrderAllocationLinkService.syncWmsAllocationsForAllocation(allocation.getId(), appliedAllocations);
 
         WmsReservationTicket reservationUpdate = new WmsReservationTicket();
         reservationUpdate.setId(reservationTicket.getId());
@@ -402,6 +466,43 @@ public class WmsReservationStateService {
             replaced.setUpdatedAt(LocalDateTime.now());
             allocationMapper.updateById(replaced);
         }
+    }
+
+    private void insertPositiveAllocation(OrderDeliveryTicketAllocation source,
+                                          WmsReservationTicket reservationTicket,
+                                          String type,
+                                          BigDecimal quantity,
+                                          Set<String> existingTypes) {
+        if (quantity == null || quantity.signum() <= 0 || existingTypes.contains(type)) {
+            return;
+        }
+        OrderDeliveryTicketAllocation row = allocationRow(source, reservationTicket, type, quantity.intValueExact());
+        allocationMapper.insert(row);
+        existingTypes.add(type);
+    }
+
+    private OrderDeliveryTicketAllocation allocationRow(OrderDeliveryTicketAllocation source,
+                                                        WmsReservationTicket reservationTicket,
+                                                        String type,
+                                                        Integer qty) {
+        OrderDeliveryTicketAllocation row = new OrderDeliveryTicketAllocation();
+        BeanUtils.copyProperties(source, row);
+        row.setId(null);
+        row.setWmsReservationTicketId(reservationTicket.getId());
+        row.setAllocationSource("WMS_RESERVATION");
+        row.setAllocationType(type);
+        row.setQty(qty);
+        row.setSourcePayload(sourcePayload(reservationTicket, type, qty));
+        row.setMesProductionStatus("PENDING");
+        row.setMesProductionRequestId(null);
+        row.setMesProductionExternalId(null);
+        row.setMesProductionSyncedAt(null);
+        row.setMesProductionMessage(null);
+        row.setStatus(ALLOCATION_ACTIVE);
+        LocalDateTime now = LocalDateTime.now();
+        row.setCreatedAt(now);
+        row.setUpdatedAt(now);
+        return row;
     }
 
     private void insertPositiveAllocation(OrderDeliveryTicket ticket,
@@ -500,7 +601,7 @@ public class WmsReservationStateService {
         batch.setRequestFingerprint(fingerprint);
         batch.setRequestPayload(copyRequest(request));
         batch.setItemCount(group.getItems().size());
-        batch.setTicketCount(group.getTickets().size());
+        batch.setTicketCount(group.getAllocations().size());
         batch.setStatus(STATUS_RESERVED);
         batch.setAttemptNo(1);
         LocalDateTime now = LocalDateTime.now();
@@ -557,13 +658,14 @@ public class WmsReservationStateService {
                 .sorted(Comparator.comparing(WmsReservationTicket::getSalesOrderLineNo, Comparator.nullsLast(Integer::compareTo))
                         .thenComparing(WmsReservationTicket::getTicketId))
                 .toList()) {
-            WmsReservationPlanService.TicketReservation planTicket = new WmsReservationPlanService.TicketReservation();
-            planTicket.setTicketId(ticket.getTicketId());
-            planTicket.setSalesOrderItemId(ticket.getSalesOrderItemId());
-            planTicket.setSalesOrderLineNo(ticket.getSalesOrderLineNo());
-            planTicket.setProductCode(ticket.getProductCode());
-            planTicket.setReserveCount(ticket.getReserveCount());
-            group.getTickets().add(planTicket);
+            WmsReservationPlanService.AllocationReservation planAllocation = new WmsReservationPlanService.AllocationReservation();
+            planAllocation.setAllocationId(ticket.getAllocationId());
+            planAllocation.setTicketId(ticket.getTicketId());
+            planAllocation.setSalesOrderItemId(ticket.getSalesOrderItemId());
+            planAllocation.setSalesOrderLineNo(ticket.getSalesOrderLineNo());
+            planAllocation.setProductCode(ticket.getProductCode());
+            planAllocation.setReserveCount(ticket.getReserveCount());
+            group.getAllocations().add(planAllocation);
         }
         return group;
     }
@@ -659,11 +761,13 @@ public class WmsReservationStateService {
             update.setUpdatedAt(now);
             ticketMapper.updateById(update);
 
-            OrderDeliveryTicket ticketUpdate = new OrderDeliveryTicket();
-            ticketUpdate.setId(ticket.getTicketId());
-            ticketUpdate.setWmsAllocateStatus(STATUS_FAILED);
-            ticketUpdate.setWmsAllocateMessage(safeMessage);
-            ticketSourceMapper.updateById(ticketUpdate);
+            if (ticket.getAllocationId() == null) {
+                OrderDeliveryTicket ticketUpdate = new OrderDeliveryTicket();
+                ticketUpdate.setId(ticket.getTicketId());
+                ticketUpdate.setWmsAllocateStatus(STATUS_FAILED);
+                ticketUpdate.setWmsAllocateMessage(safeMessage);
+                ticketSourceMapper.updateById(ticketUpdate);
+            }
         }
     }
 
@@ -681,39 +785,36 @@ public class WmsReservationStateService {
         };
     }
 
-    private void assertNoActiveTickets(List<WmsReservationPlanService.TicketReservation> tickets) {
-        List<Integer> ticketIds = tickets.stream()
-                .map(WmsReservationPlanService.TicketReservation::getTicketId)
-                .filter(Objects::nonNull)
-                .distinct()
-                .sorted()
-                .toList();
-        for (Integer ticketId : ticketIds) {
-            OrderDeliveryTicket deliveryTicket = ticketSourceMapper.selectByIdForUpdate(ticketId);
-            if (deliveryTicket == null || Boolean.TRUE.equals(deliveryTicket.getDiscarded())) {
-                throw new IllegalStateException("delivery ticket is unavailable for WMS reservation ticketId=" + ticketId);
+    private void assertNoActiveAllocations(WmsReservationPlanService.ReservationGroup group) {
+        for (WmsReservationPlanService.AllocationReservation source : stableAllocations(group.getAllocations())) {
+            SalesOrderItem item = salesOrderAllocationLinkService.lockSalesOrderForAllocation(source.getAllocationId());
+            if (!Objects.equals(item.getSalesOrderId(), group.getSaleOrderId())) {
+                throw new IllegalStateException("WMS reservation allocation belongs to another sales order allocationId="
+                        + source.getAllocationId());
             }
-            if (!"SUCCESS".equalsIgnoreCase(trim(deliveryTicket.getMesSyncStatus()))
-                    || trim(deliveryTicket.getMaterialNo()) == null) {
-                throw new IllegalStateException("MES material number is not confirmed for WMS reservation ticketId=" + ticketId);
+            OrderDeliveryTicketAllocation allocation = allocationMapper.selectByIdForUpdate(source.getAllocationId());
+            if (allocation == null
+                    || !TYPE_PRODUCTION_REQUIRED.equalsIgnoreCase(trim(allocation.getAllocationType()))
+                    || !ALLOCATION_ACTIVE.equalsIgnoreCase(trim(allocation.getStatus()))
+                    || Boolean.TRUE.equals(allocation.getDiscarded())) {
+                throw new IllegalStateException("production allocation is unavailable allocationId=" + source.getAllocationId());
             }
-            String wmsStatus = trim(deliveryTicket.getWmsAllocateStatus());
-            if ("SUCCESS".equalsIgnoreCase(wmsStatus)) {
-                throw new IllegalStateException("WMS reservation already completed ticketId=" + ticketId);
+            if (allocation.getQty() == null || allocation.getQty() <= 0
+                    || BigDecimal.valueOf(allocation.getQty()).compareTo(source.getReserveCount()) != 0) {
+                throw new IllegalStateException("WMS allocation quantity changed before request allocationId=" + source.getAllocationId());
             }
-            if (wmsStatus != null && !wmsStatus.isEmpty()
-                    && !"PENDING".equalsIgnoreCase(wmsStatus)
-                    && !"FAILED".equalsIgnoreCase(wmsStatus)) {
-                throw new IllegalStateException("WMS reservation status requires recovery ticketId=" + ticketId
-                        + " status=" + wmsStatus);
+            if (!Objects.equals(trim(allocation.getMaterialNo()), trim(source.getProductCode()))) {
+                throw new IllegalStateException("WMS allocation material changed before request allocationId=" + source.getAllocationId());
             }
-            List<OrderDeliveryTicketAllocation> allocations = allocationMapper.selectByTicketIdForUpdate(ticketId);
-            if (allocations != null && allocations.stream().anyMatch(this::hasStartedMesProduction)) {
-                throw new IllegalStateException("MES production is already in progress or completed ticketId=" + ticketId);
+            if (allocation.getWmsReservationTicketId() != null) {
+                throw new IllegalStateException("WMS reservation already applied allocationId=" + source.getAllocationId());
             }
-            WmsReservationTicket active = ticketMapper.selectActiveByTicketId(ticketId);
+            if (hasStartedMesProduction(allocation)) {
+                throw new IllegalStateException("MES production is already in progress or completed allocationId=" + source.getAllocationId());
+            }
+            WmsReservationTicket active = ticketMapper.selectActiveByAllocationId(source.getAllocationId());
             if (active != null) {
-                throw new IllegalStateException("ticket already has active WMS reservation ticketId=" + ticketId
+                throw new IllegalStateException("allocation already has active WMS reservation allocationId=" + source.getAllocationId()
                         + " activeStatus=" + active.getStatus());
             }
         }
@@ -732,11 +833,15 @@ public class WmsReservationStateService {
                 || "SUCCESS".equalsIgnoreCase(status);
     }
 
-    private List<WmsReservationPlanService.TicketReservation> stableTickets(List<WmsReservationPlanService.TicketReservation> tickets) {
-        return tickets.stream()
-                .sorted(Comparator.comparing(WmsReservationPlanService.TicketReservation::getSalesOrderLineNo,
+    private List<WmsReservationPlanService.AllocationReservation> stableAllocations(
+            List<WmsReservationPlanService.AllocationReservation> allocations) {
+        return allocations.stream()
+                .sorted(Comparator.comparing(WmsReservationPlanService.AllocationReservation::getSalesOrderLineNo,
                                 Comparator.nullsLast(Integer::compareTo))
-                        .thenComparing(WmsReservationPlanService.TicketReservation::getTicketId))
+                        .thenComparing(WmsReservationPlanService.AllocationReservation::getAllocationId,
+                                Comparator.nullsLast(Integer::compareTo))
+                        .thenComparing(WmsReservationPlanService.AllocationReservation::getTicketId,
+                                Comparator.nullsLast(Integer::compareTo)))
                 .toList();
     }
 
@@ -757,9 +862,19 @@ public class WmsReservationStateService {
         return batch;
     }
 
+    private Long reservationKey(Integer allocationId, Integer ticketId) {
+        if (allocationId != null) {
+            return allocationId.longValue();
+        }
+        if (ticketId != null) {
+            return -ticketId.longValue();
+        }
+        throw new IllegalStateException("WMS reservation snapshot has no allocation or ticket identifier");
+    }
+
     private void requireGroup(WmsReservationPlanService.ReservationGroup group) {
-        if (group == null || trim(group.getSaleNo()) == null || group.getItems().isEmpty() || group.getTickets().isEmpty()) {
-            throw new IllegalArgumentException("WMS reservation group must include saleNo, items, and tickets");
+        if (group == null || trim(group.getSaleNo()) == null || group.getItems().isEmpty() || group.getAllocations().isEmpty()) {
+            throw new IllegalArgumentException("WMS reservation group must include saleNo, items, and allocations");
         }
     }
 

@@ -50,7 +50,7 @@
 | `saleNo` | 是 | 客户订单号；字段名沿用 WMS 现有接口，QPO 不再传自生成销售订单号。 |
 | `items` | 是 | 同一 `saleNo` 下的聚合物料数组，单个零件也必须发送数组。 |
 | `items[].productCode` | 是 | MES 物料号。 |
-| `items[].reserveCount` | 是 | 同客户订单号同物料需求数量合计。 |
+| `items[].reserveCount` | 是 | 同销售订单、客户订单号、物料号和客户项目号下参与请求的有效 `PRODUCTION_REQUIRED` Allocation 数量合计；每条 Allocation 的请求数量取其 `qty`。来源提单数量不参与新流程计算。 |
 | `items[].remark` | 是 | WMS 支持的正式备注字段，QPO 必须传递。 |
 | `items[].customerProjectNo` | 否 | 客户项目号，QPO 按销售订单行、销售订单头、提单行快照依次兜底。 |
 | `items[].customerOrderNo` | 是 | 客户订单号，与外层 `saleNo` 使用同一解析结果。 |
@@ -101,7 +101,8 @@ frozenCount + surplusCount = reserveCount
 - 库存覆盖写入 `IN_STOCK_LOCK`。
 - 在产覆盖写入 `IN_PRODUCTION_LOCK`。
 - 缺口写入 `PRODUCTION_REQUIRED`。
-- 写入 `order_delivery_ticket_allocation` 时保存 `ticket_qty` 原始提单数量快照。
+- WMS 请求快照关联对应 `order_delivery_ticket_allocation.id`，并保存请求时的 Allocation 数量；来源 `ticket_id` 仅用于追溯。
+- 应用响应时逐 Allocation 校验冻结、在产和剩余数量之和等于请求快照数量及当前 Allocation 数量。
 - WMS 成功后结果进入锁库零件模块，原始 ticket 不删除。
 - 通过 `ticketId` 可反查原始 `order_delivery_ticket`。
 

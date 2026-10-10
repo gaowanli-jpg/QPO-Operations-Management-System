@@ -16,6 +16,9 @@ class WmsReservationMigrationTest {
     private static final Path V13 = Path.of(
             "src", "main", "resources", "db", "migration", "V13__wms_failed_reservation_state_repair.sql"
     );
+    private static final Path V59 = Path.of(
+            "src", "main", "resources", "db", "migration", "V59__wms_reservation_allocation_source.sql"
+    );
     private static final Path BATCH_ENTITY = Path.of(
             "src", "main", "java", "com", "machining", "quote", "entity", "WmsReservationBatch.java"
     );
@@ -84,6 +87,26 @@ class WmsReservationMigrationTest {
                         "ON order_delivery_ticket_allocation(wms_reservation_ticket_id, allocation_type)",
                         "WHERE wms_reservation_ticket_id IS NOT NULL"
                 );
+    }
+
+    @Test
+    void v59ScopesReservationUniquenessToAllocationAndPreservesLegacyTicketRecovery() throws IOException {
+        String sql = read(V59);
+
+        assertThat(sql)
+                .contains(
+                        "ADD COLUMN allocation_id INTEGER REFERENCES order_delivery_ticket_allocation(id)",
+                        "DROP CONSTRAINT uk_wms_reservation_ticket_ticket",
+                        "ON wms_reservation_ticket(batch_id, ticket_id)",
+                        "WHERE allocation_id IS NULL",
+                        "ON wms_reservation_ticket(batch_id, allocation_id)",
+                        "WHERE allocation_id IS NOT NULL",
+                        "DROP INDEX uk_wms_reservation_active_ticket",
+                        "ON wms_reservation_ticket(ticket_id)",
+                        "AND status IN ('RESERVED', 'SUBMITTING', 'RESULT_UNKNOWN', 'RESPONSE_RECEIVED', 'APPLY_FAILED')",
+                        "uk_wms_reservation_active_allocation"
+                )
+                .doesNotContain("UPDATE wms_reservation_ticket");
     }
 
     @Test
@@ -166,9 +189,10 @@ class WmsReservationMigrationTest {
         assertThat(ticketMapper)
                 .contains(
                         "extends BaseMapper<WmsReservationTicket>",
-                        "WmsReservationTicket selectActiveByTicketId",
+                        "WmsReservationTicket selectActiveLegacyByTicketId",
                         "List<WmsReservationTicket> selectByBatchId",
                         "WHERE ticket_id = #{ticketId}",
+                        "AND allocation_id IS NULL",
                         "WHERE batch_id = #{batchId}"
                 );
     }

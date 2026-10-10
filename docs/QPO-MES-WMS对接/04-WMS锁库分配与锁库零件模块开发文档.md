@@ -5,6 +5,7 @@
 > 阶段 31 后，锁库零件模块只展示 `IN_STOCK_LOCK` 和 `IN_PRODUCTION_LOCK`，`PRODUCTION_REQUIRED` 行进入待产零件模块 `/production-items`，MES 生产下发从待产零件模块发起。
 
 > 2026-10-09 可选库存获取收口：物料号成功即创建全量 `PRODUCTION_REQUIRED` allocation 并进入待产池。WMS 获取库存改由销售订单详情按整单关联提单触发；成功后替代 / 拆分默认生产分配。已提零件页的旧批量接口与权限保留为兼容入口，页面不再显示。
+> 2026-10-10 请求来源口径更新：上述“按整单关联提单触发”仅说明入口来源。新流程实际只处理有效、数量大于 0 的 `PRODUCTION_REQUIRED` Allocation，请求数量和响应拆分校验均以 Allocation 为准，提单只作追溯；新快照按 Allocation 恢复。下文按提单数量计算的旧流程为历史实现记录，详见本文档 13、14 号和 07 号接口说明。
 
 ## 1. 当前结论
 

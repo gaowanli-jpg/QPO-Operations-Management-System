@@ -219,7 +219,7 @@ class SalesOrderMaintenanceServiceTest {
     }
 
     @Test
-    void saveItemsAuditsAllocationQuantityChangesWithTicketSyncFlag() {
+    void saveItemsAuditsAllocationQuantityChangesWithoutTicketSyncMetadata() {
         Fixture fixture = fixture();
         SalesOrderHeader header = header(121L, "链悓姝?");
         SalesOrderItem item = item(212L, 121L);
@@ -228,7 +228,7 @@ class SalesOrderMaintenanceServiceTest {
         fixture.withOrder(header, List.of(item));
         when(fixture.allocationLinkService.syncAllocationQtyFromItem(header, item, 2))
                 .thenReturn(new SalesOrderAllocationLinkService.AllocationQuantitySyncResult(
-                        612, item.getId(), 2, 0, true));
+                        612, item.getId(), 2, 0));
 
         SalesOrderItemUpdateReq req = new SalesOrderItemUpdateReq();
         SalesOrderItemUpdateLineReq line = new SalesOrderItemUpdateLineReq();
@@ -251,14 +251,14 @@ class SalesOrderMaintenanceServiceTest {
                 eq(AuditService.labelForAction("SALES_ORDER_ALLOCATION_QTY_UPDATE")),
                 isNull());
         Map<?, ?> summary = (Map<?, ?>) afterCaptor.getValue();
-        assertThat(summary.get("syncedTicket")).isEqualTo(true);
+        assertThat(summary.containsKey("syncedTicket")).isFalse();
         assertThat((List<?>) summary.get("changes")).singleElement().satisfies(change -> {
             Map<?, ?> changeMap = (Map<?, ?>) change;
             assertThat(changeMap.get("allocationId")).isEqualTo(612);
             assertThat(changeMap.get("salesOrderItemId")).isEqualTo(item.getId());
             assertThat(changeMap.get("oldQty")).isEqualTo(2);
             assertThat(changeMap.get("newQty")).isEqualTo(0);
-            assertThat(changeMap.get("syncedTicket")).isEqualTo(true);
+            assertThat(changeMap.containsKey("syncedTicket")).isFalse();
         });
     }
 

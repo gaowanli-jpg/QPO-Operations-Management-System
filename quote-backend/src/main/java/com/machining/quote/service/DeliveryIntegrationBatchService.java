@@ -137,6 +137,23 @@ public class DeliveryIntegrationBatchService {
         return wmsReservationBatchService.allocateBatch(normalizeTicketIds(ticketIds), taskId);
     }
 
+    public Map<String, Object> allocateWmsAllocationBatch(List<Integer> allocationIds, Long taskId) {
+        if (wmsReservationBatchService == null) {
+            throw new RuntimeException("WMS batch reservation service is unavailable");
+        }
+        if (allocationIds == null) {
+            throw new RuntimeException("Please select at least one production allocation");
+        }
+        List<Integer> normalized = allocationIds.stream()
+                .filter(id -> id != null && id > 0)
+                .distinct()
+                .toList();
+        if (normalized.isEmpty()) {
+            throw new RuntimeException("Please select at least one production allocation");
+        }
+        return wmsReservationBatchService.allocateAllocationBatch(normalized, taskId);
+    }
+
     private String mesSkipReason(OrderDeliveryTicket ticket) {
         if (ticket == null) {
             return "Delivery ticket does not exist";

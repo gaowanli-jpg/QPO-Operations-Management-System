@@ -137,7 +137,6 @@ public class SalesOrderMaintenanceService {
                     change.put("salesOrderItemLineNo", item.getLineNo());
                     change.put("oldQty", syncResult.oldQty());
                     change.put("newQty", syncResult.newQty());
-                    change.put("syncedTicket", syncResult.ticketSynced());
                     allocationQtyChanges.add(change);
                 }
             }
@@ -149,8 +148,6 @@ public class SalesOrderMaintenanceService {
             allocationAudit.put("salesOrderId", header.getId());
             allocationAudit.put("salesOrderNo", header.getSalesOrderNo());
             allocationAudit.put("changes", allocationQtyChanges);
-            allocationAudit.put("syncedTicket", allocationQtyChanges.stream()
-                    .anyMatch(change -> Boolean.TRUE.equals(change.get("syncedTicket"))));
             allocationAudit.put("durationMs", System.currentTimeMillis() - startedAt);
             auditService.record(
                     "SALES_ORDER_ALLOCATION_QTY_UPDATE",
@@ -179,7 +176,6 @@ public class SalesOrderMaintenanceService {
         assertDataScope(header);
         List<Map<String, Object>> changes = new ArrayList<>();
         Set<Integer> seen = new LinkedHashSet<>();
-        boolean syncedTicket = false;
         for (AllocationSplitQtyReq line : req.getItems()) {
             if (line == null || line.getAllocationId() == null || !seen.add(line.getAllocationId())) {
                 throw new RuntimeException("锁库拆分行不能为空且不能重复");
@@ -190,7 +186,6 @@ public class SalesOrderMaintenanceService {
                     allocationMapper.selectByIdForUpdate(line.getAllocationId());
             Integer oldQty = allocation.getQty();
             salesOrderAllocationLinkService.updateLinkedQuantity(item, allocation, line.getQty());
-            syncedTicket |= salesOrderAllocationLinkService.syncTicketQtyIfWmsPending(allocation, line.getQty());
             Map<String, Object> change = new LinkedHashMap<>();
             change.put("allocationId", line.getAllocationId());
             change.put("salesOrderItemId", item.getId());
@@ -203,7 +198,6 @@ public class SalesOrderMaintenanceService {
         summary.put("salesOrderId", header.getId());
         summary.put("salesOrderNo", header.getSalesOrderNo());
         summary.put("changes", changes);
-        summary.put("syncedTicket", syncedTicket);
         summary.put("durationMs", System.currentTimeMillis() - startedAt);
         if (auditService != null) {
             auditService.record("SALES_ORDER_ALLOCATION_QTY_UPDATE", "sales_order_header", header.getId(), null,

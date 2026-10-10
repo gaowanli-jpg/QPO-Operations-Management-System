@@ -1,36 +1,23 @@
 package com.machining.quote.service;
 
-import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
-import com.machining.quote.dto.ReleaseSourceType;
-import com.machining.quote.entity.OrderDeliveryTicket;
+import com.machining.quote.entity.OrderDeliveryTicketAllocation;
 import com.machining.quote.entity.SalesOrderHeader;
-import com.machining.quote.entity.SalesOrderItem;
-import com.machining.quote.entity.WmsReservationTicket;
 import com.machining.quote.mapper.OrderDeliveryTicketAllocationMapper;
-import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.SalesOrderHeaderMapper;
-import com.machining.quote.mapper.SalesOrderItemMapper;
-import com.machining.quote.mapper.WmsReservationTicketMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 @Service
 public class SalesOrderWmsAllocationService {
     private static final String STATUS_SUCCESS = "SUCCESS";
 
     @Autowired
-    private SalesOrderItemMapper salesOrderItemMapper;
-    @Autowired
-    private OrderDeliveryTicketMapper ticketMapper;
-    @Autowired
     private SalesOrderHeaderMapper salesOrderHeaderMapper;
     @Autowired
     private OrderDeliveryTicketAllocationMapper allocationMapper;
-    @Autowired
-    private WmsReservationTicketMapper wmsReservationTicketMapper;
     @Autowired(required = false)
     private DataScopeService dataScopeService;
 
@@ -52,116 +39,68 @@ public class SalesOrderWmsAllocationService {
         requireAccessibleSalesOrder(salesOrderId);
     }
 
-    public List<Integer> resolveEligibleTicketIds(Long salesOrderId) {
+    public List<Integer> resolveAllocationIds(Long salesOrderId) {
         requireAccessibleSalesOrder(salesOrderId);
-        List<Integer> linkedSourceTicketIds = linkedSourceTicketIds(salesOrderId);
-        List<OrderDeliveryTicket> tickets = ticketMapper.selectList(ticketQuery(salesOrderId, linkedSourceTicketIds));
-        List<Integer> eligibleTicketIds = new ArrayList<>();
-        for (OrderDeliveryTicket ticket : tickets) {
-            if (isEligible(ticket)) {
-                eligibleTicketIds.add(ticket.getId());
-            }
-        }
-        return eligibleTicketIds;
+        return allocationMapper.selectSalesOrderProductionAllocations(salesOrderId).stream()
+                .map(OrderDeliveryTicketAllocation::getId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
     }
 
-    public List<Integer> resolveTicketIds(Long salesOrderId) {
+    public List<Integer> resolveEligibleAllocationIds(Long salesOrderId) {
         requireAccessibleSalesOrder(salesOrderId);
-        return ticketMapper.selectList(ticketQuery(salesOrderId, linkedSourceTicketIds(salesOrderId))).stream()
-                .map(OrderDeliveryTicket::getId)
-                .filter(java.util.Objects::nonNull)
+        return allocationMapper.selectSalesOrderProductionAllocations(salesOrderId).stream()
+                .filter(this::isEligible)
+                .map(OrderDeliveryTicketAllocation::getId)
+                .filter(Objects::nonNull)
                 .distinct()
                 .toList();
     }
 
     public List<String> resolveSkippedReasons(Long salesOrderId) {
         requireAccessibleSalesOrder(salesOrderId);
-        List<Integer> linkedSourceTicketIds = linkedSourceTicketIds(salesOrderId);
-        List<OrderDeliveryTicket> tickets = ticketMapper.selectList(ticketQuery(salesOrderId, linkedSourceTicketIds));
-        List<String> reasons = new ArrayList<>();
-        for (OrderDeliveryTicket ticket : tickets) {
-            String reason = skipReason(ticket);
-            if (reason != null) {
-                reasons.add("提单行" + ticket.getId() + "：" + reason);
-            }
-        }
-        return reasons;
+        return allocationMapper.selectSalesOrderProductionAllocations(salesOrderId).stream()
+                .map(allocation -> {
+                    String reason = skipReason(allocation);
+                    return reason == null ? null : "Allocation " + allocation.getId() + ": " + reason;
+                })
+                .filter(Objects::nonNull)
+                .toList();
     }
 
-    private boolean isEligible(OrderDeliveryTicket ticket) {
-        return skipReason(ticket) == null;
+    private boolean isEligible(OrderDeliveryTicketAllocation allocation) {
+        return skipReason(allocation) == null;
     }
 
-    private String skipReason(OrderDeliveryTicket ticket) {
-        if (ticket == null || ticket.getId() == null) {
-            return "提单行不存在";
+    private String skipReason(OrderDeliveryTicketAllocation allocation) {
+        if (allocation == null || allocation.getId() == null) {
+            return "Production allocation does not exist";
         }
-        if (Boolean.TRUE.equals(ticket.getDiscarded())) {
-            return "已废弃，不允许获取库存信息";
+        if (!"PRODUCTION_REQUIRED".equalsIgnoreCase(trim(allocation.getAllocationType()))
+                || !"ACTIVE".equalsIgnoreCase(defaultText(allocation.getStatus(), "ACTIVE"))) {
+            return "Allocation is not an active production row";
         }
-        if (!STATUS_SUCCESS.equalsIgnoreCase(trim(ticket.getMesSyncStatus()))
-                || trim(ticket.getMaterialNo()) == null) {
-            return "物料号尚未获取成功";
+        if (Boolean.TRUE.equals(allocation.getDiscarded())) {
+            return "Allocation is discarded";
         }
-        String wmsStatus = trim(ticket.getWmsAllocateStatus());
-        if (STATUS_SUCCESS.equalsIgnoreCase(wmsStatus)) {
-            return "已获取过库存信息";
+        if (allocation.getQty() == null || allocation.getQty() <= 0) {
+            return "Allocation quantity is not positive";
         }
-        if (wmsStatus != null && !"PENDING".equalsIgnoreCase(wmsStatus)
-                && !"FAILED".equalsIgnoreCase(wmsStatus)) {
-            WmsReservationTicket active = wmsReservationTicketMapper.selectActiveByTicketId(ticket.getId());
-            return active == null
-                    ? "库存操作状态需要核对后再重试"
-                    : "库存信息正在处理中或等待核对";
+        if (trim(allocation.getMaterialNo()) == null) {
+            return "Material number is not confirmed";
         }
-        List<com.machining.quote.entity.OrderDeliveryTicketAllocation> allocations = allocationMapper.selectByTicketId(ticket.getId());
-        if (allocations != null && allocations.stream().anyMatch(this::hasStartedMesProduction)) {
-            return "MES生产已开始或完成，不能再获取库存信息";
+        String mesStatus = trim(allocation.getMesProductionStatus());
+        if ("PROCESSING".equalsIgnoreCase(mesStatus)
+                || "SUBMITTING".equalsIgnoreCase(mesStatus)
+                || "RESULT_UNKNOWN".equalsIgnoreCase(mesStatus)
+                || STATUS_SUCCESS.equalsIgnoreCase(mesStatus)) {
+            return "MES production has started or completed";
+        }
+        if (allocation.getWmsReservationTicketId() != null) {
+            return "WMS reservation has already been applied";
         }
         return null;
-    }
-
-    private boolean hasStartedMesProduction(com.machining.quote.entity.OrderDeliveryTicketAllocation allocation) {
-        if (allocation == null
-                || !"PRODUCTION_REQUIRED".equalsIgnoreCase(trim(allocation.getAllocationType()))
-                || !"ACTIVE".equalsIgnoreCase(trim(allocation.getStatus()))) {
-            return false;
-        }
-        String status = trim(allocation.getMesProductionStatus());
-        return "PROCESSING".equalsIgnoreCase(status)
-                || "SUBMITTING".equalsIgnoreCase(status)
-                || "RESULT_UNKNOWN".equalsIgnoreCase(status)
-                || "SUCCESS".equalsIgnoreCase(status);
-    }
-
-    private QueryWrapper<OrderDeliveryTicket> ticketQuery(Long salesOrderId, List<Integer> linkedSourceTicketIds) {
-        QueryWrapper<OrderDeliveryTicket> query = new QueryWrapper<>();
-        if (linkedSourceTicketIds == null || linkedSourceTicketIds.isEmpty()) {
-            return query.eq("source_type", ReleaseSourceType.SALES_ORDER.name())
-                    .eq("source_order_id", salesOrderId);
-        }
-        return query.and(wrapper -> wrapper
-                .eq("source_type", ReleaseSourceType.SALES_ORDER.name())
-                .eq("source_order_id", salesOrderId)
-                .or()
-                .in("id", linkedSourceTicketIds));
-    }
-
-    private List<Integer> linkedSourceTicketIds(Long salesOrderId) {
-        QueryWrapper<SalesOrderItem> query = new QueryWrapper<>();
-        query.select("source_ticket_id")
-                .eq("sales_order_id", salesOrderId)
-                .eq("source_type", ReleaseSourceType.RFQ.name())
-                .isNotNull("source_ticket_id");
-        List<SalesOrderItem> items = salesOrderItemMapper.selectList(query);
-        if (items == null || items.isEmpty()) {
-            return List.of();
-        }
-        return items.stream()
-                .map(SalesOrderItem::getSourceTicketId)
-                .filter(java.util.Objects::nonNull)
-                .distinct()
-                .toList();
     }
 
     private String trim(String value) {
@@ -170,5 +109,10 @@ public class SalesOrderWmsAllocationService {
         }
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private String defaultText(String value, String fallback) {
+        String trimmed = trim(value);
+        return trimmed == null ? fallback : trimmed;
     }
 }

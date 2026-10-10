@@ -717,7 +717,7 @@
               >
                 获取库存信息
               </el-button>
-              <span class="erp-toolbar-description">按当前销售订单全部关联提单获取库存，结果会拆分为锁库数量和剩余待产数量。</span>
+              <span class="erp-toolbar-description">按本订单数量大于 0 的待产 Allocation 获取库存，结果会拆分为锁库数量和剩余待产数量。</span>
             </div>
             <el-button
               v-permission="SALES_ORDER_UPDATE_PERMISSION"
@@ -745,7 +745,8 @@
                 </el-button>
               </div>
               <el-table v-if="wmsAllocationRows.length" :data="wmsAllocationRows" border size="small" max-height="220">
-                <el-table-column prop="ticketId" label="提单行" width="100" />
+                <el-table-column prop="allocationId" label="Allocation" width="110" />
+                <el-table-column prop="ticketId" label="来源提单" width="100" />
                 <el-table-column label="处理结果" width="120">
                   <template #default="{ row }">
                     <el-tag :type="wmsTaskTagType(row.status)" size="small">{{ wmsTaskStatusText(row.status) }}</el-tag>
@@ -1483,7 +1484,7 @@ const handleWmsAllocation = async () => {
   if (!salesOrderId) return
   try {
     await ElMessageBox.confirm(
-      '确认对该销售订单全部关联提单获取库存信息？获取成功的数量将从待产数量中拆分为锁库数量，未获取库存的零件仍可全量下发 MES 生产。',
+      '确认对该销售订单数量大于 0 的待产 Allocation 获取库存信息？获取成功的数量将从待产数量中拆分为锁库数量，未获取库存的零件仍可全量下发 MES 生产。',
       '获取库存信息',
       { confirmButtonText: '确认提交', cancelButtonText: '取消', type: 'warning' }
     )

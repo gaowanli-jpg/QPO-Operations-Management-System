@@ -9,6 +9,7 @@ import com.machining.quote.mapper.OrderDeliveryTicketAllocationMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.SalesOrderHeaderMapper;
 import com.machining.quote.mapper.SalesOrderItemMapper;
+import com.machining.quote.mapper.WmsReservationTicketMapper;
 import com.machining.quote.service.SalesOrderAllocationLinkService;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -21,20 +22,56 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class SalesOrderAllocationLinkServiceTest {
     @Test
-    void quantityChangesRemainAllowedWhileWmsResultIsUnresolved() {
+    void allocationOperationLocksOrderThenSourceTicketThenAllocationAndItem() {
+        SalesOrderAllocationLinkService service = new SalesOrderAllocationLinkService();
+        SalesOrderHeaderMapper headerMapper = mock(SalesOrderHeaderMapper.class);
+        SalesOrderItemMapper itemMapper = mock(SalesOrderItemMapper.class);
+        OrderDeliveryTicketMapper ticketMapper = mock(OrderDeliveryTicketMapper.class);
+        OrderDeliveryTicketAllocationMapper allocationMapper = mock(OrderDeliveryTicketAllocationMapper.class);
+        ReflectionTestUtils.setField(service, "headerMapper", headerMapper);
+        ReflectionTestUtils.setField(service, "itemMapper", itemMapper);
+        ReflectionTestUtils.setField(service, "ticketMapper", ticketMapper);
+        ReflectionTestUtils.setField(service, "allocationMapper", allocationMapper);
+
+        OrderDeliveryTicketAllocation allocation = new OrderDeliveryTicketAllocation();
+        allocation.setId(601);
+        allocation.setTicketId(501);
+        SalesOrderItem item = new SalesOrderItem();
+        item.setId(701L);
+        item.setSalesOrderId(901L);
+        item.setAllocationId(601L);
+        when(allocationMapper.selectById(601)).thenReturn(allocation);
+        when(itemMapper.selectByAllocationId(601L)).thenReturn(item);
+        when(itemMapper.selectByAllocationIdForUpdate(601L)).thenReturn(item);
+        when(ticketMapper.selectByIdForUpdate(501)).thenReturn(new OrderDeliveryTicket());
+
+        assertThat(service.lockSalesOrderForAllocation(601)).isSameAs(item);
+
+        var order = inOrder(headerMapper, ticketMapper, allocationMapper, itemMapper);
+        order.verify(headerMapper).selectByIdForUpdate(901L);
+        order.verify(ticketMapper).selectByIdForUpdate(501);
+        order.verify(allocationMapper).selectByIdForUpdate(601);
+        order.verify(itemMapper).selectByAllocationIdForUpdate(601L);
+    }
+
+    @Test
+    void quantityChangesUpdateAllocationWithoutWritingBackToDeliveryTicket() {
         SalesOrderAllocationLinkService service = new SalesOrderAllocationLinkService();
         SalesOrderItemMapper itemMapper = mock(SalesOrderItemMapper.class);
         OrderDeliveryTicketMapper ticketMapper = mock(OrderDeliveryTicketMapper.class);
         OrderDeliveryTicketAllocationMapper allocationMapper = mock(OrderDeliveryTicketAllocationMapper.class);
+        WmsReservationTicketMapper wmsReservationTicketMapper = mock(WmsReservationTicketMapper.class);
         ReflectionTestUtils.setField(service, "itemMapper", itemMapper);
         ReflectionTestUtils.setField(service, "ticketMapper", ticketMapper);
         ReflectionTestUtils.setField(service, "allocationMapper", allocationMapper);
+        ReflectionTestUtils.setField(service, "wmsReservationTicketMapper", wmsReservationTicketMapper);
 
         SalesOrderItem item = new SalesOrderItem();
         item.setId(700L);
@@ -43,11 +80,8 @@ class SalesOrderAllocationLinkServiceTest {
         OrderDeliveryTicketAllocation allocation = new OrderDeliveryTicketAllocation();
         allocation.setId(601);
         allocation.setTicketId(501);
-        OrderDeliveryTicket ticket = ticket(501, 700L, 8);
-        ticket.setWmsAllocateStatus("RESULT_UNKNOWN");
         when(allocationMapper.selectById(601)).thenReturn(allocation);
         when(allocationMapper.selectByIdForUpdate(601)).thenReturn(allocation);
-        when(ticketMapper.selectByIdForUpdate(501)).thenReturn(ticket);
 
         SalesOrderAllocationLinkService.AllocationQuantitySyncResult result =
                 service.syncAllocationQtyFromItem(null, item, 10);
@@ -57,7 +91,8 @@ class SalesOrderAllocationLinkServiceTest {
         assertThat(result.salesOrderItemId()).isEqualTo(700L);
         assertThat(result.oldQty()).isEqualTo(10);
         assertThat(result.newQty()).isEqualTo(8);
-        assertThat(result.ticketSynced()).isFalse();
+        verify(ticketMapper, org.mockito.Mockito.never()).selectByIdForUpdate(501);
+        verify(ticketMapper, org.mockito.Mockito.never()).updateById(any(OrderDeliveryTicket.class));
         verify(allocationMapper).selectByIdForUpdate(601);
         verify(allocationMapper).updateById(any(OrderDeliveryTicketAllocation.class));
         verify(itemMapper).updateById(any(SalesOrderItem.class));

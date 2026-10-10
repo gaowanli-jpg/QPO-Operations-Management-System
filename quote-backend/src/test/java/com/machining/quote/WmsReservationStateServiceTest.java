@@ -3,6 +3,7 @@ package com.machining.quote;
 import com.machining.quote.dto.wms.WmsSaleLadingReserveReq;
 import com.machining.quote.dto.wms.WmsSaleLadingReserveResp;
 import com.machining.quote.entity.OrderDeliveryTicket;
+import com.machining.quote.entity.OrderDeliveryTicketAllocation;
 import com.machining.quote.entity.WmsReservationBatch;
 import com.machining.quote.entity.WmsReservationItem;
 import com.machining.quote.entity.WmsReservationTicket;
@@ -43,9 +44,12 @@ class WmsReservationStateServiceTest {
         WmsReservationPlanService.ReservationGroup group = group("SO-100",
                 item("MAT-A", "5", "first remark", "CP-001", "CO-001"),
                 item("MAT-B", "2", "second remark", "CP-002", "CO-002"));
-        group.getTickets().add(ticketReservation(101, 1001L, 10, "MAT-A", "3"));
-        group.getTickets().add(ticketReservation(102, 1002L, 20, "MAT-A", "2"));
-        group.getTickets().add(ticketReservation(103, 1003L, 30, "MAT-B", "2"));
+        group.getAllocations().add(allocationReservation(101, 101, 1001L, 10, "MAT-A", "3"));
+        group.getAllocations().add(allocationReservation(102, 102, 1002L, 20, "MAT-A", "2"));
+        group.getAllocations().add(allocationReservation(103, 103, 1003L, 30, "MAT-B", "2"));
+        allowAllocation(fixture, 101, 3, "MAT-A");
+        allowAllocation(fixture, 102, 2, "MAT-A");
+        allowAllocation(fixture, 103, 2, "MAT-B");
 
         WmsReservationStateService.ReservationBatchContext context = fixture.service.reserveBatch(9001L, group);
 
@@ -85,6 +89,8 @@ class WmsReservationStateServiceTest {
         verify(fixture.ticketMapper, times(3)).insert(ticketCaptor.capture());
         assertThat(ticketCaptor.getAllValues()).extracting(WmsReservationTicket::getTicketId)
                 .containsExactly(101, 102, 103);
+        assertThat(ticketCaptor.getAllValues()).extracting(WmsReservationTicket::getAllocationId)
+                .containsExactly(101, 102, 103);
         assertThat(ticketCaptor.getAllValues()).extracting(WmsReservationTicket::getBatchItemId)
                 .containsExactly(701L, 701L, 702L);
         assertThat(ticketCaptor.getAllValues()).extracting(WmsReservationTicket::getStatus)
@@ -92,15 +98,17 @@ class WmsReservationStateServiceTest {
     }
 
     @Test
-    void reserveBatchRejectsActiveTicketBeforeCreatingAnotherBatch() {
+    void reserveBatchRejectsActiveAllocationBeforeCreatingAnotherBatch() {
         Fixture fixture = fixture();
         WmsReservationTicket active = new WmsReservationTicket();
         active.setId(900L);
+        active.setAllocationId(101);
         active.setTicketId(101);
         active.setStatus("RESULT_UNKNOWN");
-        when(fixture.ticketMapper.selectActiveByTicketId(101)).thenReturn(active);
+        when(fixture.ticketMapper.selectActiveByAllocationId(101)).thenReturn(active);
         WmsReservationPlanService.ReservationGroup group = group("SO-100", item("MAT-A", "5", "remark"));
-        group.getTickets().add(ticketReservation(101, 1001L, 10, "MAT-A", "5"));
+        group.getAllocations().add(allocationReservation(101, 101, 1001L, 10, "MAT-A", "5"));
+        allowAllocation(fixture, 101, 5, "MAT-A");
 
         assertThatThrownBy(() -> fixture.service.reserveBatch(9001L, group))
                 .isInstanceOf(IllegalStateException.class)
@@ -109,6 +117,59 @@ class WmsReservationStateServiceTest {
         verify(fixture.batchMapper, never()).insert(any());
         verify(fixture.itemMapper, never()).insert(any());
         verify(fixture.ticketMapper, never()).insert(any());
+    }
+
+    @Test
+    void allocationResponseUsesAllocationQuantityAndLeavesSourceTicketUntouched() {
+        Fixture fixture = fixture();
+        WmsReservationBatch batch = batch(501L, "RESPONSE_RECEIVED", 1);
+        when(fixture.batchMapper.selectById(501L)).thenReturn(batch);
+        WmsReservationItem batchItem = reservationItem(701L, 501L, "MAT-A", "5");
+        when(fixture.itemMapper.selectList(any())).thenReturn(List.of(batchItem));
+
+        WmsReservationTicket reservation = reservationTicket(801L, 501L, 701L, 501, 1001L, 10, "MAT-A", "5");
+        reservation.setAllocationId(601);
+        reservation.setStatus("RESPONSE_RECEIVED");
+        reservation.setStockFrozenCount(new BigDecimal("3"));
+        reservation.setInProductionCount(BigDecimal.ONE);
+        reservation.setSurplusCount(BigDecimal.ONE);
+        when(fixture.ticketMapper.selectByBatchId(501L)).thenReturn(List.of(reservation));
+
+        OrderDeliveryTicketAllocation production = new OrderDeliveryTicketAllocation();
+        production.setId(601);
+        production.setTicketId(501);
+        production.setAllocationType("PRODUCTION_REQUIRED");
+        production.setStatus("ACTIVE");
+        production.setQty(5);
+        production.setMaterialNo("MAT-A");
+        production.setMesProductionStatus("PENDING");
+        when(fixture.allocationMapper.selectByIdForUpdate(601)).thenReturn(production);
+
+        List<OrderDeliveryTicketAllocation> inserted = new java.util.ArrayList<>();
+        doAnswer(invocation -> {
+            OrderDeliveryTicketAllocation row = invocation.getArgument(0);
+            row.setId(700 + inserted.size());
+            inserted.add(row);
+            return 1;
+        }).when(fixture.allocationMapper).insert(any(OrderDeliveryTicketAllocation.class));
+        when(fixture.allocationMapper.selectByWmsReservationTicketId(801L))
+                .thenReturn(List.of())
+                .thenAnswer(invocation -> {
+                    List<OrderDeliveryTicketAllocation> applied = new java.util.ArrayList<>();
+                    applied.add(production);
+                    applied.addAll(inserted);
+                    return applied;
+                });
+
+        fixture.service.applyResponse(501L);
+
+        assertThat(production.getQty()).isEqualTo(1);
+        assertThat(inserted).extracting(OrderDeliveryTicketAllocation::getAllocationType)
+                .containsExactly("IN_STOCK_LOCK", "IN_PRODUCTION_LOCK");
+        assertThat(inserted).extracting(OrderDeliveryTicketAllocation::getQty).containsExactly(3, 1);
+        verify(fixture.allocationLinkService).syncWmsAllocationsForAllocation(601, List.of(production, inserted.get(0), inserted.get(1)));
+        verify(fixture.ticketSourceMapper, never()).selectByIdForUpdate(501);
+        verify(fixture.ticketSourceMapper, never()).updateById(any(OrderDeliveryTicket.class));
     }
 
     @Test
@@ -272,18 +333,33 @@ class WmsReservationStateServiceTest {
         return item;
     }
 
-    private WmsReservationPlanService.TicketReservation ticketReservation(Integer ticketId,
-                                                                          Long salesOrderItemId,
-                                                                          Integer lineNo,
-                                                                          String productCode,
-                                                                          String reserveCount) {
-        WmsReservationPlanService.TicketReservation ticket = new WmsReservationPlanService.TicketReservation();
-        ticket.setTicketId(ticketId);
-        ticket.setSalesOrderItemId(salesOrderItemId);
-        ticket.setSalesOrderLineNo(lineNo);
-        ticket.setProductCode(productCode);
-        ticket.setReserveCount(new BigDecimal(reserveCount));
-        return ticket;
+    private WmsReservationPlanService.AllocationReservation allocationReservation(Integer allocationId,
+                                                                                  Integer ticketId,
+                                                                                  Long salesOrderItemId,
+                                                                                  Integer lineNo,
+                                                                                  String productCode,
+                                                                                  String reserveCount) {
+        WmsReservationPlanService.AllocationReservation allocation = new WmsReservationPlanService.AllocationReservation();
+        allocation.setAllocationId(allocationId);
+        allocation.setTicketId(ticketId);
+        allocation.setSalesOrderItemId(salesOrderItemId);
+        allocation.setSalesOrderLineNo(lineNo);
+        allocation.setProductCode(productCode);
+        allocation.setReserveCount(new BigDecimal(reserveCount));
+        return allocation;
+    }
+
+    private void allowAllocation(Fixture fixture, Integer allocationId, Integer qty, String materialNo) {
+        com.machining.quote.entity.OrderDeliveryTicketAllocation allocation =
+                new com.machining.quote.entity.OrderDeliveryTicketAllocation();
+        allocation.setId(allocationId);
+        allocation.setTicketId(allocationId);
+        allocation.setAllocationType("PRODUCTION_REQUIRED");
+        allocation.setStatus("ACTIVE");
+        allocation.setQty(qty);
+        allocation.setMaterialNo(materialNo);
+        allocation.setMesProductionStatus("PENDING");
+        when(fixture.allocationMapper.selectByIdForUpdate(allocationId)).thenReturn(allocation);
     }
 
     private WmsSaleLadingReserveReq request(String externalBizId, String saleNo, WmsSaleLadingReserveReq.Item... items) {
@@ -394,6 +470,7 @@ class WmsReservationStateServiceTest {
         private final WmsReservationTicketMapper ticketMapper = mock(WmsReservationTicketMapper.class);
         private final OrderDeliveryTicketMapper ticketSourceMapper = mock(OrderDeliveryTicketMapper.class);
         private final OrderDeliveryTicketAllocationMapper allocationMapper = mock(OrderDeliveryTicketAllocationMapper.class);
+        private final SalesOrderAllocationLinkService allocationLinkService = mock(SalesOrderAllocationLinkService.class);
         private final WmsReservationClient client = mock(WmsReservationClient.class);
         private final WmsReservationStateService service = new WmsReservationStateService();
 
@@ -406,7 +483,12 @@ class WmsReservationStateServiceTest {
             ReflectionTestUtils.setField(service, "client", client);
             ReflectionTestUtils.setField(service, "validator", new WmsReservationContractValidator());
             ReflectionTestUtils.setField(service, "fingerprintService", new WmsReservationFingerprintService());
-            ReflectionTestUtils.setField(service, "salesOrderAllocationLinkService", mock(SalesOrderAllocationLinkService.class));
+            ReflectionTestUtils.setField(service, "salesOrderAllocationLinkService", allocationLinkService);
+            when(allocationLinkService.lockSalesOrderForAllocation(any(Integer.class))).thenAnswer(invocation -> {
+                com.machining.quote.entity.SalesOrderItem item = new com.machining.quote.entity.SalesOrderItem();
+                item.setSalesOrderId(301L);
+                return item;
+            });
             doAnswer(invocation -> {
                 WmsReservationBatch batch = invocation.getArgument(0);
                 batch.setId(501L);

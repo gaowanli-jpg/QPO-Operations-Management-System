@@ -1,10 +1,10 @@
 package com.machining.quote;
 
 import com.machining.quote.dto.wms.WmsSaleLadingReserveResp;
-import com.machining.quote.entity.OrderDeliveryTicket;
+import com.machining.quote.entity.OrderDeliveryTicketAllocation;
 import com.machining.quote.entity.SalesOrderHeader;
 import com.machining.quote.entity.SalesOrderItem;
-import com.machining.quote.mapper.OrderDeliveryTicketMapper;
+import com.machining.quote.mapper.OrderDeliveryTicketAllocationMapper;
 import com.machining.quote.mapper.SalesOrderHeaderMapper;
 import com.machining.quote.mapper.SalesOrderItemMapper;
 import com.machining.quote.service.wms.WmsReservationFingerprintService;
@@ -22,288 +22,177 @@ import static org.mockito.Mockito.when;
 
 class WmsReservationPlanServiceTest {
     @Test
-    void prepareUsesCustomerOrderNumberAsOutboundSaleNoForWmsContract() {
+    void prepareBuildsWmsRequestFromAllocationQuantityAndLinkedSalesOrderValues() {
         Fixture fixture = fixture();
-        fixture.ticket(ticket(101, "MAT-A", 2, null, null));
+        fixture.allocation(allocation(101, "MAT-A", 7, "remark-a"));
         SalesOrderItem sourceItem = item(1001L, 501L, 10);
         sourceItem.setCustomerOrderNo("CO-LINE-501");
-        fixture.sourceTicketItem(101, sourceItem);
-        fixture.header(header(501L, "SO-501", "DOC-501", "CO-HEADER-501", "CP-HEADER-501"));
+        fixture.link(101, sourceItem);
+        fixture.header(header(501L, "SO-501", "CO-HEADER-501", "CP-HEADER-501"));
 
-        WmsReservationPlanService.ReservationPlan plan = fixture.service.prepare(List.of(101));
+        WmsReservationPlanService.ReservationPlan plan = fixture.service.prepareAllocations(List.of(101));
 
         assertThat(plan.getFailures()).isEmpty();
         assertThat(plan.getGroups()).singleElement().satisfies(group -> {
             assertThat(group.getSaleNo()).isEqualTo("CO-LINE-501");
             assertThat(group.getRequest().getSaleNo()).isEqualTo("CO-LINE-501");
-            assertThat(group.getRequest().getItems()).singleElement()
-                    .extracting(com.machining.quote.dto.wms.WmsSaleLadingReserveReq.Item::getCustomerOrderNo)
-                    .isEqualTo("CO-LINE-501");
+            assertThat(group.getRequest().getItems()).singleElement().satisfies(requestItem -> {
+                assertThat(requestItem.getReserveCount()).isEqualByComparingTo("7");
+                assertThat(requestItem.getCustomerOrderNo()).isEqualTo("CO-LINE-501");
+            });
         });
     }
 
     @Test
-    void prepareResolvesSalesOrderBySourceTicketThenDirectFallbackAndUsesCustomerOrderNoAsSaleNo() {
+    void prepareResolvesOrderHeaderForEachAllocationAndFailsWhenLinkageIsMissing() {
         Fixture fixture = fixture();
-        fixture.ticket(ticket(101, "MAT-A", 2, null, null));
-        fixture.sourceTicketItem(101, item(1001L, 501L, 10));
-        fixture.header(header(501L, "SO-FALLBACK", "DOC-501"));
+        fixture.allocation(allocation(101, "MAT-A", 2, "remark-a"));
+        fixture.link(101, item(1001L, 501L, 10));
+        fixture.header(header(501L, "SO-501", "CO-501", "CP-501"));
 
-        fixture.ticket(ticket(102, "MAT-B", 3, "SALES_ORDER", 1002L));
-        fixture.directItem(item(1002L, 502L, 20));
-        fixture.header(header(502L, "SO-502", " "));
+        fixture.allocation(allocation(102, "MAT-B", 3, "remark-b"));
+        fixture.link(102, item(1002L, 502L, 20));
 
-        WmsReservationPlanService.ReservationPlan plan = fixture.service.prepare(List.of(101, 102));
+        fixture.allocation(allocation(103, "MAT-C", 4, "remark-c"));
 
-        assertThat(plan.getFailures()).isEmpty();
-        assertThat(plan.getGroups())
-                .extracting(WmsReservationPlanService.ReservationGroup::getSaleNo)
-                .containsExactly("CO-501", "CO-502");
+        WmsReservationPlanService.ReservationPlan plan = fixture.service.prepareAllocations(List.of(101, 102, 103));
+
+        assertThat(plan.getGroups()).hasSize(1);
+        assertThat(plan.getFailures()).extracting(WmsReservationPlanService.RowFailure::getAllocationId)
+                .containsExactly(102, 103);
+        assertThat(plan.getFailures()).extracting(WmsReservationPlanService.RowFailure::getMessage)
+                .anySatisfy(message -> assertThat(message).contains("sales order header"))
+                .anySatisfy(message -> assertThat(message).contains("sales order item"));
     }
 
     @Test
-    void prepareFailsWhenCustomerOrderNumberCannotBeResolvedForOutboundSaleNo() {
+    void prepareRejectsMissingCustomerOrderNumber() {
         Fixture fixture = fixture();
-        fixture.ticket(ticket(101, "MAT-A", 2, null, null));
-        fixture.sourceTicketItem(101, item(1001L, 501L, 10));
-        fixture.header(header(501L, "SO-501", "DOC-501", null, "CP-501"));
+        OrderDeliveryTicketAllocation allocation = allocation(101, "MAT-A", 2, "remark-a");
+        allocation.setCustomerOrderNo(null);
+        fixture.allocation(allocation);
+        fixture.link(101, item(1001L, 501L, 10));
+        fixture.header(header(501L, "SO-501", null, "CP-501"));
 
-        WmsReservationPlanService.ReservationPlan plan = fixture.service.prepare(List.of(101));
+        WmsReservationPlanService.ReservationPlan plan = fixture.service.prepareAllocations(List.of(101));
 
         assertThat(plan.getGroups()).isEmpty();
         assertThat(plan.getFailures()).singleElement().satisfies(failure -> {
+            assertThat(failure.getAllocationId()).isEqualTo(101);
             assertThat(failure.getTicketId()).isEqualTo(101);
             assertThat(failure.getMessage()).contains("customerOrderNo is required");
         });
     }
 
     @Test
-    void prepareFailsAmbiguousSourceAndMissingSalesOrderHeader() {
+    void prepareGroupsByOrderAndProjectAndAggregatesSameMaterialOnlyWithinEachGroup() {
         Fixture fixture = fixture();
-        fixture.ticket(ticket(101, "MAT-A", 2, "SALES_ORDER", 1002L));
-        fixture.sourceTicketItem(101, item(1001L, 501L, 10));
-        fixture.directItem(item(1002L, 502L, 20));
-        fixture.header(header(501L, "SO-501", null));
-        fixture.header(header(502L, "SO-502", null));
+        addAllocation(fixture, 101, "MAT-A", 2, 501L, 20, "CP-A", "CO-1");
+        addAllocation(fixture, 102, "MAT-B", 3, 501L, 10, "CP-A", "CO-1");
+        addAllocation(fixture, 103, "MAT-A", 4, 501L, 30, "CP-A", "CO-1");
+        addAllocation(fixture, 201, "MAT-A", 5, 502L, 10, "CP-B", "CO-2");
+        fixture.header(header(501L, "SO-501", "CO-1", "CP-A"));
+        fixture.header(header(502L, "SO-502", "CO-2", "CP-B"));
 
-        fixture.ticket(ticket(102, "MAT-B", 3, "SALES_ORDER", 1003L));
-        fixture.directItem(item(1003L, 503L, 30));
-
-        WmsReservationPlanService.ReservationPlan plan = fixture.service.prepare(List.of(101, 102));
-
-        assertThat(plan.getGroups()).isEmpty();
-        assertThat(plan.getFailures())
-                .extracting(WmsReservationPlanService.RowFailure::getTicketId)
-                .containsExactly(101, 102);
-        assertThat(plan.getFailures())
-                .extracting(WmsReservationPlanService.RowFailure::getMessage)
-                .anySatisfy(message -> assertThat(message).contains("ambiguous"))
-                .anySatisfy(message -> assertThat(message).contains("sales order header"));
-    }
-
-    @Test
-    void prepareGroupsBySalesOrderAndAggregatesDuplicateProductOnlyInsideGroup() {
-        Fixture fixture = fixture();
-        fixture.ticket(ticket(101, "MAT-A", 2, null, null));
-        fixture.ticket(ticket(102, "MAT-B", 3, null, null));
-        fixture.ticket(ticket(103, "MAT-A", 4, null, null));
-        fixture.ticket(ticket(201, "MAT-A", 5, null, null));
-        fixture.sourceTicketItem(101, item(1001L, 501L, 20));
-        fixture.sourceTicketItem(102, item(1002L, 501L, 10));
-        fixture.sourceTicketItem(103, item(1003L, 501L, 30));
-        fixture.sourceTicketItem(201, item(2001L, 502L, 10));
-        fixture.header(header(501L, "SO-501", "DOC-501"));
-        fixture.header(header(502L, "SO-502", "DOC-502"));
-
-        WmsReservationPlanService.ReservationPlan plan = fixture.service.prepare(List.of(201, 103, 102, 101));
+        WmsReservationPlanService.ReservationPlan plan = fixture.service.prepareAllocations(List.of(201, 103, 102, 101));
 
         assertThat(plan.getFailures()).isEmpty();
         assertThat(plan.getGroups()).hasSize(2);
         WmsReservationPlanService.ReservationGroup first = plan.getGroups().get(0);
-        WmsReservationPlanService.ReservationGroup second = plan.getGroups().get(1);
-        assertThat(first.getSaleNo()).isEqualTo("CO-501");
+        assertThat(first.getSaleNo()).isEqualTo("CO-1");
         assertThat(first.getRequest().getItems())
                 .extracting(item -> item.getProductCode() + ":" + item.getReserveCount().stripTrailingZeros().toPlainString())
                 .containsExactly("MAT-A:6", "MAT-B:3");
-        assertThat(first.getTickets())
-                .extracting(WmsReservationPlanService.TicketReservation::getTicketId)
+        assertThat(first.getAllocations()).extracting(WmsReservationPlanService.AllocationReservation::getAllocationId)
                 .containsExactly(102, 101, 103);
-        assertThat(second.getSaleNo()).isEqualTo("CO-502");
-        assertThat(second.getRequest().getItems())
+        WmsReservationPlanService.ReservationGroup second = plan.getGroups().get(1);
+        assertThat(second.getSaleNo()).isEqualTo("CO-2");
+        assertThat(second.getRequest().getItems()).singleElement()
                 .extracting(item -> item.getProductCode() + ":" + item.getReserveCount().stripTrailingZeros().toPlainString())
-                .containsExactly("MAT-A:5");
+                .isEqualTo("MAT-A:5");
     }
 
     @Test
-    void prepareKeepsInvalidRowsOutOfRequests() {
+    void prepareSplitsGroupsByCustomerProjectBeforeAggregatingSameMaterial() {
         Fixture fixture = fixture();
-        fixture.ticket(ticket(101, "MAT-A", 2, null, null));
-        fixture.ticket(ticket(102, " ", 3, null, null));
-        fixture.ticket(ticket(103, "MAT-C", 0, null, null));
-        fixture.sourceTicketItem(101, item(1001L, 501L, 10));
-        fixture.sourceTicketItem(102, item(1002L, 501L, 20));
-        fixture.sourceTicketItem(103, item(1003L, 501L, 30));
-        fixture.header(header(501L, "SO-501", "DOC-501"));
+        addAllocation(fixture, 201, "MAT-A", 2, 601L, 10, "CP-A", "CO-1");
+        addAllocation(fixture, 202, "MAT-A", 3, 601L, 20, "CP-A", "CO-1");
+        addAllocation(fixture, 203, "MAT-A", 4, 601L, 30, "CP-B", "CO-1");
+        fixture.header(header(601L, "SO-601", "CO-1", "CP-HEADER"));
 
-        WmsReservationPlanService.ReservationPlan plan = fixture.service.prepare(List.of(101, 102, 103));
+        WmsReservationPlanService.ReservationPlan plan = fixture.service.prepareAllocations(List.of(203, 202, 201));
+
+        assertThat(plan.getFailures()).isEmpty();
+        assertThat(plan.getGroups()).hasSize(2);
+        assertThat(plan.getGroups().get(0).getRequest().getItems()).singleElement().satisfies(item -> {
+            assertThat(item.getReserveCount()).isEqualByComparingTo("5");
+            assertThat(item.getCustomerProjectNo()).isEqualTo("CP-A");
+        });
+        assertThat(plan.getGroups().get(0).getAllocations())
+                .extracting(WmsReservationPlanService.AllocationReservation::getAllocationId)
+                .containsExactly(201, 202);
+        assertThat(plan.getGroups().get(1).getRequest().getItems()).singleElement().satisfies(item -> {
+            assertThat(item.getReserveCount()).isEqualByComparingTo("4");
+            assertThat(item.getCustomerProjectNo()).isEqualTo("CP-B");
+        });
+    }
+
+    @Test
+    void prepareOmitsInvalidMaterialAndNonPositiveAllocations() {
+        Fixture fixture = fixture();
+        addAllocation(fixture, 101, "MAT-A", 2, 501L, 10, "CP-1", "CO-1");
+        addAllocation(fixture, 102, " ", 3, 501L, 20, "CP-1", "CO-1");
+        addAllocation(fixture, 103, "MAT-C", 0, 501L, 30, "CP-1", "CO-1");
+        fixture.header(header(501L, "SO-501", "CO-1", "CP-1"));
+
+        WmsReservationPlanService.ReservationPlan plan = fixture.service.prepareAllocations(List.of(101, 102, 103));
 
         assertThat(plan.getGroups()).hasSize(1);
         assertThat(plan.getGroups().get(0).getRequest().getItems())
                 .extracting(com.machining.quote.dto.wms.WmsSaleLadingReserveReq.Item::getProductCode)
                 .containsExactly("MAT-A");
-        assertThat(plan.getFailures())
-                .extracting(WmsReservationPlanService.RowFailure::getTicketId)
+        assertThat(plan.getFailures()).extracting(WmsReservationPlanService.RowFailure::getAllocationId)
                 .containsExactly(102, 103);
     }
 
     @Test
-    void prepareDerivesRemarkByStableTicketOrderAndFallbacks() {
+    void prepareUsesAllocationSnapshotFieldsForRemarkAndStableOrder() {
         Fixture fixture = fixture();
-        fixture.ticket(ticket(101, "MAT-A", 2, null, null, " ", "name-101", "desc-101", "P-101"));
-        fixture.ticket(ticket(102, "MAT-A", 3, null, null, "ticket-remark", "name-102", "desc-102", "P-102"));
-        fixture.ticket(ticket(103, "MAT-B", 4, null, null, " ", "material-name", "desc-103", "P-103"));
-        fixture.ticket(ticket(104, "MAT-C", 5, null, null, " ", " ", "description", "P-104"));
-        fixture.ticket(ticket(105, "MAT-D", 6, null, null, " ", " ", " ", "part-no"));
-        fixture.ticket(ticket(106, "MAT-E", 7, null, null, " ", " ", " ", " "));
-        fixture.sourceTicketItem(101, item(1001L, 501L, 20));
-        fixture.sourceTicketItem(102, item(1002L, 501L, 10));
-        fixture.sourceTicketItem(103, item(1003L, 501L, 30));
-        fixture.sourceTicketItem(104, item(1004L, 501L, 40));
-        fixture.sourceTicketItem(105, item(1005L, 501L, 50));
-        fixture.sourceTicketItem(106, item(1006L, 501L, 60));
-        fixture.header(header(501L, "SO-501", "DOC-501"));
+        fixture.allocation(allocation(101, "MAT-A", 2, " ", "material-101", "desc-101", "P-101"));
+        fixture.allocation(allocation(102, "MAT-A", 3, "ticket-remark", "material-102", "desc-102", "P-102"));
+        fixture.allocation(allocation(103, "MAT-B", 4, " ", "material-name", "desc-103", "P-103"));
+        fixture.allocation(allocation(104, "MAT-C", 5, " ", " ", "description", "P-104"));
+        fixture.allocation(allocation(105, "MAT-D", 6, " ", " ", " ", "part-no"));
+        fixture.allocation(allocation(106, "MAT-E", 7, " ", " ", " ", " "));
+        for (int id = 101; id <= 106; id++) {
+            fixture.link(id, item(1000L + id, 501L, id - 90));
+        }
+        fixture.header(header(501L, "SO-501", "CO-1", "CP-1"));
 
-        WmsReservationPlanService.ReservationPlan plan = fixture.service.prepare(List.of(106, 105, 104, 103, 102, 101));
+        WmsReservationPlanService.ReservationPlan plan = fixture.service.prepareAllocations(List.of(106, 105, 104, 103, 102, 101));
 
         assertThat(plan.getGroups()).hasSize(1);
         assertThat(plan.getGroups().get(0).getRequest().getItems())
                 .extracting(item -> item.getProductCode() + ":" + item.getRemark())
-                .containsExactly(
-                        "MAT-A:ticket-remark",
-                        "MAT-B:material-name",
-                        "MAT-C:description",
-                        "MAT-D:part-no"
-                );
-        assertThat(plan.getFailures())
-                .extracting(WmsReservationPlanService.RowFailure::getTicketId)
+                .containsExactly("MAT-A:ticket-remark", "MAT-B:material-name", "MAT-C:description", "MAT-D:part-no");
+        assertThat(plan.getFailures()).extracting(WmsReservationPlanService.RowFailure::getAllocationId)
                 .containsExactly(106);
     }
 
     @Test
-    void prepareSplitsGroupsByCustomerProjectAndAggregatesProductWithinEachGroup() {
+    void splitUsesStableAllocationOrderAndPreservesAllocationQuantities() {
         Fixture fixture = fixture();
-        fixture.ticket(ticket(101, "MAT-A", 2, null, null, "remark-101", "", "", "P-101"));
-        fixture.ticket(ticket(102, "MAT-A", 3, null, null, "remark-102", "", "", "P-102"));
-        SalesOrderItem firstItem = item(1001L, 501L, 10);
-        firstItem.setCustomerProjectNo("CP-001");
-        firstItem.setCustomerOrderNo("CO-001");
-        SalesOrderItem secondItem = item(1002L, 501L, 20);
-        secondItem.setCustomerProjectNo("CP-001");
-        secondItem.setCustomerOrderNo("CO-001");
-        fixture.sourceTicketItem(101, firstItem);
-        fixture.sourceTicketItem(102, secondItem);
-        fixture.header(header(501L, "SO-501", "DOC-501", "CO-HEADER", "CP-HEADER"));
+        addAllocation(fixture, 101, "MAT-A", 4, 501L, 10, "CP-1", "CO-1");
+        addAllocation(fixture, 102, "MAT-A", 3, 501L, 20, "CP-1", "CO-1");
+        fixture.header(header(501L, "SO-501", "CO-1", "CP-1"));
+        WmsReservationPlanService.ReservationGroup group = fixture.service.prepareAllocations(List.of(102, 101)).getGroups().get(0);
 
-        WmsReservationPlanService.ReservationPlan plan = fixture.service.prepare(List.of(102, 101));
-
-        assertThat(plan.getFailures()).isEmpty();
-        assertThat(plan.getGroups()).hasSize(1);
-        assertThat(plan.getGroups().get(0).getRequest().getItems()).singleElement().satisfies(item -> {
-            assertThat(item.getProductCode()).isEqualTo("MAT-A");
-            assertThat(item.getReserveCount()).isEqualByComparingTo("5");
-            assertThat(item.getCustomerProjectNo()).isEqualTo("CP-001");
-            assertThat(item.getCustomerOrderNo()).isEqualTo("CO-001");
-        });
-
-        Fixture projectFixture = fixture();
-        projectFixture.ticket(ticket(201, "MAT-A", 2, null, null));
-        projectFixture.ticket(ticket(202, "MAT-A", 3, null, null));
-        projectFixture.ticket(ticket(203, "MAT-A", 4, null, null));
-        SalesOrderItem conflictA = item(2001L, 601L, 10);
-        conflictA.setCustomerProjectNo("CP-A");
-        conflictA.setCustomerOrderNo("CO-001");
-        SalesOrderItem conflictB = item(2002L, 601L, 20);
-        conflictB.setCustomerProjectNo("CP-A");
-        conflictB.setCustomerOrderNo("CO-001");
-        SalesOrderItem conflictC = item(2003L, 601L, 30);
-        conflictC.setCustomerProjectNo("CP-B");
-        conflictC.setCustomerOrderNo("CO-001");
-        projectFixture.sourceTicketItem(201, conflictA);
-        projectFixture.sourceTicketItem(202, conflictB);
-        projectFixture.sourceTicketItem(203, conflictC);
-        projectFixture.header(header(601L, "SO-601", "DOC-601"));
-
-        WmsReservationPlanService.ReservationPlan projectPlan = projectFixture.service.prepare(List.of(203, 202, 201));
-
-        assertThat(projectPlan.getFailures()).isEmpty();
-        assertThat(projectPlan.getGroups()).hasSize(2);
-        WmsReservationPlanService.ReservationGroup projectA = projectPlan.getGroups().get(0);
-        assertThat(projectA.getSaleNo()).isEqualTo("CO-001");
-        assertThat(projectA.getRequest().getItems()).singleElement().satisfies(item -> {
-            assertThat(item.getProductCode()).isEqualTo("MAT-A");
-            assertThat(item.getReserveCount()).isEqualByComparingTo("5");
-            assertThat(item.getCustomerProjectNo()).isEqualTo("CP-A");
-            assertThat(item.getCustomerOrderNo()).isEqualTo("CO-001");
-        });
-        assertThat(projectA.getTickets())
-                .extracting(WmsReservationPlanService.TicketReservation::getTicketId)
-                .containsExactly(201, 202);
-
-        WmsReservationPlanService.ReservationGroup projectB = projectPlan.getGroups().get(1);
-        assertThat(projectB.getSaleNo()).isEqualTo("CO-001");
-        assertThat(projectB.getRequest().getItems()).singleElement().satisfies(item -> {
-            assertThat(item.getProductCode()).isEqualTo("MAT-A");
-            assertThat(item.getReserveCount()).isEqualByComparingTo("4");
-            assertThat(item.getCustomerProjectNo()).isEqualTo("CP-B");
-            assertThat(item.getCustomerOrderNo()).isEqualTo("CO-001");
-        });
-        assertThat(projectB.getTickets())
-                .extracting(WmsReservationPlanService.TicketReservation::getTicketId)
-                .containsExactly(203);
-    }
-
-    @Test
-    void prepareGeneratesStableFingerprintFromSortedProductSaleNoQuantityAndRemark() {
-        Fixture fixture = fixture();
-        fixture.ticket(ticket(101, "MAT-B", 2, null, null, "remark-b", "", "", "P-101"));
-        fixture.ticket(ticket(102, "MAT-A", 3, null, null, "remark-a", "", "", "P-102"));
-        fixture.sourceTicketItem(101, item(1001L, 501L, 20));
-        fixture.sourceTicketItem(102, item(1002L, 501L, 10));
-        fixture.header(header(501L, "SO-501", "DOC-501"));
-
-        WmsReservationPlanService.ReservationGroup group = fixture.service.prepare(List.of(101, 102)).getGroups().get(0);
-        String sameFingerprint = new WmsReservationFingerprintService().fingerprint(group.getSaleNo(), group.getRequest().getItems());
-
-        assertThat(group.getRequest().getItems())
-                .extracting(com.machining.quote.dto.wms.WmsSaleLadingReserveReq.Item::getProductCode)
-                .containsExactly("MAT-A", "MAT-B");
-        assertThat(group.getRequestFingerprint()).isEqualTo(sameFingerprint);
-        group.getRequest().getItems().get(0).setRemark("changed");
-        String changedFingerprint = new WmsReservationFingerprintService().fingerprint(group.getSaleNo(), group.getRequest().getItems());
-        assertThat(changedFingerprint).isNotEqualTo(sameFingerprint);
-        group.getRequest().getItems().get(0).setRemark("remark-a");
-        group.getRequest().getItems().get(0).setCustomerOrderNo("changed-order");
-        String changedCustomerFieldFingerprint = new WmsReservationFingerprintService().fingerprint(group.getSaleNo(), group.getRequest().getItems());
-        assertThat(changedCustomerFieldFingerprint).isNotEqualTo(sameFingerprint);
-    }
-
-    @Test
-    void splitUsesStableLineOrderAndConsumesStockInProductionAndSurplusBuckets() {
-        Fixture fixture = fixture();
-        fixture.ticket(ticket(101, "MAT-A", 4, null, null));
-        fixture.ticket(ticket(102, "MAT-A", 3, null, null));
-        fixture.sourceTicketItem(101, item(1001L, 501L, 10));
-        fixture.sourceTicketItem(102, item(1002L, 501L, 20));
-        fixture.header(header(501L, "SO-501", "DOC-501"));
-        WmsReservationPlanService.ReservationGroup group = fixture.service.prepare(List.of(102, 101)).getGroups().get(0);
-
-        List<WmsReservationPlanService.TicketAllocationSplit> splits = fixture.service.split(
+        List<WmsReservationPlanService.AllocationSplit> splits = fixture.service.split(
                 group,
-                responseData("CO-501", "QPO-WMS-1", responseItem("MAT-A", "7", "3", "2", "5", "2"))
+                responseData("CO-1", "QPO-WMS-1", responseItem("MAT-A", "7", "3", "2", "5", "2"))
         );
 
-        assertThat(splits).extracting(WmsReservationPlanService.TicketAllocationSplit::getTicketId)
-                .containsExactly(101, 102);
+        assertThat(splits).extracting(WmsReservationPlanService.AllocationSplit::getAllocationId).containsExactly(101, 102);
         assertThat(splits).extracting(split -> split.getStockFrozenCount().toPlainString()
                         + ":" + split.getInProductionCount().toPlainString()
                         + ":" + split.getSurplusCount().toPlainString())
@@ -316,46 +205,48 @@ class WmsReservationPlanServiceTest {
     @Test
     void splitRejectsUnconsumedBuckets() {
         Fixture fixture = fixture();
-        fixture.ticket(ticket(101, "MAT-A", 4, null, null));
-        fixture.sourceTicketItem(101, item(1001L, 501L, 10));
-        fixture.header(header(501L, "SO-501", "DOC-501"));
-        WmsReservationPlanService.ReservationGroup group = fixture.service.prepare(List.of(101)).getGroups().get(0);
+        addAllocation(fixture, 101, "MAT-A", 4, 501L, 10, "CP-1", "CO-1");
+        fixture.header(header(501L, "SO-501", "CO-1", "CP-1"));
+        WmsReservationPlanService.ReservationGroup group = fixture.service.prepareAllocations(List.of(101)).getGroups().get(0);
 
         assertThatThrownBy(() -> fixture.service.split(
                 group,
-                responseData("CO-501", "QPO-WMS-1", responseItem("MAT-A", "5", "3", "1", "4", "1"))
+                responseData("CO-1", "QPO-WMS-1", responseItem("MAT-A", "5", "3", "1", "4", "1"))
         )).hasMessageContaining("bucket");
     }
 
-    private Fixture fixture() {
-        return new Fixture();
+    private void addAllocation(Fixture fixture, Integer allocationId, String materialNo, Integer qty,
+                               Long salesOrderId, Integer lineNo, String customerProjectNo, String customerOrderNo) {
+        OrderDeliveryTicketAllocation allocation = allocation(allocationId, materialNo, qty, "remark-" + allocationId);
+        allocation.setCustomerProjectNo(customerProjectNo);
+        fixture.allocation(allocation);
+        SalesOrderItem sourceItem = item(1000L + allocationId, salesOrderId, lineNo);
+        sourceItem.setCustomerProjectNo(customerProjectNo);
+        sourceItem.setCustomerOrderNo(customerOrderNo);
+        fixture.link(allocationId, sourceItem);
     }
 
-    private OrderDeliveryTicket ticket(Integer id, String materialNo, Integer qty, String sourceType, Long sourceItemId) {
-        return ticket(id, materialNo, qty, sourceType, sourceItemId, "remark-" + id, "material-" + id, "desc-" + id, "P-" + id);
+    private OrderDeliveryTicketAllocation allocation(Integer id, String materialNo, Integer qty, String remark) {
+        return allocation(id, materialNo, qty, remark, "material-" + id, "description-" + id, "P-" + id);
     }
 
-    private OrderDeliveryTicket ticket(
-            Integer id,
-            String materialNo,
-            Integer qty,
-            String sourceType,
-            Long sourceItemId,
-            String remark,
-            String materialName,
-            String description,
-            String partNo) {
-        OrderDeliveryTicket ticket = new OrderDeliveryTicket();
-        ticket.setId(id);
-        ticket.setMaterialNo(materialNo);
-        ticket.setQty(qty);
-        ticket.setSourceType(sourceType);
-        ticket.setSourceItemId(sourceItemId);
-        ticket.setRemark(remark);
-        ticket.setMaterialName(materialName);
-        ticket.setDescription(description);
-        ticket.setPartNo(partNo);
-        return ticket;
+    private OrderDeliveryTicketAllocation allocation(Integer id, String materialNo, Integer qty,
+                                                     String remark, String materialName,
+                                                     String description, String partNo) {
+        OrderDeliveryTicketAllocation allocation = new OrderDeliveryTicketAllocation();
+        allocation.setId(id);
+        allocation.setTicketId(id);
+        allocation.setAllocationType("PRODUCTION_REQUIRED");
+        allocation.setStatus("ACTIVE");
+        allocation.setQty(qty);
+        allocation.setMaterialNo(materialNo);
+        allocation.setRemark(remark);
+        allocation.setMaterialName(materialName);
+        allocation.setDescription(description);
+        allocation.setPartNo(partNo);
+        allocation.setCustomerOrderNo("CO-1");
+        allocation.setCustomerProjectNo("CP-1");
+        return allocation;
     }
 
     private SalesOrderItem item(Long id, Long salesOrderId, Integer lineNo) {
@@ -366,21 +257,17 @@ class WmsReservationPlanServiceTest {
         return item;
     }
 
-    private SalesOrderHeader header(Long id, String salesOrderNo, String documentNo) {
-        return header(id, salesOrderNo, documentNo, "CO-" + id, "CP-" + id);
-    }
-
-    private SalesOrderHeader header(Long id, String salesOrderNo, String documentNo, String customerOrderNo, String customerProjectNo) {
+    private SalesOrderHeader header(Long id, String salesOrderNo, String customerOrderNo, String customerProjectNo) {
         SalesOrderHeader header = new SalesOrderHeader();
         header.setId(id);
         header.setSalesOrderNo(salesOrderNo);
-        header.setDocumentNo(documentNo);
         header.setCustomerOrderNo(customerOrderNo);
         header.setCustomerProjectNo(customerProjectNo);
         return header;
     }
 
-    private WmsSaleLadingReserveResp.Data responseData(String saleOrderNo, String externalBizId, WmsSaleLadingReserveResp.Item... items) {
+    private WmsSaleLadingReserveResp.Data responseData(String saleOrderNo, String externalBizId,
+                                                       WmsSaleLadingReserveResp.Item... items) {
         WmsSaleLadingReserveResp.Data data = new WmsSaleLadingReserveResp.Data();
         data.setSaleOrderNo(saleOrderNo);
         data.setExternalBizId(externalBizId);
@@ -388,13 +275,12 @@ class WmsReservationPlanServiceTest {
         return data;
     }
 
-    private WmsSaleLadingReserveResp.Item responseItem(
-            String productCode,
-            String reserveCount,
-            String stockCount,
-            String inProductionCount,
-            String frozenCount,
-            String surplusCount) {
+    private WmsSaleLadingReserveResp.Item responseItem(String productCode,
+                                                       String reserveCount,
+                                                       String stockCount,
+                                                       String inProductionCount,
+                                                       String frozenCount,
+                                                       String surplusCount) {
         WmsSaleLadingReserveResp.Item item = new WmsSaleLadingReserveResp.Item();
         item.setProductCode(productCode);
         item.setReserveCount(new BigDecimal(reserveCount));
@@ -405,29 +291,29 @@ class WmsReservationPlanServiceTest {
         return item;
     }
 
+    private Fixture fixture() {
+        return new Fixture();
+    }
+
     private static final class Fixture {
-        private final OrderDeliveryTicketMapper ticketMapper = mock(OrderDeliveryTicketMapper.class);
+        private final OrderDeliveryTicketAllocationMapper allocationMapper = mock(OrderDeliveryTicketAllocationMapper.class);
         private final SalesOrderItemMapper salesOrderItemMapper = mock(SalesOrderItemMapper.class);
         private final SalesOrderHeaderMapper salesOrderHeaderMapper = mock(SalesOrderHeaderMapper.class);
         private final WmsReservationPlanService service = new WmsReservationPlanService();
 
         private Fixture() {
-            ReflectionTestUtils.setField(service, "ticketMapper", ticketMapper);
+            ReflectionTestUtils.setField(service, "allocationMapper", allocationMapper);
             ReflectionTestUtils.setField(service, "salesOrderItemMapper", salesOrderItemMapper);
             ReflectionTestUtils.setField(service, "salesOrderHeaderMapper", salesOrderHeaderMapper);
             ReflectionTestUtils.setField(service, "fingerprintService", new WmsReservationFingerprintService());
         }
 
-        private void ticket(OrderDeliveryTicket ticket) {
-            when(ticketMapper.selectByIdForUpdate(ticket.getId())).thenReturn(ticket);
+        private void allocation(OrderDeliveryTicketAllocation allocation) {
+            when(allocationMapper.selectByIdForUpdate(allocation.getId())).thenReturn(allocation);
         }
 
-        private void sourceTicketItem(Integer ticketId, SalesOrderItem item) {
-            when(salesOrderItemMapper.selectBySourceTicketIdForUpdate(ticketId)).thenReturn(item);
-        }
-
-        private void directItem(SalesOrderItem item) {
-            when(salesOrderItemMapper.selectByIdForUpdate(item.getId())).thenReturn(item);
+        private void link(Integer allocationId, SalesOrderItem item) {
+            when(salesOrderItemMapper.selectByAllocationIdForUpdate(allocationId.longValue())).thenReturn(item);
         }
 
         private void header(SalesOrderHeader header) {

@@ -20,6 +20,43 @@ import java.time.LocalDateTime;
 
 @Mapper
 public interface OrderDeliveryTicketAllocationMapper extends BaseMapper<OrderDeliveryTicketAllocation> {
+    @Select("""
+            SELECT allocation.*
+            FROM order_delivery_ticket_allocation allocation
+            JOIN sales_order_item sales_item ON sales_item.allocation_id = allocation.id
+            WHERE sales_item.sales_order_id = #{salesOrderId}
+              AND allocation.allocation_type = 'PRODUCTION_REQUIRED'
+            ORDER BY sales_item.line_no ASC, allocation.id ASC
+            """)
+    List<OrderDeliveryTicketAllocation> selectSalesOrderProductionAllocations(@Param("salesOrderId") Long salesOrderId);
+
+    @Select("""
+            <script>
+            SELECT allocation.*
+            FROM order_delivery_ticket_allocation allocation
+            WHERE allocation.ticket_id IN
+            <foreach collection="ticketIds" item="ticketId" open="(" separator="," close=")">
+                #{ticketId}
+            </foreach>
+              AND allocation.allocation_type = 'PRODUCTION_REQUIRED'
+              AND COALESCE(allocation.status, 'ACTIVE') = 'ACTIVE'
+              AND COALESCE(allocation.discarded, FALSE) = FALSE
+            ORDER BY allocation.id ASC
+            </script>
+            """)
+    List<OrderDeliveryTicketAllocation> selectProductionAllocationsByTicketIds(@Param("ticketIds") List<Integer> ticketIds);
+
+    @Select("""
+            SELECT allocation.*
+            FROM order_delivery_ticket_allocation allocation
+            WHERE allocation.ticket_id = #{ticketId}
+              AND allocation.allocation_type = 'PRODUCTION_REQUIRED'
+              AND COALESCE(allocation.status, 'ACTIVE') = 'ACTIVE'
+              AND COALESCE(allocation.discarded, FALSE) = FALSE
+            ORDER BY allocation.id ASC
+            """)
+    List<OrderDeliveryTicketAllocation> selectActiveProductionAllocationsByTicketId(@Param("ticketId") Integer ticketId);
+
     @Select("SELECT * FROM order_delivery_ticket_allocation WHERE ticket_id = #{ticketId} ORDER BY id ASC")
     List<OrderDeliveryTicketAllocation> selectByTicketId(@Param("ticketId") Integer ticketId);
 
@@ -30,11 +67,8 @@ public interface OrderDeliveryTicketAllocationMapper extends BaseMapper<OrderDel
                    sales_item.id AS sales_order_item_id,
                    sales_item.line_no AS sales_order_item_line_no
             FROM order_delivery_ticket_allocation alloc
-            LEFT JOIN sales_order_item sales_item ON sales_item.allocation_id = alloc.id
-            WHERE alloc.ticket_id IN
-            <foreach collection="ticketIds" item="ticketId" open="(" separator="," close=")">
-                #{ticketId}
-            </foreach>
+            JOIN sales_order_item sales_item ON sales_item.allocation_id = alloc.id
+            WHERE sales_item.sales_order_id = #{salesOrderId}
               AND alloc.allocation_type IN ('IN_STOCK_LOCK', 'IN_PRODUCTION_LOCK', 'PRODUCTION_REQUIRED')
               AND COALESCE(alloc.status, 'ACTIVE') = 'ACTIVE'
               AND COALESCE(alloc.discarded, FALSE) = FALSE
@@ -44,7 +78,7 @@ public interface OrderDeliveryTicketAllocationMapper extends BaseMapper<OrderDel
             """)
     @ResultMap("lockedItemResultMap")
     List<LockedItemDTO> selectSalesOrderAllocationSplits(
-            @Param("ticketIds") List<Integer> ticketIds,
+            @Param("salesOrderId") Long salesOrderId,
             @Param("limit") int limit,
             @Param("offset") long offset);
 
@@ -52,16 +86,14 @@ public interface OrderDeliveryTicketAllocationMapper extends BaseMapper<OrderDel
             <script>
             SELECT COUNT(*)
             FROM order_delivery_ticket_allocation alloc
-            WHERE alloc.ticket_id IN
-            <foreach collection="ticketIds" item="ticketId" open="(" separator="," close=")">
-                #{ticketId}
-            </foreach>
+            JOIN sales_order_item sales_item ON sales_item.allocation_id = alloc.id
+            WHERE sales_item.sales_order_id = #{salesOrderId}
               AND alloc.allocation_type IN ('IN_STOCK_LOCK', 'IN_PRODUCTION_LOCK', 'PRODUCTION_REQUIRED')
               AND COALESCE(alloc.status, 'ACTIVE') = 'ACTIVE'
               AND COALESCE(alloc.discarded, FALSE) = FALSE
             </script>
             """)
-    long countSalesOrderAllocationSplits(@Param("ticketIds") List<Integer> ticketIds);
+    long countSalesOrderAllocationSplits(@Param("salesOrderId") Long salesOrderId);
 
     @Select("SELECT * FROM order_delivery_ticket_allocation WHERE id = #{id} FOR UPDATE")
     OrderDeliveryTicketAllocation selectByIdForUpdate(@Param("id") Integer id);
@@ -131,6 +163,12 @@ public interface OrderDeliveryTicketAllocationMapper extends BaseMapper<OrderDel
               AND allocation_type = 'PRODUCTION_REQUIRED'
               AND COALESCE(status, 'ACTIVE') = 'ACTIVE'
               AND COALESCE(mes_production_status, 'PENDING') IN ('PENDING', 'FAILED')
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM wms_reservation_ticket reservation
+                  WHERE reservation.allocation_id = order_delivery_ticket_allocation.id
+                    AND reservation.status IN ('RESERVED', 'SUBMITTING', 'RESULT_UNKNOWN', 'RESPONSE_RECEIVED', 'APPLY_FAILED')
+              )
             """)
     int markMesProductionLineReserved(@Param("allocationId") Integer allocationId,
                                       @Param("lineRequestId") String lineRequestId);

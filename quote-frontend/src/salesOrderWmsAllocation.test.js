@@ -23,13 +23,14 @@ describe('Sales order optional WMS allocation entry', () => {
     expect(orderApiSource).toContain('submitSalesOrderWmsAllocationBatch')
     expect(orderApiSource).toContain('/wms-allocation/batch')
     expect(salesOrderPageSource).toContain('submitSalesOrderWmsAllocationBatch(salesOrderId)')
-    expect(salesOrderPageSource).toContain('按当前销售订单全部关联提单获取库存')
+    expect(salesOrderPageSource).toContain('按本订单数量大于 0 的待产 Allocation 获取库存')
     expect(salesOrderPageSource).not.toContain('submitSalesOrderWmsAllocationBatch(detailTicketList')
   })
 
-  test('confirms, reports task submission, and refreshes ticket rows', () => {
+  test('confirms, reports task submission, and refreshes allocation rows', () => {
     expect(salesOrderPageSource).toContain('ElMessageBox.confirm')
     expect(salesOrderPageSource).toContain('库存信息获取任务已提交')
+    expect(salesOrderPageSource).toContain('数量大于 0 的待产 Allocation 获取库存信息')
     expect(salesOrderPageSource).toContain('runAction(salesOrderActionKeys.wmsAllocation(salesOrderId)')
     expect(salesOrderPageSource).toContain('await fetchAllocationSplits()')
   })

@@ -17,6 +17,7 @@ public class WmsReservationTicket {
     private Long batchId;
     private Long batchItemId;
     private Integer ticketId;
+    private Integer allocationId;
     private Long salesOrderItemId;
     private Integer salesOrderLineNo;
     private String productCode;

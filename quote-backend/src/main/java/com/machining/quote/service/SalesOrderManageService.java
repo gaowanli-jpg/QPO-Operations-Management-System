@@ -162,21 +162,13 @@ public class SalesOrderManageService {
         requireSalesOrder(salesOrderId);
         int safePage = safePage(page);
         int safePageSize = safePageSize(pageSize);
-        List<Integer> ticketIds = ticketMapper.selectList(ticketQuery(salesOrderId)).stream()
-                .map(OrderDeliveryTicket::getId)
-                .filter(java.util.Objects::nonNull)
-                .distinct()
-                .toList();
-        if (ticketIds.isEmpty()) {
-            return PageResult.of(List.of(), 0, safePage, safePageSize);
-        }
-        long total = allocationMapper.countSalesOrderAllocationSplits(ticketIds);
+        long total = allocationMapper.countSalesOrderAllocationSplits(salesOrderId);
         if (total == 0) {
             return PageResult.of(List.of(), 0, safePage, safePageSize);
         }
         long offset = (long) (safePage - 1) * safePageSize;
         List<LockedItemDTO> records = allocationMapper.selectSalesOrderAllocationSplits(
-                ticketIds, safePageSize, offset);
+                salesOrderId, safePageSize, offset);
         return PageResult.of(records, total, safePage, safePageSize);
     }
 

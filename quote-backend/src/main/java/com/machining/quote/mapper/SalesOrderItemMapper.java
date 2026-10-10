@@ -24,6 +24,9 @@ public interface SalesOrderItemMapper extends BaseMapper<SalesOrderItem> {
     @Select("SELECT * FROM sales_order_item WHERE allocation_id = #{allocationId} FOR UPDATE")
     SalesOrderItem selectByAllocationIdForUpdate(@Param("allocationId") Long allocationId);
 
+    @Select("SELECT * FROM sales_order_item WHERE allocation_id = #{allocationId} LIMIT 1")
+    SalesOrderItem selectByAllocationId(@Param("allocationId") Long allocationId);
+
     @Select("SELECT * FROM sales_order_item WHERE sales_order_id = #{salesOrderId} ORDER BY line_no ASC, id ASC FOR UPDATE")
     List<SalesOrderItem> selectBySalesOrderIdForUpdate(@Param("salesOrderId") Long salesOrderId);
 

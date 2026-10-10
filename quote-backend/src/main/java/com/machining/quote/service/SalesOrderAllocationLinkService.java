@@ -7,10 +7,12 @@ import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.OrderDeliveryTicketAllocation;
 import com.machining.quote.entity.SalesOrderHeader;
 import com.machining.quote.entity.SalesOrderItem;
+import com.machining.quote.entity.WmsReservationTicket;
 import com.machining.quote.mapper.OrderDeliveryTicketAllocationMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.SalesOrderHeaderMapper;
 import com.machining.quote.mapper.SalesOrderItemMapper;
+import com.machining.quote.mapper.WmsReservationTicketMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
@@ -33,8 +35,7 @@ public class SalesOrderAllocationLinkService {
             Integer allocationId,
             Long salesOrderItemId,
             Integer oldQty,
-            Integer newQty,
-            boolean ticketSynced) {
+            Integer newQty) {
     }
 
     @Autowired
@@ -45,15 +46,13 @@ public class SalesOrderAllocationLinkService {
     private OrderDeliveryTicketMapper ticketMapper;
     @Autowired
     private OrderDeliveryTicketAllocationMapper allocationMapper;
+    @Autowired
+    private WmsReservationTicketMapper wmsReservationTicketMapper;
 
     public SalesOrderItem lockItemForMutation(Long salesOrderId, Long itemId) {
         SalesOrderItem snapshot = itemMapper.selectById(itemId);
         assertItemBelongsToOrder(snapshot, salesOrderId, itemId);
         if (snapshot.getAllocationId() != null) {
-            OrderDeliveryTicketAllocation allocation = allocationMapper.selectById(snapshot.getAllocationId().intValue());
-            if (allocation != null && allocation.getTicketId() != null) {
-                ticketMapper.selectByIdForUpdate(allocation.getTicketId());
-            }
             allocationMapper.selectByIdForUpdate(snapshot.getAllocationId().intValue());
         }
         return itemMapper.selectByIdForUpdate(itemId);
@@ -68,6 +67,28 @@ public class SalesOrderAllocationLinkService {
         if (salesOrderId != null) {
             headerMapper.selectByIdForUpdate(salesOrderId);
         }
+    }
+
+    public SalesOrderItem lockSalesOrderForAllocation(Integer allocationId) {
+        OrderDeliveryTicketAllocation allocation = allocationMapper.selectById(allocationId);
+        if (allocation == null) {
+            throw new RuntimeException("allocation does not exist: " + allocationId);
+        }
+        SalesOrderItem snapshot = itemMapper.selectByAllocationId(allocationId.longValue());
+        if (snapshot == null || snapshot.getSalesOrderId() == null) {
+            throw new RuntimeException("allocation is not linked to a sales order item: " + allocationId);
+        }
+        headerMapper.selectByIdForUpdate(snapshot.getSalesOrderId());
+        if (allocation.getTicketId() == null
+                || ticketMapper.selectByIdForUpdate(allocation.getTicketId()) == null) {
+            throw new RuntimeException("allocation source delivery ticket does not exist: " + allocationId);
+        }
+        allocationMapper.selectByIdForUpdate(allocationId);
+        SalesOrderItem item = itemMapper.selectByAllocationIdForUpdate(allocationId.longValue());
+        if (item == null) {
+            throw new RuntimeException("sales order item for allocation does not exist: " + allocationId);
+        }
+        return item;
     }
 
     public OrderDeliveryTicket lockTicketForMaterialSuccess(Integer ticketId) {
@@ -242,6 +263,18 @@ public class SalesOrderAllocationLinkService {
             return;
         }
         SalesOrderItem sourceItem = resolveSourceItem(ticket, true);
+        syncWmsAllocations(sourceItem, allocations);
+    }
+
+    public void syncWmsAllocationsForAllocation(Integer allocationId, List<OrderDeliveryTicketAllocation> allocations) {
+        if (allocationId == null || allocations == null || allocations.isEmpty()) {
+            return;
+        }
+        SalesOrderItem sourceItem = itemMapper.selectByAllocationIdForUpdate(allocationId.longValue());
+        syncWmsAllocations(sourceItem, allocations);
+    }
+
+    private void syncWmsAllocations(SalesOrderItem sourceItem, List<OrderDeliveryTicketAllocation> allocations) {
         if (sourceItem == null || sourceItem.getSalesOrderId() == null) {
             return;
         }
@@ -295,27 +328,21 @@ public class SalesOrderAllocationLinkService {
         if (snapshot == null) {
             throw new RuntimeException("销售订单零件关联的 allocation 不存在：" + item.getAllocationId());
         }
-        OrderDeliveryTicket ticket = snapshot.getTicketId() == null
-                ? null
-                : ticketMapper.selectByIdForUpdate(snapshot.getTicketId());
         OrderDeliveryTicketAllocation allocation = allocationMapper.selectByIdForUpdate(item.getAllocationId().intValue());
         if (allocation == null) {
             throw new RuntimeException("销售订单零件关联的 allocation 不存在：" + item.getAllocationId());
         }
-        Integer qty = requireNonNegative(item.getQty());
-        boolean syncTicket = canSyncTicketQuantity(ticket);
-        updateLinkedQuantity(item, allocation, qty);
-        if (syncTicket && ticket != null) {
-            allocation.setTicketQty(qty);
-            ticket.setQty(qty);
-            ticketMapper.updateById(ticket);
+        WmsReservationTicket activeReservation = wmsReservationTicketMapper.selectActiveByAllocationId(allocation.getId());
+        if (activeReservation != null) {
+            throw new RuntimeException("WMS reservation is still active for allocation: " + allocation.getId());
         }
+        Integer qty = requireNonNegative(item.getQty());
+        updateLinkedQuantity(item, allocation, qty);
         return new AllocationQuantitySyncResult(
                 allocation.getId(),
                 item.getId(),
                 oldQty,
-                qty,
-                syncTicket && ticket != null);
+                qty);
     }
 
     public SalesOrderItem lockItemByAllocation(Long salesOrderId, Integer allocationId) {
@@ -323,10 +350,11 @@ public class SalesOrderAllocationLinkService {
         if (allocation == null) {
             throw new RuntimeException("allocation 不存在：" + allocationId);
         }
-        if (allocation.getTicketId() != null) {
-            ticketMapper.selectByIdForUpdate(allocation.getTicketId());
-        }
         OrderDeliveryTicketAllocation locked = allocationMapper.selectByIdForUpdate(allocationId);
+        WmsReservationTicket activeReservation = wmsReservationTicketMapper.selectActiveByAllocationId(allocationId);
+        if (activeReservation != null) {
+            throw new RuntimeException("WMS reservation is still active for allocation: " + allocationId);
+        }
         SalesOrderItem item = itemMapper.selectByAllocationIdForUpdate(locked.getId().longValue());
         assertItemBelongsToOrder(item, salesOrderId, item == null ? null : item.getId());
         return item;
@@ -350,32 +378,6 @@ public class SalesOrderAllocationLinkService {
         allocation.setQty(qty);
         allocation.setUpdatedAt(LocalDateTime.now());
         allocationMapper.updateById(allocation);
-    }
-
-    public boolean syncTicketQtyIfWmsPending(OrderDeliveryTicketAllocation allocation, int qty) {
-        if (allocation == null || allocation.getTicketId() == null) {
-            return false;
-        }
-        OrderDeliveryTicket ticket = ticketMapper.selectByIdForUpdate(allocation.getTicketId());
-        if (ticket == null || "SUCCESS".equalsIgnoreCase(defaultText(ticket.getWmsAllocateStatus(), "PENDING"))) {
-            return false;
-        }
-        if (!canSyncTicketQuantity(ticket)) {
-            return false;
-        }
-        ticket.setQty(qty);
-        ticketMapper.updateById(ticket);
-        allocation.setTicketQty(qty);
-        allocationMapper.updateById(allocation);
-        return true;
-    }
-
-    private boolean canSyncTicketQuantity(OrderDeliveryTicket ticket) {
-        if (ticket == null) {
-            return false;
-        }
-        String status = defaultText(ticket.getWmsAllocateStatus(), "PENDING").toUpperCase();
-        return "PENDING".equals(status) || "FAILED".equals(status);
     }
 
     private SalesOrderItem ensureProductionItem(SalesOrderItem source, OrderDeliveryTicketAllocation allocation) {
