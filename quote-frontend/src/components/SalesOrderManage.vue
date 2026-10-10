@@ -715,28 +715,32 @@
           </el-tab-pane>
 
           <el-tab-pane label="锁库拆行" name="allocationSplits">
-            <div class="erp-toolbar-group allocation-split-toolbar">
-              <el-button
-                v-permission="SALES_ORDER_WMS_ALLOCATE_PERMISSION"
-                type="primary"
-                plain
-                :loading="wmsAllocationPending"
-                @click="handleWmsAllocation"
-              >
-                获取库存信息
-              </el-button>
-              <span class="erp-toolbar-description">按本订单数量大于 0 的待产 Allocation 获取库存，结果会拆分为锁库数量和剩余待产数量。</span>
+            <div class="item-maintenance-actions allocation-split-toolbar">
+              <div class="item-maintenance-action-meta">
+                <span class="erp-toolbar-description">按本订单数量大于 0 的待产 Allocation 获取库存，结果会拆分为锁库数量和剩余待产数量。</span>
+              </div>
+              <div class="item-maintenance-action-buttons">
+                <el-button
+                  v-permission="SALES_ORDER_WMS_ALLOCATE_PERMISSION"
+                  type="primary"
+                  plain
+                  :loading="wmsAllocationPending"
+                  @click="handleWmsAllocation"
+                >
+                  获取库存信息
+                </el-button>
+                <el-button
+                  v-permission="SALES_ORDER_UPDATE_PERMISSION"
+                  type="success"
+                  plain
+                  :disabled="allocationSplitDirtyCount === 0"
+                  :loading="allocationSplitSaving"
+                  @click="saveAllocationSplitChanges"
+                >
+                  保存拆分数量
+                </el-button>
+              </div>
             </div>
-            <el-button
-              v-permission="SALES_ORDER_UPDATE_PERMISSION"
-              type="success"
-              plain
-              :disabled="allocationSplitDirtyCount === 0"
-              :loading="allocationSplitSaving"
-              @click="saveAllocationSplitChanges"
-            >
-              保存拆分数量
-            </el-button>
             <div v-if="wmsAllocationTask" class="sales-order-wms-task-result">
               <div class="erp-toolbar-group">
                 <el-tag :type="wmsTaskTagType(wmsAllocationTask.status)" effect="plain">
