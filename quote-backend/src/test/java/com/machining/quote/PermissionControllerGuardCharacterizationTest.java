@@ -168,8 +168,10 @@ class PermissionControllerGuardCharacterizationTest {
                 .contains("@PostMapping(\"/orders/{salesOrderId}/items/batch\")")
                 .contains("/orders/{salesOrderId}/items/data-replacement/preview")
                 .contains("/orders/{salesOrderId}/items/data-replacement/confirm")
-                .doesNotContain("market:u9-sync:submit")
                 .doesNotContain("change:sales-order:update");
+        assertThat(salesOrderManage)
+                .contains("@PostMapping(\"/orders/{salesOrderId}/u9-resync-reset\")")
+                .contains("@RequirePermission(\"market:u9-sync:submit\")");
         assertThat(admin)
                 .contains("@RequirePermission(\"system:user:view\")")
                 .contains("@RequirePermission(\"market:template:view\")")

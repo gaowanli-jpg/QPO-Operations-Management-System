@@ -2,6 +2,7 @@
 
 > 现行链路：`QPO -> 数据中心 -> WMS`。QPO 只保留批量任务 `WMS_ALLOCATION_BATCH`，底层只调用数据中心 endpoint `WMS_INVENTORY_ALLOCATE`。
 > WMS 业务接口：`POST /api/v1/wms/admin-api/wms/datacenter/sale-lading/reserve`。
+> 阶段 31 后，锁库零件模块只展示 `IN_STOCK_LOCK` 和 `IN_PRODUCTION_LOCK`，`PRODUCTION_REQUIRED` 行进入待产零件模块 `/production-items`，MES 生产下发从待产零件模块发起。
 
 > 2026-10-09 可选库存获取收口：物料号成功即创建全量 `PRODUCTION_REQUIRED` allocation 并进入待产池。WMS 获取库存改由销售订单详情按整单关联提单触发；成功后替代 / 拆分默认生产分配。已提零件页的旧批量接口与权限保留为兼容入口，页面不再显示。
 

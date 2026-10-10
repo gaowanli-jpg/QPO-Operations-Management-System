@@ -6,6 +6,7 @@ import com.machining.quote.domain.QuoteStatusWorkflow;
 import com.machining.quote.dto.ReleaseSourceType;
 import com.machining.quote.dto.SalesOrderQpoExcelLineDTO;
 import com.machining.quote.dto.SalesOrderQpoExcelParseResult;
+import com.machining.quote.dto.SalesOrderQpoImportDefaultsDTO;
 import com.machining.quote.dto.SalesOrderQpoImportResp;
 import com.machining.quote.dto.SalesOrderQpoOrderGroupDTO;
 import com.machining.quote.dto.SalesOrderAutoSnapshotCompletionResult;
@@ -71,6 +72,15 @@ abstract class SalesOrderQpoImportTestSupport {
     @AfterEach
     void clearAuthContext() {
         AuthContext.clear();
+    }
+
+    protected SalesOrderQpoImportDefaultsDTO validImportDefaults() {
+        SalesOrderQpoImportDefaultsDTO defaults = new SalesOrderQpoImportDefaultsDTO();
+        defaults.setSalesOrderDate(LocalDate.of(2026, 9, 18));
+        defaults.setCustomerOrderNo("PO-IMPORT-DEFAULT");
+        defaults.setInternalProjectNo("IP-IMPORT-DEFAULT");
+        defaults.setOrderType("正式订单");
+        return defaults;
     }
 
     protected SalesOrderQpoImportService service(
@@ -237,7 +247,7 @@ abstract class SalesOrderQpoImportTestSupport {
         first.setSalesOrderDate(LocalDate.of(2026, 7, 1));
         first.setCustomerProjectNo("CP-001");
         first.setCustomerOrderTitle("GSQ1");
-        first.setOrderType("样品订单");
+        first.setOrderType("正式订单");
         first.setLines(List.of(line(1, "P-001", "A", "MAT-001", 10), line(2, "P-002", "B", "", 4)));
 
         SalesOrderQpoOrderGroupDTO second = new SalesOrderQpoOrderGroupDTO();
@@ -247,7 +257,7 @@ abstract class SalesOrderQpoImportTestSupport {
         second.setSalesOrderDate(LocalDate.of(2026, 7, 2));
         second.setCustomerProjectNo("CP-002");
         second.setCustomerOrderTitle("GSQ2");
-        second.setOrderType("批量订单");
+        second.setOrderType("备货订单");
         second.setLines(List.of(line(3, "P-003", "C", "MAT-003", 5)));
 
         result.setOrders(List.of(first, second));
@@ -266,7 +276,7 @@ abstract class SalesOrderQpoImportTestSupport {
         group.setSalesOrderDate(LocalDate.of(2026, 7, 1));
         group.setCustomerProjectNo("CP-001");
         group.setCustomerOrderTitle("GSQ1");
-        group.setOrderType("样品订单");
+        group.setOrderType("正式订单");
         group.setLines(List.of(line(1, "P-100", "A", "MAT-001", 10), line(2, "P-100", "B", "MAT-002", 4)));
 
         result.setOrders(List.of(group));
@@ -285,7 +295,7 @@ abstract class SalesOrderQpoImportTestSupport {
         group.setSalesOrderDate(LocalDate.of(2026, 7, 1));
         group.setCustomerProjectNo("CP-001");
         group.setCustomerOrderTitle("GSQ1");
-        group.setOrderType("样品订单");
+        group.setOrderType("正式订单");
         group.setLines(List.of(blankPriceLine(1, "P-BLANK", "A"), line(2, "P-PRICED", "A", "MAT-OLD", 3)));
 
         result.setOrders(List.of(group));
@@ -420,7 +430,7 @@ abstract class SalesOrderQpoImportTestSupport {
         line.setCustomerOrderNo(lineNo == 3 ? "PO-002" : "PO-001");
         line.setCustomerProjectNo(lineNo == 3 ? "CP-002" : "CP-001");
         line.setCustomerOrderTitle(lineNo == 3 ? "GSQ2" : "GSQ1");
-        line.setOrderType(lineNo == 3 ? "批量订单" : "样品订单");
+        line.setOrderType(lineNo == 3 ? "备货订单" : "正式订单");
         line.setSalesMaterialNo(salesMaterialNo);
         line.setInternalProjectNo(lineNo == 3 ? "IP-002" : "IP-001");
         line.setCustomerDeliveryDate(LocalDate.of(2026, 8, 1));

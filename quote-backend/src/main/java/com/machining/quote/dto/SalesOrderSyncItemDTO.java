@@ -6,6 +6,8 @@ import lombok.Data;
 @Data
 @JsonInclude(JsonInclude.Include.ALWAYS)
 public class SalesOrderSyncItemDTO {
+    private Long allocationId;
+    private String allocationType;
     private String saleOrderItemNo;
     private String materialNo;
     private Integer releasedQty;

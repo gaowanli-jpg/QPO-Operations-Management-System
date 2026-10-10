@@ -128,7 +128,6 @@ public class SalesOrderQpoImportService {
             List<MultipartFile> versionDrawings,
             List<MultipartFile> drawingFolderFiles,
             String drawingFolderName) {
-        validateImportDefaults(defaults);
         return importQpoInternal(excelFile, customerId, documentTypeCode, defaults, drawings, versionDrawings, drawingFolderFiles, drawingFolderName);
     }
 
@@ -141,6 +140,7 @@ public class SalesOrderQpoImportService {
             List<MultipartFile> versionDrawings,
             List<MultipartFile> drawingFolderFiles,
             String drawingFolderName) {
+        validateImportDefaults(defaults);
         validateFile(excelFile);
         CustomerMaster customer = requireCustomer(customerId);
         if (dataScopeService != null) {

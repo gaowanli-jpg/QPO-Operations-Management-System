@@ -280,10 +280,10 @@ class CoreDeliveryWorkflowIntegrationTest extends CoreWorkflowIntegrationTestSup
         itemMapper.updateById(item);
 
         ensureCustomer(order.getCustomerName());
-        List<OrderDeliveryTicket> firstBatch = deliveryService.generateTickets(deliveryReq(order, item, 4, "预测订单"));
+        List<OrderDeliveryTicket> firstBatch = deliveryService.generateTickets(deliveryReq(order, item, 4, "正式订单"));
         assertThat(firstBatch).hasSize(1);
         assertThat(firstBatch.get(0).getQty()).isEqualTo(4);
-        assertThat(firstBatch.get(0).getOrderType()).isEqualTo("预测订单");
+        assertThat(firstBatch.get(0).getOrderType()).isEqualTo("正式订单");
         ItemQuoteVersion partiallyReleasedItem = itemMapper.selectById(item.getId());
         assertThat(partiallyReleasedItem.getStatus()).isEqualTo(QuoteStatusWorkflow.QUOTED);
         assertThat(partiallyReleasedItem.getRepeatMatchEligible()).isTrue();
@@ -292,7 +292,7 @@ class CoreDeliveryWorkflowIntegrationTest extends CoreWorkflowIntegrationTestSup
         List<OrderDeliveryTicket> secondBatch = deliveryService.generateTickets(deliveryReq(order, item, 6, "正式订单"));
         assertThat(secondBatch).hasSize(1);
         assertThat(secondBatch.get(0).getQty()).isEqualTo(6);
-        assertThat(secondBatch.get(0).getOrderType()).isEqualTo("预测订单");
+        assertThat(secondBatch.get(0).getOrderType()).isEqualTo("正式订单");
 
         QueryWrapper<OrderDeliveryTicket> ticketQw = new QueryWrapper<>();
         ticketQw.eq("rfq_id", order.getId()).eq("item_id", item.getId()).orderByAsc("id");
@@ -300,7 +300,7 @@ class CoreDeliveryWorkflowIntegrationTest extends CoreWorkflowIntegrationTestSup
         assertThat(tickets).extracting(OrderDeliveryTicket::getQty)
                 .containsExactly(4, 6);
         assertThat(tickets).extracting(OrderDeliveryTicket::getOrderType)
-                .containsExactly("预测订单", "预测订单");
+                .containsExactly("正式订单", "正式订单");
         assertThat(tickets).allSatisfy(ticket -> assertThat(ticket.getProcessRoute()).isNotNull());
 
         List<ProcessSheetDTO> sheets = deliveryService.listProcessSheets(order.getId());

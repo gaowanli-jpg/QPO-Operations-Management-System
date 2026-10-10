@@ -6,6 +6,7 @@ import com.machining.quote.domain.QuoteStatusWorkflow;
 import com.machining.quote.dto.ReleaseSourceType;
 import com.machining.quote.dto.SalesOrderQpoExcelLineDTO;
 import com.machining.quote.dto.SalesOrderQpoExcelParseResult;
+import com.machining.quote.dto.SalesOrderQpoImportDefaultsDTO;
 import com.machining.quote.dto.SalesOrderQpoImportResp;
 import com.machining.quote.dto.SalesOrderQpoOrderGroupDTO;
 import com.machining.quote.dto.SalesOrderAutoSnapshotCompletionResult;
@@ -98,7 +99,7 @@ class SalesOrderQpoImportAutoDeliveryWorkflowTest extends SalesOrderQpoImportTes
         );
         ReflectionTestUtils.setField(service, "autoMesMaterialSyncService", autoMesMaterialSyncService);
         when(customerMapper.selectById(7L)).thenReturn(customer());
-        when(parser.parse(any(InputStream.class))).thenReturn(parseResultWithBlankPrices());
+        when(parser.parse(any(InputStream.class), any(SalesOrderQpoImportDefaultsDTO.class))).thenReturn(parseResultWithBlankPrices());
         when(headerMapper.selectCount(any())).thenReturn(0L);
         doAnswer(invocation -> {
             SalesOrderImportBatch batch = invocation.getArgument(0);
@@ -134,7 +135,10 @@ class SalesOrderQpoImportAutoDeliveryWorkflowTest extends SalesOrderQpoImportTes
                         "xlsx".getBytes(StandardCharsets.UTF_8)
                 ),
                 7L,
-                "SO01"
+                "SO01",
+                validImportDefaults(),
+                List.of(),
+                List.of()
         );
 
         org.mockito.InOrder inOrder = org.mockito.Mockito.inOrder(itemMapper, matchService, deliveryService);
@@ -194,7 +198,7 @@ class SalesOrderQpoImportAutoDeliveryWorkflowTest extends SalesOrderQpoImportTes
         );
         ReflectionTestUtils.setField(service, "autoMesMaterialSyncService", autoMesMaterialSyncService);
         when(customerMapper.selectById(7L)).thenReturn(customer());
-        when(parser.parse(any(InputStream.class))).thenReturn(parseResultWithBlankPrices());
+        when(parser.parse(any(InputStream.class), any(SalesOrderQpoImportDefaultsDTO.class))).thenReturn(parseResultWithBlankPrices());
         when(headerMapper.selectCount(any())).thenReturn(0L);
         doAnswer(invocation -> {
             SalesOrderImportBatch batch = invocation.getArgument(0);
@@ -233,7 +237,10 @@ class SalesOrderQpoImportAutoDeliveryWorkflowTest extends SalesOrderQpoImportTes
                         "xlsx".getBytes(StandardCharsets.UTF_8)
                 ),
                 7L,
-                "SO01"
+                "SO01",
+                validImportDefaults(),
+                List.of(),
+                List.of()
         );
 
         assertThat(resp.isSuccess()).isTrue();
@@ -275,7 +282,7 @@ class SalesOrderQpoImportAutoDeliveryWorkflowTest extends SalesOrderQpoImportTes
         );
         ReflectionTestUtils.setField(service, "autoMesMaterialSyncService", autoMesMaterialSyncService);
         when(customerMapper.selectById(7L)).thenReturn(customer());
-        when(parser.parse(any(InputStream.class))).thenReturn(parseResult());
+        when(parser.parse(any(InputStream.class), any(SalesOrderQpoImportDefaultsDTO.class))).thenReturn(parseResult());
         when(headerMapper.selectCount(any())).thenReturn(0L);
         doAnswer(invocation -> {
             SalesOrderImportBatch batch = invocation.getArgument(0);
@@ -310,7 +317,10 @@ class SalesOrderQpoImportAutoDeliveryWorkflowTest extends SalesOrderQpoImportTes
                         "xlsx".getBytes(StandardCharsets.UTF_8)
                 ),
                 7L,
-                "SO01"
+                "SO01",
+                validImportDefaults(),
+                List.of(),
+                List.of()
         );
 
         assertThat(resp.isSuccess()).isTrue();
@@ -370,7 +380,7 @@ class SalesOrderQpoImportAutoDeliveryWorkflowTest extends SalesOrderQpoImportTes
         long[] nextRecordId = {401L};
 
         when(customerMapper.selectById(7L)).thenReturn(customer());
-        when(parser.parse(any(InputStream.class))).thenReturn(parseResultWithMatchedUnmatchedImportFacts());
+        when(parser.parse(any(InputStream.class), any(SalesOrderQpoImportDefaultsDTO.class))).thenReturn(parseResultWithMatchedUnmatchedImportFacts());
         when(headerMapper.selectCount(any())).thenReturn(0L);
         doAnswer(invocation -> {
             SalesOrderImportBatch batch = invocation.getArgument(0);
@@ -427,7 +437,9 @@ class SalesOrderQpoImportAutoDeliveryWorkflowTest extends SalesOrderQpoImportTes
                 ),
                 7L,
                 "SO01",
-                List.of(new MockMultipartFile("drawings", "P-MATCH.pdf", "application/pdf", "pdf".getBytes(StandardCharsets.UTF_8)))
+                validImportDefaults(),
+                List.of(new MockMultipartFile("drawings", "P-MATCH.pdf", "application/pdf", "pdf".getBytes(StandardCharsets.UTF_8))),
+                List.of()
         );
 
         assertThat(resp.isSuccess()).isTrue();

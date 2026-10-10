@@ -89,6 +89,8 @@ public class WmsReservationStateService {
     private ProcessRouteSnapshotService processRouteSnapshotService = new ProcessRouteSnapshotService();
     @Autowired(required = false)
     private JsonSnapshotCopyService jsonSnapshotCopyService = new JsonSnapshotCopyService();
+    @Autowired
+    private com.machining.quote.service.SalesOrderAllocationLinkService salesOrderAllocationLinkService;
 
     @Transactional
     public ReservationBatchContext reserveBatch(Long taskId, WmsReservationPlanService.ReservationGroup group) {
@@ -298,6 +300,7 @@ public class WmsReservationStateService {
 
     private void applyTicket(WmsReservationTicket reservationTicket) {
         requireTicketBuckets(reservationTicket);
+        salesOrderAllocationLinkService.lockSalesOrderForTicket(reservationTicket.getTicketId());
         OrderDeliveryTicket ticket = ticketSourceMapper.selectByIdForUpdate(reservationTicket.getTicketId());
         if (ticket == null) {
             throw new IllegalStateException("delivery ticket not found ticketId=" + reservationTicket.getTicketId());
@@ -324,6 +327,8 @@ public class WmsReservationStateService {
         insertPositiveAllocation(ticket, reservationTicket, TYPE_IN_STOCK, reservationTicket.getStockFrozenCount(), existingTypes);
         insertPositiveAllocation(ticket, reservationTicket, TYPE_IN_PRODUCTION, reservationTicket.getInProductionCount(), existingTypes);
         applyProductionRemainder(ticket, reservationTicket, ticketAllocations);
+        salesOrderAllocationLinkService.syncWmsAllocations(
+                ticket, allocationMapper.selectByTicketIdForUpdate(ticket.getId()));
 
         OrderDeliveryTicket ticketUpdate = new OrderDeliveryTicket();
         ticketUpdate.setId(ticket.getId());
@@ -351,13 +356,17 @@ public class WmsReservationStateService {
                         .sorted(Comparator.comparing(OrderDeliveryTicketAllocation::getId))
                         .collect(Collectors.toCollection(ArrayList::new));
         BigDecimal remainder = reservationTicket.getSurplusCount();
+        OrderDeliveryTicketAllocation primary = productionRows.isEmpty() ? null : productionRows.remove(0);
+        boolean productionQtyChangedAfterWmsSubmission = primary != null
+                && !Objects.equals(primary.getQty(), reservationTicket.getReserveCount().intValueExact());
         if (remainder.signum() > 0) {
-            if (productionRows.isEmpty()) {
+            if (primary == null) {
                 insertPositiveAllocation(ticket, reservationTicket, TYPE_PRODUCTION_REQUIRED, remainder, new HashSet<>());
             } else {
-                OrderDeliveryTicketAllocation primary = productionRows.remove(0);
-                primary.setQty(remainder.intValueExact());
-                primary.setTicketQty(ticket.getQty());
+                if (!productionQtyChangedAfterWmsSubmission) {
+                    primary.setQty(remainder.intValueExact());
+                }
+                primary.setTicketQty(reservationTicket.getReserveCount().intValueExact());
                 primary.setMaterialNo(ticket.getMaterialNo());
                 primary.setWmsReservationTicketId(reservationTicket.getId());
                 primary.setMesProductionStatus("PENDING");
@@ -369,20 +378,29 @@ public class WmsReservationStateService {
                 allocationMapper.updateById(primary);
             }
         }
+        if (remainder.signum() == 0 && primary != null) {
+            if (!productionQtyChangedAfterWmsSubmission) {
+                primary.setQty(0);
+            }
+            primary.setTicketQty(reservationTicket.getReserveCount().intValueExact());
+            primary.setWmsReservationTicketId(reservationTicket.getId());
+            primary.setMesProductionStatus("PENDING");
+            primary.setMesProductionRequestId(null);
+            primary.setMesProductionExternalId(null);
+            primary.setMesProductionSyncedAt(null);
+            primary.setMesProductionMessage(null);
+            primary.setUpdatedAt(LocalDateTime.now());
+            allocationMapper.updateById(primary);
+        }
+        if (remainder.signum() == 0 && primary == null) {
+            OrderDeliveryTicketAllocation zeroProduction = allocationRow(
+                    ticket, reservationTicket, TYPE_PRODUCTION_REQUIRED, 0);
+            allocationMapper.insert(zeroProduction);
+        }
         for (OrderDeliveryTicketAllocation replaced : productionRows) {
             replaced.setStatus("SUPERSEDED");
             replaced.setUpdatedAt(LocalDateTime.now());
             allocationMapper.updateById(replaced);
-        }
-        if (remainder.signum() == 0) {
-            ticketAllocations.stream()
-                    .filter(row -> TYPE_PRODUCTION_REQUIRED.equalsIgnoreCase(trim(row.getAllocationType())))
-                    .filter(row -> ALLOCATION_ACTIVE.equalsIgnoreCase(trim(row.getStatus())))
-                    .forEach(row -> {
-                        row.setStatus("SUPERSEDED");
-                        row.setUpdatedAt(LocalDateTime.now());
-                        allocationMapper.updateById(row);
-                    });
         }
     }
 

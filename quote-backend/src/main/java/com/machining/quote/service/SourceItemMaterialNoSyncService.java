@@ -25,6 +25,8 @@ public class SourceItemMaterialNoSyncService {
     private SalesOrderItemMapper salesOrderItemMapper;
     @Autowired
     private OrderDeliveryTicketMapper ticketMapper;
+    @Autowired(required = false)
+    private SalesOrderAllocationLinkService salesOrderAllocationLinkService;
 
     @Transactional
     public void assertMaterialWritable(OrderDeliveryTicket ticket, String materialNo) {
@@ -102,6 +104,9 @@ public class SourceItemMaterialNoSyncService {
     }
 
     private LockedTargets lockTargets(OrderDeliveryTicket ticket) {
+        if (salesOrderAllocationLinkService != null && ticket != null && ticket.getId() != null) {
+            salesOrderAllocationLinkService.lockSalesOrderForTicket(ticket.getId());
+        }
         OrderDeliveryTicket lockedTicket = lockTicket(ticket);
         SourceRef source = resolveSource(lockedTicket);
         if (source == null) {

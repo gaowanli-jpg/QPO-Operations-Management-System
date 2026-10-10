@@ -13,17 +13,35 @@ import com.machining.quote.entity.DictMaterial;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.OrderRfq;
+import com.machining.quote.storage.FileStorageConfig;
+import com.machining.quote.storage.FileStorageConfigService;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.mock.web.MockMultipartFile;
 
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.when;
 
 class RfqSupplementalDrawingEndToEndTest extends CoreWorkflowIntegrationTestSupport {
+    @MockBean
+    private FileStorageConfigService fileStorageConfigService;
+
+    @BeforeEach
+    void configureIsolatedLocalStorage() {
+        String storageRoot = Path.of(
+                System.getProperty("java.io.tmpdir"),
+                "qpo-rfq-supplemental-drawing-e2e",
+                String.valueOf(System.nanoTime())).toString();
+        when(fileStorageConfigService.activeConfig())
+                .thenReturn(FileStorageConfig.local(null, "E2E local storage", storageRoot, null));
+    }
 
     @Test
     void noDrawingSupplementalItemFlowsThroughPricingQuoteConfirmationAndAppendRelease() {

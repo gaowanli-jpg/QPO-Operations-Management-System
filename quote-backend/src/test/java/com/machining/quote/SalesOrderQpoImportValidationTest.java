@@ -103,7 +103,10 @@ class SalesOrderQpoImportValidationTest extends SalesOrderQpoImportTestSupport {
         assertThatThrownBy(() -> service.importQpo(
                 new MockMultipartFile("excelFile", "sales.xlsx", "application/vnd.ms-excel", "x".getBytes(StandardCharsets.UTF_8)),
                 7L,
-                "SO01"
+                "SO01",
+                validImportDefaults(),
+                null,
+                null
         ))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("No data permission");
@@ -162,7 +165,10 @@ class SalesOrderQpoImportValidationTest extends SalesOrderQpoImportTestSupport {
         assertThatThrownBy(() -> service.importQpo(
                 new MockMultipartFile("excelFile", "sales.xlsx", "application/vnd.ms-excel", "x".getBytes(StandardCharsets.UTF_8)),
                 404L,
-                "SO01"
+                "SO01",
+                validImportDefaults(),
+                null,
+                null
         ))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("\u5ba2\u6237");

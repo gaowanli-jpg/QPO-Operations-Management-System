@@ -66,6 +66,7 @@ public class ProductionItemService {
         }
         QueryWrapper<LockedItemDTO> query = new QueryWrapper<>();
         query.eq("alloc.allocation_type", PRODUCTION_REQUIRED_TYPE);
+        query.gt("alloc.qty", 0);
         query.apply("COALESCE(alloc.status, 'ACTIVE') = 'ACTIVE'");
         applyProductionActiveScope(query);
         applyDiscardedScope(query, Boolean.FALSE);
@@ -100,6 +101,7 @@ public class ProductionItemService {
     private QueryWrapper<LockedItemDTO> buildQuery(ProductionItemQueryReq req) {
         QueryWrapper<LockedItemDTO> query = new QueryWrapper<>();
         query.eq("alloc.allocation_type", PRODUCTION_REQUIRED_TYPE);
+        query.gt("alloc.qty", 0);
         query.apply("COALESCE(alloc.status, 'ACTIVE') = 'ACTIVE'");
         applyCustomerFilter(query, req.getCustomerCode(), req.getCustomerName());
         applyLike(query, "alloc.rfq_no", req.getRfqNo());

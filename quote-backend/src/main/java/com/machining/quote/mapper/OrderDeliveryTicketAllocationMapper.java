@@ -25,8 +25,12 @@ public interface OrderDeliveryTicketAllocationMapper extends BaseMapper<OrderDel
 
     @Select("""
             <script>
-            SELECT alloc.*
+            SELECT alloc.*,
+                   alloc.id AS allocation_id,
+                   sales_item.id AS sales_order_item_id,
+                   sales_item.line_no AS sales_order_item_line_no
             FROM order_delivery_ticket_allocation alloc
+            LEFT JOIN sales_order_item sales_item ON sales_item.allocation_id = alloc.id
             WHERE alloc.ticket_id IN
             <foreach collection="ticketIds" item="ticketId" open="(" separator="," close=")">
                 #{ticketId}
@@ -135,6 +139,9 @@ public interface OrderDeliveryTicketAllocationMapper extends BaseMapper<OrderDel
             <script>
             SELECT
                 alloc.id,
+                alloc.id AS allocation_id,
+                sales_item.id AS sales_order_item_id,
+                sales_item.line_no AS sales_order_item_line_no,
                 alloc.ticket_id,
                 alloc.rfq_id,
                 alloc.rfq_no,
@@ -194,6 +201,7 @@ public interface OrderDeliveryTicketAllocationMapper extends BaseMapper<OrderDel
             FROM order_delivery_ticket_allocation alloc
             LEFT JOIN order_rfq rfq ON rfq.id = alloc.rfq_id
             LEFT JOIN order_delivery_ticket ticket ON ticket.id = alloc.ticket_id
+            LEFT JOIN sales_order_item sales_item ON sales_item.allocation_id = alloc.id
             ${ew.customSqlSegment}
             ORDER BY alloc.id DESC
             LIMIT #{limit} OFFSET #{offset}
@@ -201,6 +209,9 @@ public interface OrderDeliveryTicketAllocationMapper extends BaseMapper<OrderDel
             """)
     @Results(id = "lockedItemResultMap", value = {
             @Result(column = "id", property = "id", id = true),
+            @Result(column = "allocation_id", property = "allocationId"),
+            @Result(column = "sales_order_item_id", property = "salesOrderItemId"),
+            @Result(column = "sales_order_item_line_no", property = "salesOrderItemLineNo"),
             @Result(column = "engineering_material_code", property = "engineeringMaterialCode"),
             @Result(column = "engineering_material_type_code", property = "engineeringMaterialTypeCode"),
             @Result(column = "engineering_material_type_name", property = "engineeringMaterialTypeName"),

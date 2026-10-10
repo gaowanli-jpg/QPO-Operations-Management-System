@@ -216,6 +216,7 @@ public class LockedItemService {
 
     private void applyLockedStockScope(QueryWrapper<LockedItemDTO> query) {
         query.in("alloc.allocation_type", LOCKED_STOCK_TYPES);
+        query.gt("alloc.qty", 0);
     }
 
     private void applyDiscardedScope(QueryWrapper<?> query, Boolean discarded) {

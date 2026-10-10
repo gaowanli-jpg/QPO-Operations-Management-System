@@ -50,6 +50,7 @@ public class SalesOrderManageService {
     private static final String ACTION_ITEM_RESTORE = "SALES_ORDER_ITEM_U9_CHANGE_RESTORE";
     private static final String ACTION_DRAWING_SUPPLEMENT = "SALES_ORDER_DRAWING_SUPPLEMENT";
     private static final String ACTION_DRAWING_REPLACE = "SALES_ORDER_DRAWING_REPLACE";
+    private static final String U9_STATUS_SYNCED = "已同步";
     private static final String U9_STATUS_SYNCING = "同步中";
     private static final String U9_STATUS_PENDING_CONFIRMATION = "结果待确认";
 
@@ -1083,6 +1084,13 @@ public class SalesOrderManageService {
     }
 
     private void validateSalesOrderDiscardAllowed(SalesOrderHeader order, String fromStatus, String rejectionMessage) {
+        String u9Status = order == null ? null : order.getU9SyncStatus();
+        if (U9_STATUS_SYNCED.equals(u9Status)) {
+            throw new RuntimeException("已同步 U9 的销售订单不能废弃。");
+        }
+        if (U9_STATUS_SYNCING.equals(u9Status) || U9_STATUS_PENDING_CONFIRMATION.equals(u9Status)) {
+            throw new RuntimeException("U9 状态为" + u9Status + "，不能废弃销售订单。");
+        }
         if (!QuoteStatusWorkflow.RELEASED.equals(fromStatus)) {
             throw new RuntimeException("只有已生成提单的销售订单可以废弃。");
         }

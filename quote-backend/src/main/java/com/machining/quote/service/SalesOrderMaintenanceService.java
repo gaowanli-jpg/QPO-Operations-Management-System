@@ -7,11 +7,14 @@ import com.machining.quote.dto.SalesOrderItemUpdateReq;
 import com.machining.quote.dto.SalesOrderItemFieldReplacementReq;
 import com.machining.quote.dto.SalesOrderMaintenanceOrderUpdateReq;
 import com.machining.quote.dto.SalesOrderMaintenanceUpdateResp;
+import com.machining.quote.dto.AllocationSplitBatchReq;
+import com.machining.quote.dto.AllocationSplitQtyReq;
 import com.machining.quote.entity.DictPricingMarkupFee;
 import com.machining.quote.entity.SalesOrderHeader;
 import com.machining.quote.entity.SalesOrderItem;
 import com.machining.quote.mapper.DictPricingMarkupFeeMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
+import com.machining.quote.mapper.OrderDeliveryTicketAllocationMapper;
 import com.machining.quote.mapper.SalesOrderHeaderMapper;
 import com.machining.quote.mapper.SalesOrderItemMapper;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -63,6 +66,10 @@ public class SalesOrderMaintenanceService {
     private DictPricingMarkupFeeMapper pricingMarkupFeeMapper;
     @Autowired(required = false)
     private OrderDeliveryTicketMapper ticketMapper;
+    @Autowired
+    private OrderDeliveryTicketAllocationMapper allocationMapper;
+    @Autowired
+    private SalesOrderAllocationLinkService salesOrderAllocationLinkService;
     @Autowired(required = false)
     private DataScopeService dataScopeService;
     @Autowired(required = false)
@@ -109,20 +116,102 @@ public class SalesOrderMaintenanceService {
 
         int updatedCount = 0;
         Set<String> changedFields = new LinkedHashSet<>();
+        List<Map<String, Object>> allocationQtyChanges = new ArrayList<>();
         LocalDateTime now = LocalDateTime.now();
         for (SalesOrderItemUpdateLineReq line : lines) {
             SalesOrderItem item = lockItem(header, line.getSalesOrderItemId());
+            Integer oldQty = item.getQty();
             Set<String> rowChanged = applyItemLine(header, item, line, now);
             if (rowChanged.isEmpty()) {
                 continue;
             }
             changedFields.addAll(rowChanged);
             updatedCount++;
+            if (rowChanged.contains(SalesOrderItemUpdateLineReq.FIELD_QTY)) {
+                SalesOrderAllocationLinkService.AllocationQuantitySyncResult syncResult =
+                        salesOrderAllocationLinkService.syncAllocationQtyFromItem(header, item, oldQty);
+                if (syncResult != null) {
+                    Map<String, Object> change = new LinkedHashMap<>();
+                    change.put("allocationId", syncResult.allocationId());
+                    change.put("salesOrderItemId", syncResult.salesOrderItemId());
+                    change.put("salesOrderItemLineNo", item.getLineNo());
+                    change.put("oldQty", syncResult.oldQty());
+                    change.put("newQty", syncResult.newQty());
+                    change.put("syncedTicket", syncResult.ticketSynced());
+                    allocationQtyChanges.add(change);
+                }
+            }
         }
         auditSuccess(ACTION_ITEM_UPDATE, header, null, itemAuditSummary(header, updatedCount, changedFields), changedFields,
                 System.currentTimeMillis() - startedAt);
+        if (!allocationQtyChanges.isEmpty() && auditService != null) {
+            Map<String, Object> allocationAudit = new LinkedHashMap<>();
+            allocationAudit.put("salesOrderId", header.getId());
+            allocationAudit.put("salesOrderNo", header.getSalesOrderNo());
+            allocationAudit.put("changes", allocationQtyChanges);
+            allocationAudit.put("syncedTicket", allocationQtyChanges.stream()
+                    .anyMatch(change -> Boolean.TRUE.equals(change.get("syncedTicket"))));
+            allocationAudit.put("durationMs", System.currentTimeMillis() - startedAt);
+            auditService.record(
+                    "SALES_ORDER_ALLOCATION_QTY_UPDATE",
+                    TARGET_TYPE,
+                    header.getId(),
+                    null,
+                    allocationAudit,
+                    "MARKET",
+                    "SUCCESS",
+                    AuditService.labelForAction("SALES_ORDER_ALLOCATION_QTY_UPDATE"),
+                    null);
+        }
         return response(header, updatedCount, changedFields, "销售订单零件信息已保存。");
     }
+
+    @Transactional
+    public SalesOrderMaintenanceUpdateResp saveAllocationSplits(Long salesOrderId, AllocationSplitBatchReq req) {
+        long startedAt = System.currentTimeMillis();
+        if (salesOrderId == null || req == null || req.getItems() == null || req.getItems().isEmpty()) {
+            throw new RuntimeException("请提供需要保存的锁库拆分数量");
+        }
+        SalesOrderHeader header = headerMapper.selectByIdForUpdate(salesOrderId);
+        if (header == null) {
+            throw new RuntimeException("销售订单不存在");
+        }
+        assertDataScope(header);
+        List<Map<String, Object>> changes = new ArrayList<>();
+        Set<Integer> seen = new LinkedHashSet<>();
+        boolean syncedTicket = false;
+        for (AllocationSplitQtyReq line : req.getItems()) {
+            if (line == null || line.getAllocationId() == null || !seen.add(line.getAllocationId())) {
+                throw new RuntimeException("锁库拆分行不能为空且不能重复");
+            }
+            validateQty(line.getQty());
+            SalesOrderItem item = salesOrderAllocationLinkService.lockItemByAllocation(salesOrderId, line.getAllocationId());
+            com.machining.quote.entity.OrderDeliveryTicketAllocation allocation =
+                    allocationMapper.selectByIdForUpdate(line.getAllocationId());
+            Integer oldQty = allocation.getQty();
+            salesOrderAllocationLinkService.updateLinkedQuantity(item, allocation, line.getQty());
+            syncedTicket |= salesOrderAllocationLinkService.syncTicketQtyIfWmsPending(allocation, line.getQty());
+            Map<String, Object> change = new LinkedHashMap<>();
+            change.put("allocationId", line.getAllocationId());
+            change.put("salesOrderItemId", item.getId());
+            change.put("salesOrderItemLineNo", item.getLineNo());
+            change.put("oldQty", oldQty);
+            change.put("newQty", line.getQty());
+            changes.add(change);
+        }
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("salesOrderId", header.getId());
+        summary.put("salesOrderNo", header.getSalesOrderNo());
+        summary.put("changes", changes);
+        summary.put("syncedTicket", syncedTicket);
+        summary.put("durationMs", System.currentTimeMillis() - startedAt);
+        if (auditService != null) {
+            auditService.record("SALES_ORDER_ALLOCATION_QTY_UPDATE", "sales_order_header", header.getId(), null,
+                    summary, "MARKET", "SUCCESS", AuditService.labelForAction("SALES_ORDER_ALLOCATION_QTY_UPDATE"), null);
+        }
+        return response(header, changes.size(), Set.of("qty"), "锁库拆分数量已保存");
+    }
+
 
     @Transactional
     public SalesOrderMaintenanceUpdateResp replaceItemField(Long salesOrderId, SalesOrderItemFieldReplacementReq req) {
@@ -380,7 +469,7 @@ public class SalesOrderMaintenanceService {
         if (itemId == null) {
             throw new RuntimeException("销售订单零件行 ID 不能为空");
         }
-        SalesOrderItem item = itemMapper.selectByIdForUpdate(itemId);
+        SalesOrderItem item = salesOrderAllocationLinkService.lockItemForMutation(header.getId(), itemId);
         if (item == null) {
             throw new RuntimeException("销售订单零件行不存在：" + itemId);
         }
@@ -527,8 +616,8 @@ public class SalesOrderMaintenanceService {
     }
 
     private void validateQty(Integer qty) {
-        if (qty == null || qty <= 0) {
-            throw new RuntimeException("数量必须为正整数");
+        if (qty == null || qty < 0) {
+            throw new RuntimeException("数量必须大于等于 0");
         }
     }
 

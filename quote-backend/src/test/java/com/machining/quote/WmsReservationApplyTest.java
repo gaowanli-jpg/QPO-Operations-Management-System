@@ -15,6 +15,7 @@ import com.machining.quote.mapper.WmsReservationTicketMapper;
 import com.machining.quote.service.wms.WmsReservationContractValidator;
 import com.machining.quote.service.wms.WmsReservationFingerprintService;
 import com.machining.quote.service.wms.WmsReservationStateService;
+import com.machining.quote.service.SalesOrderAllocationLinkService;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -137,7 +138,7 @@ class WmsReservationApplyTest {
     }
 
     @Test
-    void fullInventoryCoverageSupersedesDefaultProductionRowWithoutCreatingZeroQuantityRow() {
+    void fullInventoryCoverageKeepsDefaultProductionRowAtZeroWithoutCreatingZeroQuantityRow() {
         Fixture fixture = fixture();
         WmsSaleLadingReserveReq request = request("QPO-WMS-2", "SO-100", requestItem("MAT-A", "5", "remark"));
         WmsReservationBatch batch = batch(502L, "RESPONSE_RECEIVED", request);
@@ -164,8 +165,37 @@ class WmsReservationApplyTest {
         ArgumentCaptor<OrderDeliveryTicketAllocation> replacedRow = ArgumentCaptor.forClass(OrderDeliveryTicketAllocation.class);
         verify(fixture.allocationMapper).updateById(replacedRow.capture());
         assertThat(replacedRow.getValue().getId()).isEqualTo(902);
-        assertThat(replacedRow.getValue().getStatus()).isEqualTo("SUPERSEDED");
+        assertThat(replacedRow.getValue().getStatus()).isEqualTo("ACTIVE");
+        assertThat(replacedRow.getValue().getQty()).isEqualTo(0);
         assertThat(newRows.getAllValues().stream().mapToInt(OrderDeliveryTicketAllocation::getQty).sum()).isEqualTo(5);
+    }
+
+    @Test
+    void fullInventoryCoverageRepairsMissingProductionRowAtZero() {
+        Fixture fixture = fixture();
+        WmsSaleLadingReserveReq request = request("QPO-WMS-3", "SO-101", requestItem("MAT-B", "5", "remark"));
+        WmsReservationBatch batch = batch(503L, "RESPONSE_RECEIVED", request);
+        WmsReservationItem item = item(703L, "MAT-B", "5", "remark");
+        WmsReservationTicket ticket = reservationTicket(803L, 503L, 703L, 103, 1003L, 21, "MAT-B", "5");
+        ticket.setStockFrozenCount(new BigDecimal("5"));
+        ticket.setInProductionCount(BigDecimal.ZERO);
+        ticket.setSurplusCount(BigDecimal.ZERO);
+        when(fixture.batchMapper.selectById(503L)).thenReturn(batch);
+        when(fixture.itemMapper.selectList(any())).thenReturn(List.of(item));
+        when(fixture.ticketMapper.selectByBatchId(503L)).thenReturn(List.of(ticket));
+        when(fixture.ticketSourceMapper.selectByIdForUpdate(103)).thenReturn(deliveryTicket(103, "MAT-B", 5));
+        when(fixture.allocationMapper.selectByWmsReservationTicketId(803L)).thenReturn(List.of());
+        when(fixture.allocationMapper.selectByTicketIdForUpdate(103)).thenReturn(List.of());
+
+        fixture.service.applyResponse(503L);
+
+        ArgumentCaptor<OrderDeliveryTicketAllocation> newRows = ArgumentCaptor.forClass(OrderDeliveryTicketAllocation.class);
+        verify(fixture.allocationMapper, times(2)).insert(newRows.capture());
+        assertThat(newRows.getAllValues()).extracting(OrderDeliveryTicketAllocation::getAllocationType)
+                .containsExactly("IN_STOCK_LOCK", "PRODUCTION_REQUIRED");
+        OrderDeliveryTicketAllocation production = newRows.getAllValues().get(1);
+        assertThat(production.getQty()).isZero();
+        assertThat(production.getWmsReservationTicketId()).isEqualTo(803L);
     }
 
     @Test
@@ -373,6 +403,7 @@ class WmsReservationApplyTest {
             ReflectionTestUtils.setField(service, "allocationMapper", allocationMapper);
             ReflectionTestUtils.setField(service, "validator", new WmsReservationContractValidator());
             ReflectionTestUtils.setField(service, "fingerprintService", new WmsReservationFingerprintService());
+            ReflectionTestUtils.setField(service, "salesOrderAllocationLinkService", mock(SalesOrderAllocationLinkService.class));
             doAnswer(invocation -> 1).when(batchMapper).updateById(any(WmsReservationBatch.class));
             doAnswer(invocation -> 1).when(itemMapper).updateById(any(WmsReservationItem.class));
             doAnswer(invocation -> 1).when(ticketMapper).updateById(any(WmsReservationTicket.class));

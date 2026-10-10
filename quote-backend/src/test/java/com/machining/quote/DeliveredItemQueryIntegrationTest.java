@@ -129,16 +129,16 @@ class DeliveredItemQueryIntegrationTest {
         PageResult<DeliveredItemDTO> activePage = deliveredItemService.listTickets(activeReq);
 
         assertThat(partNos(activePage))
-                .contains("NO-MAT", "WAIT-MES", "WMS-FAIL", "MISSING-ALLOC")
-                .doesNotContain("DONE");
+                .contains("NO-MAT", "WAIT-MES")
+                .doesNotContain("DONE", "WMS-FAIL", "MISSING-ALLOC");
 
         DeliveredItemQueryReq completedReq = new DeliveredItemQueryReq();
         completedReq.setPage(1);
         completedReq.setPageSize(50);
         completedReq.setFlowScope("COMPLETED");
         assertThat(partNos(deliveredItemService.listTickets(completedReq)))
-                .contains("DONE")
-                .doesNotContain("NO-MAT", "WAIT-MES", "WMS-FAIL", "MISSING-ALLOC");
+                .contains("DONE", "WMS-FAIL", "MISSING-ALLOC")
+                .doesNotContain("NO-MAT", "WAIT-MES");
 
         DeliveredItemQueryReq allReq = new DeliveredItemQueryReq();
         allReq.setPage(1);
@@ -153,7 +153,7 @@ class DeliveredItemQueryIntegrationTest {
     }
 
     @Test
-    void flowStageFiltersActivePoolByBusinessStageWithoutBypassingDataScope() {
+    void flowStageFiltersActivePoolByMesStageWithoutBypassingDataScope() {
         int legacyUserId = uniqueLegacyId();
         long roleId = insertRole("CUSTOMER");
         long userId = insertUser(legacyUserId);
@@ -182,14 +182,6 @@ class DeliveredItemQueryIntegrationTest {
         assertThat(partNos(deliveredItemService.listTickets(needMaterialReq)))
                 .contains("STAGE-NO-MAT", "STAGE-MES-FAIL")
                 .doesNotContain("STAGE-WMS-PENDING", "STAGE-WMS-FAIL", "STAGE-DONE", "STAGE-OTHER-CUSTOMER");
-
-        DeliveredItemQueryReq needWmsReq = new DeliveredItemQueryReq();
-        needWmsReq.setPage(1);
-        needWmsReq.setPageSize(50);
-        needWmsReq.setFlowStage("NEED_WMS");
-        assertThat(partNos(deliveredItemService.listTickets(needWmsReq)))
-                .contains("STAGE-WMS-PENDING", "STAGE-WMS-FAIL")
-                .doesNotContain("STAGE-NO-MAT", "STAGE-MES-FAIL", "STAGE-DONE", "STAGE-OTHER-CUSTOMER");
 
         DeliveredItemQueryReq mesFailedReq = new DeliveredItemQueryReq();
         mesFailedReq.setPage(1);

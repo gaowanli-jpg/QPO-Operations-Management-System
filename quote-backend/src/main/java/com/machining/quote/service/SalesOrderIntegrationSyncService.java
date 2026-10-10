@@ -111,6 +111,8 @@ public class SalesOrderIntegrationSyncService {
             throw new IllegalArgumentException("sales_order_item.line_no must be a positive system sequence for external sales order sync");
         }
         SalesOrderSyncItemDTO record = new SalesOrderSyncItemDTO();
+        record.setAllocationId(item.getAllocationId());
+        record.setAllocationType(item.getAllocationType());
         record.setSaleOrderItemNo(String.valueOf(item.getLineNo()));
         record.setMaterialNo(item.getMaterialNo());
         record.setReleasedQty(nonNegative(item.getQty()));

@@ -85,6 +85,8 @@ public class SalesOrderIntegrationSqlProvider {
                   soi.internal_project_no,
                   soi.customer_order_no,
                   soi.customer_project_no,
+                  soi.allocation_id,
+                  soi.allocation_type,
                   GREATEST(COALESCE(soi.qty, 0), 0) AS qty
                 FROM sales_order_item soi
                 WHERE soi.sales_order_id IN

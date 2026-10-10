@@ -22,6 +22,8 @@ public class SalesOrderItem {
     private Long sourceOrderId;
     private Long sourceItemId;
     private Integer sourceTicketId;
+    private Long allocationId;
+    private String allocationType;
     private LocalDate salesOrderDate;
     private Integer lineNo;
     private String partNo;

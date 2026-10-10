@@ -202,7 +202,7 @@ class SalesOrderManagementGovernanceTest {
     }
 
     @Test
-    void nonReleasedSalesOrdersCannotBeDiscardedButSyncedReleasedOrdersCan() throws Exception {
+    void nonReleasedAndU9SyncedSalesOrdersCannotBeDiscarded() throws Exception {
         Fixture partiallyReleased = fixture(header(300L, QuoteStatusWorkflow.PARTIALLY_RELEASED), List.of(), 0L);
         assertThatThrownBy(() -> invokeStatusAction(partiallyReleased.service, "discard", 300L, "不能废弃"))
                 .isInstanceOf(RuntimeException.class)
@@ -213,9 +213,11 @@ class SalesOrderManagementGovernanceTest {
         SalesOrderHeader syncedHeader = header(301L, QuoteStatusWorkflow.RELEASED);
         syncedHeader.setU9SyncStatus("已同步");
         Fixture synced = fixture(syncedHeader, List.of(), 0L);
-        Object syncedDiscardResult = invokeStatusAction(synced.service, "discard", 301L, "同步后业务废弃");
-        assertThat(String.valueOf(syncedDiscardResult)).contains(QuoteStatusWorkflow.DISCARDED);
-        verify(synced.headerMapper).updateById(any(SalesOrderHeader.class));
+        assertThatThrownBy(() -> invokeStatusAction(synced.service, "discard", 301L, "同步后业务废弃"))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("已同步 U9 的销售订单不能废弃。");
+        verify(synced.headerMapper, never()).updateById(any());
+        verify(synced.itemMapper, never()).updateById(any());
 
         Fixture ticketed = fixture(header(302L, QuoteStatusWorkflow.QUOTED), List.of(), 1L);
         assertThatThrownBy(() -> invokeStatusAction(ticketed.service, "discard", 302L, "已有提单"))

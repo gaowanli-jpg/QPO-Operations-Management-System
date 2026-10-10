@@ -2,6 +2,7 @@ package com.machining.quote;
 
 import com.machining.quote.dto.wms.WmsSaleLadingReserveResp;
 import com.machining.quote.entity.OrderDeliveryTicket;
+import com.machining.quote.mapper.OrderDeliveryTicketAllocationMapper;
 import com.machining.quote.entity.WmsReservationBatch;
 import com.machining.quote.entity.WmsReservationTicket;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
@@ -34,6 +35,7 @@ class WmsReservationBatchServiceTest {
     @SuppressWarnings("unchecked")
     void allocationProcessesDifferentProjectGroupsIndependentlyAndContinuesAfterGroupFailure() {
         Fixture fixture = fixture();
+        allowNewReservation(fixture, 101, 102, 201);
         WmsReservationPlanService.ReservationItem firstItem = item("MAT-A", "5");
         firstItem.setCustomerProjectNo("CP-1");
         WmsReservationPlanService.ReservationGroup first = group("CO-1",
@@ -78,6 +80,7 @@ class WmsReservationBatchServiceTest {
     @Test
     void singleTicketStillUsesBatchReservationPath() {
         Fixture fixture = fixture();
+        allowNewReservation(fixture, 101);
         WmsReservationPlanService.ReservationGroup group = group("SO-1",
                 item("MAT-A", "1"), ticketReservation(101, "MAT-A", "1"));
         when(fixture.planService.prepare(List.of(101))).thenReturn(plan(group));
@@ -95,6 +98,7 @@ class WmsReservationBatchServiceTest {
     @SuppressWarnings("unchecked")
     void planFailuresRemainRowLevelAndDoNotBlockValidGroups() {
         Fixture fixture = fixture();
+        allowNewReservation(fixture, 101, 301);
         WmsReservationPlanService.ReservationGroup group = group("SO-1",
                 item("MAT-A", "1"), ticketReservation(101, "MAT-A", "1"));
         WmsReservationPlanService.ReservationPlan plan = plan(group);
@@ -170,6 +174,13 @@ class WmsReservationBatchServiceTest {
         return new Fixture();
     }
 
+    private void allowNewReservation(Fixture fixture, Integer... ticketIds) {
+        for (Integer ticketId : ticketIds) {
+            when(fixture.ticketSourceMapper.selectById(ticketId)).thenReturn(ticket(ticketId));
+            when(fixture.allocationMapper.selectByTicketId(ticketId)).thenReturn(List.of());
+        }
+    }
+
     private WmsReservationPlanService.ReservationPlan plan(WmsReservationPlanService.ReservationGroup... groups) {
         WmsReservationPlanService.ReservationPlan plan = new WmsReservationPlanService.ReservationPlan();
         plan.getGroups().addAll(List.of(groups));
@@ -241,6 +252,7 @@ class WmsReservationBatchServiceTest {
         OrderDeliveryTicket ticket = new OrderDeliveryTicket();
         ticket.setId(id);
         ticket.setMaterialNo("MAT-" + id);
+        ticket.setMesSyncStatus("SUCCESS");
         ticket.setQty(1);
         return ticket;
     }
@@ -265,6 +277,7 @@ class WmsReservationBatchServiceTest {
         private final WmsReservationTicketMapper ticketMapper = mock(WmsReservationTicketMapper.class);
         private final WmsReservationBatchMapper batchMapper = mock(WmsReservationBatchMapper.class);
         private final OrderDeliveryTicketMapper ticketSourceMapper = mock(OrderDeliveryTicketMapper.class);
+        private final OrderDeliveryTicketAllocationMapper allocationMapper = mock(OrderDeliveryTicketAllocationMapper.class);
         private final DataScopeService dataScopeService = mock(DataScopeService.class);
         private final WmsReservationBatchService service = new WmsReservationBatchService();
 
@@ -274,6 +287,7 @@ class WmsReservationBatchServiceTest {
             ReflectionTestUtils.setField(service, "ticketMapper", ticketMapper);
             ReflectionTestUtils.setField(service, "batchMapper", batchMapper);
             ReflectionTestUtils.setField(service, "ticketSourceMapper", ticketSourceMapper);
+            ReflectionTestUtils.setField(service, "allocationMapper", allocationMapper);
             ReflectionTestUtils.setField(service, "dataScopeService", dataScopeService);
         }
     }

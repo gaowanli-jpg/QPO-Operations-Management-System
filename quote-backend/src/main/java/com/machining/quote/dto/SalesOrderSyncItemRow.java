@@ -15,4 +15,6 @@ public class SalesOrderSyncItemRow {
     private String internalProjectNo;
     private String customerOrderNo;
     private String customerProjectNo;
+    private Long allocationId;
+    private String allocationType;
 }

@@ -23,6 +23,8 @@ public class ProductionAllocationLifecycleService {
     private OrderDeliveryTicketMapper ticketMapper;
     @Autowired
     private OrderDeliveryTicketAllocationMapper allocationMapper;
+    @Autowired
+    private com.machining.quote.service.SalesOrderAllocationLinkService salesOrderAllocationLinkService;
     @Autowired(required = false)
     private ProcessRouteSnapshotService processRouteSnapshotService = new ProcessRouteSnapshotService();
     @Autowired(required = false)
@@ -39,7 +41,7 @@ public class ProductionAllocationLifecycleService {
         if (ticketId == null || normalizedMaterialNo == null || normalizedMaterialNo.isEmpty()) {
             throw new IllegalArgumentException("ticketId and confirmed materialNo are required");
         }
-        OrderDeliveryTicket ticket = ticketMapper.selectByIdForUpdate(ticketId);
+        OrderDeliveryTicket ticket = salesOrderAllocationLinkService.lockTicketForMaterialSuccess(ticketId);
         if (ticket == null) {
             throw new IllegalStateException("delivery ticket not found ticketId=" + ticketId);
         }
@@ -68,6 +70,10 @@ public class ProductionAllocationLifecycleService {
         if (initialized || existing.stream().anyMatch(row -> "PRODUCTION_REQUIRED".equals(row.getAllocationType())
                 || "IN_STOCK_LOCK".equals(row.getAllocationType())
                 || "IN_PRODUCTION_LOCK".equals(row.getAllocationType()))) {
+            existing.stream()
+                    .filter(row -> "PRODUCTION_REQUIRED".equalsIgnoreCase(row.getAllocationType()))
+                    .findFirst()
+                    .ifPresent(row -> salesOrderAllocationLinkService.linkMaterialAllocation(ticket, row));
             return;
         }
         if (Boolean.TRUE.equals(ticket.getDiscarded()) || ticket.getQty() == null || ticket.getQty() <= 0) {
@@ -119,6 +125,7 @@ public class ProductionAllocationLifecycleService {
         allocation.setCreatedAt(now);
         allocation.setUpdatedAt(now);
         allocationMapper.insert(allocation);
+        salesOrderAllocationLinkService.linkMaterialAllocation(ticket, allocation);
     }
 
     private String trimToNull(String value) {

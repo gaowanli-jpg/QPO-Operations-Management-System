@@ -265,6 +265,7 @@ public class DashboardOverviewService {
         QueryWrapper<Object> query = new QueryWrapper<>();
         excludeDiscardedAllocation(query);
         query.eq("alloc.allocation_type", "PRODUCTION_REQUIRED");
+        query.gt("alloc.qty", 0);
         query.apply("COALESCE(alloc.status, 'ACTIVE') = 'ACTIVE'");
         query.and(wrapper -> wrapper.isNull("alloc.mes_production_status").or().ne("alloc.mes_production_status", "SUCCESS"));
         applyDeliveryTicketScope(query);
@@ -275,6 +276,7 @@ public class DashboardOverviewService {
         QueryWrapper<Object> query = new QueryWrapper<>();
         excludeDiscardedAllocation(query);
         query.eq("alloc.allocation_type", "PRODUCTION_REQUIRED");
+        query.gt("alloc.qty", 0);
         query.apply("COALESCE(alloc.status, 'ACTIVE') = 'ACTIVE'");
         query.eq("alloc.mes_production_status", "FAILED");
         applyDeliveryTicketScope(query);

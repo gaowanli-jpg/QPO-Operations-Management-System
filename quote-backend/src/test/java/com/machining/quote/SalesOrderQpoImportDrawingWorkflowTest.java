@@ -94,6 +94,8 @@ class SalesOrderQpoImportDrawingWorkflowTest extends SalesOrderQpoImportTestSupp
                 MultipartFile.class,
                 Long.class,
                 String.class,
+                SalesOrderQpoImportDefaultsDTO.class,
+                List.class,
                 List.class);
         BusinessFileService businessFileService = mock(BusinessFileService.class, invocation -> {
             if ("saveSalesOrderImportDrawing".equals(invocation.getMethod().getName())) {
@@ -115,7 +117,7 @@ class SalesOrderQpoImportDrawingWorkflowTest extends SalesOrderQpoImportTestSupp
         });
         ReflectionTestUtils.setField(service, "businessFileService", businessFileService);
         when(customerMapper.selectById(7L)).thenReturn(customer());
-        when(parser.parse(any(InputStream.class))).thenReturn(parseResult());
+        when(parser.parse(any(InputStream.class), any(SalesOrderQpoImportDefaultsDTO.class))).thenReturn(parseResult());
         when(headerMapper.selectCount(any())).thenReturn(0L);
         doAnswer(invocation -> {
             SalesOrderImportBatch batch = invocation.getArgument(0);
@@ -148,10 +150,12 @@ class SalesOrderQpoImportDrawingWorkflowTest extends SalesOrderQpoImportTestSupp
                 ),
                 7L,
                 "SO01",
+                validImportDefaults(),
                 List.of(
                         new MockMultipartFile("drawings", "P-001.pdf", "application/pdf", "p1".getBytes(StandardCharsets.UTF_8)),
                         new MockMultipartFile("drawings", "Z-999.pdf", "application/pdf", "z9".getBytes(StandardCharsets.UTF_8))
-                )
+                ),
+                List.of()
         );
 
         ArgumentCaptor<SalesOrderItem> itemCaptor = ArgumentCaptor.forClass(SalesOrderItem.class);
@@ -197,11 +201,12 @@ class SalesOrderQpoImportDrawingWorkflowTest extends SalesOrderQpoImportTestSupp
                 MultipartFile.class,
                 Long.class,
                 String.class,
+                SalesOrderQpoImportDefaultsDTO.class,
                 List.class,
                 List.class);
         ReflectionTestUtils.setField(service, "businessFileService", salesOrderImportDrawingStorage());
         when(customerMapper.selectById(7L)).thenReturn(customer());
-        when(parser.parse(any(InputStream.class))).thenReturn(parseResultWithSamePartDifferentVersions());
+        when(parser.parse(any(InputStream.class), any(SalesOrderQpoImportDefaultsDTO.class))).thenReturn(parseResultWithSamePartDifferentVersions());
         when(headerMapper.selectCount(any())).thenReturn(0L);
         doAnswer(invocation -> {
             SalesOrderImportBatch batch = invocation.getArgument(0);
@@ -234,6 +239,7 @@ class SalesOrderQpoImportDrawingWorkflowTest extends SalesOrderQpoImportTestSupp
                 ),
                 7L,
                 "SO01",
+                validImportDefaults(),
                 List.of(),
                 List.of(new MockMultipartFile("versionDrawings", "P-100_A.pdf", "application/pdf", "p1".getBytes(StandardCharsets.UTF_8)))
         );
@@ -404,7 +410,7 @@ class SalesOrderQpoImportDrawingWorkflowTest extends SalesOrderQpoImportTestSupp
         defaults.setCustomerOrderNo("PO-001");
         defaults.setCustomerProjectNo("CP-001");
         defaults.setCustomerOrderTitle("GSQ1");
-        defaults.setOrderType("样品订单");
+        defaults.setOrderType("正式订单");
         defaults.setInternalProjectNo("IP-001");
         return defaults;
     }

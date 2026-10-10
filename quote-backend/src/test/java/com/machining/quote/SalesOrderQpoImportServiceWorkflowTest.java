@@ -6,6 +6,7 @@ import com.machining.quote.domain.QuoteStatusWorkflow;
 import com.machining.quote.dto.ReleaseSourceType;
 import com.machining.quote.dto.SalesOrderQpoExcelLineDTO;
 import com.machining.quote.dto.SalesOrderQpoExcelParseResult;
+import com.machining.quote.dto.SalesOrderQpoImportDefaultsDTO;
 import com.machining.quote.dto.SalesOrderQpoImportResp;
 import com.machining.quote.dto.SalesOrderQpoOrderGroupDTO;
 import com.machining.quote.dto.SalesOrderAutoSnapshotCompletionResult;
@@ -91,7 +92,7 @@ class SalesOrderQpoImportServiceWorkflowTest extends SalesOrderQpoImportTestSupp
         );
         AuthContext.set(new AuthContext.SessionUser(5, "market01", "Market One", "MARKET_USER"));
         when(customerMapper.selectById(7L)).thenReturn(customer());
-        when(parser.parse(any(InputStream.class))).thenReturn(parseResult());
+        when(parser.parse(any(InputStream.class), any(SalesOrderQpoImportDefaultsDTO.class))).thenReturn(parseResult());
         when(headerMapper.selectCount(any())).thenReturn(0L);
         doAnswer(invocation -> {
             SalesOrderImportBatch batch = invocation.getArgument(0);
@@ -121,7 +122,10 @@ class SalesOrderQpoImportServiceWorkflowTest extends SalesOrderQpoImportTestSupp
                         "xlsx".getBytes(StandardCharsets.UTF_8)
                 ),
                 7L,
-                ""
+                "",
+                validImportDefaults(),
+                List.of(),
+                List.of()
         );
 
         assertThat(resp.isSuccess()).isTrue();
@@ -253,7 +257,7 @@ class SalesOrderQpoImportServiceWorkflowTest extends SalesOrderQpoImportTestSupp
                 mock(AuditService.class)
         );
         when(customerMapper.selectById(7L)).thenReturn(customer());
-        when(parser.parse(any(InputStream.class))).thenReturn(parseResultWithCustomerExcelSequence());
+        when(parser.parse(any(InputStream.class), any(SalesOrderQpoImportDefaultsDTO.class))).thenReturn(parseResultWithCustomerExcelSequence());
         when(headerMapper.selectCount(any())).thenReturn(0L);
         doAnswer(invocation -> {
             SalesOrderImportBatch batch = invocation.getArgument(0);
@@ -279,7 +283,10 @@ class SalesOrderQpoImportServiceWorkflowTest extends SalesOrderQpoImportTestSupp
                         "xlsx".getBytes(StandardCharsets.UTF_8)
                 ),
                 7L,
-                "SO06"
+                "SO06",
+                validImportDefaults(),
+                List.of(),
+                List.of()
         );
 
         ArgumentCaptor<SalesOrderItem> itemCaptor = ArgumentCaptor.forClass(SalesOrderItem.class);
@@ -312,7 +319,7 @@ class SalesOrderQpoImportServiceWorkflowTest extends SalesOrderQpoImportTestSupp
                 auditService
         );
         when(customerMapper.selectById(7L)).thenReturn(customer());
-        when(parser.parse(any(InputStream.class))).thenReturn(parseResultWithBlankPrices());
+        when(parser.parse(any(InputStream.class), any(SalesOrderQpoImportDefaultsDTO.class))).thenReturn(parseResultWithBlankPrices());
         when(headerMapper.selectCount(any())).thenReturn(0L);
         doAnswer(invocation -> {
             SalesOrderImportBatch batch = invocation.getArgument(0);
@@ -338,7 +345,10 @@ class SalesOrderQpoImportServiceWorkflowTest extends SalesOrderQpoImportTestSupp
                         "FULL-EXCEL-CONTENT-SHOULD-NOT-BE-LOGGED".getBytes(StandardCharsets.UTF_8)
                 ),
                 7L,
-                "SO01"
+                "SO01",
+                validImportDefaults(),
+                List.of(),
+                List.of()
         );
 
         assertThat(resp.isSuccess()).isTrue();
@@ -399,7 +409,7 @@ class SalesOrderQpoImportServiceWorkflowTest extends SalesOrderQpoImportTestSupp
                 matchService
         );
         when(customerMapper.selectById(7L)).thenReturn(customer());
-        when(parser.parse(any(InputStream.class))).thenReturn(parseResult());
+        when(parser.parse(any(InputStream.class), any(SalesOrderQpoImportDefaultsDTO.class))).thenReturn(parseResult());
         when(headerMapper.selectCount(any())).thenReturn(0L);
         doAnswer(invocation -> {
             SalesOrderImportBatch batch = invocation.getArgument(0);
@@ -432,7 +442,10 @@ class SalesOrderQpoImportServiceWorkflowTest extends SalesOrderQpoImportTestSupp
                         "FULL-EXCEL-CONTENT-SHOULD-NOT-BE-LOGGED".getBytes(StandardCharsets.UTF_8)
                 ),
                 7L,
-                "SO01"
+                "SO01",
+                validImportDefaults(),
+                List.of(),
+                List.of()
         );
 
         verify(matchService).completeImportedOrder(301L);
@@ -490,7 +503,7 @@ class SalesOrderQpoImportServiceWorkflowTest extends SalesOrderQpoImportTestSupp
         third.setCustomerOrderNo("PO-001");
         third.setCustomerProjectNo("CP-001");
         third.setCustomerOrderTitle("GSQ1");
-        third.setOrderType("样品订单");
+        third.setOrderType("正式订单");
         third.setInternalProjectNo("IP-001");
 
         SalesOrderQpoOrderGroupDTO group = new SalesOrderQpoOrderGroupDTO();
@@ -499,7 +512,7 @@ class SalesOrderQpoImportServiceWorkflowTest extends SalesOrderQpoImportTestSupp
         group.setCustomerOrderNo("PO-001");
         group.setCustomerProjectNo("CP-001");
         group.setCustomerOrderTitle("GSQ1");
-        group.setOrderType("样品订单");
+        group.setOrderType("正式订单");
         group.setInternalProjectNo("IP-001");
         group.setLines(new ArrayList<>(List.of(first, second, third)));
 

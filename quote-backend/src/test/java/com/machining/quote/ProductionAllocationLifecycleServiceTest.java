@@ -5,6 +5,7 @@ import com.machining.quote.entity.OrderDeliveryTicketAllocation;
 import com.machining.quote.mapper.OrderDeliveryTicketAllocationMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.service.mes.ProductionAllocationLifecycleService;
+import com.machining.quote.service.SalesOrderAllocationLinkService;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -28,6 +29,8 @@ class ProductionAllocationLifecycleServiceTest {
         ProductionAllocationLifecycleService service = new ProductionAllocationLifecycleService();
         ReflectionTestUtils.setField(service, "ticketMapper", ticketMapper);
         ReflectionTestUtils.setField(service, "allocationMapper", allocationMapper);
+        SalesOrderAllocationLinkService allocationLinkService = mock(SalesOrderAllocationLinkService.class);
+        ReflectionTestUtils.setField(service, "salesOrderAllocationLinkService", allocationLinkService);
 
         OrderDeliveryTicket ticket = new OrderDeliveryTicket();
         ticket.setId(41);
@@ -44,6 +47,7 @@ class ProductionAllocationLifecycleServiceTest {
         ticket.setProcessRoute(List.of(Map.of("processCode", "CUT")));
         ticket.setMaterialData(Map.of("shape", "plate"));
         when(ticketMapper.selectByIdForUpdate(41)).thenReturn(ticket);
+        when(allocationLinkService.lockTicketForMaterialSuccess(41)).thenReturn(ticket);
 
         List<OrderDeliveryTicketAllocation> allocations = new ArrayList<>();
         when(allocationMapper.selectByTicketIdForUpdate(41)).thenAnswer(invocation -> List.copyOf(allocations));

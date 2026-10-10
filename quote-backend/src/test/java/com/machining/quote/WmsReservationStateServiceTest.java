@@ -18,6 +18,7 @@ import com.machining.quote.service.wms.WmsReservationContractValidator;
 import com.machining.quote.service.wms.WmsReservationFingerprintService;
 import com.machining.quote.service.wms.WmsReservationPlanService;
 import com.machining.quote.service.wms.WmsReservationStateService;
+import com.machining.quote.service.SalesOrderAllocationLinkService;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -405,6 +406,7 @@ class WmsReservationStateServiceTest {
             ReflectionTestUtils.setField(service, "client", client);
             ReflectionTestUtils.setField(service, "validator", new WmsReservationContractValidator());
             ReflectionTestUtils.setField(service, "fingerprintService", new WmsReservationFingerprintService());
+            ReflectionTestUtils.setField(service, "salesOrderAllocationLinkService", mock(SalesOrderAllocationLinkService.class));
             doAnswer(invocation -> {
                 WmsReservationBatch batch = invocation.getArgument(0);
                 batch.setId(501L);

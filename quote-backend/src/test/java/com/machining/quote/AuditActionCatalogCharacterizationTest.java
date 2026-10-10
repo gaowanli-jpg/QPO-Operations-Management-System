@@ -239,6 +239,7 @@ class AuditActionCatalogCharacterizationTest {
         assertThat(AuditService.labelForAction("SALES_ORDER_UPDATE")).isEqualTo("保存销售订单信息");
         assertThat(AuditService.labelForAction("SALES_ORDER_ITEM_UPDATE")).isEqualTo("保存销售订单零件行");
         assertThat(AuditService.labelForAction("SALES_ORDER_ITEM_DATA_REPLACEMENT")).isEqualTo("销售订单表格数据替换");
+        assertThat(AuditService.labelForAction("SALES_ORDER_ALLOCATION_QTY_UPDATE")).isEqualTo("销售订单锁库拆分数量保存");
         assertThat(AuditService.labelForAction("SALES_ORDER_ITEM_LINKED_DISCARD")).isEqualTo("销售订单零件关联废弃");
         assertThat(AuditService.labelForAction("SALES_ORDER_ITEM_LINKED_RESTORE")).isEqualTo("销售订单零件关联恢复");
         assertThat(queryService)

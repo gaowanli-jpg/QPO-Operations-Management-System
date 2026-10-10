@@ -23,6 +23,7 @@ import com.machining.quote.service.DataScopeService;
 import com.machining.quote.service.SalesOrderItemDataReplacementExcelParser;
 import com.machining.quote.service.SalesOrderItemDataReplacementService;
 import com.machining.quote.service.SalesOrderMaintenanceService;
+import com.machining.quote.service.SalesOrderAllocationLinkService;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
@@ -215,6 +216,50 @@ class SalesOrderMaintenanceServiceTest {
         verify(fixture.itemMapper).update(isNull(), any(UpdateWrapper.class));
         verify(fixture.ticketMapper, never()).update(any(), any());
         verifyAudit(fixture.auditService, "SALES_ORDER_ITEM_UPDATE", header.getId());
+    }
+
+    @Test
+    void saveItemsAuditsAllocationQuantityChangesWithTicketSyncFlag() {
+        Fixture fixture = fixture();
+        SalesOrderHeader header = header(121L, "链悓姝?");
+        SalesOrderItem item = item(212L, 121L);
+        item.setAllocationId(612L);
+        item.setQty(2);
+        fixture.withOrder(header, List.of(item));
+        when(fixture.allocationLinkService.syncAllocationQtyFromItem(header, item, 2))
+                .thenReturn(new SalesOrderAllocationLinkService.AllocationQuantitySyncResult(
+                        612, item.getId(), 2, 0, true));
+
+        SalesOrderItemUpdateReq req = new SalesOrderItemUpdateReq();
+        SalesOrderItemUpdateLineReq line = new SalesOrderItemUpdateLineReq();
+        line.setSalesOrderItemId(item.getId());
+        line.setQty(0);
+        req.setItems(List.of(line));
+
+        SalesOrderMaintenanceUpdateResp result = fixture.maintenanceService.saveItems(header.getId(), req);
+
+        assertThat(result.getSuccess()).isTrue();
+        ArgumentCaptor<Object> afterCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(fixture.auditService).record(
+                eq("SALES_ORDER_ALLOCATION_QTY_UPDATE"),
+                eq("sales_order_header"),
+                eq(header.getId()),
+                isNull(),
+                afterCaptor.capture(),
+                eq("MARKET"),
+                eq("SUCCESS"),
+                eq(AuditService.labelForAction("SALES_ORDER_ALLOCATION_QTY_UPDATE")),
+                isNull());
+        Map<?, ?> summary = (Map<?, ?>) afterCaptor.getValue();
+        assertThat(summary.get("syncedTicket")).isEqualTo(true);
+        assertThat((List<?>) summary.get("changes")).singleElement().satisfies(change -> {
+            Map<?, ?> changeMap = (Map<?, ?>) change;
+            assertThat(changeMap.get("allocationId")).isEqualTo(612);
+            assertThat(changeMap.get("salesOrderItemId")).isEqualTo(item.getId());
+            assertThat(changeMap.get("oldQty")).isEqualTo(2);
+            assertThat(changeMap.get("newQty")).isEqualTo(0);
+            assertThat(changeMap.get("syncedTicket")).isEqualTo(true);
+        });
     }
 
     @Test
@@ -691,6 +736,7 @@ class SalesOrderMaintenanceServiceTest {
         ReflectionTestUtils.setField(maintenanceService, "headerMapper", fixture.headerMapper);
         ReflectionTestUtils.setField(maintenanceService, "itemMapper", fixture.itemMapper);
         ReflectionTestUtils.setField(maintenanceService, "ticketMapper", fixture.ticketMapper);
+        ReflectionTestUtils.setField(maintenanceService, "salesOrderAllocationLinkService", fixture.allocationLinkService);
         ReflectionTestUtils.setField(maintenanceService, "dataScopeService", fixture.dataScopeService);
         ReflectionTestUtils.setField(maintenanceService, "auditService", fixture.auditService);
         ReflectionTestUtils.setField(replacementService, "excelParser", new SalesOrderItemDataReplacementExcelParser());
@@ -794,6 +840,7 @@ class SalesOrderMaintenanceServiceTest {
             SalesOrderHeaderMapper headerMapper,
             SalesOrderItemMapper itemMapper,
             OrderDeliveryTicketMapper ticketMapper,
+            SalesOrderAllocationLinkService allocationLinkService,
             DataScopeService dataScopeService,
             AuditService auditService) {
         private Fixture(SalesOrderMaintenanceService maintenanceService, SalesOrderItemDataReplacementService replacementService) {
@@ -803,6 +850,7 @@ class SalesOrderMaintenanceServiceTest {
                     mock(SalesOrderHeaderMapper.class),
                     mock(SalesOrderItemMapper.class),
                     mock(OrderDeliveryTicketMapper.class),
+                    mock(SalesOrderAllocationLinkService.class),
                     mock(DataScopeService.class),
                     mock(AuditService.class));
         }
@@ -813,6 +861,7 @@ class SalesOrderMaintenanceServiceTest {
             when(itemMapper.selectList(any(QueryWrapper.class))).thenReturn(items);
             for (SalesOrderItem item : items) {
                 when(itemMapper.selectByIdForUpdate(item.getId())).thenReturn(item);
+                when(allocationLinkService.lockItemForMutation(header.getId(), item.getId())).thenReturn(item);
             }
         }
     }

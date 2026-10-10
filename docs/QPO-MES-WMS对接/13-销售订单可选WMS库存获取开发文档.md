@@ -1,5 +1,11 @@
 # 销售订单可选 WMS 库存获取开发文档
 
+> 2026-10-10 销售订单零件与 allocation 联动收口：`sales_order_item.allocation_id` 与
+> `order_delivery_ticket_allocation.id` 建立一对一关联。物料号确认后，销售订单零件立即关联全量
+> `PRODUCTION_REQUIRED` 行；WMS 拆分后原行保留为待产行，锁已入库 / 锁在产行追加到订单末尾。
+> 库存完全覆盖时，原待产行和 allocation 仍保留，数量为 `0`，仅从待产池、锁库池和仪表盘操作统计中过滤。
+> 销售订单零件与锁库拆行的数量均可编辑，编辑会同步对应 allocation；WMS 已完成后不回写提单及历史外部请求快照。
+
 ## 1. 目标流程
 
 ```text
@@ -31,7 +37,7 @@ allocation 使用 `allocation_source` 区分 `MES_MATERIAL`、`WMS_RESERVATION` 
 
 ## 4. 数量拆分与互斥
 
-WMS 响应应用事务锁定提单行和该提单的 allocations，验证 `stockFrozenCount + inProductionCount + surplusCount = ticket.qty`。库存锁定和在产锁定数量生成相应锁库 allocation；`surplusCount` 更新到唯一有效的待生产行。无剩余待生产数量时，将原待生产行置为 `SUPERSEDED`，不创建零数量 allocation。
+WMS 响应应用事务锁定提单行和该提单的 allocations，验证 `stockFrozenCount + inProductionCount + surplusCount = ticket.qty`。库存锁定和在产锁定数量生成相应锁库 allocation；`surplusCount` 更新到唯一有效的待生产行。无剩余待生产数量时，原待生产 allocation 与销售订单待产行仍保留并置为 `0`，不从销售订单明细删除。
 
 MES 生产与 WMS 获取均先以稳定顺序锁定相同的 `order_delivery_ticket` 行：
 
@@ -43,7 +49,7 @@ MES 生产与 WMS 获取均先以稳定顺序锁定相同的 `order_delivery_tic
 | MES 生产处理中、结果未知或已成功 | 不重复提交 | 禁止获取 |
 | MES 生产明确失败 | 可以按失败分配重试 | 可以获取并拆分 |
 
-分配行状态必须为 `ACTIVE` 才能进入待产列表、MES 下发和仪表盘待产统计。`SUPERSEDED` 行仅作历史审计，不参与数量和工作池计算。
+分配行状态必须为 `ACTIVE` 且 `qty > 0` 才能进入待产列表、锁库列表、MES 下发和仪表盘待产统计。销售订单详情和锁库拆行页面保留并显示数量为 `0` 的关联行。
 
 ## 5. 任务与审计
 

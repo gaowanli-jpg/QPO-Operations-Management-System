@@ -8,6 +8,9 @@ import java.time.LocalDateTime;
 @Data
 public class LockedItemDTO {
     private Integer id;
+    private Long salesOrderItemId;
+    private Integer salesOrderItemLineNo;
+    private Long allocationId;
     private Integer ticketId;
     private Integer rfqId;
     private String rfqNo;

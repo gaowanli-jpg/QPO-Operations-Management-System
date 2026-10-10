@@ -209,7 +209,7 @@ class SalesOrderManagementRegressionTest {
 
             assertThatThrownBy(() -> service.discard(701L, reason("blocked")))
                     .isInstanceOf(RuntimeException.class)
-                    .hasMessageContaining("只有已生成提单且未同步 U9 的销售订单可以废弃");
+                    .hasMessage("只有已生成提单的销售订单可以废弃。");
         }
         SalesOrderHeader synced = salesOrder(702L, QuoteStatusWorkflow.RELEASED);
         synced.setU9SyncStatus("已同步");
@@ -218,6 +218,16 @@ class SalesOrderManagementRegressionTest {
         assertThatThrownBy(() -> service.discard(702L, reason("blocked")))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("已同步 U9 的销售订单不能废弃");
+
+        for (String u9Status : List.of("同步中", "结果待确认")) {
+            SalesOrderHeader uncertain = salesOrder(703L, QuoteStatusWorkflow.RELEASED);
+            uncertain.setU9SyncStatus(u9Status);
+            when(headerMapper.selectByIdForUpdate(703L)).thenReturn(uncertain);
+
+            assertThatThrownBy(() -> service.discard(703L, reason("blocked")))
+                    .isInstanceOf(RuntimeException.class)
+                    .hasMessageContaining("不能废弃销售订单");
+        }
 
         verify(headerMapper, never()).updateById(any());
         verify(itemMapper, never()).updateById(any());

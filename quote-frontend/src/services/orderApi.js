@@ -112,6 +112,11 @@ export const submitSalesOrderWmsAllocationBatch = (salesOrderId) => request(`/ap
   method: 'POST'
 })
 
+export const saveSalesOrderAllocationSplits = (salesOrderId, payload = {}) => request(`/api/market/sales-order-management/orders/${salesOrderId}/allocation-splits/batch`, {
+  method: 'POST',
+  data: payload
+})
+
 export const listSalesOrderProcessSheets = (salesOrderId, params = {}) => request(`/api/market/sales-order-management/orders/${salesOrderId}/process-sheets`, { params })
 
 export const getSalesOrderDrawingSummary = (salesOrderId) => request(`/api/market/sales-order-management/orders/${salesOrderId}/drawing-summary`)

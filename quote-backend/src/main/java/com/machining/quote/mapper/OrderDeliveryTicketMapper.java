@@ -23,6 +23,9 @@ public interface OrderDeliveryTicketMapper extends BaseMapper<OrderDeliveryTicke
     @Select("SELECT * FROM order_delivery_ticket WHERE id = #{id} FOR UPDATE")
     OrderDeliveryTicket selectByIdForUpdate(@Param("id") Integer id);
 
+    @Select("SELECT * FROM order_delivery_ticket WHERE source_type = 'SALES_ORDER' AND source_item_id = #{sourceItemId} ORDER BY id ASC FOR UPDATE")
+    List<OrderDeliveryTicket> selectSalesOrderTicketsBySourceItemIdForUpdate(@Param("sourceItemId") Long sourceItemId);
+
     @Update("""
             <script>
             UPDATE order_delivery_ticket AS ticket

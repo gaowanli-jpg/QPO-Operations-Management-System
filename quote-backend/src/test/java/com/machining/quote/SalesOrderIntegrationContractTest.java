@@ -86,8 +86,10 @@ class SalesOrderIntegrationContractTest {
                         "customerCode",
                         "supplierCode",
                         "items");
-        assertThat(declaredFieldNames(SalesOrderSyncItemDTO.class))
+                assertThat(declaredFieldNames(SalesOrderSyncItemDTO.class))
                 .containsExactlyInAnyOrder(
+                        "allocationId",
+                        "allocationType",
                         "saleOrderItemNo",
                         "materialNo",
                         "releasedQty",
@@ -163,8 +165,10 @@ class SalesOrderIntegrationContractTest {
                         "customerCode",
                         "supplierCode",
                         "items");
-        assertThat(fieldNames(objectMapper.valueToTree(firstItem)))
+                assertThat(fieldNames(objectMapper.valueToTree(firstItem)))
                 .containsExactlyInAnyOrder(
+                        "allocationId",
+                        "allocationType",
                         "saleOrderItemNo",
                         "materialNo",
                         "releasedQty",

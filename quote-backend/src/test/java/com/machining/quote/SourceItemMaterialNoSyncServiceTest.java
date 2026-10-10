@@ -4,7 +4,9 @@ import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.SalesOrderItem;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
+import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.SalesOrderItemMapper;
+import com.machining.quote.service.SalesOrderAllocationLinkService;
 import com.machining.quote.service.SourceItemMaterialNoSyncService;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -14,6 +16,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -115,6 +118,29 @@ class SourceItemMaterialNoSyncServiceTest {
         assertThat(update.getMaterialNoSourceTicketId()).isEqualTo(123L);
         assertThat(update.getMaterialNoSyncedAt()).isNotNull();
         assertThat(update.getMaterialNoMessage()).isEqualTo("MES created");
+    }
+
+    @Test
+    void locksSalesOrderBeforeTicketAndSourceItem() {
+        SourceItemMaterialNoSyncService service = new SourceItemMaterialNoSyncService();
+        OrderDeliveryTicketMapper ticketMapper = mock(OrderDeliveryTicketMapper.class);
+        SalesOrderItemMapper salesOrderItemMapper = mock(SalesOrderItemMapper.class);
+        SalesOrderAllocationLinkService allocationLinkService = mock(SalesOrderAllocationLinkService.class);
+        OrderDeliveryTicket ticket = salesOrderTicket();
+        SalesOrderItem item = new SalesOrderItem();
+        item.setId(5001L);
+        when(ticketMapper.selectByIdForUpdate(123)).thenReturn(ticket);
+        when(salesOrderItemMapper.selectByIdForUpdate(5001L)).thenReturn(item);
+        ReflectionTestUtils.setField(service, "ticketMapper", ticketMapper);
+        ReflectionTestUtils.setField(service, "salesOrderItemMapper", salesOrderItemMapper);
+        ReflectionTestUtils.setField(service, "salesOrderAllocationLinkService", allocationLinkService);
+
+        service.syncConfirmedMaterialNo(ticket, "SO-MAT-001", "MES created");
+
+        var order = inOrder(allocationLinkService, ticketMapper, salesOrderItemMapper);
+        order.verify(allocationLinkService).lockSalesOrderForTicket(123);
+        order.verify(ticketMapper).selectByIdForUpdate(123);
+        order.verify(salesOrderItemMapper).selectByIdForUpdate(5001L);
     }
 
     @Test

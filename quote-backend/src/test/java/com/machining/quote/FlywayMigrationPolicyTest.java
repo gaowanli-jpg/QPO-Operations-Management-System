@@ -204,6 +204,21 @@ class FlywayMigrationPolicyTest {
                 .doesNotContain("ORDER BY line_no");
     }
 
+    @Test
+    void allocationLinkMigrationIsAppendOnlyAndContainsZeroQuantityRepairRules() throws IOException {
+        String baseline = read(MIGRATION_DIR.resolve("V1__qpo_baseline_schema.sql"));
+        String v2 = read(MIGRATION_DIR.resolve("V2__qpo_baseline_seed_data.sql"));
+        String migration = read(MIGRATION_DIR.resolve("V58__sales_order_item_allocation_link.sql"));
+
+        assertThat(migration)
+                .contains("allocation_id", "allocation_type", "FOREIGN KEY (allocation_id)",
+                        "qty >= 0", "production_qty", "split_rows", "qty > 0")
+                .contains("allocation_type = 'PRODUCTION_REQUIRED'")
+                .contains("allocation_type IN ('IN_STOCK_LOCK', 'IN_PRODUCTION_LOCK')");
+        assertThat(baseline).doesNotContain("allocation_id BIGINT", "allocation_type VARCHAR(40)");
+        assertThat(v2).doesNotContain("allocation_id BIGINT", "allocation_type VARCHAR(40)");
+    }
+
     private static List<MigrationFile> migrationFiles() throws IOException {
         List<MigrationFile> migrations = new ArrayList<>();
         try (var paths = Files.list(MIGRATION_DIR)) {

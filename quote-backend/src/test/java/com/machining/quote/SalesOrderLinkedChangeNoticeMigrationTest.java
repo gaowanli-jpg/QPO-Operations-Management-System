@@ -39,7 +39,7 @@ class SalesOrderLinkedChangeNoticeMigrationTest {
     }
 
     @Test
-    void version56AddsHistoricalOrderFieldFiltersWithoutChangingBaseline() throws Exception {
+    void historicalOrderFieldFiltersRemainAndMigrationSequenceIncludesV58() throws Exception {
         Pattern versionPattern = Pattern.compile("^V(\\d+)__.+\\.sql$");
         int maxVersion;
         try (var files = Files.list(MIGRATION_DIR)) {
@@ -49,7 +49,7 @@ class SalesOrderLinkedChangeNoticeMigrationTest {
                     .mapToInt(matcher -> Integer.parseInt(matcher.group(1)))
                     .max().orElse(0);
         }
-        assertThat(maxVersion).isEqualTo(57);
+        assertThat(maxVersion).isEqualTo(58);
 
         Path migration = MIGRATION_DIR.resolve("V56__sales_order_linked_change_notice_filter_fields.sql");
         assertThat(migration).exists();
@@ -77,6 +77,21 @@ class SalesOrderLinkedChangeNoticeMigrationTest {
                 .contains("APPLY_FAILED")
                 .contains("market:sales-order:wms-allocate")
                 .contains("existing_role.role_code")
+                .doesNotContain("V1__qpo_baseline_schema.sql", "V2__qpo_baseline_seed_data.sql");
+    }
+
+    @Test
+    void version58LinksSalesOrderItemsToAllocationsWithoutChangingBaselines() throws Exception {
+        Path migration = MIGRATION_DIR.resolve("V58__sales_order_item_allocation_link.sql");
+        assertThat(migration).exists();
+        String sql = Files.readString(migration, StandardCharsets.UTF_8);
+        assertThat(sql)
+                .contains("ADD COLUMN IF NOT EXISTS allocation_id INTEGER")
+                .contains("allocation_type VARCHAR(40)")
+                .contains("CHECK (qty >= 0)")
+                .contains("uk_sales_order_item_allocation_id")
+                .contains("source_ticket_id")
+                .contains("V58_PRODUCTION_REPAIR")
                 .doesNotContain("V1__qpo_baseline_schema.sql", "V2__qpo_baseline_seed_data.sql");
     }
 }

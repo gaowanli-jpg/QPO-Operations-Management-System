@@ -81,7 +81,7 @@ class RfqReleaseAppendSalesOrderIntegrationTest {
         parent.setCustomerOrderNo("ROW-PO-SHOULD-WIN");
         parent.setCustomerProjectNo("ROW-CP-SHOULD-WIN");
         parent.setCustomerOrderTitle("ROW-TITLE-SHOULD-WIN");
-        parent.setOrderType("预测订单");
+        parent.setOrderType("正式订单");
         parent.setInternalProjectNo("ROW-INTERNAL-SHOULD-WIN");
         itemMapper.updateById(parent);
         assembly(rfq.getId(), parent.getId(), child.getId());
@@ -122,7 +122,7 @@ class RfqReleaseAppendSalesOrderIntegrationTest {
         assertThat(parentSalesItem.getCustomerOrderNo()).isEqualTo("ROW-PO-SHOULD-WIN");
         assertThat(parentSalesItem.getCustomerProjectNo()).isEqualTo("ROW-CP-SHOULD-WIN");
         assertThat(parentSalesItem.getCustomerOrderTitle()).isEqualTo("ROW-TITLE-SHOULD-WIN");
-        assertThat(parentSalesItem.getOrderType()).isEqualTo("预测订单");
+        assertThat(parentSalesItem.getOrderType()).isEqualTo("正式订单");
         assertThat(parentSalesItem.getInternalProjectNo()).isEqualTo("ROW-INTERNAL-SHOULD-WIN");
         assertThat(parentSalesItem.getSalesOrderDate()).isEqualTo(LocalDate.of(2026, 9, 9));
         assertThat(childSalesItem.getCustomerOrderNo()).isEqualTo("TARGET-PO");
@@ -148,7 +148,7 @@ class RfqReleaseAppendSalesOrderIntegrationTest {
         OrderDeliveryTicket parentTicket = ticketBySource.get(parent.getId().longValue());
         assertThat(parentTicket.getCustomerOrderNo()).isEqualTo("ROW-PO-SHOULD-WIN");
         assertThat(parentTicket.getCustomerProjectNo()).isEqualTo("ROW-CP-SHOULD-WIN");
-        assertThat(parentTicket.getOrderType()).isEqualTo("预测订单");
+        assertThat(parentTicket.getOrderType()).isEqualTo("正式订单");
         assertThat(parentTicket.getInternalProjectNo()).isEqualTo("ROW-INTERNAL-SHOULD-WIN");
         assertThat(parentTicket.getMaterialNo()).isNull();
         assertThat(parentTicket.getMesSyncStatus()).isEqualTo("PENDING");
@@ -182,7 +182,7 @@ class RfqReleaseAppendSalesOrderIntegrationTest {
 
         ItemQuoteVersion reloadedParent = itemMapper.selectById(parent.getId());
         assertThat(reloadedParent.getCustomerOrderNo()).isEqualTo("ROW-PO-SHOULD-WIN");
-        assertThat(reloadedParent.getOrderType()).isEqualTo("预测订单");
+        assertThat(reloadedParent.getOrderType()).isEqualTo("正式订单");
         assertThat(reloadedParent.getInternalProjectNo()).isEqualTo("ROW-INTERNAL-SHOULD-WIN");
         ItemQuoteVersion reloadedChild = itemMapper.selectById(child.getId());
         assertThat(reloadedChild.getCustomerOrderNo()).isNull();
