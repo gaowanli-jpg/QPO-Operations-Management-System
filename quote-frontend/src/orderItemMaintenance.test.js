@@ -35,6 +35,10 @@ describe('order item maintenance detail table', () => {
     expect(itemPane).toContain('label="图号"')
     expect(itemPane).toContain('label="版本"')
     expect(itemPane).toContain('label="询价数量"')
+    expect(itemPane).toContain('label="订单类型"')
+    expect(itemPane).not.toContain('<el-option label="预测订单" value="预测订单" />')
+    expect(itemPane).toContain('<el-option label="备货订单" value="备货订单" />')
+    expect(itemPane).toContain('<el-option label="正式订单" value="正式订单" />')
     expect(itemPane).toContain('label="客户询价交期"')
     expect(itemPane).toContain('label="报价承诺交期"')
     expect(itemPane).toContain('label="内部目标交期"')
@@ -61,6 +65,9 @@ describe('order item maintenance detail table', () => {
     expect(itemPane).not.toContain('通过数量')
     expect(itemPane).not.toContain('可选状态')
     expect(itemPane).not.toContain('提单交期')
+    expect(component).toContain("const ORDER_ITEM_ORDER_TYPES = ['备货订单', '正式订单']")
+    expect(component).toContain("sourceRow.orderType === '预测订单' && row.orderType === sourceRow.orderType")
+    expect(component).toContain('订单类型只能是备货订单或正式订单')
   })
 
   test('append dialog reuses rfq import excel and drawing upload steps inside order detail', () => {

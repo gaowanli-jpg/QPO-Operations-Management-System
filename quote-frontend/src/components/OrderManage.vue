@@ -431,7 +431,6 @@
                     :class="{ 'order-item-editor-changed': itemFieldChanged(row, 'orderType') }"
                     @update:model-value="value => updateItemDraft(row, 'orderType', value)"
                   >
-                    <el-option label="预测订单" value="预测订单" />
                     <el-option label="备货订单" value="备货订单" />
                     <el-option label="正式订单" value="正式订单" />
                   </el-select>
@@ -757,7 +756,7 @@ const ORDER_ITEM_EDITABLE_FIELDS = [
 const ORDER_ITEM_DATE_FIELDS = new Set(['salesOrderDate'])
 const ORDER_ITEM_LEAD_TIME_FIELDS = new Set(['leadTime', 'quoteLeadTime', 'internalTargetLeadTime'])
 const ORDER_ITEM_TEXT_FIELDS = new Set(ORDER_ITEM_EDITABLE_FIELDS.filter(field => !['qty', 'salesOrderDate'].includes(field)))
-const ORDER_ITEM_ORDER_TYPES = ['预测订单', '备货订单', '正式订单']
+const ORDER_ITEM_ORDER_TYPES = ['备货订单', '正式订单']
 const orderActionKeys = {
   statusChange: (orderId) => `order:status-change:${orderId || 'none'}`,
   supplementDrawings: (orderId) => `order:supplement-drawings:${orderId || 'none'}`,
@@ -1064,8 +1063,9 @@ const validateOrderItemPayloadRows = (rows) => {
       ElMessage.warning(`零件 ${label} 的询价数量不能小于已提单数量。`)
       return false
     }
-    if (row.orderType && !ORDER_ITEM_ORDER_TYPES.includes(row.orderType)) {
-      ElMessage.warning(`零件 ${label} 的订单类型只能是预测订单、备货订单或正式订单。`)
+    const isUnchangedLegacyForecast = sourceRow.orderType === '预测订单' && row.orderType === sourceRow.orderType
+    if (row.orderType && !ORDER_ITEM_ORDER_TYPES.includes(row.orderType) && !isUnchangedLegacyForecast) {
+      ElMessage.warning(`零件 ${label} 的订单类型只能是备货订单或正式订单。`)
       return false
     }
   }
