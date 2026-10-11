@@ -12,7 +12,7 @@ describe('Sales order optional WMS allocation entry', () => {
   test('exposes an order-level WMS allocation action in the allocation split tab', () => {
     expect(salesOrderPageSource).toContain("const SALES_ORDER_WMS_ALLOCATE_PERMISSION = 'market:sales-order:wms-allocate'")
     expect(salesOrderPageSource).toContain('v-permission="SALES_ORDER_WMS_ALLOCATE_PERMISSION"')
-    expect(salesOrderPageSource).toContain('获取库存信息')
+    expect(salesOrderPageSource).toContain('整单获取库存信息')
     expect(salesOrderPageSource).toContain('@click="handleWmsAllocation"')
     expect(salesOrderPageSource).toContain(':loading="wmsAllocationPending"')
     expect(salesOrderPageSource).toContain('label="锁库拆行" name="allocationSplits"')
@@ -52,6 +52,9 @@ describe('Sales order optional WMS allocation entry', () => {
     expect(salesOrderPageSource).toContain('数量大于 0 的待产 Allocation 获取库存信息')
     expect(salesOrderPageSource).toContain('runAction(salesOrderActionKeys.wmsAllocation(salesOrderId)')
     expect(salesOrderPageSource).toContain('await fetchAllocationSplits()')
+    expect(salesOrderPageSource).toContain('aria-label="关闭库存任务结果"')
+    expect(salesOrderPageSource).toContain('@click="dismissWmsAllocationTask"')
+    expect(salesOrderPageSource).toContain('const dismissWmsAllocationTask = () =>')
   })
 
   test('keeps the ticket tab focused on the original ticket rows', () => {

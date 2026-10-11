@@ -744,7 +744,7 @@
                   :loading="wmsAllocationPending"
                   @click="handleWmsAllocation"
                 >
-                  获取库存信息
+                  整单获取库存信息
                 </el-button>
                 <el-button
                   v-permission="SALES_ORDER_WMS_ALLOCATE_PERMISSION"
@@ -769,18 +769,30 @@
               </div>
             </div>
             <div v-if="wmsAllocationTask" class="sales-order-wms-task-result">
-              <div class="erp-toolbar-group">
-                <el-tag :type="wmsTaskTagType(wmsAllocationTask.status)" effect="plain">
-                  {{ wmsTaskStatusText(wmsAllocationTask.status) }}
-                </el-tag>
-                <span>库存任务 #{{ wmsAllocationTask.id }} · {{ wmsAllocationTask.errorMessage || '可选库存获取不会影响未获取库存零件的 MES 全量生产。' }}</span>
+              <div class="sales-order-wms-task-result-header">
+                <div class="erp-toolbar-group">
+                  <el-tag :type="wmsTaskTagType(wmsAllocationTask.status)" effect="plain">
+                    {{ wmsTaskStatusText(wmsAllocationTask.status) }}
+                  </el-tag>
+                  <span>库存任务 #{{ wmsAllocationTask.id }} · {{ wmsAllocationTask.errorMessage || '可选库存获取不会影响未获取库存零件的 MES 全量生产。' }}</span>
+                  <el-button
+                    v-if="['PENDING', 'RUNNING'].includes(String(wmsAllocationTask.status || '').toUpperCase())"
+                    size="small"
+                    :loading="wmsAllocationRefreshing"
+                    @click="() => refreshWmsAllocationTask()"
+                  >
+                    刷新任务
+                  </el-button>
+                </div>
                 <el-button
-                  v-if="['PENDING', 'RUNNING'].includes(String(wmsAllocationTask.status || '').toUpperCase())"
-                  size="small"
-                  :loading="wmsAllocationRefreshing"
-                  @click="() => refreshWmsAllocationTask()"
+                  class="sales-order-wms-task-result-close"
+                  text
+                  circle
+                  aria-label="关闭库存任务结果"
+                  title="关闭"
+                  @click="dismissWmsAllocationTask"
                 >
-                  刷新任务
+                  <el-icon><Close /></el-icon>
                 </el-button>
               </div>
               <el-table v-if="wmsAllocationRows.length" :data="wmsAllocationRows" border size="small" max-height="220">
@@ -1025,6 +1037,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Close } from '@element-plus/icons-vue'
 import CustomerPickerDialog from './CustomerPickerDialog.vue'
 import CustomerAutocomplete from './CustomerAutocomplete.vue'
 import SupplementDrawingDialog from './order/SupplementDrawingDialog.vue'
@@ -1647,6 +1660,10 @@ const wmsAllocationRows = computed(() => {
   const rows = result?.results || result?.rows || []
   return Array.isArray(rows) ? rows : []
 })
+
+const dismissWmsAllocationTask = () => {
+  wmsAllocationTask.value = null
+}
 
 const parseTaskResult = (task) => {
   const result = task?.resultJson || task?.result || task?.task?.resultJson
@@ -2700,6 +2717,18 @@ onMounted(() => {
 
 .allocation-split-filters :deep(.el-input) {
   width: 140px;
+}
+
+.sales-order-wms-task-result-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sales-order-wms-task-result-close {
+  flex: 0 0 auto;
+  color: var(--erp-text-secondary);
 }
 
 .allocation-split-disabled-reason {
