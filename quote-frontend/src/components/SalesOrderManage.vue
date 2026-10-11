@@ -843,9 +843,10 @@
                   <el-button
                     v-if="manualSplitAvailable(row)"
                     v-permission="SALES_ORDER_UPDATE_PERMISSION"
-                    type="primary"
-                    link
+                    type="warning"
+                    plain
                     size="small"
+                    class="allocation-split-action"
                     @click="openManualSplitDialog(row)"
                   >
                     拆行

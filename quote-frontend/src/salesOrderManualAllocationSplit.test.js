@@ -17,6 +17,9 @@ describe('sales order manual allocation split', () => {
     expect(pageSource).toContain('manualSplitRemainder')
     expect(pageSource).toContain('manualSplitAvailable(row)')
     expect(pageSource).toContain('allocationSplitSourceText')
+    expect(pageSource).toContain('type="warning"')
+    expect(pageSource).toContain('class="allocation-split-action"')
+    expect(pageSource).not.toContain('type="primary"\n                    link\n                    size="small"\n                    class="allocation-split-action"')
   })
 
   test('posts manual split quantities through the sales order update endpoint', () => {
