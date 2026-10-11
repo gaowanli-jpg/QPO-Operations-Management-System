@@ -252,6 +252,7 @@ public class SalesOrderU9SyncStateService {
         QueryWrapper<SalesOrderItem> query = new QueryWrapper<>();
         query.eq("sales_order_id", salesOrderId)
                 .and(wrapper -> wrapper.eq("u9_change_excluded", false).or().isNull("u9_change_excluded"))
+                .gt("qty", 0)
                 .orderByAsc("id");
         List<SalesOrderItem> items = itemMapper.selectList(query);
         return items == null ? List.of() : items;

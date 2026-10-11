@@ -1,8 +1,11 @@
 package com.machining.quote;
 
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.machining.quote.domain.QuoteStatusWorkflow;
-import com.machining.quote.dto.SalesOrderU9SyncResp;
 import com.machining.quote.dto.SalesOrderU9PriceMode;
+import com.machining.quote.dto.SalesOrderU9SyncPreviewLine;
+import com.machining.quote.dto.SalesOrderU9SyncPreviewResp;
+import com.machining.quote.dto.SalesOrderU9SyncResp;
 import com.machining.quote.dto.u9.U9ApiResult;
 import com.machining.quote.dto.u9.U9ResultDTO;
 import com.machining.quote.dto.u9.U9SalesOrderHeadDTO;
@@ -27,6 +30,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -245,6 +249,32 @@ class SalesOrderU9SyncWorkflowTest {
     }
 
     @Test
+    void previewExcludesZeroQuantityItemsFromU9EffectiveLines() {
+        Fixture fixture = fixture();
+        SalesOrderHeader header = header(9050L, "SOQPO-050", "未同步");
+        SalesOrderItem active = item(5051L, header.getId(), "SALES-MAT-ACTIVE", new BigDecimal("18.50"));
+        SalesOrderItem zeroQuantity = item(5052L, header.getId(), "SALES-MAT-ZERO", new BigDecimal("21.00"));
+        markConfirmed(active, "MAT-ACTIVE", 5);
+        markConfirmed(zeroQuantity, "MAT-ZERO", 0);
+
+        when(fixture.headerMapper.selectById(header.getId())).thenReturn(header);
+        when(fixture.itemMapper.selectList(any())).thenAnswer(invocation ->
+                queryUsesU9PositiveQuantityFilter(invocation.getArgument(0))
+                        ? List.of(active)
+                        : List.of(active, zeroQuantity));
+        when(fixture.itemMapper.selectCount(any())).thenAnswer(invocation ->
+                queryUsesU9PositiveQuantityFilter(invocation.getArgument(0)) ? 1L : 2L);
+
+        SalesOrderU9SyncPreviewResp response = fixture.service.previewSalesOrder(header.getId());
+
+        assertThat(response.getItemCount()).isEqualTo(1);
+        assertThat(response.getTotal()).isEqualTo(1);
+        assertThat(response.getLines()).extracting(SalesOrderU9SyncPreviewLine::getSalesOrderItemId)
+                .containsExactly(active.getId());
+        assertThat(response.getSyncReady()).isTrue();
+    }
+
+    @Test
     void auditActionsAndControllerPermissionCloseU9SyncBoundary() {
         assertThat(AuditService.inferModule("SALES_ORDER_U9_SYNC")).isEqualTo("MARKET");
         assertThat(AuditService.labelForAction("SALES_ORDER_U9_SYNC")).contains("销售订单").contains("U9");
@@ -451,6 +481,14 @@ class SalesOrderU9SyncWorkflowTest {
         } catch (java.io.IOException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    private static boolean queryUsesU9PositiveQuantityFilter(Object query) {
+        if (!(query instanceof QueryWrapper<?> wrapper)) {
+            return false;
+        }
+        String segment = wrapper.getCustomSqlSegment().toLowerCase(Locale.ROOT);
+        return segment.contains("u9_change_excluded") && segment.contains("qty >");
     }
 
     private static final class Fixture {

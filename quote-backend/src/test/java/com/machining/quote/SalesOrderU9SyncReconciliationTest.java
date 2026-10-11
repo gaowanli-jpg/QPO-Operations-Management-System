@@ -260,7 +260,7 @@ class SalesOrderU9SyncReconciliationTest {
         ArgumentCaptor<QueryWrapper<SalesOrderItem>> queryCaptor = ArgumentCaptor.forClass(QueryWrapper.class);
         verify(itemMapper).selectList(queryCaptor.capture());
         assertThat(queryCaptor.getValue().getCustomSqlSegment().toLowerCase(Locale.ROOT))
-                .contains("u9_change_excluded");
+                .contains("u9_change_excluded", "qty >");
     }
 
     @Test
