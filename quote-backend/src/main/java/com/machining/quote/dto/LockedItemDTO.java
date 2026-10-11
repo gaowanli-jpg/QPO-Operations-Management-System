@@ -20,6 +20,10 @@ public class LockedItemDTO {
     private Long sourceOrderId;
     private Long sourceItemId;
     private String itemType;
+    private String allocationSource;
+    private String allocationSplitSource;
+    private Integer splitParentAllocationId;
+    private String wmsReservationStatus;
     private String allocationType;
     private Integer qty;
     private Integer ticketQty;

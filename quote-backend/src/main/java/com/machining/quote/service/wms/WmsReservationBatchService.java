@@ -259,6 +259,9 @@ public class WmsReservationBatchService {
         if (trim(allocation.getMaterialNo()) == null) {
             return "Material number is not confirmed";
         }
+        if (allocation.getAllocationSplitSource() != null) {
+            return "Allocation has already completed an initial split";
+        }
         String mesStatus = normalizeStatus(allocation.getMesProductionStatus());
         if ("PROCESSING".equals(mesStatus) || "SUBMITTING".equals(mesStatus)
                 || STATUS_RESULT_UNKNOWN.equals(mesStatus) || STATUS_SUCCESS.equals(mesStatus)) {

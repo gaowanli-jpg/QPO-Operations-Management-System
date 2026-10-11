@@ -3,6 +3,8 @@ package com.machining.quote.controller;
 import com.machining.quote.config.RequirePermission;
 import com.machining.quote.dto.CustomerOptionDTO;
 import com.machining.quote.dto.AllocationSplitBatchReq;
+import com.machining.quote.dto.ManualAllocationSplitReq;
+import com.machining.quote.dto.ManualAllocationSplitResp;
 import com.machining.quote.dto.OrderStatusChangeReq;
 import com.machining.quote.dto.OrderStatusChangeResult;
 import com.machining.quote.dto.PageResult;
@@ -181,6 +183,14 @@ public class SalesOrderManageController {
             @PathVariable Long salesOrderId,
             @RequestBody(required = false) AllocationSplitBatchReq req) {
         return salesOrderMaintenanceService.saveAllocationSplits(salesOrderId, req);
+    }
+
+    @PostMapping("/orders/{salesOrderId}/allocation-splits/manual")
+    @RequirePermission("market:sales-order:update")
+    public ManualAllocationSplitResp manualAllocationSplit(
+            @PathVariable Long salesOrderId,
+            @RequestBody(required = false) ManualAllocationSplitReq req) {
+        return salesOrderMaintenanceService.manualAllocationSplit(salesOrderId, req);
     }
 
     @PostMapping("/orders/{salesOrderId}/items/field-replacement")

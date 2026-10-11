@@ -129,6 +129,10 @@ public class WmsReservationPlanService {
             failures.add(new RowFailure(allocationId, allocation.getTicketId(), "allocation is not an active production row"));
             return null;
         }
+        if (allocation.getAllocationSplitSource() != null) {
+            failures.add(new RowFailure(allocationId, allocation.getTicketId(), "allocation has already completed an initial split"));
+            return null;
+        }
         SalesOrderItem sourceItem = salesOrderItemMapper.selectByAllocationIdForUpdate(allocationId.longValue());
         if (sourceItem == null || sourceItem.getSalesOrderId() == null) {
             failures.add(new RowFailure(allocationId, allocation.getTicketId(), "sales order item not found for allocation"));

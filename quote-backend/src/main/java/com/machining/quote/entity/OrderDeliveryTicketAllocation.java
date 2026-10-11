@@ -23,6 +23,8 @@ public class OrderDeliveryTicketAllocation {
     private Long sourceOrderId;
     private Long sourceItemId;
     private String allocationSource;
+    private String allocationSplitSource;
+    private Integer splitParentAllocationId;
     private String allocationType;
     private Long wmsReservationTicketId;
     private Integer qty;

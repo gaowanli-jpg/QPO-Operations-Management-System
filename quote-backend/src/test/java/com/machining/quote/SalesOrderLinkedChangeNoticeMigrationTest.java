@@ -49,7 +49,7 @@ class SalesOrderLinkedChangeNoticeMigrationTest {
                     .mapToInt(matcher -> Integer.parseInt(matcher.group(1)))
                     .max().orElse(0);
         }
-        assertThat(maxVersion).isEqualTo(59);
+        assertThat(maxVersion).isEqualTo(60);
 
         Path migration = MIGRATION_DIR.resolve("V56__sales_order_linked_change_notice_filter_fields.sql");
         assertThat(migration).exists();

@@ -9,6 +9,8 @@ import com.machining.quote.dto.SalesOrderMaintenanceOrderUpdateReq;
 import com.machining.quote.dto.SalesOrderMaintenanceUpdateResp;
 import com.machining.quote.dto.AllocationSplitBatchReq;
 import com.machining.quote.dto.AllocationSplitQtyReq;
+import com.machining.quote.dto.ManualAllocationSplitReq;
+import com.machining.quote.dto.ManualAllocationSplitResp;
 import com.machining.quote.entity.DictPricingMarkupFee;
 import com.machining.quote.entity.SalesOrderHeader;
 import com.machining.quote.entity.SalesOrderItem;
@@ -74,6 +76,8 @@ public class SalesOrderMaintenanceService {
     private DataScopeService dataScopeService;
     @Autowired(required = false)
     private AuditService auditService;
+    @Autowired
+    private AllocationSplitService allocationSplitService;
 
     @Transactional
     public SalesOrderMaintenanceUpdateResp saveOrder(Long salesOrderId, SalesOrderMaintenanceOrderUpdateReq req) {
@@ -206,6 +210,63 @@ public class SalesOrderMaintenanceService {
         return response(header, changes.size(), Set.of("qty"), "锁库拆分数量已保存");
     }
 
+
+    @Transactional
+    public ManualAllocationSplitResp manualAllocationSplit(Long salesOrderId, ManualAllocationSplitReq req) {
+        long startedAt = System.currentTimeMillis();
+        if (salesOrderId == null || req == null || req.getAllocationId() == null) {
+            throw new RuntimeException("请提供需要人工拆行的待产 Allocation");
+        }
+        SalesOrderHeader header = headerMapper.selectByIdForUpdate(salesOrderId);
+        if (header == null) {
+            throw new RuntimeException("销售订单不存在");
+        }
+        assertDataScope(header);
+        AllocationSplitService.SplitResult result = allocationSplitService.applyManualSplit(
+                salesOrderId,
+                req.getAllocationId(),
+                req.getInStockQty(),
+                req.getInProductionQty());
+        ManualAllocationSplitResp response = new ManualAllocationSplitResp();
+        response.setSuccess(true);
+        response.setMessage(req.getInStockQty() == 0 && req.getInProductionQty() == 0
+                ? "人工确认无库存，全部保留待产"
+                : "人工拆行已完成");
+        response.setSalesOrderId(result.salesOrderId());
+        response.setSourceAllocationId(result.sourceAllocationId());
+        response.setSourceAllocationOldQty(result.sourceAllocationOldQty());
+        response.setInStockQty(req.getInStockQty());
+        response.setInProductionQty(req.getInProductionQty());
+        response.setProductionRequiredQty(result.productionRequiredQty());
+        response.setCreatedAllocationIds(result.createdAllocations().stream()
+                .map(com.machining.quote.entity.OrderDeliveryTicketAllocation::getId)
+                .toList());
+        response.setCreatedSalesOrderItemIds(result.createdSalesOrderItemIds());
+
+        if (auditService != null) {
+            Map<String, Object> summary = new LinkedHashMap<>();
+            summary.put("salesOrderId", salesOrderId);
+            summary.put("salesOrderNo", header.getSalesOrderNo());
+            summary.put("sourceAllocationId", result.sourceAllocationId());
+            summary.put("inStockQty", req.getInStockQty());
+            summary.put("inProductionQty", req.getInProductionQty());
+            summary.put("productionRequiredQty", result.productionRequiredQty());
+            summary.put("createdAllocationIds", response.getCreatedAllocationIds());
+            summary.put("createdSalesOrderItemIds", response.getCreatedSalesOrderItemIds());
+            summary.put("durationMs", System.currentTimeMillis() - startedAt);
+            auditService.record(
+                    "SALES_ORDER_MANUAL_ALLOCATION_SPLIT",
+                    TARGET_TYPE,
+                    salesOrderId,
+                    null,
+                    summary,
+                    "MARKET",
+                    "SUCCESS",
+                    AuditService.labelForAction("SALES_ORDER_MANUAL_ALLOCATION_SPLIT"),
+                    null);
+        }
+        return response;
+    }
 
     @Transactional
     public SalesOrderMaintenanceUpdateResp replaceItemField(Long salesOrderId, SalesOrderItemFieldReplacementReq req) {

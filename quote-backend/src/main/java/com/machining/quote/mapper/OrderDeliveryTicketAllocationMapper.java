@@ -60,6 +60,9 @@ public interface OrderDeliveryTicketAllocationMapper extends BaseMapper<OrderDel
     @Select("SELECT * FROM order_delivery_ticket_allocation WHERE ticket_id = #{ticketId} ORDER BY id ASC")
     List<OrderDeliveryTicketAllocation> selectByTicketId(@Param("ticketId") Integer ticketId);
 
+    @Select("SELECT * FROM order_delivery_ticket_allocation WHERE split_parent_allocation_id = #{parentAllocationId} ORDER BY id ASC")
+    List<OrderDeliveryTicketAllocation> selectBySplitParentAllocationId(@Param("parentAllocationId") Integer parentAllocationId);
+
     @Select("""
             <script>
             SELECT alloc.*,
@@ -205,6 +208,14 @@ public interface OrderDeliveryTicketAllocationMapper extends BaseMapper<OrderDel
                 alloc.source_type,
                 alloc.source_order_id,
                 alloc.source_item_id,
+                alloc.allocation_source,
+                alloc.allocation_split_source,
+                alloc.split_parent_allocation_id,
+                   (SELECT reservation.status
+                      FROM wms_reservation_ticket reservation
+                     WHERE reservation.allocation_id = alloc.id
+                     ORDER BY reservation.updated_at DESC NULLS LAST, reservation.id DESC
+                     LIMIT 1) AS wms_reservation_status,
                 alloc.allocation_type,
                 alloc.wms_reservation_ticket_id,
                 alloc.qty,
@@ -267,6 +278,10 @@ public interface OrderDeliveryTicketAllocationMapper extends BaseMapper<OrderDel
             @Result(column = "allocation_id", property = "allocationId"),
             @Result(column = "sales_order_item_id", property = "salesOrderItemId"),
             @Result(column = "sales_order_item_line_no", property = "salesOrderItemLineNo"),
+            @Result(column = "allocation_source", property = "allocationSource"),
+            @Result(column = "allocation_split_source", property = "allocationSplitSource"),
+            @Result(column = "split_parent_allocation_id", property = "splitParentAllocationId"),
+            @Result(column = "wms_reservation_status", property = "wmsReservationStatus"),
             @Result(column = "engineering_material_code", property = "engineeringMaterialCode"),
             @Result(column = "engineering_material_type_code", property = "engineeringMaterialTypeCode"),
             @Result(column = "engineering_material_type_name", property = "engineeringMaterialTypeName"),

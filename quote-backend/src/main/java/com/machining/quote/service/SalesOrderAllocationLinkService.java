@@ -267,6 +267,10 @@ public class SalesOrderAllocationLinkService {
     }
 
     public void syncWmsAllocationsForAllocation(Integer allocationId, List<OrderDeliveryTicketAllocation> allocations) {
+        syncAllocationSplitsForAllocation(allocationId, allocations);
+    }
+
+    public void syncAllocationSplitsForAllocation(Integer allocationId, List<OrderDeliveryTicketAllocation> allocations) {
         if (allocationId == null || allocations == null || allocations.isEmpty()) {
             return;
         }

@@ -817,6 +817,9 @@
               <el-table-column prop="allocationType" label="拆行类型" width="130">
                 <template #default="{ row }">{{ allocationTypeText(row.allocationType) }}</template>
               </el-table-column>
+              <el-table-column prop="allocationSplitSource" label="拆分来源" width="100" align="center">
+                <template #default="{ row }">{{ allocationSplitSourceText(row.allocationSplitSource) }}</template>
+              </el-table-column>
               <el-table-column prop="partNo" label="图号" min-width="150" show-overflow-tooltip />
               <el-table-column prop="version" label="版本" width="80" align="center" />
               <el-table-column prop="materialNo" label="物料号" min-width="130" show-overflow-tooltip />
@@ -835,6 +838,24 @@
                 </template>
               </el-table-column>
               <el-table-column prop="ticketQty" label="提单总量" width="100" align="center" />
+              <el-table-column label="人工拆行" width="110" align="center">
+                <template #default="{ row }">
+                  <el-button
+                    v-if="manualSplitAvailable(row)"
+                    v-permission="SALES_ORDER_UPDATE_PERMISSION"
+                    type="primary"
+                    link
+                    size="small"
+                    @click="openManualSplitDialog(row)"
+                  >
+                    拆行
+                  </el-button>
+                  <el-tooltip v-else-if="manualSplitReason(row) !== '-'" :content="manualSplitReason(row)" placement="top">
+                    <span class="allocation-split-disabled-reason">{{ manualSplitReason(row) }}</span>
+                  </el-tooltip>
+                  <span v-else>-</span>
+                </template>
+              </el-table-column>
               <el-table-column prop="internalProjectNo" label="内部项目号" min-width="140" show-overflow-tooltip />
               <el-table-column prop="customerOrderNo" label="客户订单号" min-width="140" show-overflow-tooltip />
               <el-table-column prop="customerProjectNo" label="客户项目号" min-width="140" show-overflow-tooltip />
@@ -959,6 +980,38 @@
       @select="handleCustomerSelected"
     />
 
+    <el-dialog v-model="manualSplitVisible" title="人工拆行" width="520px" destroy-on-close>
+      <el-form label-width="150px" class="erp-dialog-form">
+        <el-form-item label="图号 / 版本">
+          <span>{{ manualSplitRow?.partNo || '-' }} / {{ manualSplitRow?.version || '-' }}</span>
+        </el-form-item>
+        <el-form-item label="当前待产数量">
+          <strong>{{ manualSplitRow?.qty ?? 0 }}</strong>
+        </el-form-item>
+        <el-form-item label="锁已入库库存数量">
+          <el-input-number v-model="manualSplitDraft.inStockQty" :min="0" :precision="0" :controls="false" />
+        </el-form-item>
+        <el-form-item label="锁在产库存数量">
+          <el-input-number v-model="manualSplitDraft.inProductionQty" :min="0" :precision="0" :controls="false" />
+        </el-form-item>
+        <el-form-item label="剩余待产数量">
+          <span :class="manualSplitRemainder < 0 ? 'manual-split-invalid' : ''">{{ manualSplitRemainder }}</span>
+        </el-form-item>
+        <el-alert
+          v-if="manualSplitDraft.inStockQty === 0 && manualSplitDraft.inProductionQty === 0"
+          title="人工确认无库存，全部保留待产"
+          type="info"
+          :closable="false"
+        />
+      </el-form>
+      <template #footer>
+        <div class="erp-dialog-footer">
+          <el-button @click="manualSplitVisible = false">取消</el-button>
+          <el-button type="primary" :loading="manualSplitSaving" :disabled="manualSplitRemainder < 0" @click="submitManualSplit">确认拆行</el-button>
+        </div>
+      </template>
+    </el-dialog>
+
     <DrawingFolderViewer
       v-model="folderViewerVisible"
       :folder-url="currentDrawingFolderUrl"
@@ -994,6 +1047,7 @@ import {
   listSalesOrders,
   listSalesOrderProcessSheets,
   listSalesOrderTickets,
+  manualSplitSalesOrderAllocation,
   saveSalesOrderHeader,
   saveSalesOrderAllocationSplits,
   saveSalesOrderItems,
@@ -1037,6 +1091,7 @@ const salesOrderActionKeys = {
   headerSave: (orderId) => `sales-order:header-save:${orderId || 'none'}`,
   itemSave: (orderId) => `sales-order:item-save:${orderId || 'none'}`,
   allocationSplitSave: (orderId) => `sales-order:allocation-split-save:${orderId || 'none'}`,
+  manualAllocationSplit: (orderId, allocationId) => `sales-order:manual-allocation-split:${orderId || 'none'}:${allocationId || 'none'}`,
   itemFieldReplacement: (orderId, field) => `sales-order:item-field-replacement:${field || 'none'}:${orderId || 'none'}`,
   itemPriceConversion: (orderId, direction) => `sales-order:item-price-conversion:${direction}:${orderId || 'none'}`,
   itemU9ChangeExclusion: (itemId) => `sales-order:item-u9-change-exclusion:${itemId || 'none'}`,
@@ -1142,6 +1197,10 @@ const detailItemPagination = reactive({ page: 1, pageSize: 20 })
 const detailTicketPagination = reactive({ page: 1, pageSize: 20 })
 const allocationSplitPagination = reactive({ page: 1, pageSize: 20 })
 const allocationSplitFilters = reactive({ partNo: '', version: '' })
+const manualSplitVisible = ref(false)
+const manualSplitSaving = ref(false)
+const manualSplitRow = ref(null)
+const manualSplitDraft = reactive({ inStockQty: 0, inProductionQty: 0 })
 const detailProcessSheetPagination = reactive({ page: 1, pageSize: 20 })
 const detailItemTotal = ref(0)
 const detailTicketTotal = ref(0)
@@ -1189,6 +1248,9 @@ const allocationSplitDirtyCount = computed(() => allocationSplitList.value.reduc
   const draft = allocationSplitDrafts[row?.allocationId]
   return draft && Number(draft.qty ?? 0) !== Number(row?.qty ?? 0) ? count + 1 : count
 }, 0))
+const manualSplitRemainder = computed(() => Number(manualSplitRow.value?.qty || 0)
+  - Number(manualSplitDraft.inStockQty || 0)
+  - Number(manualSplitDraft.inProductionQty || 0))
 const isItemFieldReplacementPending = (field) => isPending(salesOrderActionKeys.itemFieldReplacement(orderDetail.value?.orderInfo?.id, field))
 const itemPriceConversionPending = (direction) => isPending(salesOrderActionKeys.itemPriceConversion(orderDetail.value?.orderInfo?.id, direction))
 
@@ -1481,6 +1543,67 @@ const isAllocationWmsSelectable = (row) => {
   if (row.wmsReservationTicketId) return false
   return !['PROCESSING', 'SUBMITTING', 'RESULT_UNKNOWN', 'SUCCESS']
     .includes(String(row.mesProductionStatus || '').toUpperCase())
+}
+
+const allocationSplitSourceText = (value) => ({ WMS: 'WMS', MANUAL: '人工' }[String(value || '').toUpperCase()] || '-')
+
+const manualSplitReason = (row) => {
+  if (!row || String(row.allocationType || '').toUpperCase() !== 'PRODUCTION_REQUIRED') return '-'
+  if (Boolean(row.discarded)) return '已废弃'
+  if (Number(row.qty || 0) <= 0) return '数量为0'
+  if (!String(row.materialNo || '').trim()) return '物料号未成功'
+  if (row.allocationSplitSource) return `已${String(row.allocationSplitSource).toUpperCase() === 'WMS' ? 'WMS' : '人工'}拆行`
+  if (row.wmsReservationTicketId || ['RESERVED', 'SUBMITTING', 'RESULT_UNKNOWN', 'RESPONSE_RECEIVED', 'APPLY_FAILED']
+    .includes(String(row.wmsReservationStatus || '').toUpperCase())) return 'WMS处理中或待核对'
+  if (['PROCESSING', 'SUBMITTING', 'RESULT_UNKNOWN', 'SUCCESS'].includes(String(row.mesProductionStatus || '').toUpperCase())) return 'MES已开始'
+  return ''
+}
+
+const manualSplitAvailable = (row) => manualSplitReason(row) === ''
+
+const openManualSplitDialog = (row) => {
+  if (!manualSplitAvailable(row)) {
+    ElMessage.warning(manualSplitReason(row))
+    return
+  }
+  manualSplitRow.value = row
+  manualSplitDraft.inStockQty = 0
+  manualSplitDraft.inProductionQty = 0
+  manualSplitVisible.value = true
+}
+
+const submitManualSplit = async () => {
+  const salesOrderId = orderDetail.value?.orderInfo?.id
+  const row = manualSplitRow.value
+  const inStockQty = Number(manualSplitDraft.inStockQty)
+  const inProductionQty = Number(manualSplitDraft.inProductionQty)
+  if (!salesOrderId || !row?.allocationId) return
+  if (!Number.isInteger(inStockQty) || !Number.isInteger(inProductionQty) || inStockQty < 0 || inProductionQty < 0) {
+    ElMessage.warning('库存数量必须是大于或等于0的整数')
+    return
+  }
+  if (inStockQty + inProductionQty > Number(row.qty || 0)) {
+    ElMessage.warning('锁已入库数量与锁在产数量合计不能超过当前待产数量')
+    return
+  }
+  manualSplitSaving.value = true
+  try {
+    const response = await manualSplitSalesOrderAllocation(salesOrderId, {
+      allocationId: Number(row.allocationId),
+      inStockQty,
+      inProductionQty
+    })
+    ElMessage.success(response?.message || '人工拆行已完成')
+    manualSplitVisible.value = false
+    await loadOrders()
+    await refreshCurrentDetail()
+    await Promise.all([fetchDetailItems(), fetchAllocationSplits()])
+  } catch (error) {
+    console.error(error)
+    ElMessage.error(error.response?.data?.message || error.message || '人工拆行失败')
+  } finally {
+    manualSplitSaving.value = false
+  }
 }
 
 const handleAllocationSplitSelectionChange = (rows) => {
@@ -2576,6 +2699,15 @@ onMounted(() => {
 
 .allocation-split-filters :deep(.el-input) {
   width: 140px;
+}
+
+.allocation-split-disabled-reason {
+  color: var(--erp-text-secondary);
+  font-size: 12px;
+}
+
+.manual-split-invalid {
+  color: var(--erp-danger);
 }
 
 .item-edit-input {
