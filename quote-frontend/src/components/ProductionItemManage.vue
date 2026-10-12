@@ -146,6 +146,9 @@
           <el-table-column type="selection" width="46" fixed align="center" />
           <el-table-column prop="id" label="分配ID" width="96" fixed align="center" show-overflow-tooltip />
           <el-table-column prop="ticketId" label="提单ID" width="96" fixed align="center" show-overflow-tooltip />
+          <el-table-column prop="salesOrderDate" label="下单日期" width="120" fixed align="center" show-overflow-tooltip>
+            <template #default="{ row }">{{ formatDash(row.salesOrderDate) }}</template>
+          </el-table-column>
           <el-table-column prop="partNo" label="图号" min-width="150" fixed show-overflow-tooltip />
           <el-table-column prop="version" label="版本" width="80" align="center">
             <template #default="{ row }">{{ formatDash(row.version) }}</template>

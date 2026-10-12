@@ -10,6 +10,7 @@ public class LockedItemDTO {
     private Integer id;
     private Long salesOrderItemId;
     private Integer salesOrderItemLineNo;
+    private LocalDate salesOrderDate;
     private Long allocationId;
     private Integer ticketId;
     private Integer rfqId;

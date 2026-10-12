@@ -32,6 +32,17 @@ describe('ProductionItemManage split workbench', () => {
     expect(pageSource).not.toContain("request('/api/order-delivery/locked-items'")
   })
 
+  test('shows the linked sales order date before part number without changing pagination', () => {
+    const dateColumnIndex = pageSource.indexOf('<el-table-column prop="salesOrderDate" label="下单日期"')
+    const partNumberColumnIndex = pageSource.indexOf('<el-table-column prop="partNo" label="图号"')
+
+    expect(dateColumnIndex).toBeGreaterThanOrEqual(0)
+    expect(dateColumnIndex).toBeLessThan(partNumberColumnIndex)
+    expect(pageSource).toContain('v-model:current-page="page"')
+    expect(pageSource).toContain('v-model:page-size="pageSize"')
+    expect(pageSource).toContain(':total="total"')
+  })
+
   test('owns MES production dispatch interaction and batch result summary', () => {
     expect(pageSource).toContain('PRODUCTION_ITEM_MES_PRODUCTION_SUBMIT_PERMISSION')
     expect(pageSource).toContain('market:production-item:mes-production-submit')
