@@ -419,8 +419,8 @@ public class DashboardOverviewService {
                         "优先关注工程核价积压", "primary", "/orders", query("status", QuoteStatusWorkflow.UNPRICED), "market:order:view"),
                 summaryCard("salesReleased", "销售已提单", salesReleased, "单", "已提单且待同步 U9",
                         "进入 U9 同步选择订单", "success", "/u9-sync", query("materialReadyStatus", "READY"), "market:u9-sync:view"),
-                summaryCard("deliveredActive", "已提未完成", deliveredActive, "行", "等待物料号或库存信息",
-                        "处理 MES / WMS 待办", "warning", "/delivered-items", query("flowScope", "ACTIVE"), "market:delivered-item:view"),
+                summaryCard("deliveredActive", "已提未完成", deliveredActive, "行", "等待物料号获取结果",
+                        "进入已提零件获取物料号", "warning", "/delivered-items", query("flowScope", "ACTIVE"), "market:delivered-item:view"),
                 summaryCard("lockedProduction", "待生产下发", lockedProduction, "行", "WMS 锁库后仍需生产",
                         "进入待产零件下发生产", "info", "/production-items", query("mesProductionStatus", "PENDING"), "market:production-item:view")
         );
