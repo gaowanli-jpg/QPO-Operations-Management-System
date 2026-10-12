@@ -172,13 +172,15 @@ class LockedItemStockPickingOrderServiceTest {
         OrderDeliveryTicketAllocation allocation = allocation(4, "IN_STOCK_LOCK", "PENDING");
         OrderDeliveryTicket ticket = new OrderDeliveryTicket();
         ticket.setId(104);
-        when(allocationMapper.selectById(4)).thenReturn(allocation);
-        when(ticketMapper.selectById(104)).thenReturn(ticket);
+        when(allocationMapper.selectBatchIds(List.of(4))).thenReturn(List.of(allocation));
+        when(ticketMapper.selectBatchIds(List.of(104))).thenReturn(List.of(ticket));
         wire(service, allocationMapper, ticketMapper, mock(MesProductionOrderCreateClient.class), null, dataScopeService, Clock.systemDefaultZone());
 
         service.assertCanAccessAllocations(List.of(4));
 
-        verify(dataScopeService).assertCanAccessDeliveryTicket(ticket);
+        verify(allocationMapper).selectBatchIds(List.of(4));
+        verify(ticketMapper).selectBatchIds(List.of(104));
+        verify(dataScopeService).assertCanAccessDeliveryTickets(List.of(ticket));
     }
 
     private void wire(

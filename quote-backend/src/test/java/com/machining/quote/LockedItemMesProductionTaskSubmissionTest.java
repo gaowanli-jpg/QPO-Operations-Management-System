@@ -39,6 +39,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
@@ -51,6 +52,37 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class LockedItemMesProductionTaskSubmissionTest extends LockedItemMesProductionDispatchTestSupport {
+
+    @Test
+    void productionDispatchAllowsAtMostOneThousandUniqueAllocations() {
+        MesProductionDispatchService dispatchService = new MesProductionDispatchService();
+        List<Integer> maximumBatch = java.util.stream.IntStream.rangeClosed(1, 1000).boxed().toList();
+        List<Integer> oversizedBatch = java.util.stream.IntStream.rangeClosed(1, 1001).boxed().toList();
+
+        assertThat(dispatchService.normalizeAllocationIds(maximumBatch)).hasSize(1000);
+        assertThatThrownBy(() -> dispatchService.normalizeAllocationIds(oversizedBatch))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("at most 1000");
+    }
+
+    @Test
+    void discardedAllocationsAreLoadedInOneBatchBeforeTaskCreation() {
+        SystemTaskService taskService = new SystemTaskService();
+        OrderDeliveryTicketAllocationMapper allocationMapper = mock(OrderDeliveryTicketAllocationMapper.class);
+        OrderDeliveryTicketAllocation active = new OrderDeliveryTicketAllocation();
+        active.setId(10);
+        active.setDiscarded(false);
+        OrderDeliveryTicketAllocation discarded = new OrderDeliveryTicketAllocation();
+        discarded.setId(11);
+        discarded.setDiscarded(true);
+        when(allocationMapper.selectBatchIds(List.of(10, 11))).thenReturn(List.of(active, discarded));
+        org.springframework.test.util.ReflectionTestUtils.setField(taskService, "allocationMapper", allocationMapper);
+
+        assertThat(taskService.filterDiscardedAllocationIds(List.of(10, 11))).containsExactly(10);
+
+        verify(allocationMapper).selectBatchIds(List.of(10, 11));
+        verify(allocationMapper, never()).selectById(any());
+    }
 
     @Test
     @SuppressWarnings("unchecked")

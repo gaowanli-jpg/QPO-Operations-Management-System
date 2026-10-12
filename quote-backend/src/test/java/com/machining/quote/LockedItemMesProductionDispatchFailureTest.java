@@ -170,7 +170,8 @@ class LockedItemMesProductionDispatchFailureTest extends LockedItemMesProduction
         OrderDeliveryTicket ticket = new OrderDeliveryTicket();
         ticket.setId(103);
         when(allocationMapper.selectById(3)).thenReturn(failed);
-        when(ticketMapper.selectById(103)).thenReturn(ticket);
+        when(allocationMapper.selectBatchIds(List.of(3))).thenReturn(List.of(failed));
+        when(ticketMapper.selectBatchIds(List.of(103))).thenReturn(List.of(ticket));
         when(allocationMapper.update(any(OrderDeliveryTicketAllocation.class), any())).thenReturn(1);
         when(client.dispatch(any())).thenReturn(success("MES-PROD-3", "accepted"));
         wireDispatchService(service, allocationMapper, ticketMapper, client, null, dataScopeService);
@@ -179,7 +180,10 @@ class LockedItemMesProductionDispatchFailureTest extends LockedItemMesProduction
         Map<String, Object> result = service.dispatchBatch(List.of(3), 9004L);
 
         assertThat(result).containsEntry("successCount", 1);
-        verify(dataScopeService).assertCanAccessDeliveryTicket(ticket);
+        verify(allocationMapper).selectBatchIds(List.of(3));
+        verify(ticketMapper).selectBatchIds(List.of(103));
+        verify(dataScopeService).assertCanAccessDeliveryTickets(List.of(ticket));
+        verify(dataScopeService, never()).assertCanAccessDeliveryTicket(ticket);
         verify(client).dispatch(any());
     }
 }

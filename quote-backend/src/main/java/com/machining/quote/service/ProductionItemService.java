@@ -48,7 +48,7 @@ public class ProductionItemService {
     public LockedItemPageDTO listProductionItems(ProductionItemQueryReq req) {
         ProductionItemQueryReq effectiveReq = req == null ? new ProductionItemQueryReq() : req;
         int safePage = normalizePage(effectiveReq.getPage());
-        int safePageSize = normalizePageSize(effectiveReq.getPageSize());
+        int safePageSize = normalizeProductionPageSize(effectiveReq.getPageSize());
         QueryWrapper<LockedItemDTO> query = buildQuery(effectiveReq);
 
         long total = allocationMapper.countLockedItems(query);
@@ -378,6 +378,13 @@ public class ProductionItemService {
 
     private int normalizePage(Integer page) {
         return page == null || page < 1 ? 1 : page;
+    }
+
+    private int normalizeProductionPageSize(Integer pageSize) {
+        if (pageSize == null || pageSize < 1) {
+            return 100;
+        }
+        return Math.min(pageSize, 1000);
     }
 
     private int normalizePageSize(Integer pageSize) {

@@ -5,11 +5,14 @@ import com.machining.quote.config.AuthContext;
 import com.machining.quote.dto.RoleDataScopeAssignReq;
 import com.machining.quote.entity.AuditLog;
 import com.machining.quote.entity.CustomerMaster;
+import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.entity.SalesOrderHeader;
 import com.machining.quote.entity.SystemRole;
 import com.machining.quote.entity.SystemUser;
 import com.machining.quote.mapper.CustomerMasterMapper;
+import com.machining.quote.mapper.OrderRfqMapper;
+import com.machining.quote.mapper.SalesOrderHeaderMapper;
 import com.machining.quote.mapper.SystemRoleDataScopeCustomerMapper;
 import com.machining.quote.mapper.SystemRoleDataScopeDeptMapper;
 import com.machining.quote.mapper.SystemRoleMapper;
@@ -117,6 +120,74 @@ class PermissionDataScopeServiceTest {
         assertThatThrownBy(() -> service.assertCanAccessSalesOrder(deniedSalesOrder))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("No data permission");
+    }
+
+    @Test
+    void deliveryTicketBatchScopeLoadsDistinctSalesOrdersAndRfqsOnce() {
+        DataScopeService service = serviceWithRoles(role(24L, "KEY_ACCOUNT", "CUSTOMER", false));
+        SystemRoleDataScopeCustomerMapper customerMapper = mock(SystemRoleDataScopeCustomerMapper.class);
+        OrderRfqMapper rfqMapper = mock(OrderRfqMapper.class);
+        SalesOrderHeaderMapper salesOrderMapper = mock(SalesOrderHeaderMapper.class);
+        when(customerMapper.selectCustomerCodesByRoleId(24L)).thenReturn(List.of("C001"));
+        OrderRfq rfq = new OrderRfq();
+        rfq.setId(501);
+        rfq.setCustomerCode("C001");
+        SalesOrderHeader salesOrder = new SalesOrderHeader();
+        salesOrder.setId(701L);
+        salesOrder.setCustomerCode("C001");
+        when(rfqMapper.selectBatchIds(List.of(501))).thenReturn(List.of(rfq));
+        when(salesOrderMapper.selectBatchIds(List.of(701L))).thenReturn(List.of(salesOrder));
+        ReflectionTestUtils.setField(service, "dataScopeCustomerMapper", customerMapper);
+        ReflectionTestUtils.setField(service, "orderRfqMapper", rfqMapper);
+        ReflectionTestUtils.setField(service, "salesOrderHeaderMapper", salesOrderMapper);
+        AuthContext.set(new AuthContext.SessionUser(8, "sales", "Sales", "MARKET"));
+
+        OrderDeliveryTicket firstRfqTicket = new OrderDeliveryTicket();
+        firstRfqTicket.setId(1);
+        firstRfqTicket.setRfqId(501);
+        OrderDeliveryTicket secondRfqTicket = new OrderDeliveryTicket();
+        secondRfqTicket.setId(2);
+        secondRfqTicket.setRfqId(501);
+        OrderDeliveryTicket salesOrderTicket = new OrderDeliveryTicket();
+        salesOrderTicket.setId(3);
+        salesOrderTicket.setSourceType("SALES_ORDER");
+        salesOrderTicket.setSourceOrderId(701L);
+
+        service.assertCanAccessDeliveryTickets(List.of(firstRfqTicket, secondRfqTicket, salesOrderTicket));
+
+        verify(rfqMapper).selectBatchIds(List.of(501));
+        verify(salesOrderMapper).selectBatchIds(List.of(701L));
+        verify(rfqMapper, never()).selectById(org.mockito.ArgumentMatchers.any());
+        verify(salesOrderMapper, never()).selectById(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void deliveryTicketBatchScopeRejectsAnOutOfScopeOrder() {
+        DataScopeService service = serviceWithRoles(role(25L, "KEY_ACCOUNT", "CUSTOMER", false));
+        SystemRoleDataScopeCustomerMapper customerMapper = mock(SystemRoleDataScopeCustomerMapper.class);
+        OrderRfqMapper rfqMapper = mock(OrderRfqMapper.class);
+        when(customerMapper.selectCustomerCodesByRoleId(25L)).thenReturn(List.of("C001"));
+        OrderRfq allowed = new OrderRfq();
+        allowed.setId(501);
+        allowed.setCustomerCode("C001");
+        OrderRfq denied = new OrderRfq();
+        denied.setId(502);
+        denied.setCustomerCode("C002");
+        when(rfqMapper.selectBatchIds(List.of(501, 502))).thenReturn(List.of(allowed, denied));
+        ReflectionTestUtils.setField(service, "dataScopeCustomerMapper", customerMapper);
+        ReflectionTestUtils.setField(service, "orderRfqMapper", rfqMapper);
+        AuthContext.set(new AuthContext.SessionUser(8, "sales", "Sales", "MARKET"));
+        OrderDeliveryTicket allowedTicket = new OrderDeliveryTicket();
+        allowedTicket.setId(1);
+        allowedTicket.setRfqId(501);
+        OrderDeliveryTicket deniedTicket = new OrderDeliveryTicket();
+        deniedTicket.setId(2);
+        deniedTicket.setRfqId(502);
+
+        assertThatThrownBy(() -> service.assertCanAccessDeliveryTickets(List.of(allowedTicket, deniedTicket)))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("No data permission for order 502");
+        verify(rfqMapper).selectBatchIds(List.of(501, 502));
     }
 
     @Test

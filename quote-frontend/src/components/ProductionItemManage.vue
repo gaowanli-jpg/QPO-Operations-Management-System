@@ -41,12 +41,13 @@
             v-permission="PRODUCTION_ITEM_MES_PRODUCTION_SUBMIT_PERMISSION"
             type="primary"
             plain
-            :disabled="selectedAllocationIds.length === 0 || isMesProductionDispatchPending"
+            :disabled="selectedAllocationIds.length === 0 || selectedAllocationIds.length > MAX_MES_PRODUCTION_BATCH_SIZE || isMesProductionDispatchPending"
             :loading="isMesProductionDispatchPending"
             @click="handleMesProductionDispatch"
           >
             下发MES生产
           </el-button>
+          <el-tag size="small" type="info" effect="plain">单次最多下发 1000 条</el-tag>
           <el-button
             v-permission="PRODUCTION_ITEM_DISCARD_PERMISSION"
             type="danger"
@@ -264,7 +265,7 @@
         <el-pagination
           v-model:current-page="page"
           v-model:page-size="pageSize"
-          :page-sizes="[20, 50, 100]"
+          :page-sizes="[20, 50, 100, 300, 500, 1000]"
           layout="total, sizes, prev, pager, next, jumper"
           :pager-count="7"
           :total="total"
@@ -339,6 +340,7 @@ import { formatProcessRouteSnapshot } from '../utils/processRouteFormatter'
 
 const PRODUCTION_ITEM_VIEW_PERMISSION = 'market:production-item:view'
 const PRODUCTION_ITEM_MES_PRODUCTION_SUBMIT_PERMISSION = 'market:production-item:mes-production-submit'
+const MAX_MES_PRODUCTION_BATCH_SIZE = 1000
 const PRODUCTION_ITEM_DISCARD_PERMISSION = 'market:production-item:discard'
 const PRODUCTION_ITEM_RESTORE_PERMISSION = 'market:production-item:restore'
 const DELIVERED_ITEM_VIEW_PERMISSION = 'market:delivered-item:view'
@@ -388,7 +390,7 @@ const selectedRows = ref([])
 const selectedAllocationIds = computed(() => selectedRows.value.map(row => row.id).filter(Boolean))
 const loading = ref(false)
 const page = ref(1)
-const pageSize = ref(20)
+const pageSize = ref(100)
 const total = ref(0)
 const customerPickerVisible = ref(false)
 const ticketDetailVisible = ref(false)
@@ -436,8 +438,12 @@ const loadItems = async () => {
   try {
     if (route.query.ticketId) {
       const records = await listTicketAllocations(route.query.ticketId)
-      items.value = filterProductionRows(records)
-      total.value = items.value.length
+      const filteredRecords = filterProductionRows(records)
+      total.value = filteredRecords.length
+      const lastPage = Math.max(1, Math.ceil(total.value / pageSize.value))
+      page.value = Math.min(page.value, lastPage)
+      const fromIndex = (page.value - 1) * pageSize.value
+      items.value = filteredRecords.slice(fromIndex, fromIndex + pageSize.value)
       return
     }
     const response = await listProductionItems(buildParams())
@@ -668,6 +674,9 @@ const productionDispatchConfirmMessage = () => {
 const handleMesProductionDispatch = async () => {
   if (selectedAllocationIds.value.length === 0) {
     return ElMessage.warning('请先选择需要下发 MES 生产的待产零件。')
+  }
+  if (selectedAllocationIds.value.length > MAX_MES_PRODUCTION_BATCH_SIZE) {
+    return ElMessage.warning(`单次最多下发 ${MAX_MES_PRODUCTION_BATCH_SIZE} 条，请减少选择数量后重试。`)
   }
   mesProductionResult.value = null
   try {

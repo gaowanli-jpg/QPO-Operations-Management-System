@@ -307,9 +307,12 @@ public class SystemTaskService {
     }
 
     public List<Integer> filterDiscardedAllocationIds(List<Integer> allocationIds) {
+        Map<Integer, OrderDeliveryTicketAllocation> allocationsById = new LinkedHashMap<>();
+        allocationMapper.selectBatchIds(allocationIds)
+                .forEach(allocation -> allocationsById.put(allocation.getId(), allocation));
         return allocationIds.stream()
                 .filter(allocationId -> {
-                    OrderDeliveryTicketAllocation allocation = allocationMapper.selectById(allocationId);
+                    OrderDeliveryTicketAllocation allocation = allocationsById.get(allocationId);
                     return allocation == null || !Boolean.TRUE.equals(allocation.getDiscarded());
                 })
                 .toList();

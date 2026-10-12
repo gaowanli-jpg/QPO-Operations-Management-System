@@ -1,6 +1,8 @@
 package com.machining.quote;
 
+import com.machining.quote.service.ProductionItemService;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -12,6 +14,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ProductionItemModuleSplitStage2Test {
     private static final Path MAIN_JAVA = Path.of("src", "main", "java", "com", "machining", "quote");
     private static final Path FRONTEND_SRC = Path.of("..", "quote-frontend", "src");
+
+    @Test
+    void productionListPageSizeDefaultsToOneHundredAndCapsAtOneThousand() {
+        ProductionItemService service = new ProductionItemService();
+
+        assertThat((Integer) ReflectionTestUtils.invokeMethod(service, "normalizeProductionPageSize", (Object) null)).isEqualTo(100);
+        assertThat((Integer) ReflectionTestUtils.invokeMethod(service, "normalizeProductionPageSize", 300)).isEqualTo(300);
+        assertThat((Integer) ReflectionTestUtils.invokeMethod(service, "normalizeProductionPageSize", 500)).isEqualTo(500);
+        assertThat((Integer) ReflectionTestUtils.invokeMethod(service, "normalizeProductionPageSize", 1000)).isEqualTo(1000);
+        assertThat((Integer) ReflectionTestUtils.invokeMethod(service, "normalizeProductionPageSize", 5000)).isEqualTo(1000);
+    }
 
     @Test
     void backendExposesSeparateLockedAndProductionItemReadEndpoints() throws IOException {

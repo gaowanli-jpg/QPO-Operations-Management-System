@@ -89,16 +89,16 @@ public class LockedItemStockPickingOrderService {
         if (ticketMapper == null) {
             throw new RuntimeException("Delivery ticket data permission service is unavailable");
         }
-        for (Integer allocationId : normalizeAllocationIds(allocationIds)) {
-            OrderDeliveryTicketAllocation allocation = allocationMapper.selectById(allocationId);
-            if (allocation == null) {
-                continue;
-            }
-            OrderDeliveryTicket ticket = allocation.getTicketId() == null ? null : ticketMapper.selectById(allocation.getTicketId());
-            if (ticket != null) {
-                dataScopeService.assertCanAccessDeliveryTicket(ticket);
-            }
+        List<OrderDeliveryTicketAllocation> allocations = allocationMapper.selectBatchIds(normalizeAllocationIds(allocationIds));
+        List<Integer> ticketIds = allocations.stream()
+                .map(OrderDeliveryTicketAllocation::getTicketId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (ticketIds.isEmpty()) {
+            return;
         }
+        dataScopeService.assertCanAccessDeliveryTickets(ticketMapper.selectBatchIds(ticketIds));
     }
 
     public Map<String, Object> dispatchBatch(List<Integer> allocationIds, Long taskId) {

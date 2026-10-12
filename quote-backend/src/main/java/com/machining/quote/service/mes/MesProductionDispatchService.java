@@ -63,6 +63,7 @@ public class MesProductionDispatchService {
     private static final String STATUS_RESULT_UNKNOWN = "RESULT_UNKNOWN";
     private static final String STATUS_SUBMITTING = "SUBMITTING";
     private static final String SOURCE_SALES_ORDER = "SALES_ORDER";
+    private static final int MAX_PRODUCTION_DISPATCH_BATCH_SIZE = 1000;
     private static final DateTimeFormatter REQUEST_TIME_FORMAT = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
     private static final DateTimeFormatter BIZ_DATE_FORMAT = DateTimeFormatter.BASIC_ISO_DATE;
 
@@ -108,23 +109,29 @@ public class MesProductionDispatchService {
         if (normalized.isEmpty()) {
             throw new RuntimeException("Please select at least one production item");
         }
+        if (normalized.size() > MAX_PRODUCTION_DISPATCH_BATCH_SIZE) {
+            throw new RuntimeException("A single MES production task can include at most 1000 production items");
+        }
         return new ArrayList<>(normalized);
     }
 
     public void assertCanAccessAllocations(List<Integer> allocationIds) {
-        for (Integer allocationId : normalizeAllocationIds(allocationIds)) {
-            OrderDeliveryTicketAllocation allocation = allocationMapper.selectById(allocationId);
-            if (allocation == null || dataScopeService == null) {
-                continue;
-            }
-            if (ticketMapper == null) {
-                throw new RuntimeException("Delivery ticket data permission service is unavailable");
-            }
-            OrderDeliveryTicket ticket = ticketMapper.selectById(allocation.getTicketId());
-            if (ticket != null) {
-                dataScopeService.assertCanAccessDeliveryTicket(ticket);
-            }
+        if (dataScopeService == null) {
+            return;
         }
+        if (ticketMapper == null) {
+            throw new RuntimeException("Delivery ticket data permission service is unavailable");
+        }
+        List<OrderDeliveryTicketAllocation> allocations = allocationMapper.selectBatchIds(normalizeAllocationIds(allocationIds));
+        List<Integer> ticketIds = allocations.stream()
+                .map(OrderDeliveryTicketAllocation::getTicketId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (ticketIds.isEmpty()) {
+            return;
+        }
+        dataScopeService.assertCanAccessDeliveryTickets(ticketMapper.selectBatchIds(ticketIds));
     }
 
     public Map<String, Object> dispatchBatch(List<Integer> allocationIds, Long taskId) {

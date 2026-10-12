@@ -22,9 +22,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
@@ -209,6 +211,73 @@ public class DataScopeService {
             return;
         }
         throw new RuntimeException("No data permission for delivery ticket " + ticket.getId());
+    }
+
+    public void assertCanAccessDeliveryTickets(List<OrderDeliveryTicket> tickets) {
+        if (tickets == null || tickets.isEmpty()) {
+            return;
+        }
+        DataScopeSnapshot snapshot = currentSnapshot();
+        if (snapshot.noContext() || snapshot.allAccess()) {
+            return;
+        }
+
+        Set<Long> salesOrderIds = new LinkedHashSet<>();
+        Set<Integer> rfqIds = new LinkedHashSet<>();
+        for (OrderDeliveryTicket ticket : tickets) {
+            if (ticket == null) {
+                continue;
+            }
+            if ("SALES_ORDER".equalsIgnoreCase(ticket.getSourceType()) && ticket.getSourceOrderId() != null) {
+                salesOrderIds.add(ticket.getSourceOrderId());
+            } else if (ticket.getRfqId() != null) {
+                rfqIds.add(ticket.getRfqId());
+            } else {
+                throw new RuntimeException("No data permission for delivery ticket " + ticket.getId());
+            }
+        }
+
+        Map<Long, SalesOrderHeader> salesOrdersById = new LinkedHashMap<>();
+        if (!salesOrderIds.isEmpty()) {
+            if (salesOrderHeaderMapper == null) {
+                throw new RuntimeException("Sales order data permission service is unavailable");
+            }
+            salesOrderHeaderMapper.selectBatchIds(new ArrayList<>(salesOrderIds))
+                    .forEach(order -> salesOrdersById.put(order.getId(), order));
+        }
+        Map<Integer, OrderRfq> rfqsById = new LinkedHashMap<>();
+        if (!rfqIds.isEmpty()) {
+            if (orderRfqMapper == null) {
+                throw new RuntimeException("Order data permission service is unavailable");
+            }
+            orderRfqMapper.selectBatchIds(new ArrayList<>(rfqIds))
+                    .forEach(order -> rfqsById.put(order.getId(), order));
+        }
+
+        for (OrderDeliveryTicket ticket : tickets) {
+            if (ticket == null) {
+                continue;
+            }
+            if ("SALES_ORDER".equalsIgnoreCase(ticket.getSourceType()) && ticket.getSourceOrderId() != null) {
+                SalesOrderHeader order = salesOrdersById.get(ticket.getSourceOrderId());
+                if (order == null) {
+                    throw new RuntimeException("Sales order does not exist");
+                }
+                if (!matchesSalesOrder(snapshot, order)) {
+                    throw new RuntimeException("No data permission for sales order " + order.getId());
+                }
+            } else if (ticket.getRfqId() != null) {
+                OrderRfq order = rfqsById.get(ticket.getRfqId());
+                if (order == null) {
+                    throw new RuntimeException("Order does not exist");
+                }
+                if (!matchesOrder(snapshot, order)) {
+                    throw new RuntimeException("No data permission for order " + order.getId());
+                }
+            } else {
+                throw new RuntimeException("No data permission for delivery ticket " + ticket.getId());
+            }
+        }
     }
 
     public void assertCanAccessDeliveryTicket(Integer ticketId) {
