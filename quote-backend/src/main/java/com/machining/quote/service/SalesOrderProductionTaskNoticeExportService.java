@@ -54,7 +54,7 @@ public class SalesOrderProductionTaskNoticeExportService {
             new AdaptiveTextField("L", "O", 22, SalesOrderItem::getCustomerProjectNo),
             new AdaptiveTextField("P", "S", 26, SalesOrderItem::getPartNo),
             new AdaptiveTextField("U", "U", 14, SalesOrderItem::getVersion),
-            new AdaptiveTextField("V", "X", 26, item -> firstNonBlankStatic(item.getEngineeringMaterialName(), item.getMaterialName())),
+            new AdaptiveTextField("V", "X", 26, SalesOrderItem::getMaterialName),
             new AdaptiveTextField("Y", "AB", 24, SalesOrderItem::getSurfaceTreatment),
             new AdaptiveTextField("AG", "AI", 36, SalesOrderItem::getRemark)
     );
@@ -195,7 +195,7 @@ public class SalesOrderProductionTaskNoticeExportService {
             setText(sheet, rowIndex, "P", item.getPartNo());
             setNumber(sheet, rowIndex, "T", item.getQty() == null ? 0 : item.getQty());
             setText(sheet, rowIndex, "U", item.getVersion());
-            setText(sheet, rowIndex, "V", firstNonBlank(item.getEngineeringMaterialName(), item.getMaterialName()));
+            setText(sheet, rowIndex, "V", item.getMaterialName());
             setText(sheet, rowIndex, "Y", item.getSurfaceTreatment());
             setText(sheet, rowIndex, "AC", dateText(item.getSalesOrderDate() == null ? null : item.getSalesOrderDate()));
             setText(sheet, rowIndex, "AF", dateText(item.getInternalDeliveryDate()));

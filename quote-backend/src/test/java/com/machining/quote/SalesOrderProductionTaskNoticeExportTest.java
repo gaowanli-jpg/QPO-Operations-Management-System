@@ -183,7 +183,8 @@ class SalesOrderProductionTaskNoticeExportTest {
         repeated.setPartNo("PN-001");
         repeated.setQty(3);
         repeated.setVersion("A");
-        repeated.setEngineeringMaterialName("进口 6061");
+        repeated.setEngineeringMaterialName("AL6061-T6板");
+        repeated.setMaterialName("本色PP");
         repeated.setSurfaceTreatment("本色阳极");
         repeated.setSalesOrderDate(LocalDate.of(2026, 9, 5));
         repeated.setInternalDeliveryDate(LocalDate.of(2026, 9, 20));
@@ -196,8 +197,8 @@ class SalesOrderProductionTaskNoticeExportTest {
         fresh.setPartNo("PN-002");
         fresh.setQty(5);
         fresh.setVersion("B");
-        fresh.setEngineeringMaterialName("SUS304");
-        fresh.setMaterialName("不应优先使用的销售材料");
+        fresh.setEngineeringMaterialName("AL6061-T6板");
+        fresh.setMaterialName("SST304");
         fresh.setSurfaceTreatment("钝化");
         fresh.setSalesOrderDate(LocalDate.of(2026, 9, 6));
         fresh.setInternalDeliveryDate(LocalDate.of(2026, 9, 25));
@@ -242,7 +243,7 @@ class SalesOrderProductionTaskNoticeExportTest {
             assertThat(text(sheet, 12, "P")).isEqualTo("PN-001");
             assertThat(text(sheet, 12, "T")).isEqualTo("3");
             assertThat(text(sheet, 12, "U")).isEqualTo("A");
-            assertThat(text(sheet, 12, "V")).isEqualTo("进口 6061");
+            assertThat(text(sheet, 12, "V")).isEqualTo("本色PP");
             assertThat(text(sheet, 12, "Y")).isEqualTo("本色阳极");
             assertThat(text(sheet, 12, "AC")).isEqualTo("2026-09-05");
             assertThat(text(sheet, 12, "AF")).isEqualTo("2026-09-20");
@@ -252,7 +253,7 @@ class SalesOrderProductionTaskNoticeExportTest {
             assertThat(text(sheet, 13, "E")).isEqualTo("新件");
             assertThat(text(sheet, 13, "H")).isEqualTo("IP-002");
             assertThat(text(sheet, 13, "T")).isEqualTo("5");
-            assertThat(text(sheet, 13, "V")).isEqualTo("SUS304");
+            assertThat(text(sheet, 13, "V")).isEqualTo("SST304");
             assertThat(text(sheet, 13, "AF")).isEqualTo("2026-09-25");
             assertThat(text(sheet, 13, "AG")).isEqualTo("第二件备注");
 
