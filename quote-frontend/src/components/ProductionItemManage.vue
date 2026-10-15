@@ -47,7 +47,6 @@
           >
             下发MES生产
           </el-button>
-          <el-tag size="small" type="info" effect="plain">单次最多下发 1000 条</el-tag>
           <el-button
             v-permission="PRODUCTION_ITEM_DISCARD_PERMISSION"
             type="danger"

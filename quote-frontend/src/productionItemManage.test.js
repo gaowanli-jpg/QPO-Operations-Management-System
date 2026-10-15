@@ -47,7 +47,7 @@ describe('ProductionItemManage split workbench', () => {
     expect(pageSource).toContain(':page-sizes="[20, 50, 100, 300, 500, 1000]"')
     expect(pageSource).toContain('const pageSize = ref(100)')
     expect(pageSource).toContain('MAX_MES_PRODUCTION_BATCH_SIZE = 1000')
-    expect(pageSource).toContain('单次最多下发 1000 条')
+    expect(pageSource).not.toContain('单次最多下发 1000 条')
     expect(pageSource).toContain('filteredRecords.slice(fromIndex, fromIndex + pageSize.value)')
   })
 
