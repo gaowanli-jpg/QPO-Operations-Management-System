@@ -89,13 +89,29 @@ public class AllocationSplitService {
         if (allocation == null) {
             throw new IllegalArgumentException("production allocation does not exist");
         }
-        validateProductionAllocation(allocation);
+        boolean linked = linkedItem != null && linkedItem.getAllocationId() != null;
+        validateProductionAllocation(allocation, linkedItem, linked);
         boolean sameWmsApplication = SOURCE_WMS.equals(normalizedSource)
                 && SOURCE_WMS.equalsIgnoreCase(defaultText(allocation.getAllocationSplitSource()))
                 && Objects.equals(allocation.getWmsReservationTicketId(), wmsReservationTicketId);
         int originalQty = sameWmsApplication
                 ? exactInt(loadWmsReserveCount(wmsReservationTicketId), "WMS reserve quantity")
-                : requirePositiveInteger(allocation.getQty(), "寰呬骇鏁伴噺");
+                : requirePositiveInteger(linked ? linkedItem.getQty() : allocation.getQty(), "待产数量");
+        if (SOURCE_WMS.equals(normalizedSource)) {
+            WmsReservationTicket reservation = wmsReservationTicketMapper.selectById(wmsReservationTicketId);
+            if (reservation == null
+                    || (linked && reservation.getSalesOrderItemId() != null
+                    && !Objects.equals(linkedItem.getId(), reservation.getSalesOrderItemId()))
+                    || (linked && reservation.getSalesOrderLineNo() != null
+                    && !Objects.equals(linkedItem.getLineNo(), reservation.getSalesOrderLineNo()))
+                    || !Objects.equals(defaultText(linked ? linkedItem.getMaterialNo() : allocation.getMaterialNo()), defaultText(reservation.getProductCode()))) {
+                throw new IllegalStateException("WMS request snapshot no longer matches its sales order item");
+            }
+            if (!sameWmsApplication && (reservation.getReserveCount() == null
+                    || !Objects.equals(linked ? linkedItem.getQty() : allocation.getQty(), reservation.getReserveCount().intValueExact()))) {
+                throw new IllegalStateException("sales order item quantity changed after WMS request");
+            }
+        }
         if (!sameWmsApplication) {
             validateMesNotStarted(allocation);
         }
@@ -227,13 +243,19 @@ public class AllocationSplitService {
         return child;
     }
 
-    private void validateProductionAllocation(OrderDeliveryTicketAllocation allocation) {
+    private void validateProductionAllocation(OrderDeliveryTicketAllocation allocation, SalesOrderItem linkedItem, boolean linked) {
         if (!TYPE_PRODUCTION_REQUIRED.equalsIgnoreCase(defaultText(allocation.getAllocationType()))
                 || !STATUS_ACTIVE.equalsIgnoreCase(defaultText(allocation.getStatus(), STATUS_ACTIVE))
                 || Boolean.TRUE.equals(allocation.getDiscarded())) {
             throw new IllegalStateException("allocation is not an active production row");
         }
-        if (isBlank(allocation.getMaterialNo())) {
+        if (linked && !Objects.equals(linkedItem.getAllocationId(), allocation.getId().longValue())) {
+            throw new IllegalStateException("sales order item allocation link does not match allocation");
+        }
+        if (linkedItem == null && isBlank(allocation.getMaterialNo())) {
+            throw new IllegalStateException("legacy allocation material number is missing");
+        }
+        if (isBlank(linked ? linkedItem.getMaterialNo() : allocation.getMaterialNo())) {
             throw new IllegalStateException("鐗╂枡鍙峰皻鏈幏鍙栨垚鍔燂紝涓嶈兘鎷嗚");
         }
     }

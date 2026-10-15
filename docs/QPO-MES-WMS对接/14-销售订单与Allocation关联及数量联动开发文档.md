@@ -20,9 +20,9 @@ WMS 重试、恢复和重复应用按 `allocation_id` 查找已有销售订单�
 
 销售订单详情保存销售订单零件数量时，同事务更新关联 allocation。新 WMS 流程始终以 Allocation 为操作对象和数量来源；无论 WMS 是否已执行，都不为 WMS 目的同步修改来源提单数量。WMS 请求快照保存 Allocation ID 和请求时数量；请求处理中禁止编辑对应数量，历史请求快照不随之后编辑改写。
 
-锁库拆行页面通过 `POST /api/market/sales-order-management/orders/{salesOrderId}/allocation-splits/batch` 批量保存 allocation 数量，同时更新对应销售订单零件，数量允许为 `0`。该操作不因 MES 生产或提库存工单已成功而禁止。
+锁库拆行页面的“拆分数量”只读显示关联 `sales_order_item.qty`，不再提供数量编辑或保存按钮。数量统一在销售订单零件明细页面修改，修改后锁库拆行页面刷新即可显示最新数量；人工初次拆行仍使用独立的 `/allocation-splits/manual` 接口。
 
-每次保存记录 `SALES_ORDER_ALLOCATION_QTY_UPDATE` 审计动作，包含订单、销售订单行、allocation、旧数量、新数量和是否同步提单。
+销售订单零件数量修改仍记录 `SALES_ORDER_ALLOCATION_QTY_UPDATE` 审计动作，包含订单、销售订单行、allocation、旧数量和新数量；锁库拆行页面本身不再产生数量保存审计。
 
 ## 4. 历史数据
 

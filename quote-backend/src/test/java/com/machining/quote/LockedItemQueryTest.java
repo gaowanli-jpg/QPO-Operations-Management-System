@@ -164,13 +164,13 @@ class LockedItemQueryTest {
                         "listTicketAllocations",
                         "dataScopeService.applyDeliveryTicketScope(query, \"ticket\")",
                         "applyCustomerFilter(query, req.getCustomerCode(), req.getCustomerName())",
-                        "rfq.customer_code = {0}",
-                        "sales_order_header so WHERE so.customer_code = {1}",
-                        "applyLike(query, \"alloc.customer_order_no\", req.getCustomerOrderNo())",
-                        "applyLike(query, \"alloc.customer_project_no\", req.getCustomerProjectNo())",
-                        "applyEquals(query, \"alloc.item_type\", req.getItemType())",
-                        "query.ge(\"alloc.delivery_date\", req.getDateFrom())",
-                        "query.le(\"alloc.delivery_date\", req.getDateTo())",
+                        "sales_header.customer_code = {0}",
+                        "SELECT so.id FROM sales_order_header so WHERE so.customer_code = {2}",
+                        "applyLinkedItemLike(query, \"alloc.customer_order_no\", \"sales_item.customer_order_no\", req.getCustomerOrderNo())",
+                        "applyLinkedItemLike(query, \"alloc.customer_project_no\", \"sales_item.customer_project_no\", req.getCustomerProjectNo())",
+                        "applyLinkedItemEquals(query, \"alloc.item_type\", \"sales_item.item_type\", req.getItemType())",
+                        "(CASE WHEN sales_item.id IS NULL THEN alloc.delivery_date ELSE COALESCE(sales_item.internal_delivery_date, sales_item.sales_order_date) END) >= {0}",
+                        "(CASE WHEN sales_item.id IS NULL THEN alloc.delivery_date ELSE COALESCE(sales_item.internal_delivery_date, sales_item.sales_order_date) END) <= {0}",
                         "listCustomers",
                         "countLockedItems",
                         "selectLockedItems"
@@ -188,16 +188,16 @@ class LockedItemQueryTest {
                         "order_delivery_ticket_allocation alloc",
                         "LEFT JOIN order_rfq rfq ON rfq.id = alloc.rfq_id",
                         "LEFT JOIN order_delivery_ticket ticket ON ticket.id = alloc.ticket_id",
-                        "alloc.order_type AS order_type",
-                        "alloc.item_type",
+                        "CASE WHEN sales_item.id IS NULL THEN alloc.order_type ELSE sales_item.order_type END AS order_type",
+                        "CASE WHEN sales_item.id IS NULL THEN alloc.item_type ELSE sales_item.item_type END AS item_type",
                         "alloc.rfq_no",
-                        "alloc.customer_order_no",
-                        "alloc.customer_project_no",
-                        "alloc.process_route",
-                        "alloc.material_data",
-                        "alloc.material_gross_weight",
-                        "alloc.part_net_weight",
-                        "alloc.remark",
+                        "CASE WHEN sales_item.id IS NULL THEN alloc.customer_order_no ELSE sales_item.customer_order_no END AS customer_order_no",
+                        "CASE WHEN sales_item.id IS NULL THEN alloc.customer_project_no ELSE sales_item.customer_project_no END AS customer_project_no",
+                        "CASE WHEN sales_item.id IS NULL THEN alloc.process_route ELSE sales_item.process_route END AS process_route",
+                        "CASE WHEN sales_item.id IS NULL THEN alloc.material_data ELSE sales_item.material_data END AS material_data",
+                        "CASE WHEN sales_item.id IS NULL THEN alloc.material_gross_weight ELSE sales_item.material_gross_weight END AS material_gross_weight",
+                        "CASE WHEN sales_item.id IS NULL THEN alloc.part_net_weight ELSE sales_item.part_net_weight END AS part_net_weight",
+                        "CASE WHEN sales_item.id IS NULL THEN alloc.remark ELSE sales_item.remark END AS remark",
                         "ORDER BY alloc.id DESC"
                 );
         assertNoLegacyProductionOrderNumber(mapper, ALLOCATION_MAPPER);
@@ -213,6 +213,14 @@ class LockedItemQueryTest {
                         "ticket.part_net_weight",
                         "LEFT JOIN item_quote_version item",
                         "COALESCE(alloc.order_type, ticket.order_type, rfq.order_type)"
+                );
+        assertThat(mapper)
+                .as("Linked locked-item rows should prefer current sales-order item fields and keep allocation fallback")
+                .contains(
+                        "LEFT JOIN sales_order_item sales_item ON sales_item.allocation_id = alloc.id",
+                        "LEFT JOIN sales_order_header sales_header ON sales_header.id = sales_item.sales_order_id",
+                        "CASE WHEN sales_item.id IS NULL THEN alloc.qty ELSE sales_item.qty END AS qty",
+                        "CASE WHEN sales_item.id IS NULL THEN alloc.material_no ELSE sales_item.material_no END AS material_no"
                 );
         assertThat(controller)
                 .contains(

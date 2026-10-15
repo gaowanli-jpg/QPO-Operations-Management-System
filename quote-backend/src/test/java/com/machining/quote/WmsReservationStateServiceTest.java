@@ -120,14 +120,14 @@ class WmsReservationStateServiceTest {
     }
 
     @Test
-    void allocationResponseUsesAllocationQuantityAndLeavesSourceTicketUntouched() {
+    void allocationResponseUsesSalesOrderItemAllocationQuantityAndLeavesSourceTicketUntouched() {
         Fixture fixture = fixture();
         WmsReservationBatch batch = batch(501L, "RESPONSE_RECEIVED", 1);
         when(fixture.batchMapper.selectById(501L)).thenReturn(batch);
         WmsReservationItem batchItem = reservationItem(701L, 501L, "MAT-A", "5");
         when(fixture.itemMapper.selectList(any())).thenReturn(List.of(batchItem));
 
-        WmsReservationTicket reservation = reservationTicket(801L, 501L, 701L, 501, 1001L, 10, "MAT-A", "5");
+        WmsReservationTicket reservation = reservationTicket(801L, 501L, 701L, 501, 1601L, 10, "MAT-A", "5");
         reservation.setAllocationId(601);
         reservation.setStatus("RESPONSE_RECEIVED");
         reservation.setStockFrozenCount(new BigDecimal("3"));
@@ -485,8 +485,21 @@ class WmsReservationStateServiceTest {
             ReflectionTestUtils.setField(service, "fingerprintService", new WmsReservationFingerprintService());
             ReflectionTestUtils.setField(service, "salesOrderAllocationLinkService", allocationLinkService);
             when(allocationLinkService.lockSalesOrderForAllocation(any(Integer.class))).thenAnswer(invocation -> {
+                Integer allocationId = invocation.getArgument(0);
                 com.machining.quote.entity.SalesOrderItem item = new com.machining.quote.entity.SalesOrderItem();
                 item.setSalesOrderId(301L);
+                item.setAllocationId(allocationId.longValue());
+                item.setQty(switch (allocationId) {
+                    case 101 -> 3;
+                    case 102, 103 -> 2;
+                    default -> 5;
+                });
+                item.setLineNo(10);
+                item.setMaterialNo(switch (allocationId) {
+                    case 103 -> "MAT-B";
+                    default -> "MAT-A";
+                });
+                item.setId(1000L + allocationId);
                 return item;
             });
             doAnswer(invocation -> {

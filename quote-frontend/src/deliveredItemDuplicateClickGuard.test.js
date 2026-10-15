@@ -82,7 +82,7 @@ describe('delivery duplicate click guards', () => {
     expect(source).toContain('const { isPending, runAction } = usePendingAction()')
     expect(source).toContain("mesProductionDispatch: () => 'production-item:mes-production:batch'")
     expect(source).toContain(':loading="isMesProductionDispatchPending"')
-    expect(source).toContain(':disabled="selectedAllocationIds.length === 0 || isMesProductionDispatchPending"')
+    expect(source).toContain(':disabled="selectedAllocationIds.length === 0 || selectedAllocationIds.length > MAX_MES_PRODUCTION_BATCH_SIZE || isMesProductionDispatchPending"')
   })
 
   test('WMS batch allocation key suppresses duplicate submitWmsAllocationBatch calls while pending', async () => {

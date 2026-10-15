@@ -258,7 +258,7 @@ public class AuditService {
 
     public static String labelForAction(String action) {
         if (action == null) return "系统操作";
-        if ("SALES_ORDER_ALLOCATION_QTY_UPDATE".equalsIgnoreCase(action)) return "销售订单锁库拆分数量保存";
+        if ("SALES_ORDER_ALLOCATION_QTY_UPDATE".equalsIgnoreCase(action)) return "销售订单零件数量联动";
         return switch (action) {
             case "AUTH_LOGIN_SUCCESS" -> "登录成功";
             case "AUTH_LOGIN_FAILED" -> "登录失败";

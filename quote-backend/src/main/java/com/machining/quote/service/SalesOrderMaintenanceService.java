@@ -7,8 +7,6 @@ import com.machining.quote.dto.SalesOrderItemUpdateReq;
 import com.machining.quote.dto.SalesOrderItemFieldReplacementReq;
 import com.machining.quote.dto.SalesOrderMaintenanceOrderUpdateReq;
 import com.machining.quote.dto.SalesOrderMaintenanceUpdateResp;
-import com.machining.quote.dto.AllocationSplitBatchReq;
-import com.machining.quote.dto.AllocationSplitQtyReq;
 import com.machining.quote.dto.ManualAllocationSplitReq;
 import com.machining.quote.dto.ManualAllocationSplitResp;
 import com.machining.quote.entity.DictPricingMarkupFee;
@@ -16,7 +14,6 @@ import com.machining.quote.entity.SalesOrderHeader;
 import com.machining.quote.entity.SalesOrderItem;
 import com.machining.quote.mapper.DictPricingMarkupFeeMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
-import com.machining.quote.mapper.OrderDeliveryTicketAllocationMapper;
 import com.machining.quote.mapper.SalesOrderHeaderMapper;
 import com.machining.quote.mapper.SalesOrderItemMapper;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -68,8 +65,6 @@ public class SalesOrderMaintenanceService {
     private DictPricingMarkupFeeMapper pricingMarkupFeeMapper;
     @Autowired(required = false)
     private OrderDeliveryTicketMapper ticketMapper;
-    @Autowired
-    private OrderDeliveryTicketAllocationMapper allocationMapper;
     @Autowired
     private SalesOrderAllocationLinkService salesOrderAllocationLinkService;
     @Autowired(required = false)
@@ -166,50 +161,6 @@ public class SalesOrderMaintenanceService {
         }
         return response(header, updatedCount, changedFields, "销售订单零件信息已保存。");
     }
-
-    @Transactional
-    public SalesOrderMaintenanceUpdateResp saveAllocationSplits(Long salesOrderId, AllocationSplitBatchReq req) {
-        long startedAt = System.currentTimeMillis();
-        if (salesOrderId == null || req == null || req.getItems() == null || req.getItems().isEmpty()) {
-            throw new RuntimeException("请提供需要保存的锁库拆分数量");
-        }
-        SalesOrderHeader header = headerMapper.selectByIdForUpdate(salesOrderId);
-        if (header == null) {
-            throw new RuntimeException("销售订单不存在");
-        }
-        assertDataScope(header);
-        List<Map<String, Object>> changes = new ArrayList<>();
-        Set<Integer> seen = new LinkedHashSet<>();
-        for (AllocationSplitQtyReq line : req.getItems()) {
-            if (line == null || line.getAllocationId() == null || !seen.add(line.getAllocationId())) {
-                throw new RuntimeException("锁库拆分行不能为空且不能重复");
-            }
-            validateQty(line.getQty());
-            SalesOrderItem item = salesOrderAllocationLinkService.lockItemByAllocation(salesOrderId, line.getAllocationId());
-            com.machining.quote.entity.OrderDeliveryTicketAllocation allocation =
-                    allocationMapper.selectByIdForUpdate(line.getAllocationId());
-            Integer oldQty = allocation.getQty();
-            salesOrderAllocationLinkService.updateLinkedQuantity(item, allocation, line.getQty());
-            Map<String, Object> change = new LinkedHashMap<>();
-            change.put("allocationId", line.getAllocationId());
-            change.put("salesOrderItemId", item.getId());
-            change.put("salesOrderItemLineNo", item.getLineNo());
-            change.put("oldQty", oldQty);
-            change.put("newQty", line.getQty());
-            changes.add(change);
-        }
-        Map<String, Object> summary = new LinkedHashMap<>();
-        summary.put("salesOrderId", header.getId());
-        summary.put("salesOrderNo", header.getSalesOrderNo());
-        summary.put("changes", changes);
-        summary.put("durationMs", System.currentTimeMillis() - startedAt);
-        if (auditService != null) {
-            auditService.record("SALES_ORDER_ALLOCATION_QTY_UPDATE", "sales_order_header", header.getId(), null,
-                    summary, "MARKET", "SUCCESS", AuditService.labelForAction("SALES_ORDER_ALLOCATION_QTY_UPDATE"), null);
-        }
-        return response(header, changes.size(), Set.of("qty"), "锁库拆分数量已保存");
-    }
-
 
     @Transactional
     public ManualAllocationSplitResp manualAllocationSplit(Long salesOrderId, ManualAllocationSplitReq req) {

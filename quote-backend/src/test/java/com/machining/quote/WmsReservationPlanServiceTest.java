@@ -22,10 +22,13 @@ import static org.mockito.Mockito.when;
 
 class WmsReservationPlanServiceTest {
     @Test
-    void prepareBuildsWmsRequestFromAllocationQuantityAndLinkedSalesOrderValues() {
+    void prepareBuildsWmsRequestFromLinkedSalesOrderItemQuantityAndValues() {
         Fixture fixture = fixture();
         fixture.allocation(allocation(101, "MAT-A", 7, "remark-a"));
         SalesOrderItem sourceItem = item(1001L, 501L, 10);
+        sourceItem.setQty(11);
+        sourceItem.setMaterialNo("MAT-FROM-ORDER");
+        sourceItem.setRemark("order-remark-501");
         sourceItem.setCustomerOrderNo("CO-LINE-501");
         fixture.link(101, sourceItem);
         fixture.header(header(501L, "SO-501", "CO-HEADER-501", "CP-HEADER-501"));
@@ -37,7 +40,8 @@ class WmsReservationPlanServiceTest {
             assertThat(group.getSaleNo()).isEqualTo("CO-LINE-501");
             assertThat(group.getRequest().getSaleNo()).isEqualTo("CO-LINE-501");
             assertThat(group.getRequest().getItems()).singleElement().satisfies(requestItem -> {
-                assertThat(requestItem.getReserveCount()).isEqualByComparingTo("7");
+                assertThat(requestItem.getProductCode()).isEqualTo("MAT-FROM-ORDER");
+                assertThat(requestItem.getReserveCount()).isEqualByComparingTo("11");
                 assertThat(requestItem.getCustomerOrderNo()).isEqualTo("CO-LINE-501");
             });
         });
@@ -71,7 +75,9 @@ class WmsReservationPlanServiceTest {
         OrderDeliveryTicketAllocation allocation = allocation(101, "MAT-A", 2, "remark-a");
         allocation.setCustomerOrderNo(null);
         fixture.allocation(allocation);
-        fixture.link(101, item(1001L, 501L, 10));
+        SalesOrderItem sourceItem = item(1001L, 501L, 10);
+        sourceItem.setCustomerOrderNo(null);
+        fixture.link(101, sourceItem);
         fixture.header(header(501L, "SO-501", null, "CP-501"));
 
         WmsReservationPlanService.ReservationPlan plan = fixture.service.prepareAllocations(List.of(101));
@@ -156,7 +162,7 @@ class WmsReservationPlanServiceTest {
     }
 
     @Test
-    void prepareUsesAllocationSnapshotFieldsForRemarkAndStableOrder() {
+    void prepareUsesLinkedSalesOrderItemFieldsForRemarkAndStableOrder() {
         Fixture fixture = fixture();
         fixture.allocation(allocation(101, "MAT-A", 2, " ", "material-101", "desc-101", "P-101"));
         fixture.allocation(allocation(102, "MAT-A", 3, "ticket-remark", "material-102", "desc-102", "P-102"));
@@ -165,7 +171,21 @@ class WmsReservationPlanServiceTest {
         fixture.allocation(allocation(105, "MAT-D", 6, " ", " ", " ", "part-no"));
         fixture.allocation(allocation(106, "MAT-E", 7, " ", " ", " ", " "));
         for (int id = 101; id <= 106; id++) {
-            fixture.link(id, item(1000L + id, 501L, id - 90));
+            SalesOrderItem sourceItem = item(1000L + id, 501L, id - 90);
+            sourceItem.setQty(id - 99);
+            sourceItem.setMaterialNo(switch (id) {
+                case 101, 102 -> "MAT-A";
+                case 103 -> "MAT-B";
+                case 104 -> "MAT-C";
+                case 105 -> "MAT-D";
+                default -> "MAT-E";
+            });
+            sourceItem.setCustomerOrderNo("CO-1");
+            sourceItem.setCustomerProjectNo("CP-1");
+            if (id == 106) {
+                sourceItem.setRemark(" ");
+            }
+            fixture.link(id, sourceItem);
         }
         fixture.header(header(501L, "SO-501", "CO-1", "CP-1"));
 
@@ -174,7 +194,8 @@ class WmsReservationPlanServiceTest {
         assertThat(plan.getGroups()).hasSize(1);
         assertThat(plan.getGroups().get(0).getRequest().getItems())
                 .extracting(item -> item.getProductCode() + ":" + item.getRemark())
-                .containsExactly("MAT-A:ticket-remark", "MAT-B:material-name", "MAT-C:description", "MAT-D:part-no");
+                .containsExactly("MAT-A:order-remark-1101", "MAT-B:order-remark-1103",
+                        "MAT-C:order-remark-1104", "MAT-D:order-remark-1105");
         assertThat(plan.getFailures()).extracting(WmsReservationPlanService.RowFailure::getAllocationId)
                 .containsExactly(106);
     }
@@ -221,6 +242,9 @@ class WmsReservationPlanServiceTest {
         allocation.setCustomerProjectNo(customerProjectNo);
         fixture.allocation(allocation);
         SalesOrderItem sourceItem = item(1000L + allocationId, salesOrderId, lineNo);
+        sourceItem.setQty(qty);
+        sourceItem.setMaterialNo(materialNo);
+        sourceItem.setRemark("order-remark-" + allocationId);
         sourceItem.setCustomerProjectNo(customerProjectNo);
         sourceItem.setCustomerOrderNo(customerOrderNo);
         fixture.link(allocationId, sourceItem);
@@ -254,6 +278,11 @@ class WmsReservationPlanServiceTest {
         item.setId(id);
         item.setSalesOrderId(salesOrderId);
         item.setLineNo(lineNo);
+        item.setQty(1);
+        item.setMaterialNo("MAT-LINKED");
+        item.setCustomerOrderNo("CO-LINKED");
+        item.setCustomerProjectNo("CP-LINKED");
+        item.setRemark("order-remark-" + id);
         return item;
     }
 
@@ -313,7 +342,9 @@ class WmsReservationPlanServiceTest {
         }
 
         private void link(Integer allocationId, SalesOrderItem item) {
+            item.setAllocationId(allocationId.longValue());
             when(salesOrderItemMapper.selectByAllocationIdForUpdate(allocationId.longValue())).thenReturn(item);
+            when(salesOrderItemMapper.selectByAllocationIds(List.of(allocationId.longValue()))).thenReturn(List.of(item));
         }
 
         private void header(SalesOrderHeader header) {

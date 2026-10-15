@@ -109,20 +109,20 @@ public class LockedItemService {
         applyLockedStockScope(query);
         applyCustomerFilter(query, req.getCustomerCode(), req.getCustomerName());
         applyLike(query, "alloc.rfq_no", req.getRfqNo());
-        applyLike(query, "alloc.part_no", req.getPartNo());
-        applyEquals(query, "alloc.version", req.getVersion());
-        applyLike(query, "alloc.material_no", req.getMaterialNo());
-        applyLike(query, "alloc.internal_project_no", req.getInternalProjectNo());
-        applyLike(query, "alloc.customer_order_no", req.getCustomerOrderNo());
-        applyLike(query, "alloc.customer_project_no", req.getCustomerProjectNo());
-        applyEquals(query, "alloc.item_type", req.getItemType());
+        applyLinkedItemLike(query, "alloc.part_no", "sales_item.part_no", req.getPartNo());
+        applyLinkedItemEquals(query, "alloc.version", "sales_item.version", req.getVersion());
+        applyLinkedItemLike(query, "alloc.material_no", "sales_item.material_no", req.getMaterialNo());
+        applyLinkedItemLike(query, "alloc.internal_project_no", "sales_item.internal_project_no", req.getInternalProjectNo());
+        applyLinkedItemLike(query, "alloc.customer_order_no", "sales_item.customer_order_no", req.getCustomerOrderNo());
+        applyLinkedItemLike(query, "alloc.customer_project_no", "sales_item.customer_project_no", req.getCustomerProjectNo());
+        applyLinkedItemEquals(query, "alloc.item_type", "sales_item.item_type", req.getItemType());
         applyLockedAllocationType(query, req.getAllocationType());
         applyStockPickingStatusScope(query, req.getStockPickingStatus());
         if (req.getDateFrom() != null) {
-            query.ge("alloc.delivery_date", req.getDateFrom());
+            query.apply("(CASE WHEN sales_item.id IS NULL THEN alloc.delivery_date ELSE COALESCE(sales_item.internal_delivery_date, sales_item.sales_order_date) END) >= {0}", req.getDateFrom());
         }
         if (req.getDateTo() != null) {
-            query.le("alloc.delivery_date", req.getDateTo());
+            query.apply("(CASE WHEN sales_item.id IS NULL THEN alloc.delivery_date ELSE COALESCE(sales_item.internal_delivery_date, sales_item.sales_order_date) END) <= {0}", req.getDateTo());
         }
         applyDiscardedScope(query, req.getDiscarded());
         dataScopeService.applyDeliveryTicketScope(query, "ticket");
@@ -204,19 +204,21 @@ public class LockedItemService {
     private void applyCustomerFilter(QueryWrapper<LockedItemDTO> query, String customerCode, String customerName) {
         if (hasText(customerCode)) {
             String code = customerCode.trim();
-            query.apply("(rfq.customer_code = {0} "
+            query.apply("(sales_header.customer_code = {0} OR rfq.customer_code = {1} "
                     + "OR (alloc.source_type = 'SALES_ORDER' AND alloc.source_order_id IN "
-                    + "(SELECT so.id FROM sales_order_header so WHERE so.customer_code = {1})) "
+                    + "(SELECT so.id FROM sales_order_header so WHERE so.customer_code = {2})) "
                     + "OR (ticket.source_type = 'SALES_ORDER' AND ticket.source_order_id IN "
-                    + "(SELECT so.id FROM sales_order_header so WHERE so.customer_code = {2})))", code, code, code);
+                    + "(SELECT so.id FROM sales_order_header so WHERE so.customer_code = {3})))", code, code, code, code);
             return;
         }
-        applyEquals(query, "alloc.customer_name", customerName);
+        if (hasText(customerName)) {
+            query.apply("COALESCE(sales_header.customer_name, alloc.customer_name, ticket.customer_name, rfq.customer_name) = {0}", customerName.trim());
+        }
     }
 
     private void applyLockedStockScope(QueryWrapper<LockedItemDTO> query) {
         query.in("alloc.allocation_type", LOCKED_STOCK_TYPES);
-        query.gt("alloc.qty", 0);
+        query.apply("(CASE WHEN sales_item.id IS NULL THEN alloc.qty ELSE sales_item.qty END) > 0");
     }
 
     private void applyDiscardedScope(QueryWrapper<?> query, Boolean discarded) {
@@ -236,8 +238,8 @@ public class LockedItemService {
     }
 
     private void applyCustomerPresentScope(QueryWrapper<LockedItemDTO> query) {
-        query.isNotNull("COALESCE(alloc.customer_name, ticket.customer_name, rfq.customer_name)");
-        query.ne("COALESCE(alloc.customer_name, ticket.customer_name, rfq.customer_name)", "");
+        query.isNotNull("COALESCE(sales_header.customer_name, alloc.customer_name, ticket.customer_name, rfq.customer_name)");
+        query.ne("COALESCE(sales_header.customer_name, alloc.customer_name, ticket.customer_name, rfq.customer_name)", "");
     }
 
     private void applyStockPickingStatusScope(QueryWrapper<LockedItemDTO> query, String status) {
@@ -384,6 +386,20 @@ public class LockedItemService {
     private void applyEquals(QueryWrapper<LockedItemDTO> query, String column, String value) {
         if (hasText(value)) {
             query.eq(column, value.trim());
+        }
+    }
+
+    private void applyLinkedItemLike(QueryWrapper<LockedItemDTO> query, String allocationColumn, String itemColumn, String value) {
+        if (hasText(value)) {
+            query.apply("LOWER(CASE WHEN sales_item.id IS NULL THEN COALESCE(" + allocationColumn
+                    + ", '') ELSE COALESCE(" + itemColumn + ", '') END) LIKE CONCAT('%', LOWER({0}), '%')", value.trim());
+        }
+    }
+
+    private void applyLinkedItemEquals(QueryWrapper<LockedItemDTO> query, String allocationColumn, String itemColumn, String value) {
+        if (hasText(value)) {
+            query.apply("(CASE WHEN sales_item.id IS NULL THEN " + allocationColumn + " ELSE " + itemColumn
+                    + " END) = {0}", value.trim());
         }
     }
 

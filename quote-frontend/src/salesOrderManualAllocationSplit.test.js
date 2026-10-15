@@ -19,6 +19,11 @@ describe('sales order manual allocation split', () => {
     expect(pageSource).toContain('allocationSplitSourceText')
     expect(pageSource).toContain('type="warning"')
     expect(pageSource).toContain('class="allocation-split-action"')
+    expect(pageSource).toContain('label="拆分数量"')
+    expect(pageSource).not.toContain('label="提单总量"')
+    expect(pageSource).not.toContain('保存拆分数量')
+    expect(pageSource).not.toContain('allocationSplitDrafts')
+    expect(pageSource).not.toContain('saveAllocationSplitChanges')
     expect(pageSource).not.toContain('type="primary"\n                    link\n                    size="small"\n                    class="allocation-split-action"')
   })
 

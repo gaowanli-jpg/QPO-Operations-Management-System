@@ -352,7 +352,8 @@ public class WmsReservationStateService {
 
     private void applyAllocation(WmsReservationTicket reservationTicket) {
         requireTicketBuckets(reservationTicket);
-        salesOrderAllocationLinkService.lockSalesOrderForAllocation(reservationTicket.getAllocationId());
+        SalesOrderItem linkedItem = salesOrderAllocationLinkService
+                .lockSalesOrderForAllocation(reservationTicket.getAllocationId());
         OrderDeliveryTicketAllocation allocation = allocationMapper
                 .selectByIdForUpdate(reservationTicket.getAllocationId());
         if (allocation == null
@@ -362,14 +363,26 @@ public class WmsReservationStateService {
             throw new IllegalStateException("WMS source allocation is not an active production row allocationId="
                     + reservationTicket.getAllocationId());
         }
-        if (!Objects.equals(trim(allocation.getMaterialNo()), trim(reservationTicket.getProductCode()))) {
-            throw new IllegalStateException("WMS reservation material snapshot changed allocationId=" + allocation.getId());
+        boolean linked = linkedItem != null && linkedItem.getAllocationId() != null;
+        if (linked && !Objects.equals(linkedItem.getAllocationId(), allocation.getId().longValue())) {
+            throw new IllegalStateException("WMS reservation sales order item link changed allocationId=" + allocation.getId());
         }
         boolean sameWmsApplication = "WMS".equalsIgnoreCase(trim(allocation.getAllocationSplitSource()))
                 && Objects.equals(allocation.getWmsReservationTicketId(), reservationTicket.getId());
-        if (!sameWmsApplication && (allocation.getQty() == null
-                || BigDecimal.valueOf(allocation.getQty()).compareTo(reservationTicket.getReserveCount()) != 0)) {
-            throw new IllegalStateException("WMS reservation quantity snapshot changed allocationId=" + allocation.getId());
+        if (!Objects.equals(trim(linked ? linkedItem.getMaterialNo() : allocation.getMaterialNo()), trim(reservationTicket.getProductCode()))) {
+            throw new IllegalStateException("WMS reservation material snapshot changed salesOrderItemId=" + linkedItem.getId());
+        }
+        if (linked && reservationTicket.getSalesOrderItemId() != null
+                && !Objects.equals(linkedItem.getId(), reservationTicket.getSalesOrderItemId())) {
+            throw new IllegalStateException("WMS reservation item id snapshot changed allocationId=" + allocation.getId());
+        }
+        if (linked && reservationTicket.getSalesOrderLineNo() != null
+                && !Objects.equals(linkedItem.getLineNo(), reservationTicket.getSalesOrderLineNo())) {
+            throw new IllegalStateException("WMS reservation line number snapshot changed allocationId=" + allocation.getId());
+        }
+        if (!sameWmsApplication && ((linked ? linkedItem.getQty() : allocation.getQty()) == null
+                || BigDecimal.valueOf(linked ? linkedItem.getQty() : allocation.getQty()).compareTo(reservationTicket.getReserveCount()) != 0)) {
+            throw new IllegalStateException("WMS reservation quantity snapshot changed salesOrderItemId=" + linkedItem.getId());
         }
         if (!sameWmsApplication && hasStartedMesProduction(allocation)) {
             throw new IllegalStateException("MES production started before WMS response was applied allocationId=" + allocation.getId());
@@ -377,8 +390,8 @@ public class WmsReservationStateService {
         BigDecimal splitTotal = reservationTicket.getStockFrozenCount()
                 .add(reservationTicket.getInProductionCount())
                 .add(reservationTicket.getSurplusCount());
-        if (!sameWmsApplication && splitTotal.compareTo(BigDecimal.valueOf(allocation.getQty())) != 0) {
-            throw new IllegalStateException("WMS allocation split does not preserve allocation quantity allocationId=" + allocation.getId());
+        if (splitTotal.compareTo(reservationTicket.getReserveCount()) != 0) {
+            throw new IllegalStateException("WMS response split does not match the request snapshot allocationId=" + allocation.getId());
         }
         if (allocationSplitService == null) {
             applyAllocationLegacy(reservationTicket, allocation);
@@ -845,23 +858,27 @@ public class WmsReservationStateService {
                     || Boolean.TRUE.equals(allocation.getDiscarded())) {
                 throw new IllegalStateException("production allocation is unavailable allocationId=" + source.getAllocationId());
             }
-            if (allocation.getQty() == null || allocation.getQty() <= 0
-                    || BigDecimal.valueOf(allocation.getQty()).compareTo(source.getReserveCount()) != 0) {
-                throw new IllegalStateException("WMS allocation quantity changed before request allocationId=" + source.getAllocationId());
+            WmsReservationTicket active = ticketMapper.selectActiveByAllocationId(source.getAllocationId());
+            if (active != null) {
+                throw new IllegalStateException("allocation already has active WMS reservation allocationId=" + source.getAllocationId()
+                        + " activeStatus=" + active.getStatus());
             }
-            if (!Objects.equals(trim(allocation.getMaterialNo()), trim(source.getProductCode()))) {
-                throw new IllegalStateException("WMS allocation material changed before request allocationId=" + source.getAllocationId());
+            boolean linked = item.getAllocationId() != null;
+            Integer currentQty = linked ? item.getQty() : allocation.getQty();
+            if ((linked && !Objects.equals(item.getAllocationId(), source.getAllocationId().longValue()))
+                    || currentQty == null || currentQty <= 0
+                    || BigDecimal.valueOf(currentQty).compareTo(source.getReserveCount()) != 0) {
+                throw new IllegalStateException("WMS sales order item quantity changed before request allocationId=" + source.getAllocationId());
+            }
+            String currentMaterialNo = linked ? item.getMaterialNo() : allocation.getMaterialNo();
+            if (!Objects.equals(trim(currentMaterialNo), trim(source.getProductCode()))) {
+                throw new IllegalStateException("WMS sales order item material changed before request allocationId=" + source.getAllocationId());
             }
             if (allocation.getWmsReservationTicketId() != null) {
                 throw new IllegalStateException("WMS reservation already applied allocationId=" + source.getAllocationId());
             }
             if (hasStartedMesProduction(allocation)) {
                 throw new IllegalStateException("MES production is already in progress or completed allocationId=" + source.getAllocationId());
-            }
-            WmsReservationTicket active = ticketMapper.selectActiveByAllocationId(source.getAllocationId());
-            if (active != null) {
-                throw new IllegalStateException("allocation already has active WMS reservation allocationId=" + source.getAllocationId()
-                        + " activeStatus=" + active.getStatus());
             }
         }
     }

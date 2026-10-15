@@ -30,6 +30,7 @@ import com.machining.quote.mapper.SalesOrderItemMapper;
 import com.machining.quote.service.AuditService;
 import com.machining.quote.service.DataCenterCallException;
 import com.machining.quote.service.DataScopeService;
+import com.machining.quote.service.SalesOrderAllocationContextLoader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -83,6 +84,8 @@ public class MesProductionDispatchService {
     private SalesOrderItemMapper salesOrderItemMapper;
     @Autowired(required = false)
     private SalesOrderHeaderMapper salesOrderHeaderMapper;
+    @Autowired(required = false)
+    private SalesOrderAllocationContextLoader contextLoader;
     @Autowired(required = false)
     private MesBatchStateService mesBatchStateService;
     @Autowired(required = false)
@@ -142,8 +145,32 @@ public class MesProductionDispatchService {
 
         LinkedHashMap<Integer, Map<String, Object>> rowsByAllocationId = new LinkedHashMap<>();
         List<ProductionDispatchPlan> plans = new ArrayList<>();
+        List<OrderDeliveryTicketAllocation> sourceAllocations = allocationMapper.selectBatchIdsForUpdate(normalizedIds);
+        Map<Integer, OrderDeliveryTicketAllocation> allocationsById = new LinkedHashMap<>();
+        if (sourceAllocations != null) {
+            sourceAllocations.stream().filter(Objects::nonNull)
+                    .forEach(allocation -> allocationsById.put(allocation.getId(), allocation));
+        }
+        List<Integer> missingAllocationIds = normalizedIds.stream()
+                .filter(id -> !allocationsById.containsKey(id)).toList();
+        if (!missingAllocationIds.isEmpty()) {
+            for (Integer allocationId : missingAllocationIds) {
+                OrderDeliveryTicketAllocation allocation = allocationMapper.selectById(allocationId);
+                if (allocation != null) {
+                    allocationsById.put(allocationId, allocation);
+                }
+            }
+        }
+        Map<Integer, SalesOrderAllocationContextLoader.Context> contexts;
+        if (contextLoader != null) {
+            contexts = contextLoader.load(new ArrayList<>(allocationsById.values()));
+        } else {
+            contexts = loadSalesOrderContextsLegacy(allocationsById.values());
+        }
+        Map<Long, List<MesProductionAssemblyRelationDTO>> assemblyRelationsByItemId =
+                buildSalesOrderAssemblyRelationsBatch(contexts);
         for (Integer allocationId : normalizedIds) {
-            OrderDeliveryTicketAllocation allocation = allocationMapper.selectById(allocationId);
+            OrderDeliveryTicketAllocation allocation = allocationsById.get(allocationId);
             if (allocation == null) {
                 rowsByAllocationId.put(allocationId, row(allocationId, STATUS_SKIPPED, "Production item allocation does not exist", null));
                 continue;
@@ -155,7 +182,10 @@ public class MesProductionDispatchService {
                 continue;
             }
             try {
-                plans.add(buildProductionPlan(allocation));
+                plans.add(buildProductionPlan(
+                        allocation,
+                        contexts.get(allocationId),
+                        assemblyRelationsByItemId));
             } catch (RuntimeException error) {
                 String message = safeMessage(error);
                 markFailed(allocation, null, message);
@@ -194,34 +224,87 @@ public class MesProductionDispatchService {
                 && mesIntegrationBatchMapper != null;
     }
 
-    private ProductionDispatchPlan buildProductionPlan(OrderDeliveryTicketAllocation allocation) {
-        String validationError = productionValidationError(allocation);
+    private Map<Integer, SalesOrderAllocationContextLoader.Context> loadSalesOrderContextsLegacy(
+            java.util.Collection<OrderDeliveryTicketAllocation> allocations) {
+        Map<Integer, SalesOrderAllocationContextLoader.Context> contexts = new LinkedHashMap<>();
+        for (OrderDeliveryTicketAllocation allocation : allocations) {
+            SalesOrderItem item = null;
+            if (allocation.getTicketId() != null && salesOrderItemMapper != null) {
+                item = salesOrderItemMapper.selectBySourceTicketIdForUpdate(allocation.getTicketId());
+            }
+            if (SOURCE_SALES_ORDER.equalsIgnoreCase(blankToEmpty(allocation.getSourceType()))
+                    && allocation.getSourceItemId() != null && salesOrderItemMapper != null) {
+                SalesOrderItem direct = salesOrderItemMapper.selectByIdForUpdate(allocation.getSourceItemId());
+                if (item != null && direct != null && !Objects.equals(item.getId(), direct.getId())) {
+                    contexts.put(allocation.getId(), new SalesOrderAllocationContextLoader.Context(
+                            null, null, false, "sales order item resolution is ambiguous for allocation"));
+                    continue;
+                }
+                if (item == null) {
+                    item = direct;
+                }
+            }
+            SalesOrderHeader header = item == null || item.getSalesOrderId() == null || salesOrderHeaderMapper == null
+                    ? null
+                    : salesOrderHeaderMapper.selectById(item.getSalesOrderId());
+            contexts.put(allocation.getId(), new SalesOrderAllocationContextLoader.Context(
+                    item, header, false, item == null ? "sales order item is not linked to allocation" : null));
+        }
+        return contexts;
+    }
+
+    private ProductionDispatchPlan buildProductionPlan(
+            OrderDeliveryTicketAllocation allocation,
+            SalesOrderAllocationContextLoader.Context context,
+            Map<Long, List<MesProductionAssemblyRelationDTO>> assemblyRelationsByItemId) {
+        if (context != null && context.error() != null) {
+            throw new RuntimeException(context.error());
+        }
+        boolean linked = context != null && context.allocationLinked();
+        SalesOrderItem salesItem = linked ? context.item() : null;
+        SalesOrderHeader salesHeader = context == null ? null : context.header();
+        String materialNo = linked ? salesItem.getMaterialNo() : allocation.getMaterialNo();
+        Integer quantity = linked ? salesItem.getQty() : allocation.getQty();
+        LocalDate requiredDate = linked
+                ? firstDate(salesItem.getInternalDeliveryDate(), salesItem.getSalesOrderDate(), salesHeader.getSalesOrderDate())
+                : allocation.getDeliveryDate();
+        String validationError = productionValidationError(quantity, materialNo, requiredDate);
         if (validationError != null) {
             throw new RuntimeException(validationError);
         }
-        SalesOrderResolution resolution = resolveSalesOrder(allocation);
-        List<MesProductionAssemblyRelationDTO> assemblyRelations = buildAssemblyRelations(allocation);
-        List<MesProductionBomDTO> bom = buildBom(allocation);
+        SalesOrderResolution resolution = context == null
+                ? resolveSalesOrder(allocation)
+                : resolveSalesOrder(allocation, context);
+        List<MesProductionAssemblyRelationDTO> assemblyRelations = linked
+                ? assemblyRelationsByItemId.getOrDefault(salesItem.getId(), List.of())
+                : buildAssemblyRelations(allocation);
+        List<MesProductionBomDTO> bom = linked
+                ? buildBom(salesItem.getEngineeringMaterialCode(), salesItem.getMaterialGrossWeight())
+                : buildBom(allocation);
 
         MesProductionDispatchReq.Item item = new MesProductionDispatchReq.Item();
         item.setSaleOrderNo(resolution.saleOrderNo());
         item.setSaleOrderItemNo(resolution.saleOrderItemNo());
-        item.setProductCode(trimToNull(allocation.getMaterialNo()));
-        item.setDemandQty(allocation.getQty());
-        item.setMakeQty(allocation.getQty());
+        item.setProductCode(trimToNull(materialNo));
+        item.setDemandQty(quantity);
+        item.setMakeQty(quantity);
         item.setBuyQty(0);
         item.setStockQty(0);
-        item.setRequiredDate(allocation.getDeliveryDate().atTime(23, 59, 59));
-        item.setRemark(trimToNull(allocation.getRemark()));
+        if (requiredDate != null) {
+            item.setRequiredDate(requiredDate.atTime(23, 59, 59));
+        }
+        item.setRemark(trimToNull(linked ? salesItem.getRemark() : allocation.getRemark()));
         item.setCustomerRequirements(MesCustomerRequirementsAssembler.assemble(
-                allocation.getMaterialName(),
-                allocation.getSurfaceTreatment()));
+                linked ? salesItem.getMaterialName() : allocation.getMaterialName(),
+                linked ? salesItem.getSurfaceTreatment() : allocation.getSurfaceTreatment()));
         item.setBom(bom);
-        item.setProcessRoute(buildProcessRoute(allocation.getProcessRoute()));
+        item.setProcessRoute(buildProcessRoute(linked ? salesItem.getProcessRoute() : allocation.getProcessRoute()));
 
         String customerCode = trimToNull(resolution.header().getCustomerCode());
-        String customerName = firstNonBlank(resolution.header().getCustomerName(), allocation.getCustomerName());
-        String internalProjectNo = firstNonBlank(resolution.header().getInternalProjectNo(), allocation.getInternalProjectNo());
+        String customerName = firstNonBlank(resolution.header().getCustomerName(), linked ? null : allocation.getCustomerName());
+        String internalProjectNo = linked
+                ? firstNonBlank(salesItem.getInternalProjectNo(), resolution.header().getInternalProjectNo())
+                : firstNonBlank(resolution.header().getInternalProjectNo(), allocation.getInternalProjectNo());
         String groupKey = String.join("|",
                 blankToEmpty(customerCode),
                 blankToEmpty(customerName),
@@ -230,7 +313,7 @@ public class MesProductionDispatchService {
         String itemKey = String.join("|",
                 resolution.saleOrderNo(),
                 resolution.saleOrderItemNo(),
-                trimToNull(allocation.getMaterialNo()),
+                trimToNull(materialNo),
                 String.valueOf(allocation.getId()));
         return new ProductionDispatchPlan(
                 allocation,
@@ -252,6 +335,49 @@ public class MesProductionDispatchService {
         }
         if (allocation.getDeliveryDate() == null) {
             return "Delivery date is required before MES production dispatch";
+        }
+        return null;
+    }
+
+    private String productionValidationError(Integer quantity, String materialNo, LocalDate requiredDate) {
+        if (quantity == null || quantity <= 0) {
+            return "Production quantity must be greater than 0";
+        }
+        if (isBlank(materialNo)) {
+            return "Material number is required before MES production dispatch";
+        }
+        if (requiredDate == null) {
+            return "Delivery date is required before MES production dispatch";
+        }
+        return null;
+    }
+
+    private SalesOrderResolution resolveSalesOrder(
+            OrderDeliveryTicketAllocation allocation,
+            SalesOrderAllocationContextLoader.Context context) {
+        if (context.item() == null || context.header() == null) {
+            throw new RuntimeException("Official sales order line is required before MES production dispatch");
+        }
+        if (context.item().getLineNo() == null || context.item().getLineNo() <= 0) {
+            throw new RuntimeException("Official sales order line number is required before MES production dispatch");
+        }
+        if (SOURCE_SALES_ORDER.equalsIgnoreCase(blankToEmpty(allocation.getSourceType()))
+                && allocation.getSourceOrderId() != null
+                && !Objects.equals(allocation.getSourceOrderId(), context.item().getSalesOrderId())) {
+            throw new RuntimeException("Official sales order source does not match production allocation");
+        }
+        String saleOrderNo = firstNonBlank(context.header().getDocumentNo(), context.header().getSalesOrderNo());
+        if (isBlank(saleOrderNo)) {
+            throw new RuntimeException("Official sales order number is required before MES production dispatch");
+        }
+        return new SalesOrderResolution(context.header(), saleOrderNo, String.valueOf(context.item().getLineNo()));
+    }
+
+    private LocalDate firstDate(LocalDate... values) {
+        for (LocalDate value : values) {
+            if (value != null) {
+                return value;
+            }
         }
         return null;
     }
@@ -853,11 +979,15 @@ public class MesProductionDispatchService {
         if (allocation == null) {
             return List.of();
         }
-        String materialCode = trimToNull(allocation.getEngineeringMaterialCode());
+        return buildBom(allocation.getEngineeringMaterialCode(), allocation.getMaterialGrossWeight());
+    }
+
+    private List<MesProductionBomDTO> buildBom(String engineeringMaterialCode, Double materialGrossWeight) {
+        String materialCode = trimToNull(engineeringMaterialCode);
         if (materialCode == null) {
             return List.of();
         }
-        Double grossWeightKg = allocation.getMaterialGrossWeight();
+        Double grossWeightKg = materialGrossWeight;
         if (grossWeightKg == null || grossWeightKg <= 0) {
             return List.of();
         }
@@ -903,6 +1033,13 @@ public class MesProductionDispatchService {
 
     private List<MesProductionAssemblyRelationDTO> buildSalesOrderAssemblyRelations(OrderDeliveryTicketAllocation allocation) {
         Long parentItemId = allocation.getSourceItemId();
+        return buildSalesOrderAssemblyRelations(parentItemId, allocation.getPartNo(), allocation.getVersion());
+    }
+
+    private List<MesProductionAssemblyRelationDTO> buildSalesOrderAssemblyRelations(
+            Long parentItemId,
+            String fallbackPartNo,
+            String fallbackVersion) {
         if (parentItemId == null || salesOrderItemAssemblyRelationMapper == null || salesOrderItemMapper == null) {
             return List.of();
         }
@@ -924,8 +1061,8 @@ public class MesProductionDispatchService {
             MesProductionAssemblyRelationDTO dto = new MesProductionAssemblyRelationDTO();
             dto.setParentItemId(relation.getParentItemId());
             dto.setChildItemId(relation.getChildItemId());
-            dto.setParentPartNo(firstNonBlank(parent == null ? null : parent.getPartNo(), allocation.getPartNo()));
-            dto.setParentVersion(firstNonBlank(parent == null ? null : parent.getVersion(), allocation.getVersion()));
+            dto.setParentPartNo(firstNonBlank(parent == null ? null : parent.getPartNo(), fallbackPartNo));
+            dto.setParentVersion(firstNonBlank(parent == null ? null : parent.getVersion(), fallbackVersion));
             dto.setChildPartNo(child == null ? null : child.getPartNo());
             dto.setChildVersion(child == null ? null : child.getVersion());
             dto.setChildMaterialNo(child == null ? null : child.getMaterialNo());
@@ -934,6 +1071,63 @@ public class MesProductionDispatchService {
             dto.setSourceParentItemId(relation.getSourceParentItemId());
             dto.setSourceChildItemId(relation.getSourceChildItemId());
             result.add(dto);
+        }
+        return result;
+    }
+
+    private Map<Long, List<MesProductionAssemblyRelationDTO>> buildSalesOrderAssemblyRelationsBatch(
+            Map<Integer, SalesOrderAllocationContextLoader.Context> contexts) {
+        if (contexts == null || contexts.isEmpty() || salesOrderItemAssemblyRelationMapper == null) {
+            return Map.of();
+        }
+        Map<Long, SalesOrderItem> parentItems = new LinkedHashMap<>();
+        for (SalesOrderAllocationContextLoader.Context context : contexts.values()) {
+            if (context != null && context.allocationLinked() && context.item() != null) {
+                parentItems.put(context.item().getId(), context.item());
+            }
+        }
+        if (parentItems.isEmpty()) {
+            return Map.of();
+        }
+        QueryWrapper<SalesOrderItemAssemblyRelation> query = new QueryWrapper<>();
+        query.in("parent_item_id", parentItems.keySet()).orderByAsc("sort_no").orderByAsc("id");
+        List<SalesOrderItemAssemblyRelation> relations = salesOrderItemAssemblyRelationMapper.selectList(query);
+        if (relations == null || relations.isEmpty()) {
+            return Map.of();
+        }
+        List<Long> childIds = relations.stream()
+                .map(SalesOrderItemAssemblyRelation::getChildItemId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        Map<Long, SalesOrderItem> childItems = new LinkedHashMap<>();
+        if (!childIds.isEmpty() && salesOrderItemMapper != null) {
+            List<SalesOrderItem> children = salesOrderItemMapper.selectBatchIds(childIds);
+            if (children != null) {
+                children.stream().filter(Objects::nonNull).filter(item -> item.getId() != null)
+                        .forEach(item -> childItems.put(item.getId(), item));
+            }
+        }
+        Map<Long, List<MesProductionAssemblyRelationDTO>> result = new LinkedHashMap<>();
+        for (SalesOrderItemAssemblyRelation relation : relations) {
+            if (relation == null || relation.getParentItemId() == null) {
+                continue;
+            }
+            SalesOrderItem parent = parentItems.get(relation.getParentItemId());
+            SalesOrderItem child = relation.getChildItemId() == null ? null : childItems.get(relation.getChildItemId());
+            MesProductionAssemblyRelationDTO dto = new MesProductionAssemblyRelationDTO();
+            dto.setParentItemId(relation.getParentItemId());
+            dto.setChildItemId(relation.getChildItemId());
+            dto.setParentPartNo(parent == null ? null : parent.getPartNo());
+            dto.setParentVersion(parent == null ? null : parent.getVersion());
+            dto.setChildPartNo(child == null ? null : child.getPartNo());
+            dto.setChildVersion(child == null ? null : child.getVersion());
+            dto.setChildMaterialNo(child == null ? null : child.getMaterialNo());
+            dto.setQtyPerParent(relation.getQtyPerParent());
+            dto.setSortNo(relation.getSortNo());
+            dto.setSourceParentItemId(relation.getSourceParentItemId());
+            dto.setSourceChildItemId(relation.getSourceChildItemId());
+            result.computeIfAbsent(relation.getParentItemId(), ignored -> new ArrayList<>()).add(dto);
         }
         return result;
     }

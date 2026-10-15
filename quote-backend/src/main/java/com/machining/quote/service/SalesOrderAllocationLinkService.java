@@ -75,6 +75,20 @@ public class SalesOrderAllocationLinkService {
             throw new RuntimeException("allocation does not exist: " + allocationId);
         }
         SalesOrderItem snapshot = itemMapper.selectByAllocationId(allocationId.longValue());
+        if (snapshot == null) {
+            OrderDeliveryTicket ticket = allocation.getTicketId() == null
+                    ? null
+                    : ticketMapper.selectById(allocation.getTicketId());
+            SalesOrderItem ticketItem = ticket == null ? null : resolveSourceItem(ticket, false);
+            SalesOrderItem directItem = "SALES_ORDER".equalsIgnoreCase(defaultText(allocation.getSourceType(), ""))
+                    && allocation.getSourceItemId() != null
+                    ? itemMapper.selectById(allocation.getSourceItemId())
+                    : null;
+            if (ticketItem != null && directItem != null && !Objects.equals(ticketItem.getId(), directItem.getId())) {
+                throw new RuntimeException("allocation sales order item resolution is ambiguous: " + allocationId);
+            }
+            snapshot = ticketItem != null ? ticketItem : directItem;
+        }
         if (snapshot == null || snapshot.getSalesOrderId() == null) {
             throw new RuntimeException("allocation is not linked to a sales order item: " + allocationId);
         }
@@ -85,8 +99,16 @@ public class SalesOrderAllocationLinkService {
         }
         allocationMapper.selectByIdForUpdate(allocationId);
         SalesOrderItem item = itemMapper.selectByAllocationIdForUpdate(allocationId.longValue());
+        if (item == null && snapshot.getId() != null) {
+            item = itemMapper.selectByIdForUpdate(snapshot.getId());
+        }
         if (item == null) {
             throw new RuntimeException("sales order item for allocation does not exist: " + allocationId);
+        }
+        if ("SALES_ORDER".equalsIgnoreCase(defaultText(allocation.getSourceType(), ""))
+                && allocation.getSourceOrderId() != null
+                && !Objects.equals(allocation.getSourceOrderId(), item.getSalesOrderId())) {
+            throw new RuntimeException("sales order item belongs to another source order: " + allocationId);
         }
         return item;
     }
@@ -275,6 +297,23 @@ public class SalesOrderAllocationLinkService {
             return;
         }
         SalesOrderItem sourceItem = itemMapper.selectByAllocationIdForUpdate(allocationId.longValue());
+        if (sourceItem == null) {
+            OrderDeliveryTicketAllocation sourceAllocation = allocationMapper.selectById(allocationId);
+            if (sourceAllocation != null) {
+                OrderDeliveryTicket sourceTicket = sourceAllocation.getTicketId() == null
+                        ? null
+                        : ticketMapper.selectById(sourceAllocation.getTicketId());
+                SalesOrderItem ticketItem = sourceTicket == null ? null : resolveSourceItem(sourceTicket, true);
+                SalesOrderItem directItem = "SALES_ORDER".equalsIgnoreCase(defaultText(sourceAllocation.getSourceType(), ""))
+                        && sourceAllocation.getSourceItemId() != null
+                        ? itemMapper.selectByIdForUpdate(sourceAllocation.getSourceItemId())
+                        : null;
+                if (ticketItem != null && directItem != null && !Objects.equals(ticketItem.getId(), directItem.getId())) {
+                    throw new RuntimeException("allocation sales order item resolution is ambiguous: " + allocationId);
+                }
+                sourceItem = ticketItem != null ? ticketItem : directItem;
+            }
+        }
         syncWmsAllocations(sourceItem, allocations);
     }
 
@@ -419,14 +458,14 @@ public class SalesOrderAllocationLinkService {
         item.setMaterialNoMessage(source.getMaterialNoMessage());
         item.setCustomerDeliveryDate(source.getCustomerDeliveryDate());
         item.setInternalDeliveryDate(source.getInternalDeliveryDate());
-        item.setMaterialName(allocation.getMaterialName());
-        item.setEngineeringMaterialCode(allocation.getEngineeringMaterialCode());
-        item.setEngineeringMaterialName(allocation.getEngineeringMaterialName());
-        item.setEngineeringMaterialTypeCode(allocation.getEngineeringMaterialTypeCode());
-        item.setEngineeringMaterialTypeName(allocation.getEngineeringMaterialTypeName());
-        item.setEngineeringMaterialCategory(allocation.getEngineeringMaterialCategory());
-        item.setMaterialShape(allocation.getMaterialShape());
-        item.setSurfaceTreatment(allocation.getSurfaceTreatment());
+        item.setMaterialName(source.getMaterialName());
+        item.setEngineeringMaterialCode(source.getEngineeringMaterialCode());
+        item.setEngineeringMaterialName(source.getEngineeringMaterialName());
+        item.setEngineeringMaterialTypeCode(source.getEngineeringMaterialTypeCode());
+        item.setEngineeringMaterialTypeName(source.getEngineeringMaterialTypeName());
+        item.setEngineeringMaterialCategory(source.getEngineeringMaterialCategory());
+        item.setMaterialShape(source.getMaterialShape());
+        item.setSurfaceTreatment(source.getSurfaceTreatment());
         item.setTaxIncludedUnitPrice(source.getTaxIncludedUnitPrice());
         item.setUntaxedUnitPrice(source.getUntaxedUnitPrice());
         item.setShippedQty(0);
@@ -435,17 +474,17 @@ public class SalesOrderAllocationLinkService {
         item.setUnshippedQty(safeInt(allocation.getQty()));
         item.setDrawingUrl(source.getDrawingUrl());
         item.setHasDrawing(source.getHasDrawing());
-        item.setMaterialGrossWeight(allocation.getMaterialGrossWeight());
-        item.setPartNetWeight(allocation.getPartNetWeight());
+        item.setMaterialGrossWeight(source.getMaterialGrossWeight());
+        item.setPartNetWeight(source.getPartNetWeight());
         item.setQuoteMode(source.getQuoteMode());
         item.setAssemblyFee(source.getAssemblyFee());
         item.setBaseCost(source.getBaseCost());
-        item.setItemType(allocation.getItemType());
+        item.setItemType(source.getItemType());
         item.setAssemblyRelationStatus(source.getAssemblyRelationStatus());
-        item.setMaterialData(allocation.getMaterialData());
-        item.setProcessRoute(allocation.getProcessRoute());
+        item.setMaterialData(source.getMaterialData());
+        item.setProcessRoute(source.getProcessRoute());
         item.setFeeData(source.getFeeData());
-        item.setRemark(allocation.getRemark());
+        item.setRemark(source.getRemark());
         item.setStatus(source.getStatus());
         item.setAllocationId(allocation.getId().longValue());
         item.setAllocationType(allocation.getAllocationType());

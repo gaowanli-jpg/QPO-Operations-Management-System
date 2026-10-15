@@ -15,6 +15,7 @@ import com.machining.quote.service.AuditService;
 import com.machining.quote.service.DataCenterCallException;
 import com.machining.quote.service.DataCenterEndpointRegistry;
 import com.machining.quote.service.DataScopeService;
+import com.machining.quote.service.SalesOrderAllocationContextLoader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -63,6 +64,8 @@ public class LockedItemStockPickingOrderService {
     private AuditService auditService;
     @Autowired(required = false)
     private DataScopeService dataScopeService;
+    @Autowired(required = false)
+    private SalesOrderAllocationContextLoader contextLoader;
 
     private Clock clock = Clock.system(ZoneId.of("Asia/Shanghai"));
 
@@ -105,9 +108,27 @@ public class LockedItemStockPickingOrderService {
         List<Integer> normalizedIds = normalizeAllocationIds(allocationIds);
         LinkedHashMap<Integer, Map<String, Object>> rowsByAllocationId = new LinkedHashMap<>();
         List<StockPickingPlan> plans = new ArrayList<>();
-
+        List<OrderDeliveryTicketAllocation> sourceAllocations = allocationMapper.selectBatchIdsForUpdate(normalizedIds);
+        Map<Integer, OrderDeliveryTicketAllocation> allocationsById = new LinkedHashMap<>();
+        if (sourceAllocations != null) {
+            sourceAllocations.stream().filter(Objects::nonNull)
+                    .forEach(allocation -> allocationsById.put(allocation.getId(), allocation));
+        }
+        List<Integer> missingAllocationIds = normalizedIds.stream()
+                .filter(id -> !allocationsById.containsKey(id)).toList();
+        if (!missingAllocationIds.isEmpty()) {
+            for (Integer allocationId : missingAllocationIds) {
+                OrderDeliveryTicketAllocation allocation = allocationMapper.selectById(allocationId);
+                if (allocation != null) {
+                    allocationsById.put(allocationId, allocation);
+                }
+            }
+        }
+        Map<Integer, SalesOrderAllocationContextLoader.Context> contexts = contextLoader == null
+                ? loadSalesOrderContextsLegacy(allocationsById.values())
+                : contextLoader.load(new ArrayList<>(allocationsById.values()));
         for (Integer allocationId : normalizedIds) {
-            OrderDeliveryTicketAllocation allocation = allocationMapper.selectById(allocationId);
+            OrderDeliveryTicketAllocation allocation = allocationsById.get(allocationId);
             if (allocation == null) {
                 rowsByAllocationId.put(allocationId, row(allocationId, STATUS_SKIPPED, "锁库零件不存在", null));
                 continue;
@@ -118,7 +139,7 @@ public class LockedItemStockPickingOrderService {
                 continue;
             }
             try {
-                plans.add(buildPlan(allocation));
+                plans.add(buildPlan(allocation, contexts.get(allocationId)));
             } catch (RuntimeException error) {
                 String message = safeMessage(error);
                 markFailed(allocation, allocation.getStockPickingBizId(), message);
@@ -143,28 +164,49 @@ public class LockedItemStockPickingOrderService {
         return summary(taskId, rows);
     }
 
-    private StockPickingPlan buildPlan(OrderDeliveryTicketAllocation allocation) {
-        String validationError = validationError(allocation);
+    private StockPickingPlan buildPlan(
+            OrderDeliveryTicketAllocation allocation,
+            SalesOrderAllocationContextLoader.Context context) {
+        if (context != null && context.error() != null) {
+            throw new RuntimeException(context.error());
+        }
+        boolean linked = context != null && context.allocationLinked();
+        SalesOrderItem salesItem = context == null ? null : context.item();
+        SalesOrderHeader header = context == null ? null : context.header();
+        String productCode = linked ? salesItem.getMaterialNo() : allocation.getMaterialNo();
+        Integer quantity = linked ? salesItem.getQty() : allocation.getQty();
+        java.time.LocalDate deliveryDate = linked
+                ? firstDate(salesItem.getInternalDeliveryDate(), salesItem.getSalesOrderDate(), header.getSalesOrderDate())
+                : allocation.getDeliveryDate();
+        String validationError = validationError(quantity, productCode, deliveryDate);
         if (validationError != null) {
             throw new RuntimeException(validationError);
         }
-        SalesOrderIdentity salesOrder = resolveSalesOrder(allocation);
+        SalesOrderIdentity salesOrder = context == null
+                ? resolveSalesOrder(allocation)
+                : resolveSalesOrder(allocation, context);
         MesProductionOrderCreateReq.Item item = new MesProductionOrderCreateReq.Item();
         item.setOrderType(ORDER_TYPE_STOCK_PICKING);
-        item.setProductCode(trimToNull(allocation.getMaterialNo()));
-        item.setPlanCount(BigDecimal.valueOf(allocation.getQty()));
+        item.setProductCode(trimToNull(productCode));
+        item.setPlanCount(BigDecimal.valueOf(quantity));
         item.setPlanStartTime(LocalDateTime.now(clock));
-        item.setPlanEndTime(allocation.getDeliveryDate().atStartOfDay());
-        item.setRemark(trimToNull(allocation.getRemark()));
+        item.setPlanEndTime(deliveryDate.atStartOfDay());
+        item.setRemark(trimToNull(linked ? salesItem.getRemark() : allocation.getRemark()));
         item.setSaleOrderNo(salesOrder.saleOrderNo());
         item.setSaleOrderItemNo(salesOrder.saleOrderItemNo());
         item.setSaleRemark(MesCustomerRequirementsAssembler.assemble(
-                allocation.getDescription(),
-                allocation.getSurfaceTreatment()));
+                linked ? salesItem.getDescription() : allocation.getDescription(),
+                linked ? salesItem.getSurfaceTreatment() : allocation.getSurfaceTreatment()));
         item.setCustomerPoNo("");
-        item.setCustomerProjectNo(trimToNull(allocation.getCustomerProjectNo()));
-        item.setCustomerOrderNo(trimToNull(allocation.getCustomerOrderNo()));
-        item.setInternalProjectNo(trimToNull(allocation.getInternalProjectNo()));
+        item.setCustomerProjectNo(trimToNull(linked
+                ? firstNonBlank(salesItem.getCustomerProjectNo(), header.getCustomerProjectNo())
+                : allocation.getCustomerProjectNo()));
+        item.setCustomerOrderNo(trimToNull(linked
+                ? firstNonBlank(salesItem.getCustomerOrderNo(), header.getCustomerOrderNo())
+                : allocation.getCustomerOrderNo()));
+        item.setInternalProjectNo(trimToNull(linked
+                ? firstNonBlank(salesItem.getInternalProjectNo(), header.getInternalProjectNo())
+                : allocation.getInternalProjectNo()));
 
         String existingBizId = trimToNull(allocation.getStockPickingBizId());
         String groupKey = existingBizId == null ? "NEW" : existingBizId;
@@ -213,6 +255,64 @@ public class LockedItemStockPickingOrderService {
             throw new RuntimeException("Official sales order number is required before MES stock picking dispatch");
         }
         return new SalesOrderIdentity(saleOrderNo, String.valueOf(item.getLineNo()));
+    }
+
+    private SalesOrderIdentity resolveSalesOrder(
+            OrderDeliveryTicketAllocation allocation,
+            SalesOrderAllocationContextLoader.Context context) {
+        if (context.item() == null || context.header() == null) {
+            throw new RuntimeException("Official sales order line is required before MES stock picking dispatch");
+        }
+        if (context.item().getLineNo() == null || context.item().getLineNo() <= 0) {
+            throw new RuntimeException("Official sales order line number is required before MES stock picking dispatch");
+        }
+        if (SOURCE_SALES_ORDER.equalsIgnoreCase(blankToEmpty(allocation.getSourceType()))
+                && allocation.getSourceOrderId() != null
+                && !Objects.equals(allocation.getSourceOrderId(), context.item().getSalesOrderId())) {
+            throw new RuntimeException("Official sales order source does not match stock picking allocation");
+        }
+        String saleOrderNo = firstNonBlank(context.header().getDocumentNo(), context.header().getSalesOrderNo());
+        if (isBlank(saleOrderNo)) {
+            throw new RuntimeException("Official sales order number is required before MES stock picking dispatch");
+        }
+        return new SalesOrderIdentity(saleOrderNo, String.valueOf(context.item().getLineNo()));
+    }
+
+    private Map<Integer, SalesOrderAllocationContextLoader.Context> loadSalesOrderContextsLegacy(
+            java.util.Collection<OrderDeliveryTicketAllocation> allocations) {
+        Map<Integer, SalesOrderAllocationContextLoader.Context> contexts = new LinkedHashMap<>();
+        for (OrderDeliveryTicketAllocation allocation : allocations) {
+            SalesOrderItem item = allocation.getTicketId() == null
+                    ? null
+                    : salesOrderItemMapper.selectBySourceTicketIdForUpdate(allocation.getTicketId());
+            if (SOURCE_SALES_ORDER.equalsIgnoreCase(blankToEmpty(allocation.getSourceType()))
+                    && allocation.getSourceItemId() != null) {
+                SalesOrderItem direct = salesOrderItemMapper.selectByIdForUpdate(allocation.getSourceItemId());
+                if (item != null && direct != null && !sameSalesOrderItem(item, direct)) {
+                    contexts.put(allocation.getId(), new SalesOrderAllocationContextLoader.Context(
+                            null, null, false, "sales order item resolution is ambiguous for allocation"));
+                    continue;
+                }
+                if (item == null) {
+                    item = direct;
+                }
+            }
+            SalesOrderHeader header = item == null || item.getSalesOrderId() == null
+                    ? null
+                    : salesOrderHeaderMapper.selectById(item.getSalesOrderId());
+            contexts.put(allocation.getId(), new SalesOrderAllocationContextLoader.Context(
+                    item, header, false, item == null ? "sales order item is not linked to allocation" : null));
+        }
+        return contexts;
+    }
+
+    private java.time.LocalDate firstDate(java.time.LocalDate... values) {
+        for (java.time.LocalDate value : values) {
+            if (value != null) {
+                return value;
+            }
+        }
+        return null;
     }
 
     private boolean sameSalesOrderItem(SalesOrderItem left, SalesOrderItem right) {
@@ -388,14 +488,14 @@ public class LockedItemStockPickingOrderService {
         allocationMapper.updateById(update);
     }
 
-    private String validationError(OrderDeliveryTicketAllocation allocation) {
-        if (allocation.getQty() == null || allocation.getQty() <= 0) {
+    private String validationError(Integer quantity, String materialNo, java.time.LocalDate deliveryDate) {
+        if (quantity == null || quantity <= 0) {
             return "锁库数量必须大于 0";
         }
-        if (isBlank(allocation.getMaterialNo())) {
+        if (isBlank(materialNo)) {
             return "下发提库存工单前必须先有物料号";
         }
-        if (allocation.getDeliveryDate() == null) {
+        if (deliveryDate == null) {
             return "内部目标交期不能为空";
         }
         return null;

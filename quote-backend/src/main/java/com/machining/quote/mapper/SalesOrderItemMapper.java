@@ -27,6 +27,29 @@ public interface SalesOrderItemMapper extends BaseMapper<SalesOrderItem> {
     @Select("SELECT * FROM sales_order_item WHERE allocation_id = #{allocationId} LIMIT 1")
     SalesOrderItem selectByAllocationId(@Param("allocationId") Long allocationId);
 
+    @Select("""
+            <script>
+            SELECT * FROM sales_order_item
+            WHERE allocation_id IN
+            <foreach collection="allocationIds" item="allocationId" open="(" separator="," close=")">
+                #{allocationId}
+            </foreach>
+            </script>
+            """)
+    List<SalesOrderItem> selectByAllocationIds(@Param("allocationIds") List<Long> allocationIds);
+
+    @Select("""
+            <script>
+            SELECT * FROM sales_order_item
+            WHERE source_ticket_id IN
+            <foreach collection="ticketIds" item="ticketId" open="(" separator="," close=")">
+                #{ticketId}
+            </foreach>
+            ORDER BY source_ticket_id, line_no, id
+            </script>
+            """)
+    List<SalesOrderItem> selectBySourceTicketIds(@Param("ticketIds") List<Integer> ticketIds);
+
     @Select("SELECT * FROM sales_order_item WHERE sales_order_id = #{salesOrderId} ORDER BY line_no ASC, id ASC FOR UPDATE")
     List<SalesOrderItem> selectBySalesOrderIdForUpdate(@Param("salesOrderId") Long salesOrderId);
 

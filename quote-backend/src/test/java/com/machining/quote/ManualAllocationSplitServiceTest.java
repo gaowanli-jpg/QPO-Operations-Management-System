@@ -74,6 +74,9 @@ class ManualAllocationSplitServiceTest {
         fixture.item = new SalesOrderItem();
         fixture.item.setId(100L);
         fixture.item.setSalesOrderId(77L);
+        fixture.item.setAllocationId(10L);
+        fixture.item.setQty(qty);
+        fixture.item.setMaterialNo("MAT-10");
 
         when(fixture.link.lockSalesOrderForAllocation(10)).thenReturn(fixture.item);
         when(fixture.allocationMapper.selectByIdForUpdate(10)).thenReturn(fixture.parent);

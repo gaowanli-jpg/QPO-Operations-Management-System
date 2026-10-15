@@ -8,6 +8,7 @@ import com.machining.quote.entity.SalesOrderItem;
 import com.machining.quote.mapper.OrderDeliveryTicketAllocationMapper;
 import com.machining.quote.mapper.SalesOrderHeaderMapper;
 import com.machining.quote.mapper.SalesOrderItemMapper;
+import com.machining.quote.service.SalesOrderAllocationContextLoader;
 import lombok.Data;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -31,6 +32,8 @@ public class WmsReservationPlanService {
     @Autowired
     private SalesOrderHeaderMapper salesOrderHeaderMapper;
     @Autowired(required = false)
+    private SalesOrderAllocationContextLoader contextLoader;
+    @Autowired(required = false)
     private WmsReservationFingerprintService fingerprintService = new WmsReservationFingerprintService();
 
     public ReservationPlan prepareAllocations(List<Integer> allocationIds) {
@@ -38,9 +41,49 @@ public class WmsReservationPlanService {
         if (allocationIds == null || allocationIds.isEmpty()) {
             return plan;
         }
+        List<Integer> normalizedIds = allocationIds.stream().filter(Objects::nonNull).distinct().toList();
+        List<OrderDeliveryTicketAllocation> sourceAllocations = allocationMapper.selectBatchIdsForUpdate(normalizedIds);
+        Map<Integer, OrderDeliveryTicketAllocation> allocationById = new LinkedHashMap<>();
+        if (sourceAllocations != null) {
+            sourceAllocations.stream().filter(Objects::nonNull)
+                    .forEach(row -> allocationById.put(row.getId(), row));
+        }
+        List<Integer> missingIds = normalizedIds.stream().filter(id -> !allocationById.containsKey(id)).toList();
+        if (!missingIds.isEmpty()) {
+            for (Integer allocationId : missingIds) {
+                OrderDeliveryTicketAllocation allocation = allocationMapper.selectByIdForUpdate(allocationId);
+                if (allocation != null) {
+                    allocationById.put(allocationId, allocation);
+                }
+            }
+        }
+        List<OrderDeliveryTicketAllocation> allocations = normalizedIds.stream()
+                .map(allocationById::get)
+                .filter(Objects::nonNull)
+                .toList();
+        Map<Integer, SalesOrderAllocationContextLoader.Context> contexts;
+        if (contextLoader != null) {
+            contexts = contextLoader.load(allocations);
+        } else {
+            contexts = new LinkedHashMap<>();
+            for (Integer id : normalizedIds) {
+                SalesOrderItem item = salesOrderItemMapper.selectByAllocationIdForUpdate(id.longValue());
+                SalesOrderHeader header = item == null || item.getSalesOrderId() == null
+                        ? null
+                        : salesOrderHeaderMapper.selectByIdForUpdate(item.getSalesOrderId());
+                contexts.put(id, new SalesOrderAllocationContextLoader.Context(item, header,
+                        item != null && item.getAllocationId() != null,
+                        item == null ? "sales order item is not linked to allocation" : null));
+            }
+        }
         Map<GroupKey, List<PreparedAllocation>> byGroup = new LinkedHashMap<>();
-        for (Integer allocationId : allocationIds.stream().filter(Objects::nonNull).distinct().toList()) {
-            PreparedAllocation prepared = prepareAllocation(allocationId, plan.getFailures());
+        for (Integer allocationId : normalizedIds) {
+            OrderDeliveryTicketAllocation allocation = allocationById.get(allocationId);
+            if (allocation == null) {
+                plan.getFailures().add(new RowFailure(allocationId, null, "production allocation not found"));
+                continue;
+            }
+            PreparedAllocation prepared = prepareAllocation(allocation, contexts.get(allocationId), plan.getFailures());
             if (prepared == null) {
                 continue;
             }
@@ -118,12 +161,11 @@ public class WmsReservationPlanService {
         return result;
     }
 
-    private PreparedAllocation prepareAllocation(Integer allocationId, List<RowFailure> failures) {
-        OrderDeliveryTicketAllocation allocation = allocationMapper.selectByIdForUpdate(allocationId);
-        if (allocation == null) {
-            failures.add(new RowFailure(allocationId, null, "production allocation not found"));
-            return null;
-        }
+    private PreparedAllocation prepareAllocation(
+            OrderDeliveryTicketAllocation allocation,
+            SalesOrderAllocationContextLoader.Context context,
+            List<RowFailure> failures) {
+        Integer allocationId = allocation.getId();
         if (!"PRODUCTION_REQUIRED".equalsIgnoreCase(text(allocation.getAllocationType()))
                 || !"ACTIVE".equalsIgnoreCase(firstText(allocation.getStatus(), "ACTIVE"))) {
             failures.add(new RowFailure(allocationId, allocation.getTicketId(), "allocation is not an active production row"));
@@ -133,27 +175,39 @@ public class WmsReservationPlanService {
             failures.add(new RowFailure(allocationId, allocation.getTicketId(), "allocation has already completed an initial split"));
             return null;
         }
-        SalesOrderItem sourceItem = salesOrderItemMapper.selectByAllocationIdForUpdate(allocationId.longValue());
+        SalesOrderItem sourceItem = context == null
+                ? null
+                : context.item();
+        if (context != null && context.error() != null) {
+            failures.add(new RowFailure(allocationId, allocation.getTicketId(), context.error()));
+            return null;
+        }
         if (sourceItem == null || sourceItem.getSalesOrderId() == null) {
             failures.add(new RowFailure(allocationId, allocation.getTicketId(), "sales order item not found for allocation"));
             return null;
         }
-        SalesOrderHeader header = salesOrderHeaderMapper.selectByIdForUpdate(sourceItem.getSalesOrderId());
+        SalesOrderHeader header = context == null
+                ? salesOrderHeaderMapper.selectByIdForUpdate(sourceItem.getSalesOrderId())
+                : context.header();
         if (header == null) {
             failures.add(new RowFailure(allocationId, allocation.getTicketId(), "sales order header not found"));
             return null;
         }
-        String customerOrderNo = firstText(sourceItem.getCustomerOrderNo(), header.getCustomerOrderNo(), allocation.getCustomerOrderNo());
+        boolean linked = context != null && context.allocationLinked();
+        String customerOrderNo = linked
+                ? firstText(sourceItem.getCustomerOrderNo(), header.getCustomerOrderNo())
+                : firstText(sourceItem.getCustomerOrderNo(), header.getCustomerOrderNo(), allocation.getCustomerOrderNo());
         if (customerOrderNo == null) {
             failures.add(new RowFailure(allocationId, allocation.getTicketId(), "customerOrderNo is required"));
             return null;
         }
-        String productCode = text(allocation.getMaterialNo());
+        String productCode = linked ? text(sourceItem.getMaterialNo()) : text(allocation.getMaterialNo());
         if (productCode == null) {
             failures.add(new RowFailure(allocationId, allocation.getTicketId(), "materialNo is required"));
             return null;
         }
-        if (allocation.getQty() == null || allocation.getQty() <= 0) {
+        Integer requestQty = linked ? sourceItem.getQty() : allocation.getQty();
+        if (requestQty == null || requestQty <= 0) {
             failures.add(new RowFailure(allocationId, allocation.getTicketId(), "qty must be positive"));
             return null;
         }
@@ -161,7 +215,9 @@ public class WmsReservationPlanService {
             failures.add(new RowFailure(allocationId, null, "source delivery ticket is required for traceability"));
             return null;
         }
-        String fallbackRemark = firstText(allocation.getRemark(), allocation.getMaterialName(), allocation.getDescription(), allocation.getPartNo());
+        String fallbackRemark = linked
+                ? firstText(sourceItem.getRemark(), sourceItem.getMaterialName(), sourceItem.getDescription(), sourceItem.getPartNo())
+                : firstText(allocation.getRemark(), allocation.getMaterialName(), allocation.getDescription(), allocation.getPartNo());
         if (fallbackRemark == null) {
             failures.add(new RowFailure(allocationId, allocation.getTicketId(), "remark is required"));
             return null;
@@ -173,10 +229,12 @@ public class WmsReservationPlanService {
         prepared.setSalesOrderItemId(sourceItem.getId());
         prepared.setSalesOrderLineNo(sourceItem.getLineNo());
         prepared.setProductCode(productCode);
-        prepared.setReserveCount(BigDecimal.valueOf(allocation.getQty()));
+        prepared.setReserveCount(BigDecimal.valueOf(requestQty));
         prepared.setFallbackRemark(fallbackRemark);
         prepared.setCustomerOrderNo(customerOrderNo);
-        prepared.setCustomerProjectNo(firstText(sourceItem.getCustomerProjectNo(), header.getCustomerProjectNo(), allocation.getCustomerProjectNo()));
+        prepared.setCustomerProjectNo(linked
+                ? firstText(sourceItem.getCustomerProjectNo(), header.getCustomerProjectNo())
+                : firstText(sourceItem.getCustomerProjectNo(), header.getCustomerProjectNo(), allocation.getCustomerProjectNo()));
         return prepared;
     }
 
@@ -254,23 +312,12 @@ public class WmsReservationPlanService {
     }
 
     private String remark(List<PreparedAllocation> allocations) {
-        List<Function<PreparedAllocation, String>> extractors = List.of(
-                row -> row.getAllocation().getRemark(),
-                row -> row.getAllocation().getMaterialName(),
-                row -> row.getAllocation().getDescription(),
-                row -> row.getAllocation().getPartNo());
-        for (Function<PreparedAllocation, String> extractor : extractors) {
-            String value = allocations.stream()
-                    .map(extractor)
-                    .map(this::text)
-                    .filter(Objects::nonNull)
-                    .findFirst()
-                    .orElse(null);
-            if (value != null) {
-                return value;
-            }
-        }
-        return null;
+        return allocations.stream()
+                .map(PreparedAllocation::getFallbackRemark)
+                .map(this::text)
+                .filter(Objects::nonNull)
+                .findFirst()
+                .orElse(null);
     }
 
     private WmsSaleLadingReserveReq.Item toRequestItem(ReservationItem item) {

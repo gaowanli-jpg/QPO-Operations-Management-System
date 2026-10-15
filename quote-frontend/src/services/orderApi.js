@@ -118,11 +118,6 @@ export const submitSalesOrderWmsAllocationBatch = (salesOrderId, allocationIds =
   })
 }
 
-export const saveSalesOrderAllocationSplits = (salesOrderId, payload = {}) => request(`/api/market/sales-order-management/orders/${salesOrderId}/allocation-splits/batch`, {
-  method: 'POST',
-  data: payload
-})
-
 export const manualSplitSalesOrderAllocation = (salesOrderId, payload = {}) => request(`/api/market/sales-order-management/orders/${salesOrderId}/allocation-splits/manual`, {
   method: 'POST',
   data: payload

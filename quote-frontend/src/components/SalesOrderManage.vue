@@ -756,16 +756,6 @@
                 >
                   批量获取库存信息
                 </el-button>
-                <el-button
-                  v-permission="SALES_ORDER_UPDATE_PERMISSION"
-                  type="success"
-                  plain
-                  :disabled="allocationSplitDirtyCount === 0"
-                  :loading="allocationSplitSaving"
-                  @click="saveAllocationSplitChanges"
-                >
-                  保存拆分数量
-                </el-button>
               </div>
             </div>
             <div v-if="wmsAllocationTask" class="sales-order-wms-task-result">
@@ -835,21 +825,7 @@
               <el-table-column prop="partNo" label="图号" min-width="150" show-overflow-tooltip />
               <el-table-column prop="version" label="版本" width="80" align="center" />
               <el-table-column prop="materialNo" label="物料号" min-width="130" show-overflow-tooltip />
-              <el-table-column prop="qty" label="拆分数量" width="130" align="center">
-                <template #default="{ row }">
-                  <el-input-number
-                    v-if="allocationSplitDrafts[row.allocationId]"
-                    v-model="allocationSplitDrafts[row.allocationId].qty"
-                    :min="0"
-                    :precision="0"
-                    :controls="false"
-                    :disabled="salesOrderEditLocked"
-                    size="small"
-                  />
-                  <span v-else>{{ row.qty ?? 0 }}</span>
-                </template>
-              </el-table-column>
-              <el-table-column prop="ticketQty" label="提单总量" width="100" align="center" />
+              <el-table-column prop="qty" label="拆分数量" width="130" align="center" />
               <el-table-column label="人工拆行" width="110" align="center">
                 <template #default="{ row }">
                   <el-button
@@ -1063,7 +1039,6 @@ import {
   listSalesOrderTickets,
   manualSplitSalesOrderAllocation,
   saveSalesOrderHeader,
-  saveSalesOrderAllocationSplits,
   saveSalesOrderItems,
   replaceSalesOrderItemField,
   restoreSalesOrder,
@@ -1197,8 +1172,6 @@ const activeDetailTab = ref('items')
 const detailItemList = ref([])
 const detailTicketList = ref([])
 const allocationSplitList = ref([])
-const allocationSplitDrafts = reactive({})
-const allocationSplitSaving = ref(false)
 const wmsAllocationTask = ref(null)
 const wmsAllocationRefreshing = ref(false)
 const detailProcessSheetList = ref([])
@@ -1258,10 +1231,6 @@ const itemDataReplacementBusy = ref(false)
 
 const orderEditSaving = computed(() => isPending(salesOrderActionKeys.headerSave(orderDetail.value?.orderInfo?.id)))
 const itemEditSaving = computed(() => isPending(salesOrderActionKeys.itemSave(orderDetail.value?.orderInfo?.id)))
-const allocationSplitDirtyCount = computed(() => allocationSplitList.value.reduce((count, row) => {
-  const draft = allocationSplitDrafts[row?.allocationId]
-  return draft && Number(draft.qty ?? 0) !== Number(row?.qty ?? 0) ? count + 1 : count
-}, 0))
 const manualSplitRemainder = computed(() => Number(manualSplitRow.value?.qty || 0)
   - Number(manualSplitDraft.inStockQty || 0)
   - Number(manualSplitDraft.inProductionQty || 0))
@@ -1413,7 +1382,6 @@ const resetDetailPagination = () => {
   detailItemList.value = []
   detailTicketList.value = []
   allocationSplitList.value = []
-  Object.keys(allocationSplitDrafts).forEach(key => delete allocationSplitDrafts[key])
   wmsAllocationTask.value = null
   detailProcessSheetList.value = []
   detailItemTotal.value = 0
@@ -1526,12 +1494,6 @@ const fetchAllocationSplits = async () => {
     })
     allocationSplitList.value = response.records || []
     allocationSplitTotal.value = Number(response.total ?? 0)
-    Object.keys(allocationSplitDrafts).forEach(key => delete allocationSplitDrafts[key])
-    allocationSplitList.value.forEach(row => {
-      if (row?.allocationId != null) {
-        allocationSplitDrafts[row.allocationId] = { qty: Number(row.qty ?? 0) }
-      }
-    })
   } catch (error) {
     console.error(error)
     ElMessage.error('销售订单锁库拆行加载失败。')
@@ -1622,37 +1584,6 @@ const submitManualSplit = async () => {
 
 const handleAllocationSplitSelectionChange = (rows) => {
   selectedAllocationSplitRows.value = rows || []
-}
-
-const saveAllocationSplitChanges = async () => {
-  const salesOrderId = orderDetail.value?.orderInfo?.id
-  if (!salesOrderId) return ElMessage.warning('请先打开销售订单详情。')
-  const items = allocationSplitList.value
-    .filter(row => {
-      const draft = allocationSplitDrafts[row?.allocationId]
-      return draft && Number(draft.qty ?? 0) !== Number(row?.qty ?? 0)
-    })
-    .map(row => ({ allocationId: row.allocationId, qty: Number(allocationSplitDrafts[row.allocationId].qty) }))
-  if (!items.length) return ElMessage.info('拆分数量没有变化。')
-  if (items.some(item => !Number.isInteger(item.qty) || item.qty < 0)) {
-    return ElMessage.warning('拆分数量必须是大于或等于 0 的整数。')
-  }
-  allocationSplitSaving.value = true
-  try {
-    const response = await saveSalesOrderAllocationSplits(salesOrderId, { items })
-    ElMessage.success(response?.message || '锁库拆分数量已保存。')
-    await loadOrders()
-    await refreshCurrentDetail()
-    await Promise.all([fetchDetailItems(), fetchAllocationSplits()])
-    if (wmsAllocationTask.value?.id || wmsAllocationTask.value?.taskId) {
-      await refreshWmsAllocationTask()
-    }
-  } catch (error) {
-    console.error(error)
-    ElMessage.error(error.response?.data?.message || error.message || '锁库拆分数量保存失败。')
-  } finally {
-    allocationSplitSaving.value = false
-  }
 }
 
 const wmsAllocationRows = computed(() => {
