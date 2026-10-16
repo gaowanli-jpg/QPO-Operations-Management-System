@@ -114,7 +114,7 @@ class ProcessRouteBaselineStage1CharacterizationTest {
     }
 
     @Test
-    void currentProcessRouteSnapshotIsCopiedThroughReleaseWmsAndMesDispatch() throws IOException {
+    void sourceProcessRoutesRemainAvailableAndNewWmsAllocationsDoNotCopyThem() throws IOException {
         String rfqReleaseService = read(service("RfqReleaseSalesOrderService.java"));
         String deliveryService = read(service("DeliveryService.java"));
         String autoSnapshotCompletionService = read(service("SalesOrderAutoSnapshotCompletionService.java"));
@@ -137,7 +137,7 @@ class ProcessRouteBaselineStage1CharacterizationTest {
                 .contains(
                         "item.setProcessRoute(processRouteSnapshotService.copySnapshot(source.getProcessRoute()))");
         assertThat(wmsReservationStateService)
-                .contains("row.setProcessRoute(processRouteSnapshotService.copySnapshot(ticket.getProcessRoute()))");
+                .doesNotContain("row.setProcessRoute(processRouteSnapshotService.copySnapshot(ticket.getProcessRoute()))");
         assertThat(mesProductionService)
                 .contains("item.setProcessRoute(buildProcessRoute(salesItem.getProcessRoute()))")
                 .doesNotContain("item.setProcessRoute(buildProcessRoute(allocation.getProcessRoute()))");

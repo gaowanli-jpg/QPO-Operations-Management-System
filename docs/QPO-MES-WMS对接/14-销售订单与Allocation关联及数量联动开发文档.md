@@ -35,3 +35,9 @@ Flyway `V58__sales_order_item_allocation_link.sql` 追加字段、约束和索�
 ## 6. 物料号成功前的销售订单数量编辑限制
 
 销售订单详情中，只有 `sales_order_item.allocation_id` 已关联 Allocation 的零件行才允许修改数量。物料号尚未成功并建立 Allocation 关联时，详情数量输入框禁用；后端零件保存接口同样拒绝数量变更。表格数据替换预览会跳过未关联 Allocation 零件行的数量字段，同一行其他有效字段仍可确认。关联建立后，数量编辑同步更新对应 Allocation；WMS 活动请求期间仍按既有并发保护拒绝编辑。该规则只限制数量，不影响其他零件字段。
+
+## 7. 新 Allocation 的写入边界
+
+从物料号获取成功开始，新建的 Allocation 只保存关系、拆分类型、拆分来源、父子关系、废弃状态以及 MES、WMS、提库存工单的流程状态和任务追踪信息。当前零件业务字段和数量不再复制写入 Allocation，包括物料号、图号、版本、项目号、客户订单号、材料、工艺、描述、备注、重量、交期、`process_route`、`material_data`、`qty` 和 `ticket_qty`。
+
+WMS 或人工拆分产生的新 Allocation 同样不写入这些冗余快照；拆分数量通过关联销售订单零件行写入，待产、锁库和后续下发读取 `sales_order_item` 的当前数量及业务字段。Allocation 表中保留的旧字段只用于历史数据兼容和必要的旧数据回退，V61 允许新行的 `qty` 为空，不删除既有字段和历史值。

@@ -8,7 +8,6 @@ import com.machining.quote.entity.WmsReservationTicket;
 import com.machining.quote.mapper.OrderDeliveryTicketAllocationMapper;
 import com.machining.quote.mapper.SalesOrderItemMapper;
 import com.machining.quote.mapper.WmsReservationTicketMapper;
-import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -144,8 +143,12 @@ public class AllocationSplitService {
             List<OrderDeliveryTicketAllocation> existing = allocationMapper.selectBySplitParentAllocationId(allocationId);
             List<OrderDeliveryTicketAllocation> linkedRows = new ArrayList<>(existing);
             linkedRows.add(allocation);
-            salesOrderAllocationLinkService.syncAllocationSplitsForAllocation(allocationId, linkedRows);
-            return result(linkedItem.getSalesOrderId(), allocation, originalQty, existing);
+            Map<Integer, Integer> quantitiesByAllocationId = quantitiesByAllocationId(
+                    allocationId, originalQty, stockQty, inProduction, existing);
+            salesOrderAllocationLinkService.syncAllocationSplitsForAllocation(
+                    allocationId, linkedRows, quantitiesByAllocationId);
+            return result(linkedItem.getSalesOrderId(), allocation, originalQty,
+                    Math.toIntExact(originalQty - stockQty - inProduction), existing);
         }
 
         long splitTotal = (long) stockQty + inProduction;
@@ -164,16 +167,16 @@ public class AllocationSplitService {
 
         LocalDateTime now = LocalDateTime.now();
         List<OrderDeliveryTicketAllocation> created = new ArrayList<>();
+        Map<Integer, Integer> quantitiesByAllocationId = new LinkedHashMap<>();
+        quantitiesByAllocationId.put(allocationId, remainder);
         if (stockQty > 0) {
             OrderDeliveryTicketAllocation existingStock = existingChildren.stream()
                     .filter(row -> TYPE_IN_STOCK.equalsIgnoreCase(defaultText(row.getAllocationType())))
                     .findFirst().orElse(null);
             if (existingStock == null) {
-                created.add(createChild(allocation, TYPE_IN_STOCK, stockQty, normalizedSource, wmsReservationTicketId, sourcePayload, now));
+                created.add(createChild(allocation, TYPE_IN_STOCK, normalizedSource, wmsReservationTicketId, sourcePayload, now));
             } else {
-                existingStock.setQty(stockQty);
-                existingStock.setUpdatedAt(now);
-                allocationMapper.updateById(existingStock);
+                quantitiesByAllocationId.put(existingStock.getId(), stockQty);
             }
         }
         if (inProduction > 0) {
@@ -181,14 +184,11 @@ public class AllocationSplitService {
                     .filter(row -> TYPE_IN_PRODUCTION.equalsIgnoreCase(defaultText(row.getAllocationType())))
                     .findFirst().orElse(null);
             if (existingInProduction == null) {
-                created.add(createChild(allocation, TYPE_IN_PRODUCTION, inProduction, normalizedSource, wmsReservationTicketId, sourcePayload, now));
+                created.add(createChild(allocation, TYPE_IN_PRODUCTION, normalizedSource, wmsReservationTicketId, sourcePayload, now));
             } else {
-                existingInProduction.setQty(inProduction);
-                existingInProduction.setUpdatedAt(now);
-                allocationMapper.updateById(existingInProduction);
+                quantitiesByAllocationId.put(existingInProduction.getId(), inProduction);
             }
         }
-        allocation.setQty(remainder);
         allocation.setAllocationSplitSource(normalizedSource);
         allocation.setSplitParentAllocationId(null);
         if (SOURCE_WMS.equals(normalizedSource)) {
@@ -203,32 +203,53 @@ public class AllocationSplitService {
         allocation.setMesProductionSyncedAt(null);
         allocation.setMesProductionMessage(null);
         allocation.setUpdatedAt(now);
-        allocationMapper.updateById(allocation);
+        OrderDeliveryTicketAllocation stateUpdate = new OrderDeliveryTicketAllocation();
+        stateUpdate.setId(allocation.getId());
+        stateUpdate.setAllocationSplitSource(allocation.getAllocationSplitSource());
+        stateUpdate.setSplitParentAllocationId(null);
+        stateUpdate.setWmsReservationTicketId(allocation.getWmsReservationTicketId());
+        stateUpdate.setAllocationSource(allocation.getAllocationSource());
+        stateUpdate.setMesProductionStatus(allocation.getMesProductionStatus());
+        stateUpdate.setMesProductionRequestId(null);
+        stateUpdate.setMesProductionExternalId(null);
+        stateUpdate.setMesProductionSyncedAt(null);
+        stateUpdate.setMesProductionMessage(null);
+        stateUpdate.setUpdatedAt(now);
+        allocationMapper.updateById(stateUpdate);
         for (OrderDeliveryTicketAllocation child : created) {
             allocationMapper.insert(child);
+            if (child.getId() == null) {
+                throw new IllegalStateException("split allocation insert did not return an id");
+            }
+            int childQty = TYPE_IN_STOCK.equalsIgnoreCase(child.getAllocationType()) ? stockQty : inProduction;
+            quantitiesByAllocationId.put(child.getId(), childQty);
         }
 
         List<OrderDeliveryTicketAllocation> linkedRows = new ArrayList<>(existingChildren);
         linkedRows.removeIf(row -> created.stream().anyMatch(newRow -> Objects.equals(row.getId(), newRow.getId())));
         linkedRows.addAll(created);
         linkedRows.add(allocation);
-        salesOrderAllocationLinkService.syncAllocationSplitsForAllocation(allocationId, linkedRows);
-        return result(linkedItem.getSalesOrderId(), allocation, originalQty, created);
+        salesOrderAllocationLinkService.syncAllocationSplitsForAllocation(
+                allocationId, linkedRows, quantitiesByAllocationId);
+        return result(linkedItem.getSalesOrderId(), allocation, originalQty, remainder, created);
     }
 
     private OrderDeliveryTicketAllocation createChild(
             OrderDeliveryTicketAllocation source,
             String allocationType,
-            int qty,
             String splitSource,
             Long wmsReservationTicketId,
             Map<String, Object> sourcePayload,
             LocalDateTime now) {
         OrderDeliveryTicketAllocation child = new OrderDeliveryTicketAllocation();
-        BeanUtils.copyProperties(source, child);
+        child.setTicketId(source.getTicketId());
+        child.setRfqId(source.getRfqId());
+        child.setItemId(source.getItemId());
+        child.setSourceType(source.getSourceType());
+        child.setSourceOrderId(source.getSourceOrderId());
+        child.setSourceItemId(source.getSourceItemId());
         child.setId(null);
         child.setAllocationType(allocationType);
-        child.setQty(qty);
         child.setAllocationSource(SOURCE_WMS.equals(splitSource) ? "WMS_RESERVATION" : "MANUAL_SPLIT");
         child.setAllocationSplitSource(splitSource);
         child.setSplitParentAllocationId(source.getId());
@@ -276,13 +297,35 @@ public class AllocationSplitService {
         }
     }
 
+    private Map<Integer, Integer> quantitiesByAllocationId(
+            Integer sourceAllocationId,
+            int sourceQty,
+            int stockQty,
+            int inProductionQty,
+            List<OrderDeliveryTicketAllocation> children) {
+        Map<Integer, Integer> quantities = new LinkedHashMap<>();
+        quantities.put(sourceAllocationId, sourceQty);
+        for (OrderDeliveryTicketAllocation child : children) {
+            if (child == null || child.getId() == null) {
+                continue;
+            }
+            if (TYPE_IN_STOCK.equalsIgnoreCase(defaultText(child.getAllocationType()))) {
+                quantities.put(child.getId(), stockQty);
+            } else if (TYPE_IN_PRODUCTION.equalsIgnoreCase(defaultText(child.getAllocationType()))) {
+                quantities.put(child.getId(), inProductionQty);
+            }
+        }
+        return quantities;
+    }
+
     private SplitResult result(Long salesOrderId, OrderDeliveryTicketAllocation source, int oldQty,
+                               int productionRequiredQty,
                                List<OrderDeliveryTicketAllocation> created) {
         SplitResult result = new SplitResult();
         result.salesOrderId = salesOrderId;
         result.sourceAllocationId = source.getId();
         result.sourceAllocationOldQty = oldQty;
-        result.productionRequiredQty = source.getQty();
+        result.productionRequiredQty = productionRequiredQty;
         result.createdAllocations = created == null ? List.of() : created.stream().toList();
         result.createdSalesOrderItemIds = result.createdAllocations.stream()
                 .map(row -> salesOrderItemMapper.selectByAllocationId(row.getId().longValue()))

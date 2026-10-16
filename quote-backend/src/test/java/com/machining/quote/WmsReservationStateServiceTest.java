@@ -163,11 +163,14 @@ class WmsReservationStateServiceTest {
 
         fixture.service.applyResponse(501L);
 
-        assertThat(production.getQty()).isEqualTo(1);
+        assertThat(production.getQty()).isEqualTo(5);
         assertThat(inserted).extracting(OrderDeliveryTicketAllocation::getAllocationType)
                 .containsExactly("IN_STOCK_LOCK", "IN_PRODUCTION_LOCK");
-        assertThat(inserted).extracting(OrderDeliveryTicketAllocation::getQty).containsExactly(3, 1);
-        verify(fixture.allocationLinkService).syncWmsAllocationsForAllocation(601, List.of(production, inserted.get(0), inserted.get(1)));
+        assertThat(inserted).extracting(OrderDeliveryTicketAllocation::getQty).containsOnlyNulls();
+        verify(fixture.allocationLinkService).syncAllocationSplitsForAllocation(
+                org.mockito.ArgumentMatchers.eq(601),
+                org.mockito.ArgumentMatchers.eq(List.of(production, inserted.get(0), inserted.get(1))),
+                org.mockito.ArgumentMatchers.any());
         verify(fixture.ticketSourceMapper, never()).selectByIdForUpdate(501);
         verify(fixture.ticketSourceMapper, never()).updateById(any(OrderDeliveryTicket.class));
     }

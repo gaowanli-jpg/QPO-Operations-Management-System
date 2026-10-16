@@ -1,7 +1,6 @@
 package com.machining.quote.service.wms;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
-import org.springframework.beans.BeanUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.machining.quote.dto.wms.WmsSaleLadingReserveReq;
@@ -18,8 +17,6 @@ import com.machining.quote.mapper.WmsReservationBatchMapper;
 import com.machining.quote.mapper.WmsReservationItemMapper;
 import com.machining.quote.mapper.WmsReservationTicketMapper;
 import com.machining.quote.service.DataCenterCallException;
-import com.machining.quote.service.JsonSnapshotCopyService;
-import com.machining.quote.service.ProcessRouteSnapshotService;
 import com.machining.quote.service.AllocationSplitService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -88,10 +85,6 @@ public class WmsReservationStateService {
     private WmsReservationPlanService planService = new WmsReservationPlanService();
     @Autowired(required = false)
     private TransactionTemplate transactionTemplate;
-    @Autowired(required = false)
-    private ProcessRouteSnapshotService processRouteSnapshotService = new ProcessRouteSnapshotService();
-    @Autowired(required = false)
-    private JsonSnapshotCopyService jsonSnapshotCopyService = new JsonSnapshotCopyService();
     @Autowired
     private com.machining.quote.service.SalesOrderAllocationLinkService salesOrderAllocationLinkService;
     @Autowired
@@ -325,15 +318,18 @@ public class WmsReservationStateService {
         if (splitTotal.compareTo(BigDecimal.valueOf(ticket.getQty())) != 0) {
             throw new IllegalStateException("WMS allocation split does not preserve ticket quantity ticketId=" + ticket.getId());
         }
+        Map<Integer, Integer> quantitiesByAllocationId = new LinkedHashMap<>();
         Set<String> existingTypes = allocationMapper.selectByWmsReservationTicketId(reservationTicket.getId()).stream()
                 .map(OrderDeliveryTicketAllocation::getAllocationType)
                 .collect(Collectors.toCollection(HashSet::new));
-        insertPositiveAllocation(ticket, reservationTicket, TYPE_IN_STOCK, reservationTicket.getStockFrozenCount(), existingTypes);
-        insertPositiveAllocation(ticket, reservationTicket, TYPE_IN_PRODUCTION, reservationTicket.getInProductionCount(), existingTypes);
-        applyProductionRemainder(ticket, reservationTicket, ticketAllocations);
+        insertPositiveAllocation(ticket, reservationTicket, TYPE_IN_STOCK,
+                reservationTicket.getStockFrozenCount(), existingTypes, quantitiesByAllocationId);
+        insertPositiveAllocation(ticket, reservationTicket, TYPE_IN_PRODUCTION,
+                reservationTicket.getInProductionCount(), existingTypes, quantitiesByAllocationId);
+        applyProductionRemainder(ticket, reservationTicket, ticketAllocations, quantitiesByAllocationId);
         markLegacyWmsSplit(ticket.getId(), reservationTicket.getId());
         salesOrderAllocationLinkService.syncWmsAllocations(
-                ticket, allocationMapper.selectByTicketIdForUpdate(ticket.getId()));
+                ticket, allocationMapper.selectByTicketIdForUpdate(ticket.getId()), quantitiesByAllocationId);
 
         OrderDeliveryTicket ticketUpdate = new OrderDeliveryTicket();
         ticketUpdate.setId(ticket.getId());
@@ -409,7 +405,8 @@ public class WmsReservationStateService {
 
     private void applyProductionRemainder(OrderDeliveryTicket ticket,
                                           WmsReservationTicket reservationTicket,
-                                          List<OrderDeliveryTicketAllocation> ticketAllocations) {
+                                          List<OrderDeliveryTicketAllocation> ticketAllocations,
+                                          Map<Integer, Integer> quantitiesByAllocationId) {
         List<OrderDeliveryTicketAllocation> productionRows = ticketAllocations == null
                 ? new ArrayList<>()
                 : ticketAllocations.stream()
@@ -419,17 +416,11 @@ public class WmsReservationStateService {
                         .collect(Collectors.toCollection(ArrayList::new));
         BigDecimal remainder = reservationTicket.getSurplusCount();
         OrderDeliveryTicketAllocation primary = productionRows.isEmpty() ? null : productionRows.remove(0);
-        boolean productionQtyChangedAfterWmsSubmission = primary != null
-                && !Objects.equals(primary.getQty(), reservationTicket.getReserveCount().intValueExact());
         if (remainder.signum() > 0) {
             if (primary == null) {
-                insertPositiveAllocation(ticket, reservationTicket, TYPE_PRODUCTION_REQUIRED, remainder, new HashSet<>());
+                primary = insertPositiveAllocation(ticket, reservationTicket, TYPE_PRODUCTION_REQUIRED,
+                        remainder, new HashSet<>(), quantitiesByAllocationId);
             } else {
-                if (!productionQtyChangedAfterWmsSubmission) {
-                    primary.setQty(remainder.intValueExact());
-                }
-                primary.setTicketQty(reservationTicket.getReserveCount().intValueExact());
-                primary.setMaterialNo(ticket.getMaterialNo());
                 primary.setWmsReservationTicketId(reservationTicket.getId());
                 primary.setAllocationSplitSource(AllocationSplitService.SOURCE_WMS);
                 primary.setMesProductionStatus("PENDING");
@@ -438,14 +429,13 @@ public class WmsReservationStateService {
                 primary.setMesProductionSyncedAt(null);
                 primary.setMesProductionMessage(null);
                 primary.setUpdatedAt(LocalDateTime.now());
-                allocationMapper.updateById(primary);
+                updateWmsProductionState(primary);
+            }
+            if (primary != null && primary.getId() != null) {
+                quantitiesByAllocationId.put(primary.getId(), remainder.intValueExact());
             }
         }
         if (remainder.signum() == 0 && primary != null) {
-            if (!productionQtyChangedAfterWmsSubmission) {
-                primary.setQty(0);
-            }
-            primary.setTicketQty(reservationTicket.getReserveCount().intValueExact());
             primary.setWmsReservationTicketId(reservationTicket.getId());
             primary.setAllocationSplitSource(AllocationSplitService.SOURCE_WMS);
             primary.setMesProductionStatus("PENDING");
@@ -454,12 +444,16 @@ public class WmsReservationStateService {
             primary.setMesProductionSyncedAt(null);
             primary.setMesProductionMessage(null);
             primary.setUpdatedAt(LocalDateTime.now());
-            allocationMapper.updateById(primary);
+            updateWmsProductionState(primary);
+            quantitiesByAllocationId.put(primary.getId(), 0);
         }
         if (remainder.signum() == 0 && primary == null) {
             OrderDeliveryTicketAllocation zeroProduction = allocationRow(
                     ticket, reservationTicket, TYPE_PRODUCTION_REQUIRED, 0);
             allocationMapper.insert(zeroProduction);
+            if (zeroProduction.getId() != null) {
+                quantitiesByAllocationId.put(zeroProduction.getId(), 0);
+            }
         }
         for (OrderDeliveryTicketAllocation replaced : productionRows) {
             replaced.setStatus("SUPERSEDED");
@@ -500,14 +494,15 @@ public class WmsReservationStateService {
 
     private void applyAllocationLegacy(WmsReservationTicket reservationTicket,
                                        OrderDeliveryTicketAllocation allocation) {
+        Map<Integer, Integer> quantitiesByAllocationId = new LinkedHashMap<>();
         Set<String> existingTypes = allocationMapper.selectByWmsReservationTicketId(reservationTicket.getId()).stream()
                 .map(OrderDeliveryTicketAllocation::getAllocationType)
                 .collect(Collectors.toCollection(HashSet::new));
         insertPositiveAllocation(allocation, reservationTicket, TYPE_IN_STOCK,
-                reservationTicket.getStockFrozenCount(), existingTypes);
+                reservationTicket.getStockFrozenCount(), existingTypes, quantitiesByAllocationId);
         insertPositiveAllocation(allocation, reservationTicket, TYPE_IN_PRODUCTION,
-                reservationTicket.getInProductionCount(), existingTypes);
-        allocation.setQty(reservationTicket.getSurplusCount().intValueExact());
+                reservationTicket.getInProductionCount(), existingTypes, quantitiesByAllocationId);
+        quantitiesByAllocationId.put(allocation.getId(), reservationTicket.getSurplusCount().intValueExact());
         allocation.setWmsReservationTicketId(reservationTicket.getId());
         allocation.setMesProductionStatus("PENDING");
         allocation.setMesProductionRequestId(null);
@@ -515,27 +510,48 @@ public class WmsReservationStateService {
         allocation.setMesProductionSyncedAt(null);
         allocation.setMesProductionMessage(null);
         allocation.setUpdatedAt(LocalDateTime.now());
-        allocationMapper.updateById(allocation);
+        updateWmsProductionState(allocation);
         List<OrderDeliveryTicketAllocation> appliedAllocations = allocationMapper
                 .selectByWmsReservationTicketId(reservationTicket.getId());
         if (appliedAllocations.stream().noneMatch(row -> Objects.equals(row.getId(), allocation.getId()))) {
             appliedAllocations = new ArrayList<>(appliedAllocations);
             appliedAllocations.add(allocation);
         }
-        salesOrderAllocationLinkService.syncWmsAllocationsForAllocation(allocation.getId(), appliedAllocations);
+        salesOrderAllocationLinkService.syncAllocationSplitsForAllocation(
+                allocation.getId(), appliedAllocations, quantitiesByAllocationId);
     }
 
-    private void insertPositiveAllocation(OrderDeliveryTicketAllocation source,
-                                          WmsReservationTicket reservationTicket,
-                                          String type,
-                                          BigDecimal quantity,
-                                          Set<String> existingTypes) {
+    private void updateWmsProductionState(OrderDeliveryTicketAllocation allocation) {
+        OrderDeliveryTicketAllocation update = new OrderDeliveryTicketAllocation();
+        update.setId(allocation.getId());
+        update.setAllocationSource(allocation.getAllocationSource());
+        update.setWmsReservationTicketId(allocation.getWmsReservationTicketId());
+        update.setAllocationSplitSource(allocation.getAllocationSplitSource());
+        update.setMesProductionStatus(allocation.getMesProductionStatus());
+        update.setMesProductionRequestId(null);
+        update.setMesProductionExternalId(null);
+        update.setMesProductionSyncedAt(null);
+        update.setMesProductionMessage(null);
+        update.setUpdatedAt(allocation.getUpdatedAt());
+        allocationMapper.updateById(update);
+    }
+
+    private OrderDeliveryTicketAllocation insertPositiveAllocation(OrderDeliveryTicketAllocation source,
+                                                                    WmsReservationTicket reservationTicket,
+                                                                    String type,
+                                                                    BigDecimal quantity,
+                                                                    Set<String> existingTypes,
+                                                                    Map<Integer, Integer> quantitiesByAllocationId) {
         if (quantity == null || quantity.signum() <= 0 || existingTypes.contains(type)) {
-            return;
+            return null;
         }
         OrderDeliveryTicketAllocation row = allocationRow(source, reservationTicket, type, quantity.intValueExact());
         allocationMapper.insert(row);
         existingTypes.add(type);
+        if (row.getId() != null) {
+            quantitiesByAllocationId.put(row.getId(), quantity.intValueExact());
+        }
+        return row;
     }
 
     private OrderDeliveryTicketAllocation allocationRow(OrderDeliveryTicketAllocation source,
@@ -543,13 +559,16 @@ public class WmsReservationStateService {
                                                         String type,
                                                         Integer qty) {
         OrderDeliveryTicketAllocation row = new OrderDeliveryTicketAllocation();
-        BeanUtils.copyProperties(source, row);
-        row.setId(null);
+        row.setTicketId(source.getTicketId());
+        row.setRfqId(source.getRfqId());
+        row.setItemId(source.getItemId());
+        row.setSourceType(source.getSourceType());
+        row.setSourceOrderId(source.getSourceOrderId());
+        row.setSourceItemId(source.getSourceItemId());
         row.setWmsReservationTicketId(reservationTicket.getId());
         row.setAllocationSource("WMS_RESERVATION");
         row.setAllocationSplitSource(AllocationSplitService.SOURCE_WMS);
         row.setAllocationType(type);
-        row.setQty(qty);
         row.setSourcePayload(sourcePayload(reservationTicket, type, qty));
         row.setMesProductionStatus("PENDING");
         row.setMesProductionRequestId(null);
@@ -563,17 +582,22 @@ public class WmsReservationStateService {
         return row;
     }
 
-    private void insertPositiveAllocation(OrderDeliveryTicket ticket,
-                                          WmsReservationTicket reservationTicket,
-                                          String type,
-                                          BigDecimal quantity,
-                                          Set<String> existingTypes) {
+    private OrderDeliveryTicketAllocation insertPositiveAllocation(OrderDeliveryTicket ticket,
+                                                                    WmsReservationTicket reservationTicket,
+                                                                    String type,
+                                                                    BigDecimal quantity,
+                                                                    Set<String> existingTypes,
+                                                                    Map<Integer, Integer> quantitiesByAllocationId) {
         if (quantity == null || quantity.signum() <= 0 || existingTypes.contains(type)) {
-            return;
+            return null;
         }
         OrderDeliveryTicketAllocation row = allocationRow(ticket, reservationTicket, type, quantity.intValueExact());
         allocationMapper.insert(row);
         existingTypes.add(type);
+        if (row.getId() != null) {
+            quantitiesByAllocationId.put(row.getId(), quantity.intValueExact());
+        }
+        return row;
     }
 
     private OrderDeliveryTicketAllocation allocationRow(OrderDeliveryTicket ticket,
@@ -591,33 +615,6 @@ public class WmsReservationStateService {
         row.setAllocationSource("WMS_RESERVATION");
         row.setAllocationSplitSource(AllocationSplitService.SOURCE_WMS);
         row.setAllocationType(type);
-        row.setQty(qty);
-        row.setTicketQty(ticket.getQty());
-        row.setMaterialNo(ticket.getMaterialNo());
-        row.setOrderType(ticket.getOrderType());
-        row.setItemType(ticket.getItemType());
-        row.setPartNo(ticket.getPartNo());
-        row.setVersion(ticket.getVersion());
-        row.setRfqNo(ticket.getRfqNo());
-        row.setCustomerName(ticket.getCustomerName());
-        row.setInternalProjectNo(ticket.getInternalProjectNo());
-        row.setCustomerOrderNo(ticket.getCustomerOrderNo());
-        row.setCustomerProjectNo(ticket.getCustomerProjectNo());
-        row.setMaterialName(ticket.getMaterialName());
-        row.setEngineeringMaterialCode(ticket.getEngineeringMaterialCode());
-        row.setEngineeringMaterialTypeCode(ticket.getEngineeringMaterialTypeCode());
-        row.setEngineeringMaterialTypeName(ticket.getEngineeringMaterialTypeName());
-        row.setEngineeringMaterialCategory(ticket.getEngineeringMaterialCategory());
-        row.setEngineeringMaterialName(ticket.getEngineeringMaterialName());
-        row.setMaterialShape(ticket.getMaterialShape());
-        row.setSurfaceTreatment(ticket.getSurfaceTreatment());
-        row.setRemark(ticket.getRemark());
-        row.setDescription(ticket.getDescription());
-        row.setDeliveryDate(ticket.getDeliveryDate());
-        row.setProcessRoute(processRouteSnapshotService.copySnapshot(ticket.getProcessRoute()));
-        row.setMaterialData(deepCopySnapshot(ticket.getMaterialData()));
-        row.setMaterialGrossWeight(ticket.getMaterialGrossWeight());
-        row.setPartNetWeight(ticket.getPartNetWeight());
         row.setSourcePayload(sourcePayload(reservationTicket, type, qty));
         row.setMesProductionStatus("PENDING");
         row.setStatus(ALLOCATION_ACTIVE);
@@ -956,13 +953,6 @@ public class WmsReservationStateService {
 
     private int valueOrOne(Integer value) {
         return value == null || value <= 0 ? 1 : value;
-    }
-
-    private Object deepCopySnapshot(Object value) {
-        if (jsonSnapshotCopyService == null) {
-            jsonSnapshotCopyService = new JsonSnapshotCopyService();
-        }
-        return jsonSnapshotCopyService.deepCopySnapshot(value);
     }
 
     private String normalizeStatus(String status) {

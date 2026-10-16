@@ -43,3 +43,9 @@ WMS 请求快照继续保存 Allocation ID、销售订单零件 ID、行号、�
 本次不新增 API、权限或数据库迁移，不删除 Allocation 冗余字段，也不修改历史 MES/WMS 请求快照。
 已有权限、数据范围和审计动作保持不变。关联字段 `sales_order_item.allocation_id` 已有外键和唯一索引，
 批量任务使用批量 ID 查询；只有确实找不到关联销售订单零件的历史行才回退快照字段。
+
+## 新 Allocation 写入规则
+
+新数据不再把销售订单零件的业务字段和数量复制到 Allocation。物料号成功后创建的待产 Allocation，以及 WMS、人工拆分创建的 Allocation，只保存 Allocation 关系、拆分信息、状态和任务追踪数据；`qty`、`ticket_qty`、物料号、图号、版本、项目号、客户订单号、材料、工艺、描述、备注、重量、交期、`process_route` 和 `material_data` 等字段不再写入新行。
+
+待产、锁库、WMS 请求、人工拆分、MES 和提库存工单统一从关联的 `sales_order_item` 读取当前数量和业务字段。历史 Allocation 仍可使用原有快照回退，V61 仅放宽 `qty` 为空以兼容新写入方式，不删除历史字段或历史数据。数量变化只更新销售订单零件及其业务派生字段，不再为兼容目的回写 Allocation 数量。

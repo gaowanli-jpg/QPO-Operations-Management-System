@@ -4,8 +4,6 @@ import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.OrderDeliveryTicketAllocation;
 import com.machining.quote.mapper.OrderDeliveryTicketAllocationMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
-import com.machining.quote.service.JsonSnapshotCopyService;
-import com.machining.quote.service.ProcessRouteSnapshotService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,10 +23,6 @@ public class ProductionAllocationLifecycleService {
     private OrderDeliveryTicketAllocationMapper allocationMapper;
     @Autowired
     private com.machining.quote.service.SalesOrderAllocationLinkService salesOrderAllocationLinkService;
-    @Autowired(required = false)
-    private ProcessRouteSnapshotService processRouteSnapshotService = new ProcessRouteSnapshotService();
-    @Autowired(required = false)
-    private JsonSnapshotCopyService jsonSnapshotCopyService = new JsonSnapshotCopyService();
 
     @Transactional
     public void recordMaterialSuccess(Integer ticketId,
@@ -89,33 +83,6 @@ public class ProductionAllocationLifecycleService {
         allocation.setSourceItemId(ticket.getSourceItemId());
         allocation.setAllocationType("PRODUCTION_REQUIRED");
         allocation.setAllocationSource(MATERIAL_SOURCE);
-        allocation.setQty(ticket.getQty());
-        allocation.setTicketQty(ticket.getQty());
-        allocation.setMaterialNo(normalizedMaterialNo);
-        allocation.setOrderType(ticket.getOrderType());
-        allocation.setItemType(ticket.getItemType());
-        allocation.setPartNo(ticket.getPartNo());
-        allocation.setVersion(ticket.getVersion());
-        allocation.setRfqNo(ticket.getRfqNo());
-        allocation.setCustomerName(ticket.getCustomerName());
-        allocation.setInternalProjectNo(ticket.getInternalProjectNo());
-        allocation.setCustomerOrderNo(ticket.getCustomerOrderNo());
-        allocation.setCustomerProjectNo(ticket.getCustomerProjectNo());
-        allocation.setMaterialName(ticket.getMaterialName());
-        allocation.setEngineeringMaterialCode(ticket.getEngineeringMaterialCode());
-        allocation.setEngineeringMaterialName(ticket.getEngineeringMaterialName());
-        allocation.setEngineeringMaterialTypeCode(ticket.getEngineeringMaterialTypeCode());
-        allocation.setEngineeringMaterialTypeName(ticket.getEngineeringMaterialTypeName());
-        allocation.setEngineeringMaterialCategory(ticket.getEngineeringMaterialCategory());
-        allocation.setMaterialShape(ticket.getMaterialShape());
-        allocation.setSurfaceTreatment(ticket.getSurfaceTreatment());
-        allocation.setRemark(ticket.getRemark());
-        allocation.setDescription(ticket.getDescription());
-        allocation.setDeliveryDate(ticket.getDeliveryDate());
-        allocation.setProcessRoute(processRouteSnapshotService.copySnapshot(ticket.getProcessRoute()));
-        allocation.setMaterialData(jsonSnapshotCopyService.deepCopySnapshot(ticket.getMaterialData()));
-        allocation.setMaterialGrossWeight(ticket.getMaterialGrossWeight());
-        allocation.setPartNetWeight(ticket.getPartNetWeight());
         Map<String, Object> sourcePayload = new LinkedHashMap<>();
         sourcePayload.put("source", "MES_MATERIAL_SUCCESS");
         sourcePayload.put("ticketId", ticketId);

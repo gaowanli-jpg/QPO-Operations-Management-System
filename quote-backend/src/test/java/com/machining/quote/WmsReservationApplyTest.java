@@ -101,14 +101,15 @@ class WmsReservationApplyTest {
         assertThat(allocationCaptor.getAllValues()).extracting(OrderDeliveryTicketAllocation::getAllocationType)
                 .containsExactly("IN_STOCK_LOCK", "IN_PRODUCTION_LOCK");
         assertThat(allocationCaptor.getAllValues()).extracting(OrderDeliveryTicketAllocation::getQty)
-                .containsExactly(2, 1);
+                .containsOnlyNulls();
         assertThat(allocationCaptor.getAllValues()).allSatisfy(row -> {
             assertThat(row.getTicketId()).isEqualTo(101);
-            assertThat(row.getMaterialNo()).isEqualTo("MAT-A");
-            assertThat(row.getTicketQty()).isEqualTo(5);
-            assertThat(row.getProcessRoute()).isEqualTo(List.of(Map.of("processCode", "CUT")));
-            assertThat(row.getProcessRoute()).isNotSameAs(List.of(Map.of("processCode", "CUT")));
-            assertThat(row.getMaterialData()).isEqualTo(Map.of("shape", "plate"));
+            assertThat(row.getMaterialNo()).isNull();
+            assertThat(row.getTicketQty()).isNull();
+            assertThat(row.getPartNo()).isNull();
+            assertThat(row.getVersion()).isNull();
+            assertThat(row.getProcessRoute()).isNull();
+            assertThat(row.getMaterialData()).isNull();
             assertThat(row.getMesProductionStatus()).isEqualTo("PENDING");
             assertThat(row.getStatus()).isEqualTo("ACTIVE");
         });
@@ -116,10 +117,8 @@ class WmsReservationApplyTest {
         ArgumentCaptor<OrderDeliveryTicketAllocation> productionUpdate = ArgumentCaptor.forClass(OrderDeliveryTicketAllocation.class);
         verify(fixture.allocationMapper).updateById(productionUpdate.capture());
         assertThat(productionUpdate.getValue().getId()).isEqualTo(901);
-        assertThat(productionUpdate.getValue().getQty()).isEqualTo(2);
+        assertThat(productionUpdate.getValue().getQty()).isNull();
         assertThat(productionUpdate.getValue().getAllocationSource()).isEqualTo("MES_MATERIAL");
-        assertThat(allocationCaptor.getAllValues().stream().mapToInt(OrderDeliveryTicketAllocation::getQty).sum()
-                + productionUpdate.getValue().getQty()).isEqualTo(5);
 
         ArgumentCaptor<OrderDeliveryTicket> ticketUpdate = ArgumentCaptor.forClass(OrderDeliveryTicket.class);
         verify(fixture.ticketSourceMapper).updateById(ticketUpdate.capture());
@@ -161,13 +160,13 @@ class WmsReservationApplyTest {
         verify(fixture.allocationMapper, times(2)).insert(newRows.capture());
         assertThat(newRows.getAllValues()).extracting(OrderDeliveryTicketAllocation::getAllocationType)
                 .containsExactly("IN_STOCK_LOCK", "IN_PRODUCTION_LOCK");
-        assertThat(newRows.getAllValues()).extracting(OrderDeliveryTicketAllocation::getQty).containsExactly(3, 2);
+        assertThat(newRows.getAllValues()).extracting(OrderDeliveryTicketAllocation::getQty).containsOnlyNulls();
         ArgumentCaptor<OrderDeliveryTicketAllocation> replacedRow = ArgumentCaptor.forClass(OrderDeliveryTicketAllocation.class);
         verify(fixture.allocationMapper).updateById(replacedRow.capture());
         assertThat(replacedRow.getValue().getId()).isEqualTo(902);
-        assertThat(replacedRow.getValue().getStatus()).isEqualTo("ACTIVE");
-        assertThat(replacedRow.getValue().getQty()).isEqualTo(0);
-        assertThat(newRows.getAllValues().stream().mapToInt(OrderDeliveryTicketAllocation::getQty).sum()).isEqualTo(5);
+        assertThat(replacedRow.getValue().getWmsReservationTicketId()).isEqualTo(802L);
+        assertThat(replacedRow.getValue().getAllocationSplitSource()).isEqualTo("WMS");
+        assertThat(replacedRow.getValue().getQty()).isNull();
     }
 
     @Test
@@ -194,7 +193,7 @@ class WmsReservationApplyTest {
         assertThat(newRows.getAllValues()).extracting(OrderDeliveryTicketAllocation::getAllocationType)
                 .containsExactly("IN_STOCK_LOCK", "PRODUCTION_REQUIRED");
         OrderDeliveryTicketAllocation production = newRows.getAllValues().get(1);
-        assertThat(production.getQty()).isZero();
+        assertThat(production.getQty()).isNull();
         assertThat(production.getWmsReservationTicketId()).isEqualTo(803L);
     }
 
@@ -240,8 +239,9 @@ class WmsReservationApplyTest {
 
         ArgumentCaptor<OrderDeliveryTicketAllocation> replayUpdate = ArgumentCaptor.forClass(OrderDeliveryTicketAllocation.class);
         verify(replayFixture.allocationMapper).updateById(replayUpdate.capture());
-        assertThat(replayUpdate.getValue().getAllocationType()).isEqualTo("PRODUCTION_REQUIRED");
-        assertThat(replayUpdate.getValue().getQty()).isEqualTo(3);
+        assertThat(replayUpdate.getValue().getId()).isEqualTo(901);
+        assertThat(replayUpdate.getValue().getWmsReservationTicketId()).isEqualTo(801L);
+        assertThat(replayUpdate.getValue().getQty()).isNull();
     }
 
     private Fixture fixture() {

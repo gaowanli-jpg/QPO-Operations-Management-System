@@ -62,7 +62,7 @@ class MaterialMasterDeliveryWmsSnapshotContractTest {
     }
 
     @Test
-    void releaseAndWmsServicesCopyCompleteMaterialSnapshotsWithoutLoggingMaterialDataJson() throws IOException {
+    void releaseServicesKeepSourceSnapshotsButNewWmsAllocationsDoNotCopyThem() throws IOException {
         String deliveryService = read(MAIN.resolve(Path.of("service", "DeliveryService.java")));
         String rfqReleaseService = read(MAIN.resolve(Path.of("service", "RfqReleaseSalesOrderService.java")));
         String wmsReservationStateService = read(MAIN.resolve(Path.of("service", "wms", "WmsReservationStateService.java")));
@@ -82,13 +82,13 @@ class MaterialMasterDeliveryWmsSnapshotContractTest {
                         "ticket.setEngineeringMaterialCategory(MaterialDataResolver.materialCategory(item));",
                         "ticket.setMaterialData(deepCopySnapshot(item.getMaterialData()));");
         assertThat(wmsReservationStateService)
-                .contains(
+                .doesNotContain(
                         "row.setEngineeringMaterialCode(ticket.getEngineeringMaterialCode());",
                         "row.setEngineeringMaterialTypeCode(ticket.getEngineeringMaterialTypeCode());",
                         "row.setEngineeringMaterialTypeName(ticket.getEngineeringMaterialTypeName());",
                         "row.setEngineeringMaterialCategory(ticket.getEngineeringMaterialCategory());",
-                        "row.setMaterialData(deepCopySnapshot(ticket.getMaterialData()));")
-                .doesNotContain(
+                        "row.setMaterialData(deepCopySnapshot(ticket.getMaterialData()));",
+                        "BeanUtils.copyProperties(source, row)",
                         "summary.put(\"materialData\"",
                         "log.info(\"{}\", ticket.getMaterialData()",
                         "log.error(\"{}\", ticket.getMaterialData()");

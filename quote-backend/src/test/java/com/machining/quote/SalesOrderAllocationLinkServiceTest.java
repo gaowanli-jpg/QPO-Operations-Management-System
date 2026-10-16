@@ -62,7 +62,7 @@ class SalesOrderAllocationLinkServiceTest {
     }
 
     @Test
-    void quantityChangesUpdateAllocationWithoutWritingBackToDeliveryTicket() {
+    void quantityChangesDoNotWriteBackToAllocationOrDeliveryTicket() {
         SalesOrderAllocationLinkService service = new SalesOrderAllocationLinkService();
         SalesOrderItemMapper itemMapper = mock(SalesOrderItemMapper.class);
         OrderDeliveryTicketMapper ticketMapper = mock(OrderDeliveryTicketMapper.class);
@@ -94,7 +94,7 @@ class SalesOrderAllocationLinkServiceTest {
         verify(ticketMapper, org.mockito.Mockito.never()).selectByIdForUpdate(501);
         verify(ticketMapper, org.mockito.Mockito.never()).updateById(any(OrderDeliveryTicket.class));
         verify(allocationMapper).selectByIdForUpdate(601);
-        verify(allocationMapper).updateById(any(OrderDeliveryTicketAllocation.class));
+        verify(allocationMapper, org.mockito.Mockito.never()).updateById(any(OrderDeliveryTicketAllocation.class));
         verify(itemMapper).updateById(any(SalesOrderItem.class));
     }
 

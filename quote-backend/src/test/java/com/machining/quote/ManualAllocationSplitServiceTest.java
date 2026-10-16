@@ -29,14 +29,15 @@ class ManualAllocationSplitServiceTest {
 
         AllocationSplitService.SplitResult result = fixture.service.applyManualSplit(77L, 10, 3, 2);
 
-        assertThat(fixture.parent.getQty()).isEqualTo(5);
+        assertThat(fixture.parent.getQty()).isEqualTo(10);
         assertThat(fixture.parent.getAllocationSplitSource()).isEqualTo("MANUAL");
+        assertThat(result.productionRequiredQty()).isEqualTo(5);
         assertThat(result.createdAllocations()).hasSize(2);
         assertThat(result.createdAllocations()).extracting(OrderDeliveryTicketAllocation::getAllocationType)
                 .containsExactlyInAnyOrder("IN_STOCK_LOCK", "IN_PRODUCTION_LOCK");
         assertThat(result.createdAllocations()).extracting(OrderDeliveryTicketAllocation::getQty)
-                .containsExactlyInAnyOrder(3, 2);
-        verify(fixture.link).syncAllocationSplitsForAllocation(eq(10), any());
+                .containsOnlyNulls();
+        verify(fixture.link).syncAllocationSplitsForAllocation(eq(10), any(), any());
     }
 
     @Test

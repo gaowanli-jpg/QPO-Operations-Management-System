@@ -155,10 +155,6 @@ public class SalesOrderAllocationLinkService {
         }
         item.setAllocationId(allocation.getId().longValue());
         item.setAllocationType(allocation.getAllocationType());
-        item.setQty(allocation.getQty());
-        item.setReleasedQty(allocation.getQty());
-        item.setRemainingQty(0);
-        item.setUnshippedQty(Math.max(0, safeInt(allocation.getQty()) - safeInt(item.getShippedQty())));
         item.setUpdatedAt(LocalDateTime.now());
         itemMapper.updateById(item);
     }
@@ -281,11 +277,17 @@ public class SalesOrderAllocationLinkService {
     }
 
     public void syncWmsAllocations(OrderDeliveryTicket ticket, List<OrderDeliveryTicketAllocation> allocations) {
+        syncWmsAllocations(ticket, allocations, Map.of());
+    }
+
+    public void syncWmsAllocations(OrderDeliveryTicket ticket,
+                                   List<OrderDeliveryTicketAllocation> allocations,
+                                   Map<Integer, Integer> quantitiesByAllocationId) {
         if (ticket == null || allocations == null || allocations.isEmpty()) {
             return;
         }
         SalesOrderItem sourceItem = resolveSourceItem(ticket, true);
-        syncWmsAllocations(sourceItem, allocations);
+        syncWmsAllocations(sourceItem, allocations, quantitiesByAllocationId);
     }
 
     public void syncWmsAllocationsForAllocation(Integer allocationId, List<OrderDeliveryTicketAllocation> allocations) {
@@ -293,6 +295,12 @@ public class SalesOrderAllocationLinkService {
     }
 
     public void syncAllocationSplitsForAllocation(Integer allocationId, List<OrderDeliveryTicketAllocation> allocations) {
+        syncAllocationSplitsForAllocation(allocationId, allocations, Map.of());
+    }
+
+    public void syncAllocationSplitsForAllocation(Integer allocationId,
+                                                  List<OrderDeliveryTicketAllocation> allocations,
+                                                  Map<Integer, Integer> quantitiesByAllocationId) {
         if (allocationId == null || allocations == null || allocations.isEmpty()) {
             return;
         }
@@ -314,10 +322,12 @@ public class SalesOrderAllocationLinkService {
                 sourceItem = ticketItem != null ? ticketItem : directItem;
             }
         }
-        syncWmsAllocations(sourceItem, allocations);
+        syncWmsAllocations(sourceItem, allocations, quantitiesByAllocationId);
     }
 
-    private void syncWmsAllocations(SalesOrderItem sourceItem, List<OrderDeliveryTicketAllocation> allocations) {
+    private void syncWmsAllocations(SalesOrderItem sourceItem,
+                                    List<OrderDeliveryTicketAllocation> allocations,
+                                    Map<Integer, Integer> quantitiesByAllocationId) {
         if (sourceItem == null || sourceItem.getSalesOrderId() == null) {
             return;
         }
@@ -335,8 +345,9 @@ public class SalesOrderAllocationLinkService {
                 .toList();
         for (OrderDeliveryTicketAllocation allocation : ordered) {
             String type = defaultText(allocation.getAllocationType(), "");
+            Integer quantity = quantityOf(allocation, quantitiesByAllocationId);
             if (TYPE_PRODUCTION.equalsIgnoreCase(type)) {
-                productionItem = ensureProductionItem(productionItem, allocation);
+                productionItem = ensureProductionItem(productionItem, allocation, quantity);
                 continue;
             }
             if (!TYPE_IN_STOCK.equalsIgnoreCase(type) && !TYPE_IN_PRODUCTION.equalsIgnoreCase(type)) {
@@ -345,8 +356,8 @@ public class SalesOrderAllocationLinkService {
             SalesOrderItem linked = allocation.getId() == null
                     ? null
                     : itemMapper.selectByAllocationIdForUpdate(allocation.getId().longValue());
-            if (linked == null && safeInt(allocation.getQty()) > 0) {
-                linked = copySplitItem(productionItem, allocation, nextLineNo++);
+            if (linked == null && safeInt(quantity) > 0) {
+                linked = copySplitItem(productionItem, allocation, quantity, nextLineNo++);
                 itemMapper.insert(linked);
             }
             if (linked != null && linked.getAllocationId() == null) {
@@ -361,6 +372,17 @@ public class SalesOrderAllocationLinkService {
         header.setTotalItemCount(Math.toIntExact(itemMapper.selectCount(countQuery)));
         header.setUpdatedAt(LocalDateTime.now());
         headerMapper.updateById(header);
+    }
+
+    private Integer quantityOf(OrderDeliveryTicketAllocation allocation,
+                               Map<Integer, Integer> quantitiesByAllocationId) {
+        if (allocation == null || allocation.getId() == null) {
+            return null;
+        }
+        if (quantitiesByAllocationId != null && quantitiesByAllocationId.containsKey(allocation.getId())) {
+            return quantitiesByAllocationId.get(allocation.getId());
+        }
+        return allocation.getQty();
     }
 
     public AllocationQuantitySyncResult syncAllocationQtyFromItem(SalesOrderHeader header, SalesOrderItem item, Integer oldQty) {
@@ -418,21 +440,25 @@ public class SalesOrderAllocationLinkService {
         }
         item.setUpdatedAt(LocalDateTime.now());
         itemMapper.updateById(item);
-        allocation.setQty(qty);
-        allocation.setUpdatedAt(LocalDateTime.now());
-        allocationMapper.updateById(allocation);
     }
 
-    private SalesOrderItem ensureProductionItem(SalesOrderItem source, OrderDeliveryTicketAllocation allocation) {
+    private SalesOrderItem ensureProductionItem(SalesOrderItem source,
+                                                OrderDeliveryTicketAllocation allocation,
+                                                Integer quantity) {
         if (source.getAllocationId() == null || !Objects.equals(source.getAllocationId(), allocation.getId().longValue())) {
             source.setAllocationId(allocation.getId().longValue());
             source.setAllocationType(TYPE_PRODUCTION);
         }
-        updateLinkedQuantity(source, allocation, safeInt(allocation.getQty()));
+        if (quantity != null && !Objects.equals(source.getQty(), quantity)) {
+            updateLinkedQuantity(source, allocation, quantity);
+        }
         return source;
     }
 
-    private SalesOrderItem copySplitItem(SalesOrderItem source, OrderDeliveryTicketAllocation allocation, int lineNo) {
+    private SalesOrderItem copySplitItem(SalesOrderItem source,
+                                         OrderDeliveryTicketAllocation allocation,
+                                         int quantity,
+                                         int lineNo) {
         SalesOrderItem item = new SalesOrderItem();
         item.setSalesOrderId(source.getSalesOrderId());
         item.setSourceType(source.getSourceType());
@@ -443,7 +469,7 @@ public class SalesOrderAllocationLinkService {
         item.setLineNo(lineNo);
         item.setPartNo(source.getPartNo());
         item.setDescription(source.getDescription());
-        item.setQty(safeInt(allocation.getQty()));
+        item.setQty(quantity);
         item.setVersion(source.getVersion());
         item.setOrderType(source.getOrderType());
         item.setCustomerOrderNo(source.getCustomerOrderNo());
@@ -469,9 +495,9 @@ public class SalesOrderAllocationLinkService {
         item.setTaxIncludedUnitPrice(source.getTaxIncludedUnitPrice());
         item.setUntaxedUnitPrice(source.getUntaxedUnitPrice());
         item.setShippedQty(0);
-        item.setReleasedQty(safeInt(allocation.getQty()));
+        item.setReleasedQty(quantity);
         item.setRemainingQty(0);
-        item.setUnshippedQty(safeInt(allocation.getQty()));
+        item.setUnshippedQty(quantity);
         item.setDrawingUrl(source.getDrawingUrl());
         item.setHasDrawing(source.getHasDrawing());
         item.setMaterialGrossWeight(source.getMaterialGrossWeight());
@@ -488,8 +514,8 @@ public class SalesOrderAllocationLinkService {
         item.setStatus(source.getStatus());
         item.setAllocationId(allocation.getId().longValue());
         item.setAllocationType(allocation.getAllocationType());
-        item.setTaxIncludedTotalPrice(total(source.getTaxIncludedUnitPrice(), allocation.getQty()));
-        item.setUntaxedTotalPrice(total(source.getUntaxedUnitPrice(), allocation.getQty()));
+        item.setTaxIncludedTotalPrice(total(source.getTaxIncludedUnitPrice(), quantity));
+        item.setUntaxedTotalPrice(total(source.getUntaxedUnitPrice(), quantity));
         item.setCreatedAt(LocalDateTime.now());
         item.setUpdatedAt(LocalDateTime.now());
         return item;

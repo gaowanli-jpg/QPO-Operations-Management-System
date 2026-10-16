@@ -49,7 +49,7 @@ class SalesOrderLinkedChangeNoticeMigrationTest {
                     .mapToInt(matcher -> Integer.parseInt(matcher.group(1)))
                     .max().orElse(0);
         }
-        assertThat(maxVersion).isEqualTo(60);
+        assertThat(maxVersion).isEqualTo(61);
 
         Path migration = MIGRATION_DIR.resolve("V56__sales_order_linked_change_notice_filter_fields.sql");
         assertThat(migration).exists();
@@ -92,6 +92,18 @@ class SalesOrderLinkedChangeNoticeMigrationTest {
                 .contains("uk_sales_order_item_allocation_id")
                 .contains("source_ticket_id")
                 .contains("V58_PRODUCTION_REPAIR")
+                .doesNotContain("V1__qpo_baseline_schema.sql", "V2__qpo_baseline_seed_data.sql");
+    }
+
+    @Test
+    void version61MakesLegacyAllocationQuantityOptionalWithoutChangingBaselines() throws Exception {
+        Path migration = MIGRATION_DIR.resolve("V61__allocation_current_data_source.sql");
+        assertThat(migration).exists();
+        String sql = Files.readString(migration, StandardCharsets.UTF_8);
+        assertThat(sql)
+                .contains("ALTER COLUMN qty DROP NOT NULL")
+                .contains("Legacy quantity snapshot")
+                .contains("new linked allocations do not write it")
                 .doesNotContain("V1__qpo_baseline_schema.sql", "V2__qpo_baseline_seed_data.sql");
     }
 }

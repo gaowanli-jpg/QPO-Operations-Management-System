@@ -278,7 +278,7 @@ class MaterialMasterSchemaCharacterizationTest {
     }
 
     @Test
-    void materialSnapshotCurrentlyCopiesThroughRepeatSalesReleaseTicketAndWms() throws IOException {
+    void sourceSnapshotsRemainAvailableButNewWmsAllocationsDoNotCopyMaterialData() throws IOException {
         String autoSnapshotCompletionService = read(AUTO_SNAPSHOT_COMPLETION_SERVICE);
         String rfqReleaseService = read(RFQ_RELEASE_SERVICE);
         String deliveryService = read(DELIVERY_SERVICE);
@@ -323,14 +323,15 @@ class MaterialMasterSchemaCharacterizationTest {
                         "ticket.setMaterialData(deepCopySnapshot(item.getMaterialData()));",
                         "sheet.setEngineeringMaterialName(ticket.getEngineeringMaterialName());");
         assertThat(wmsReservationStateService)
-                .contains(
+                .doesNotContain(
                         "row.setEngineeringMaterialCode(ticket.getEngineeringMaterialCode());",
                         "row.setEngineeringMaterialName(ticket.getEngineeringMaterialName());",
                         "row.setEngineeringMaterialTypeCode(ticket.getEngineeringMaterialTypeCode());",
                         "row.setEngineeringMaterialTypeName(ticket.getEngineeringMaterialTypeName());",
                         "row.setEngineeringMaterialCategory(ticket.getEngineeringMaterialCategory());",
                         "row.setMaterialShape(ticket.getMaterialShape());",
-                        "row.setMaterialData(deepCopySnapshot(ticket.getMaterialData()));");
+                        "row.setMaterialData(deepCopySnapshot(ticket.getMaterialData()));",
+                        "BeanUtils.copyProperties(source, row)");
     }
 
     @Test
