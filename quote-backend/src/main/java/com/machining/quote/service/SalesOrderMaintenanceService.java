@@ -330,6 +330,7 @@ public class SalesOrderMaintenanceService {
             SalesOrderItem item,
             SalesOrderItemUpdateLineReq line,
             LocalDateTime updatedAt) {
+        assertItemIdentityImmutable(item, line);
         assertItemQuantityEditable(item, line);
         Set<String> changed = new LinkedHashSet<>();
         if (line.hasField(SalesOrderItemUpdateLineReq.FIELD_QTY)) {
@@ -366,8 +367,6 @@ public class SalesOrderMaintenanceService {
                 changed.add(SalesOrderItemUpdateLineReq.FIELD_TAX_INCLUDED_UNIT_PRICE);
             }
         }
-        applyText(item.getVersion(), line.getVersion(), TEXT_50,
-                SalesOrderItemUpdateLineReq.FIELD_VERSION, changed, line, item::setVersion);
         applyText(item.getMaterialName(), line.getMaterialName(), TEXT_255,
                 SalesOrderItemUpdateLineReq.FIELD_MATERIAL_NAME, changed, line, item::setMaterialName);
         applyText(item.getSurfaceTreatment(), line.getSurfaceTreatment(), TEXT_255,
@@ -410,6 +409,17 @@ public class SalesOrderMaintenanceService {
         validateQty(qty);
         if (!Objects.equals(item.getQty(), qty) && item.getAllocationId() == null) {
             throw new RuntimeException("物料号获取成功并关联 Allocation 后才能修改数量");
+        }
+    }
+
+    private void assertItemIdentityImmutable(SalesOrderItem item, SalesOrderItemUpdateLineReq line) {
+        if (line.hasField(SalesOrderItemUpdateLineReq.FIELD_PART_NO)
+                && !Objects.equals(item.getPartNo(), line.getPartNo())) {
+            throw new RuntimeException("销售订单零件的图号和版本创建后不可修改");
+        }
+        if (line.hasField(SalesOrderItemUpdateLineReq.FIELD_VERSION)
+                && !Objects.equals(item.getVersion(), line.getVersion())) {
+            throw new RuntimeException("销售订单零件的图号和版本创建后不可修改");
         }
     }
 
@@ -763,7 +773,6 @@ public class SalesOrderMaintenanceService {
                 .set("internal_delivery_date", item.getInternalDeliveryDate())
                 .set("untaxed_unit_price", item.getUntaxedUnitPrice())
                 .set("tax_included_unit_price", item.getTaxIncludedUnitPrice())
-                .set("version", item.getVersion())
                 .set("material_name", item.getMaterialName())
                 .set("surface_treatment", item.getSurfaceTreatment())
                 .set("customer_order_no", item.getCustomerOrderNo())

@@ -127,7 +127,8 @@ class ProductionItemModuleSplitStage2Test {
         assertThat(mapper)
                 .contains(
                         "sales_item.sales_order_date AS sales_order_date",
-                        "LEFT JOIN sales_order_item sales_item ON sales_item.allocation_id = alloc.id",
+                        "LEFT JOIN LATERAL (",
+                        "item.allocation_id = alloc.id",
                         "@Result(column = \"sales_order_date\", property = \"salesOrderDate\")",
                         "LIMIT #{limit} OFFSET #{offset}"
                 );

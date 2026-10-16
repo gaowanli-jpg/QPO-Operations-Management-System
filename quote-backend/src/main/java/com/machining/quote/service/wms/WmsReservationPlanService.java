@@ -71,9 +71,17 @@ public class WmsReservationPlanService {
                 SalesOrderHeader header = item == null || item.getSalesOrderId() == null
                         ? null
                         : salesOrderHeaderMapper.selectByIdForUpdate(item.getSalesOrderId());
-                contexts.put(id, new SalesOrderAllocationContextLoader.Context(item, header,
-                        item != null && item.getAllocationId() != null,
-                        item == null ? "sales order item is not linked to allocation" : null));
+                boolean directlyLinked = item != null && item.getAllocationId() != null
+                        && Objects.equals(item.getAllocationId(), id.longValue());
+                contexts.put(id, new SalesOrderAllocationContextLoader.Context(
+                        item,
+                        header,
+                        directlyLinked,
+                        item == null
+                                ? "sales order item is not linked to allocation"
+                                : directlyLinked
+                                ? null
+                                : "sales order item must be directly linked to allocation before WMS processing"));
             }
         }
         Map<GroupKey, List<PreparedAllocation>> byGroup = new LinkedHashMap<>();
@@ -182,6 +190,11 @@ public class WmsReservationPlanService {
             failures.add(new RowFailure(allocationId, allocation.getTicketId(), context.error()));
             return null;
         }
+        if (context == null || !context.allocationLinked()) {
+            failures.add(new RowFailure(allocationId, allocation.getTicketId(),
+                    "sales order item must be directly linked to allocation before WMS processing"));
+            return null;
+        }
         if (sourceItem == null || sourceItem.getSalesOrderId() == null) {
             failures.add(new RowFailure(allocationId, allocation.getTicketId(), "sales order item not found for allocation"));
             return null;
@@ -193,7 +206,7 @@ public class WmsReservationPlanService {
             failures.add(new RowFailure(allocationId, allocation.getTicketId(), "sales order header not found"));
             return null;
         }
-        boolean linked = context != null && context.allocationLinked();
+        boolean linked = sourceItem != null;
         String customerOrderNo = linked
                 ? firstText(sourceItem.getCustomerOrderNo(), header.getCustomerOrderNo())
                 : firstText(sourceItem.getCustomerOrderNo(), header.getCustomerOrderNo(), allocation.getCustomerOrderNo());

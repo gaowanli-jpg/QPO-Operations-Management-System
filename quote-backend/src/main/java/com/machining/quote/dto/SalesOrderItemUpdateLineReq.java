@@ -12,6 +12,7 @@ public class SalesOrderItemUpdateLineReq {
     public static final String FIELD_INTERNAL_DELIVERY_DATE = "internalDeliveryDate";
     public static final String FIELD_UNTAXED_UNIT_PRICE = "untaxedUnitPrice";
     public static final String FIELD_TAX_INCLUDED_UNIT_PRICE = "taxIncludedUnitPrice";
+    public static final String FIELD_PART_NO = "partNo";
     public static final String FIELD_VERSION = "version";
     public static final String FIELD_MATERIAL_NAME = "materialName";
     public static final String FIELD_SURFACE_TREATMENT = "surfaceTreatment";
@@ -30,6 +31,7 @@ public class SalesOrderItemUpdateLineReq {
     private LocalDate internalDeliveryDate;
     private BigDecimal untaxedUnitPrice;
     private BigDecimal taxIncludedUnitPrice;
+    private String partNo;
     private String version;
     private String materialName;
     private String surfaceTreatment;
@@ -94,6 +96,15 @@ public class SalesOrderItemUpdateLineReq {
     public void setTaxIncludedUnitPrice(BigDecimal taxIncludedUnitPrice) {
         this.taxIncludedUnitPrice = taxIncludedUnitPrice;
         providedFields.add(FIELD_TAX_INCLUDED_UNIT_PRICE);
+    }
+
+    public String getPartNo() {
+        return partNo;
+    }
+
+    public void setPartNo(String partNo) {
+        this.partNo = partNo;
+        providedFields.add(FIELD_PART_NO);
     }
 
     public String getVersion() {

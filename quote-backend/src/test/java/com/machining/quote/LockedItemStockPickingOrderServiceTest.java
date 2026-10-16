@@ -14,6 +14,7 @@ import com.machining.quote.service.AuditService;
 import com.machining.quote.service.DataCenterCallException;
 import com.machining.quote.service.DataCenterEndpointRegistry;
 import com.machining.quote.service.DataScopeService;
+import com.machining.quote.service.SalesOrderAllocationContextLoader;
 import com.machining.quote.service.mes.LockedItemStockPickingOrderService;
 import com.machining.quote.service.mes.MesProductionOrderCreateClient;
 import org.junit.jupiter.api.Test;
@@ -203,6 +204,36 @@ class LockedItemStockPickingOrderServiceTest {
         when(salesOrderHeaderMapper.selectById(3001L)).thenReturn(salesOrderHeader(3001L, "SO-2026-001"));
         ReflectionTestUtils.setField(service, "salesOrderItemMapper", salesOrderItemMapper);
         ReflectionTestUtils.setField(service, "salesOrderHeaderMapper", salesOrderHeaderMapper);
+        SalesOrderAllocationContextLoader contextLoader = mock(SalesOrderAllocationContextLoader.class);
+        when(contextLoader.load(any())).thenAnswer(invocation -> {
+            List<OrderDeliveryTicketAllocation> allocations = invocation.getArgument(0);
+            Map<Integer, SalesOrderAllocationContextLoader.Context> contexts = new java.util.LinkedHashMap<>();
+            for (OrderDeliveryTicketAllocation allocation : allocations) {
+                SalesOrderItem item = salesOrderItemMapper.selectByIdForUpdate(allocation.getSourceItemId());
+                if (item == null) {
+                    item = new SalesOrderItem();
+                    item.setId(allocation.getSourceItemId());
+                }
+                item.setAllocationId(allocation.getId().longValue());
+                item.setSalesOrderId(allocation.getSourceOrderId());
+                item.setQty(allocation.getQty());
+                item.setMaterialNo(allocation.getMaterialNo());
+                item.setInternalProjectNo(allocation.getInternalProjectNo());
+                item.setCustomerOrderNo(allocation.getCustomerOrderNo());
+                item.setCustomerProjectNo(allocation.getCustomerProjectNo());
+                item.setDescription(allocation.getDescription());
+                item.setSurfaceTreatment(allocation.getSurfaceTreatment());
+                item.setRemark(allocation.getRemark());
+                if (item.getInternalDeliveryDate() == null) {
+                    item.setInternalDeliveryDate(allocation.getDeliveryDate());
+                }
+                SalesOrderHeader header = salesOrderHeaderMapper.selectById(allocation.getSourceOrderId());
+                contexts.put(allocation.getId(), new SalesOrderAllocationContextLoader.Context(
+                        item, header, true, null));
+            }
+            return contexts;
+        });
+        ReflectionTestUtils.setField(service, "contextLoader", contextLoader);
     }
 
     private OrderDeliveryTicketAllocation allocation(Integer id, String allocationType, String stockPickingStatus) {

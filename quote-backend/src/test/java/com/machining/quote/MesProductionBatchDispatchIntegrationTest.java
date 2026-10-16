@@ -45,8 +45,8 @@ class MesProductionBatchDispatchIntegrationTest {
         OrderDeliveryTicketAllocation available = allocation(21, 121, "MAT-AVAILABLE", 6, 9821L);
         when(fixture.allocationMapper.selectById(20)).thenReturn(wmsBusy);
         when(fixture.allocationMapper.selectById(21)).thenReturn(available);
-        when(fixture.salesItemMapper.selectByIdForUpdate(9820L)).thenReturn(salesItem(9820L, 10, 3001L, null));
-        when(fixture.salesItemMapper.selectByIdForUpdate(9821L)).thenReturn(salesItem(9821L, 20, 3001L, null));
+        when(fixture.salesItemMapper.selectByIdForUpdate(9820L)).thenReturn(salesItem(9820L, 10, 3001L, null, 20L, "MAT-WMS-BUSY", 4));
+        when(fixture.salesItemMapper.selectByIdForUpdate(9821L)).thenReturn(salesItem(9821L, 20, 3001L, null, 21L, "MAT-AVAILABLE", 6));
         when(fixture.headerMapper.selectById(3001L)).thenReturn(header(3001L, "SO-DOC-1"));
         when(fixture.batchStateService.reserveProductionBatch(any(String.class), any(MesBatchStateService.ProductionBatchReservation.class)))
                 .thenThrow(new IllegalStateException("WMS inventory operation is still active for ticketId=120"))
@@ -80,8 +80,8 @@ class MesProductionBatchDispatchIntegrationTest {
         OrderDeliveryTicketAllocation second = allocation(2, 102, "MAT-002", 6, 9002L);
         when(fixture.allocationMapper.selectById(1)).thenReturn(first);
         when(fixture.allocationMapper.selectById(2)).thenReturn(second);
-        when(fixture.salesItemMapper.selectByIdForUpdate(9001L)).thenReturn(salesItem(9001L, 10, 3001L, null));
-        when(fixture.salesItemMapper.selectByIdForUpdate(9002L)).thenReturn(salesItem(9002L, 20, 3001L, null));
+        when(fixture.salesItemMapper.selectByIdForUpdate(9001L)).thenReturn(salesItem(9001L, 10, 3001L, null, 1L, "MAT-001", 4));
+        when(fixture.salesItemMapper.selectByIdForUpdate(9002L)).thenReturn(salesItem(9002L, 20, 3001L, null, 2L, "MAT-002", 6));
         when(fixture.headerMapper.selectById(3001L)).thenReturn(header(3001L, "SO-DOC-1"));
         mockReserve(fixture, "QPO-DEM-BATCH-1", List.of(line(1, "QPO-DEML-1", "MAT-001"), line(2, "QPO-DEML-2", "MAT-002")));
         when(fixture.client.dispatch(any())).thenReturn(success("QPO-DEM-BATCH-1",
@@ -158,7 +158,7 @@ class MesProductionBatchDispatchIntegrationTest {
         allocation.setProcessRoute(null);
         allocation.setSourceOrderId(3816L);
         when(fixture.allocationMapper.selectById(16)).thenReturn(allocation);
-        when(fixture.salesItemMapper.selectByIdForUpdate(9816L)).thenReturn(salesItem(9816L, 160, 3816L, null));
+        when(fixture.salesItemMapper.selectByIdForUpdate(9816L)).thenReturn(salesItem(9816L, 160, 3816L, null, 16L, "MAT-NO-BOM", 3));
         when(fixture.headerMapper.selectById(3816L)).thenReturn(header(3816L, "SO-DOC-NO-BOM"));
         mockReserve(fixture, "QPO-DEM-NO-BOM", List.of(line(16, "QPO-DEML-NO-BOM", "MAT-NO-BOM")));
         when(fixture.client.dispatch(any())).thenReturn(success("QPO-DEM-NO-BOM",
@@ -199,7 +199,9 @@ class MesProductionBatchDispatchIntegrationTest {
                         "inputVal", 18.0,
                         "lineCost", 18.0)));
         when(fixture.allocationMapper.selectById(17)).thenReturn(allocation);
-        when(fixture.salesItemMapper.selectByIdForUpdate(9817L)).thenReturn(salesItem(9817L, 170, 3817L, null));
+        SalesOrderItem routeItem = salesItem(9817L, 170, 3817L, null, 17L, "MAT-WITH-ROUTE", 2);
+        routeItem.setProcessRoute(allocation.getProcessRoute());
+        when(fixture.salesItemMapper.selectByIdForUpdate(9817L)).thenReturn(routeItem);
         when(fixture.headerMapper.selectById(3817L)).thenReturn(header(3817L, "SO-DOC-ROUTE"));
         mockReserve(fixture, "QPO-DEM-ROUTE", List.of(line(17, "QPO-DEML-ROUTE", "MAT-WITH-ROUTE")));
         when(fixture.client.dispatch(any())).thenReturn(success("QPO-DEM-ROUTE",
@@ -232,7 +234,7 @@ class MesProductionBatchDispatchIntegrationTest {
         allocation.setSourceType("RFQ");
         allocation.setRfqNo("RFQ-SHOULD-NOT-BE-SENT");
         when(fixture.allocationMapper.selectById(3)).thenReturn(allocation);
-        when(fixture.salesItemMapper.selectBySourceTicketIdForUpdate(203)).thenReturn(salesItem(9303L, 30, 3303L, 203));
+        when(fixture.salesItemMapper.selectBySourceTicketIdForUpdate(203)).thenReturn(salesItem(9303L, 30, 3303L, 203, 3L, "MAT-RFQ", 3));
         when(fixture.headerMapper.selectById(3303L)).thenReturn(header(3303L, "SO-FROM-TICKET"));
         mockReserve(fixture, "QPO-DEM-RFQ", List.of(line(3, "QPO-DEML-RFQ", "MAT-RFQ")));
         when(fixture.client.dispatch(any())).thenReturn(success("QPO-DEM-RFQ", item("SO-FROM-TICKET", "30", "MAT-RFQ", "PLAN-RFQ")));
@@ -264,23 +266,23 @@ class MesProductionBatchDispatchIntegrationTest {
         when(fixture.allocationMapper.selectById(5)).thenReturn(missingLine);
         when(fixture.allocationMapper.selectById(6)).thenReturn(missingMaterial);
         when(fixture.allocationMapper.selectById(7)).thenReturn(missingDate);
-        when(fixture.salesItemMapper.selectByIdForUpdate(9404L)).thenReturn(salesItem(9404L, 40, 3404L, null));
-        when(fixture.salesItemMapper.selectByIdForUpdate(9405L)).thenReturn(salesItem(9405L, null, 3404L, null));
-        when(fixture.salesItemMapper.selectByIdForUpdate(9406L)).thenReturn(salesItem(9406L, 60, 3404L, null));
-        when(fixture.salesItemMapper.selectByIdForUpdate(9407L)).thenReturn(salesItem(9407L, 70, 3404L, null));
+        when(fixture.salesItemMapper.selectByIdForUpdate(9404L)).thenReturn(salesItem(9404L, 40, 3404L, null, 4L, "MAT-OK", 2));
+        when(fixture.salesItemMapper.selectByIdForUpdate(9405L)).thenReturn(salesItem(9405L, null, 3404L, null, 5L, "MAT-BAD", 2));
+        when(fixture.salesItemMapper.selectByIdForUpdate(9406L)).thenReturn(salesItem(9406L, 60, 3404L, null, 6L, null, 2));
+        when(fixture.salesItemMapper.selectByIdForUpdate(9407L)).thenReturn(salesItem(9407L, 70, 3404L, null, 7L, "MAT-NODATE", 2, null));
         when(fixture.headerMapper.selectById(3404L)).thenReturn(header(3404L, "SO-DOC-VALID"));
         mockReserve(fixture, "QPO-DEM-VALID", List.of(line(4, "QPO-DEML-4", "MAT-OK")));
         when(fixture.client.dispatch(any())).thenReturn(success("QPO-DEM-VALID", item("SO-DOC-VALID", "40", "MAT-OK", "PLAN-OK")));
 
         Map<String, Object> result = fixture.service.dispatchBatch(List.of(4, 5, 6, 7), 9904L);
 
-        assertThat(result).containsEntry("successCount", 1).containsEntry("failedCount", 3);
+        assertThat(result).containsEntry("successCount", 1).containsEntry("failedCount", 2).containsEntry("skippedCount", 1);
         List<Map<String, Object>> rows = (List<Map<String, Object>>) result.get("rows");
         assertThat(rows).extracting(row -> row.get("status"))
-                .containsExactly("SUCCESS", "FAILED", "FAILED", "FAILED");
+                .containsExactly("SUCCESS", "FAILED", "SKIPPED", "FAILED");
         verify(fixture.client).dispatch(any());
         ArgumentCaptor<OrderDeliveryTicketAllocation> allocationCaptor = ArgumentCaptor.forClass(OrderDeliveryTicketAllocation.class);
-        verify(fixture.allocationMapper, times(4)).updateById(allocationCaptor.capture());
+        verify(fixture.allocationMapper, times(3)).updateById(allocationCaptor.capture());
         assertThat(allocationCaptor.getAllValues()).anySatisfy(update -> {
             assertThat(update.getId()).isEqualTo(5);
             assertThat(update.getMesProductionStatus()).isEqualTo("FAILED");
@@ -297,8 +299,8 @@ class MesProductionBatchDispatchIntegrationTest {
         second.setSourceOrderId(3808L);
         when(fixture.allocationMapper.selectById(8)).thenReturn(first);
         when(fixture.allocationMapper.selectById(9)).thenReturn(second);
-        when(fixture.salesItemMapper.selectByIdForUpdate(9801L)).thenReturn(salesItem(9801L, 80, 3808L, null));
-        when(fixture.salesItemMapper.selectByIdForUpdate(9802L)).thenReturn(salesItem(9802L, 90, 3808L, null));
+        when(fixture.salesItemMapper.selectByIdForUpdate(9801L)).thenReturn(salesItem(9801L, 80, 3808L, null, 8L, "MAT-DUP", 1));
+        when(fixture.salesItemMapper.selectByIdForUpdate(9802L)).thenReturn(salesItem(9802L, 90, 3808L, null, 9L, "MAT-DUP", 1));
         when(fixture.headerMapper.selectById(3808L)).thenReturn(header(3808L, "SO-DOC-DUP"));
         mockReserve(fixture, "QPO-DEM-DUP", List.of(
                 line(8, "QPO-DEML-DUP-1", "MAT-DUP"),
@@ -324,8 +326,8 @@ class MesProductionBatchDispatchIntegrationTest {
         second.setSourceOrderId(3811L);
         when(fixture.allocationMapper.selectById(11)).thenReturn(first);
         when(fixture.allocationMapper.selectById(12)).thenReturn(second);
-        when(fixture.salesItemMapper.selectByIdForUpdate(9811L)).thenReturn(salesItem(9811L, 10, 3811L, null));
-        when(fixture.salesItemMapper.selectByIdForUpdate(9812L)).thenReturn(salesItem(9812L, 20, 3811L, null));
+        when(fixture.salesItemMapper.selectByIdForUpdate(9811L)).thenReturn(salesItem(9811L, 10, 3811L, null, 11L, "MAT-LINE-A", 1));
+        when(fixture.salesItemMapper.selectByIdForUpdate(9812L)).thenReturn(salesItem(9812L, 20, 3811L, null, 12L, "MAT-LINE-B", 1));
         when(fixture.headerMapper.selectById(3811L)).thenReturn(header(3811L, "SO-DOC-LINE"));
         mockReserve(fixture, "QPO-DEM-LINE", List.of(
                 line(11, "QPO-DEML-LINE-10", "MAT-LINE-A"),
@@ -359,8 +361,8 @@ class MesProductionBatchDispatchIntegrationTest {
         second.setSourceOrderId(3813L);
         when(fixture.allocationMapper.selectById(13)).thenReturn(first);
         when(fixture.allocationMapper.selectById(14)).thenReturn(second);
-        when(fixture.salesItemMapper.selectByIdForUpdate(9813L)).thenReturn(salesItem(9813L, 10, 3813L, null));
-        when(fixture.salesItemMapper.selectByIdForUpdate(9814L)).thenReturn(salesItem(9814L, 10, 3813L, null));
+        when(fixture.salesItemMapper.selectByIdForUpdate(9813L)).thenReturn(salesItem(9813L, 10, 3813L, null, 13L, "MAT-SO-LINE-A", 1));
+        when(fixture.salesItemMapper.selectByIdForUpdate(9814L)).thenReturn(salesItem(9814L, 10, 3813L, null, 14L, "MAT-SO-LINE-B", 1));
         when(fixture.headerMapper.selectById(3813L)).thenReturn(header(3813L, "SO-DOC-DUP-LINE"));
         mockReserveSequence(fixture,
                 reservation("QPO-DEM-SO-LINE-1", line(13, "QPO-DEML-SO-LINE-1", "MAT-SO-LINE-A")),
@@ -387,7 +389,7 @@ class MesProductionBatchDispatchIntegrationTest {
         OrderDeliveryTicketAllocation allocation = allocation(10, 110, "MAT-UNKNOWN", 5, 9910L);
         allocation.setSourceOrderId(3910L);
         when(fixture.allocationMapper.selectById(10)).thenReturn(allocation);
-        when(fixture.salesItemMapper.selectByIdForUpdate(9910L)).thenReturn(salesItem(9910L, 100, 3910L, null));
+        when(fixture.salesItemMapper.selectByIdForUpdate(9910L)).thenReturn(salesItem(9910L, 100, 3910L, null, 10L, "MAT-UNKNOWN", 5));
         when(fixture.headerMapper.selectById(3910L)).thenReturn(header(3910L, "SO-DOC-UNKNOWN"));
         mockReserve(fixture, "QPO-DEM-UNKNOWN", List.of(line(10, "QPO-DEML-UNKNOWN", "MAT-UNKNOWN")));
         when(fixture.client.dispatch(any())).thenReturn(success("QPO-DEM-UNKNOWN"));
@@ -409,7 +411,7 @@ class MesProductionBatchDispatchIntegrationTest {
         OrderDeliveryTicketAllocation allocation = allocation(15, 115, "MAT-STRICT", 5, 9915L);
         allocation.setSourceOrderId(3915L);
         when(fixture.allocationMapper.selectById(15)).thenReturn(allocation);
-        when(fixture.salesItemMapper.selectByIdForUpdate(9915L)).thenReturn(salesItem(9915L, 150, 3915L, null));
+        when(fixture.salesItemMapper.selectByIdForUpdate(9915L)).thenReturn(salesItem(9915L, 150, 3915L, null, 15L, "MAT-STRICT", 5));
         when(fixture.headerMapper.selectById(3915L)).thenReturn(header(3915L, "SO-DOC-STRICT"));
         mockReserve(fixture, "QPO-DEM-STRICT", List.of(line(15, "QPO-DEML-STRICT", "MAT-STRICT")));
         when(fixture.client.dispatch(any())).thenReturn(success("QPO-DEM-STRICT", productOnlyItem("MAT-STRICT", "PLAN-SHOULD-NOT-MATCH")));
@@ -511,12 +513,36 @@ class MesProductionBatchDispatchIntegrationTest {
         return allocation;
     }
 
-    private SalesOrderItem salesItem(Long id, Integer lineNo, Long salesOrderId, Integer sourceTicketId) {
+    private SalesOrderItem salesItem(Long id, Integer lineNo, Long salesOrderId, Integer sourceTicketId,
+                                     Long allocationId, String materialNo, Integer qty) {
+        return salesItem(id, lineNo, salesOrderId, sourceTicketId, allocationId, materialNo, qty,
+                LocalDate.of(2026, 8, 20));
+    }
+
+    private SalesOrderItem salesItem(Long id, Integer lineNo, Long salesOrderId, Integer sourceTicketId,
+                                     Long allocationId, String materialNo, Integer qty, LocalDate deliveryDate) {
         SalesOrderItem item = new SalesOrderItem();
         item.setId(id);
         item.setSalesOrderId(salesOrderId);
         item.setLineNo(lineNo);
         item.setSourceTicketId(sourceTicketId);
+        item.setAllocationId(allocationId);
+        item.setMaterialNo(materialNo);
+        item.setQty(qty);
+        item.setInternalProjectNo("IP-9");
+        item.setCustomerOrderNo("CO-9");
+        item.setCustomerProjectNo("CP-9");
+        item.setPartNo("P-" + allocationId);
+        item.setVersion("A");
+        item.setMaterialName("Material note P-" + allocationId);
+        item.setSurfaceTreatment("Anodized");
+        item.setRemark("Rush");
+        item.setInternalDeliveryDate(deliveryDate);
+        if (materialNo != null && !"MAT-NO-BOM".equals(materialNo)) {
+            item.setEngineeringMaterialCode("RAW-" + materialNo);
+            item.setEngineeringMaterialName("Raw material for " + materialNo);
+            item.setMaterialGrossWeight(1.25);
+        }
         return item;
     }
 

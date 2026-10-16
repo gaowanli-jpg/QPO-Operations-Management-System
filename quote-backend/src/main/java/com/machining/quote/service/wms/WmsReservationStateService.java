@@ -363,10 +363,10 @@ public class WmsReservationStateService {
             throw new IllegalStateException("WMS source allocation is not an active production row allocationId="
                     + reservationTicket.getAllocationId());
         }
-        boolean linked = linkedItem != null && linkedItem.getAllocationId() != null;
-        if (linked && !Objects.equals(linkedItem.getAllocationId(), allocation.getId().longValue())) {
+        if (linkedItem == null || !Objects.equals(linkedItem.getAllocationId(), allocation.getId().longValue())) {
             throw new IllegalStateException("WMS reservation sales order item link changed allocationId=" + allocation.getId());
         }
+        boolean linked = true;
         boolean sameWmsApplication = "WMS".equalsIgnoreCase(trim(allocation.getAllocationSplitSource()))
                 && Objects.equals(allocation.getWmsReservationTicketId(), reservationTicket.getId());
         if (!Objects.equals(trim(linked ? linkedItem.getMaterialNo() : allocation.getMaterialNo()), trim(reservationTicket.getProductCode()))) {
@@ -863,10 +863,9 @@ public class WmsReservationStateService {
                 throw new IllegalStateException("allocation already has active WMS reservation allocationId=" + source.getAllocationId()
                         + " activeStatus=" + active.getStatus());
             }
-            boolean linked = item.getAllocationId() != null;
-            Integer currentQty = linked ? item.getQty() : allocation.getQty();
-            if ((linked && !Objects.equals(item.getAllocationId(), source.getAllocationId().longValue()))
-                    || currentQty == null || currentQty <= 0
+            boolean linked = Objects.equals(item.getAllocationId(), source.getAllocationId().longValue());
+            Integer currentQty = linked ? item.getQty() : null;
+            if (!linked || currentQty == null || currentQty <= 0
                     || BigDecimal.valueOf(currentQty).compareTo(source.getReserveCount()) != 0) {
                 throw new IllegalStateException("WMS sales order item quantity changed before request allocationId=" + source.getAllocationId());
             }

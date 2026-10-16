@@ -156,10 +156,12 @@ class DashboardOverviewStage2Test {
 
         assertThat(sqlFor(mapper, (target, captor) -> verify(target).countLockedProductionTodo(captor.capture())))
                 .contains("COALESCE(alloc.discarded, false) = false")
-                .contains("COALESCE(ticket.discarded, false) = false");
+                .contains("COALESCE(ticket.discarded, false) = false")
+                .contains("COALESCE(sales_item.qty, alloc.qty) > 0");
         assertThat(sqlFor(mapper, (target, captor) -> verify(target).countLockedMesProductionFailed(captor.capture())))
                 .contains("COALESCE(alloc.discarded, false) = false")
-                .contains("COALESCE(ticket.discarded, false) = false");
+                .contains("COALESCE(ticket.discarded, false) = false")
+                .contains("COALESCE(sales_item.qty, alloc.qty) > 0");
 
         assertThat(sqlFor(mapper, (target, captor) -> verify(target).countU9Ready(captor.capture())))
                 .contains("COALESCE(soi.u9_change_excluded, false) = false")

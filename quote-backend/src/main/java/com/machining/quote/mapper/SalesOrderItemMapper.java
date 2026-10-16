@@ -41,6 +41,19 @@ public interface SalesOrderItemMapper extends BaseMapper<SalesOrderItem> {
     @Select("""
             <script>
             SELECT * FROM sales_order_item
+            WHERE allocation_id IN
+            <foreach collection="allocationIds" item="allocationId" open="(" separator="," close=")">
+                #{allocationId}
+            </foreach>
+            ORDER BY allocation_id ASC, id ASC
+            FOR UPDATE
+            </script>
+            """)
+    List<SalesOrderItem> selectByAllocationIdsForUpdate(@Param("allocationIds") List<Long> allocationIds);
+
+    @Select("""
+            <script>
+            SELECT * FROM sales_order_item
             WHERE source_ticket_id IN
             <foreach collection="ticketIds" item="ticketId" open="(" separator="," close=")">
                 #{ticketId}
@@ -49,6 +62,32 @@ public interface SalesOrderItemMapper extends BaseMapper<SalesOrderItem> {
             </script>
             """)
     List<SalesOrderItem> selectBySourceTicketIds(@Param("ticketIds") List<Integer> ticketIds);
+
+    @Select("""
+            <script>
+            SELECT * FROM sales_order_item
+            WHERE source_ticket_id IN
+            <foreach collection="ticketIds" item="ticketId" open="(" separator="," close=")">
+                #{ticketId}
+            </foreach>
+            ORDER BY source_ticket_id, line_no, id
+            FOR UPDATE
+            </script>
+            """)
+    List<SalesOrderItem> selectBySourceTicketIdsForUpdate(@Param("ticketIds") List<Integer> ticketIds);
+
+    @Select("""
+            <script>
+            SELECT * FROM sales_order_item
+            WHERE id IN
+            <foreach collection="itemIds" item="itemId" open="(" separator="," close=")">
+                #{itemId}
+            </foreach>
+            ORDER BY id ASC
+            FOR UPDATE
+            </script>
+            """)
+    List<SalesOrderItem> selectBatchIdsForUpdate(@Param("itemIds") List<Long> itemIds);
 
     @Select("SELECT * FROM sales_order_item WHERE sales_order_id = #{salesOrderId} ORDER BY line_no ASC, id ASC FOR UPDATE")
     List<SalesOrderItem> selectBySalesOrderIdForUpdate(@Param("salesOrderId") Long salesOrderId);

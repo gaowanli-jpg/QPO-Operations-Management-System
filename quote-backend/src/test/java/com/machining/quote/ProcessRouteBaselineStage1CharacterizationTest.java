@@ -139,7 +139,8 @@ class ProcessRouteBaselineStage1CharacterizationTest {
         assertThat(wmsReservationStateService)
                 .contains("row.setProcessRoute(processRouteSnapshotService.copySnapshot(ticket.getProcessRoute()))");
         assertThat(mesProductionService)
-                .contains("item.setProcessRoute(buildProcessRoute(allocation.getProcessRoute()))");
+                .contains("item.setProcessRoute(buildProcessRoute(salesItem.getProcessRoute()))")
+                .doesNotContain("item.setProcessRoute(buildProcessRoute(allocation.getProcessRoute()))");
         assertThat(mesProductionReq)
                 .contains("private List<MesProductionProcessRouteDTO> processRoute;")
                 .doesNotContain("private Object processRoute;");

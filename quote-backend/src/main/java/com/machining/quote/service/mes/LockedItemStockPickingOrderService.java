@@ -133,9 +133,10 @@ public class LockedItemStockPickingOrderService {
                 rowsByAllocationId.put(allocationId, row(allocationId, STATUS_SKIPPED, "锁库零件不存在", null));
                 continue;
             }
-            String skipReason = skipReason(allocation);
+            String skipReason = skipReason(allocation, contexts.get(allocationId));
             if (skipReason != null) {
-                rowsByAllocationId.put(allocationId, row(allocationId, STATUS_SKIPPED, skipReason, resultSummary(allocation, null, null)));
+                rowsByAllocationId.put(allocationId, row(allocationId, STATUS_SKIPPED, skipReason,
+                        resultSummary(allocation, null, null, contexts.get(allocationId))));
                 continue;
             }
             try {
@@ -143,7 +144,8 @@ public class LockedItemStockPickingOrderService {
             } catch (RuntimeException error) {
                 String message = safeMessage(error);
                 markFailed(allocation, allocation.getStockPickingBizId(), message);
-                Map<String, Object> result = resultSummary(allocation, allocation.getStockPickingBizId(), null);
+                Map<String, Object> result = resultSummary(allocation, allocation.getStockPickingBizId(), null,
+                        contexts.get(allocationId));
                 result.put("errorMessage", abbreviate(message));
                 rowsByAllocationId.put(allocationId, row(allocationId, STATUS_FAILED, message, result));
                 recordAudit("LOCKED_ITEM_STOCK_PICKING_FAILED", allocation, taskId, result, message);
@@ -170,8 +172,11 @@ public class LockedItemStockPickingOrderService {
         if (context != null && context.error() != null) {
             throw new RuntimeException(context.error());
         }
-        boolean linked = context != null && context.allocationLinked();
-        SalesOrderItem salesItem = context == null ? null : context.item();
+        if (context == null || !context.allocationLinked() || context.item() == null || context.header() == null) {
+            throw new RuntimeException("sales order item must be directly linked to allocation before stock picking dispatch");
+        }
+        boolean linked = true;
+        SalesOrderItem salesItem = context.item();
         SalesOrderHeader header = context == null ? null : context.header();
         String productCode = linked ? salesItem.getMaterialNo() : allocation.getMaterialNo();
         Integer quantity = linked ? salesItem.getQty() : allocation.getQty();
@@ -300,8 +305,17 @@ public class LockedItemStockPickingOrderService {
             SalesOrderHeader header = item == null || item.getSalesOrderId() == null
                     ? null
                     : salesOrderHeaderMapper.selectById(item.getSalesOrderId());
+            boolean directlyLinked = item != null
+                    && Objects.equals(item.getAllocationId(), allocation.getId().longValue());
             contexts.put(allocation.getId(), new SalesOrderAllocationContextLoader.Context(
-                    item, header, false, item == null ? "sales order item is not linked to allocation" : null));
+                    item,
+                    header,
+                    directlyLinked,
+                    item == null
+                            ? "sales order item is not linked to allocation"
+                            : directlyLinked
+                            ? null
+                            : "sales order item must be directly linked to allocation before stock picking dispatch"));
         }
         return contexts;
     }
@@ -345,7 +359,7 @@ public class LockedItemStockPickingOrderService {
                         plan.allocation().getId(),
                         STATUS_SKIPPED,
                         "提库存工单已成功或正在下发，请刷新后查看",
-                        withBizId(resultSummary(plan.allocation(), bizId, null), bizId)));
+                        withBizId(resultSummary(plan, bizId, null), bizId)));
             }
         }
         if (reservedPlans.isEmpty()) {
@@ -379,7 +393,7 @@ public class LockedItemStockPickingOrderService {
                 StockPickingPlan plan = reservedPlans.get(i);
                 MesProductionOrderCreateResp.Item responseItem = responseItems.get(i);
                 markSuccess(plan.allocation(), bizId, responseItem, response.getMessage());
-                Map<String, Object> result = withBizId(resultSummary(plan.allocation(), bizId, responseItem), bizId);
+                Map<String, Object> result = withBizId(resultSummary(plan, bizId, responseItem), bizId);
                 rowsByAllocationId.put(plan.allocation().getId(), row(plan.allocation().getId(), STATUS_SUCCESS,
                         "提库存工单下发成功", result));
                 recordAudit("LOCKED_ITEM_STOCK_PICKING_SUCCESS", plan.allocation(), taskId, result, null);
@@ -447,7 +461,7 @@ public class LockedItemStockPickingOrderService {
             update.setStockPickingMessage(abbreviate(firstNonBlank(message, "提库存工单结果待核对")));
             update.setUpdatedAt(LocalDateTime.now(clock));
             allocationMapper.updateById(update);
-            Map<String, Object> result = withBizId(resultSummary(allocation, bizId, null), bizId);
+            Map<String, Object> result = withBizId(resultSummary(plan, bizId, null), bizId);
             result.put("errorMessage", abbreviate(message));
             rowsByAllocationId.put(allocation.getId(), row(allocation.getId(), STATUS_RESULT_UNKNOWN, message, result));
             recordAudit("LOCKED_ITEM_STOCK_PICKING_RESULT_UNKNOWN", allocation, taskId, result, null);
@@ -466,7 +480,7 @@ public class LockedItemStockPickingOrderService {
         for (StockPickingPlan plan : plans) {
             OrderDeliveryTicketAllocation allocation = plan.allocation();
             markFailed(allocation, bizId, message);
-            Map<String, Object> result = withBizId(resultSummary(allocation, bizId, null), bizId);
+            Map<String, Object> result = withBizId(resultSummary(plan, bizId, null), bizId);
             result.put("errorMessage", abbreviate(message));
             rowsByAllocationId.put(allocation.getId(), row(allocation.getId(), STATUS_FAILED, message, result));
             recordAudit("LOCKED_ITEM_STOCK_PICKING_FAILED", allocation, taskId, result, message);
@@ -501,7 +515,12 @@ public class LockedItemStockPickingOrderService {
         return null;
     }
 
-    private String skipReason(OrderDeliveryTicketAllocation allocation) {
+    private String skipReason(
+            OrderDeliveryTicketAllocation allocation,
+            SalesOrderAllocationContextLoader.Context context) {
+        if (allocation == null) {
+            return "锁库零件不存在";
+        }
         if (Boolean.TRUE.equals(allocation.getDiscarded())) {
             return "锁库零件已废弃";
         }
@@ -514,6 +533,18 @@ public class LockedItemStockPickingOrderService {
         }
         if (STATUS_PROCESSING.equalsIgnoreCase(status)) {
             return "提库存工单正在下发";
+        }
+        if (context == null || context.error() != null || !context.allocationLinked()
+                || context.item() == null || context.header() == null) {
+            return context == null || context.error() == null
+                    ? "sales order item must be directly linked to allocation before stock picking dispatch"
+                    : context.error();
+        }
+        if (context.item().getQty() == null || context.item().getQty() <= 0) {
+            return "锁库数量必须大于 0";
+        }
+        if (isBlank(context.item().getMaterialNo())) {
+            return "下发提库存工单前必须先有物料号";
         }
         return null;
     }
@@ -547,6 +578,29 @@ public class LockedItemStockPickingOrderService {
             OrderDeliveryTicketAllocation allocation,
             String bizId,
             MesProductionOrderCreateResp.Item responseItem) {
+        return resultSummary(allocation, bizId, responseItem, null, null);
+    }
+
+    private Map<String, Object> resultSummary(
+            OrderDeliveryTicketAllocation allocation,
+            String bizId,
+            MesProductionOrderCreateResp.Item responseItem,
+            SalesOrderAllocationContextLoader.Context context) {
+        String materialNo = allocation.getMaterialNo();
+        Integer planCount = allocation.getQty();
+        if (context != null && context.item() != null && context.allocationLinked()) {
+            materialNo = context.item().getMaterialNo();
+            planCount = context.item().getQty();
+        }
+        return resultSummary(allocation, bizId, responseItem, materialNo, planCount);
+    }
+
+    private Map<String, Object> resultSummary(
+            OrderDeliveryTicketAllocation allocation,
+            String bizId,
+            MesProductionOrderCreateResp.Item responseItem,
+            String materialNo,
+            Integer planCount) {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("allocationId", allocation.getId());
         result.put("ticketId", allocation.getTicketId());
@@ -554,12 +608,24 @@ public class LockedItemStockPickingOrderService {
         result.put("sourceType", allocation.getSourceType());
         result.put("sourceOrderId", allocation.getSourceOrderId());
         result.put("sourceItemId", allocation.getSourceItemId());
-        result.put("materialNo", allocation.getMaterialNo());
-        result.put("planCount", allocation.getQty());
+        result.put("materialNo", materialNo);
+        result.put("planCount", planCount);
         if (responseItem != null && !isBlank(externalId(responseItem))) {
             result.put("externalId", externalId(responseItem));
         }
         return result;
+    }
+
+    private Map<String, Object> resultSummary(
+            StockPickingPlan plan,
+            String bizId,
+            MesProductionOrderCreateResp.Item responseItem) {
+        return resultSummary(
+                plan.allocation(),
+                bizId,
+                responseItem,
+                plan.item().getProductCode(),
+                plan.item().getPlanCount() == null ? null : plan.item().getPlanCount().intValue());
     }
 
     private Map<String, Object> withBizId(Map<String, Object> result, String bizId) {

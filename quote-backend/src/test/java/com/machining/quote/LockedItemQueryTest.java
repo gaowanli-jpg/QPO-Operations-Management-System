@@ -217,7 +217,8 @@ class LockedItemQueryTest {
         assertThat(mapper)
                 .as("Linked locked-item rows should prefer current sales-order item fields and keep allocation fallback")
                 .contains(
-                        "LEFT JOIN sales_order_item sales_item ON sales_item.allocation_id = alloc.id",
+                        "LEFT JOIN LATERAL (",
+                        "item.allocation_id = alloc.id",
                         "LEFT JOIN sales_order_header sales_header ON sales_header.id = sales_item.sales_order_id",
                         "CASE WHEN sales_item.id IS NULL THEN alloc.qty ELSE sales_item.qty END AS qty",
                         "CASE WHEN sales_item.id IS NULL THEN alloc.material_no ELSE sales_item.material_no END AS material_no"

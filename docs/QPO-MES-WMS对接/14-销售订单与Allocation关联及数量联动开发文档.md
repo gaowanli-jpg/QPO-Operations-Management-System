@@ -18,7 +18,7 @@ WMS 重试、恢复和重复应用按 `allocation_id` 查找已有销售订单�
 
 ## 3. 数量编辑
 
-销售订单详情保存销售订单零件数量时，同事务更新关联 allocation。新 WMS 流程始终以 Allocation 为操作对象和数量来源；无论 WMS 是否已执行，都不为 WMS 目的同步修改来源提单数量。WMS 请求快照保存 Allocation ID 和请求时数量；请求处理中禁止编辑对应数量，历史请求快照不随之后编辑改写。
+销售订单详情保存销售订单零件数量时，同事务更新关联 allocation。新 WMS 流程仍以有效 `PRODUCTION_REQUIRED` Allocation 作为操作对象，但请求数量读取关联 `sales_order_item.qty`，不再把 Allocation 冗余数量当作当前业务来源；无论 WMS 是否已执行，都不为 WMS 目的同步修改来源提单数量。WMS 请求快照保存 Allocation ID、销售订单零件 ID、行号、物料号和请求时数量；请求处理中禁止编辑对应数量，历史请求快照不随之后编辑改写。
 
 锁库拆行页面的“拆分数量”只读显示关联 `sales_order_item.qty`，不再提供数量编辑或保存按钮。数量统一在销售订单零件明细页面修改，修改后锁库拆行页面刷新即可显示最新数量；人工初次拆行仍使用独立的 `/allocation-splits/manual` 接口。
 
@@ -30,7 +30,7 @@ Flyway `V58__sales_order_item_allocation_link.sql` 追加字段、约束和索�
 
 ## 5. WMS 请求来源
 
-销售订单锁库拆行页仅对该订单有效、数量大于 `0` 的 `PRODUCTION_REQUIRED` Allocation 发起 WMS 请求。请求数量、快照、结果恢复和拆分恒等式都以 Allocation 为准；提单 ID 仅保留来源追溯。V59 为快照增加 `allocation_id`，活动请求按 Allocation 互斥；同一来源提单下的不同 Allocation 可以进入同一批次。历史 `allocation_id IS NULL` 快照仍使用原提单唯一性和恢复逻辑。
+销售订单锁库拆行页仅对该订单关联销售订单零件、数量大于 `0` 的 `PRODUCTION_REQUIRED` Allocation 发起 WMS 请求。请求数量读取 `sales_order_item.qty`，快照保存请求时的销售订单零件字段，结果恢复以快照和销售订单零件一致性校验为准；提单 ID 仅保留来源追溯。V59 为快照增加 `allocation_id`，活动请求按 Allocation 互斥；同一来源提单下的不同 Allocation 可以进入同一批次。历史 `allocation_id IS NULL` 快照仍使用原提单唯一性和恢复逻辑。
 
 ## 6. 物料号成功前的销售订单数量编辑限制
 

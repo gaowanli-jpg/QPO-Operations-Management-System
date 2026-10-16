@@ -39,6 +39,7 @@ public interface OrderDeliveryTicketAllocationMapper extends BaseMapper<OrderDel
             JOIN sales_order_item sales_item ON sales_item.allocation_id = allocation.id
             WHERE sales_item.sales_order_id = #{salesOrderId}
               AND allocation.allocation_type = 'PRODUCTION_REQUIRED'
+              AND sales_item.qty > 0
             ORDER BY sales_item.line_no ASC, allocation.id ASC
             """)
     List<OrderDeliveryTicketAllocation> selectSalesOrderProductionAllocations(@Param("salesOrderId") Long salesOrderId);
@@ -83,43 +84,60 @@ public interface OrderDeliveryTicketAllocationMapper extends BaseMapper<OrderDel
                    sales_item.id AS sales_order_item_id,
                    sales_item.line_no AS sales_order_item_line_no,
                    sales_item.sales_order_date AS sales_order_date,
-                   sales_item.qty AS linked_qty,
-                   sales_item.material_no AS linked_material_no,
-                   sales_item.order_type AS linked_order_type,
-                   sales_item.item_type AS linked_item_type,
-                   sales_item.part_no AS linked_part_no,
-                   sales_item.version AS linked_version,
-                   sales_item.internal_project_no AS linked_internal_project_no,
-                   sales_item.customer_order_no AS linked_customer_order_no,
-                   sales_item.customer_project_no AS linked_customer_project_no,
-                   sales_item.material_name AS linked_material_name,
-                   sales_item.engineering_material_code AS linked_engineering_material_code,
-                   sales_item.engineering_material_name AS linked_engineering_material_name,
-                   sales_item.engineering_material_type_code AS linked_engineering_material_type_code,
-                   sales_item.engineering_material_type_name AS linked_engineering_material_type_name,
-                   sales_item.engineering_material_category AS linked_engineering_material_category,
-                   sales_item.material_shape AS linked_material_shape,
-                   sales_item.surface_treatment AS linked_surface_treatment,
-                   sales_item.remark AS linked_remark,
-                   sales_item.description AS linked_description,
-                   COALESCE(sales_item.internal_delivery_date, sales_item.sales_order_date) AS linked_delivery_date,
-                   sales_item.process_route AS linked_process_route,
-                   sales_item.material_data AS linked_material_data,
-                   sales_item.material_gross_weight AS linked_material_gross_weight,
-                   sales_item.part_net_weight AS linked_part_net_weight,
+                   CASE WHEN sales_item.id IS NULL THEN alloc.qty ELSE sales_item.qty END AS linked_qty,
+                   CASE WHEN sales_item.id IS NULL THEN alloc.material_no ELSE sales_item.material_no END AS linked_material_no,
+                   CASE WHEN sales_item.id IS NULL THEN alloc.order_type ELSE sales_item.order_type END AS linked_order_type,
+                   CASE WHEN sales_item.id IS NULL THEN alloc.item_type ELSE sales_item.item_type END AS linked_item_type,
+                   CASE WHEN sales_item.id IS NULL THEN alloc.part_no ELSE sales_item.part_no END AS linked_part_no,
+                   CASE WHEN sales_item.id IS NULL THEN alloc.version ELSE sales_item.version END AS linked_version,
+                   CASE WHEN sales_item.id IS NULL THEN alloc.internal_project_no ELSE sales_item.internal_project_no END AS linked_internal_project_no,
+                   CASE WHEN sales_item.id IS NULL THEN alloc.customer_order_no ELSE sales_item.customer_order_no END AS linked_customer_order_no,
+                   CASE WHEN sales_item.id IS NULL THEN alloc.customer_project_no ELSE sales_item.customer_project_no END AS linked_customer_project_no,
+                   CASE WHEN sales_item.id IS NULL THEN alloc.material_name ELSE sales_item.material_name END AS linked_material_name,
+                   CASE WHEN sales_item.id IS NULL THEN alloc.engineering_material_code ELSE sales_item.engineering_material_code END AS linked_engineering_material_code,
+                   CASE WHEN sales_item.id IS NULL THEN alloc.engineering_material_name ELSE sales_item.engineering_material_name END AS linked_engineering_material_name,
+                   CASE WHEN sales_item.id IS NULL THEN alloc.engineering_material_type_code ELSE sales_item.engineering_material_type_code END AS linked_engineering_material_type_code,
+                   CASE WHEN sales_item.id IS NULL THEN alloc.engineering_material_type_name ELSE sales_item.engineering_material_type_name END AS linked_engineering_material_type_name,
+                   CASE WHEN sales_item.id IS NULL THEN alloc.engineering_material_category ELSE sales_item.engineering_material_category END AS linked_engineering_material_category,
+                   CASE WHEN sales_item.id IS NULL THEN alloc.material_shape ELSE sales_item.material_shape END AS linked_material_shape,
+                   CASE WHEN sales_item.id IS NULL THEN alloc.surface_treatment ELSE sales_item.surface_treatment END AS linked_surface_treatment,
+                   CASE WHEN sales_item.id IS NULL THEN alloc.remark ELSE sales_item.remark END AS linked_remark,
+                   CASE WHEN sales_item.id IS NULL THEN alloc.description ELSE sales_item.description END AS linked_description,
+                   CASE WHEN sales_item.id IS NULL THEN alloc.delivery_date ELSE COALESCE(sales_item.internal_delivery_date, sales_item.sales_order_date) END AS linked_delivery_date,
+                   CASE WHEN sales_item.id IS NULL THEN alloc.process_route ELSE sales_item.process_route END AS linked_process_route,
+                   CASE WHEN sales_item.id IS NULL THEN alloc.material_data ELSE sales_item.material_data END AS linked_material_data,
+                   CASE WHEN sales_item.id IS NULL THEN alloc.material_gross_weight ELSE sales_item.material_gross_weight END AS linked_material_gross_weight,
+                   CASE WHEN sales_item.id IS NULL THEN alloc.part_net_weight ELSE sales_item.part_net_weight END AS linked_part_net_weight,
                    COALESCE(sales_header.customer_name, alloc.customer_name) AS linked_customer_name
             FROM order_delivery_ticket_allocation alloc
-            JOIN sales_order_item sales_item ON sales_item.allocation_id = alloc.id
+            LEFT JOIN LATERAL (
+                SELECT item.*
+                FROM sales_order_item item
+                WHERE item.allocation_id = alloc.id
+                   OR (item.allocation_id IS NULL AND item.source_ticket_id = alloc.ticket_id)
+                   OR (item.allocation_id IS NULL
+                       AND alloc.source_type = 'SALES_ORDER'
+                       AND item.id = alloc.source_item_id)
+                ORDER BY CASE
+                    WHEN item.allocation_id = alloc.id THEN 1
+                    WHEN alloc.source_type = 'SALES_ORDER' AND item.id = alloc.source_item_id THEN 2
+                    ELSE 3
+                END, item.line_no ASC, item.id ASC
+                LIMIT 1
+            ) sales_item ON TRUE
             LEFT JOIN sales_order_header sales_header ON sales_header.id = sales_item.sales_order_id
-            WHERE sales_item.sales_order_id = #{salesOrderId}
+            WHERE (sales_item.sales_order_id = #{salesOrderId}
+                   OR (sales_item.id IS NULL
+                       AND alloc.source_type = 'SALES_ORDER'
+                       AND alloc.source_order_id = #{salesOrderId}))
               AND alloc.allocation_type IN ('IN_STOCK_LOCK', 'IN_PRODUCTION_LOCK', 'PRODUCTION_REQUIRED')
               AND COALESCE(alloc.status, 'ACTIVE') = 'ACTIVE'
               AND COALESCE(alloc.discarded, FALSE) = FALSE
             <if test="partNo != null and partNo != ''">
-              AND LOWER(CASE WHEN sales_item.id IS NULL THEN COALESCE(alloc.part_no, '') ELSE COALESCE(sales_item.part_no, '') END) LIKE CONCAT('%', LOWER(#{partNo}), '%')
+              AND LOWER(COALESCE(sales_item.part_no, alloc.part_no, '')) LIKE CONCAT('%', LOWER(#{partNo}), '%')
             </if>
             <if test="version != null and version != ''">
-              AND LOWER(CASE WHEN sales_item.id IS NULL THEN COALESCE(alloc.version, '') ELSE COALESCE(sales_item.version, '') END) LIKE CONCAT('%', LOWER(#{version}), '%')
+              AND LOWER(COALESCE(sales_item.version, alloc.version, '')) LIKE CONCAT('%', LOWER(#{version}), '%')
             </if>
             ORDER BY alloc.ticket_id ASC, alloc.id ASC
             LIMIT #{limit} OFFSET #{offset}
@@ -169,17 +187,34 @@ public interface OrderDeliveryTicketAllocationMapper extends BaseMapper<OrderDel
             <script>
             SELECT COUNT(*)
             FROM order_delivery_ticket_allocation alloc
-            JOIN sales_order_item sales_item ON sales_item.allocation_id = alloc.id
+            LEFT JOIN LATERAL (
+                SELECT item.*
+                FROM sales_order_item item
+                WHERE item.allocation_id = alloc.id
+                   OR (item.allocation_id IS NULL AND item.source_ticket_id = alloc.ticket_id)
+                   OR (item.allocation_id IS NULL
+                       AND alloc.source_type = 'SALES_ORDER'
+                       AND item.id = alloc.source_item_id)
+                ORDER BY CASE
+                    WHEN item.allocation_id = alloc.id THEN 1
+                    WHEN alloc.source_type = 'SALES_ORDER' AND item.id = alloc.source_item_id THEN 2
+                    ELSE 3
+                END, item.line_no ASC, item.id ASC
+                LIMIT 1
+            ) sales_item ON TRUE
             LEFT JOIN sales_order_header sales_header ON sales_header.id = sales_item.sales_order_id
-            WHERE sales_item.sales_order_id = #{salesOrderId}
+            WHERE (sales_item.sales_order_id = #{salesOrderId}
+                   OR (sales_item.id IS NULL
+                       AND alloc.source_type = 'SALES_ORDER'
+                       AND alloc.source_order_id = #{salesOrderId}))
               AND alloc.allocation_type IN ('IN_STOCK_LOCK', 'IN_PRODUCTION_LOCK', 'PRODUCTION_REQUIRED')
               AND COALESCE(alloc.status, 'ACTIVE') = 'ACTIVE'
               AND COALESCE(alloc.discarded, FALSE) = FALSE
             <if test="partNo != null and partNo != ''">
-              AND LOWER(CASE WHEN sales_item.id IS NULL THEN COALESCE(alloc.part_no, '') ELSE COALESCE(sales_item.part_no, '') END) LIKE CONCAT('%', LOWER(#{partNo}), '%')
+              AND LOWER(COALESCE(sales_item.part_no, alloc.part_no, '')) LIKE CONCAT('%', LOWER(#{partNo}), '%')
             </if>
             <if test="version != null and version != ''">
-              AND LOWER(CASE WHEN sales_item.id IS NULL THEN COALESCE(alloc.version, '') ELSE COALESCE(sales_item.version, '') END) LIKE CONCAT('%', LOWER(#{version}), '%')
+              AND LOWER(COALESCE(sales_item.version, alloc.version, '')) LIKE CONCAT('%', LOWER(#{version}), '%')
             </if>
             </script>
             """)
@@ -342,7 +377,21 @@ public interface OrderDeliveryTicketAllocationMapper extends BaseMapper<OrderDel
             FROM order_delivery_ticket_allocation alloc
             LEFT JOIN order_rfq rfq ON rfq.id = alloc.rfq_id
             LEFT JOIN order_delivery_ticket ticket ON ticket.id = alloc.ticket_id
-            LEFT JOIN sales_order_item sales_item ON sales_item.allocation_id = alloc.id
+            LEFT JOIN LATERAL (
+                SELECT item.*
+                FROM sales_order_item item
+                WHERE item.allocation_id = alloc.id
+                   OR (item.allocation_id IS NULL AND item.source_ticket_id = alloc.ticket_id)
+                   OR (item.allocation_id IS NULL
+                       AND alloc.source_type = 'SALES_ORDER'
+                       AND item.id = alloc.source_item_id)
+                ORDER BY CASE
+                    WHEN item.allocation_id = alloc.id THEN 1
+                    WHEN alloc.source_type = 'SALES_ORDER' AND item.id = alloc.source_item_id THEN 2
+                    ELSE 3
+                END, item.line_no ASC, item.id ASC
+                LIMIT 1
+            ) sales_item ON TRUE
             LEFT JOIN sales_order_header sales_header ON sales_header.id = sales_item.sales_order_id
             ${ew.customSqlSegment}
             ORDER BY alloc.id DESC
@@ -378,7 +427,21 @@ public interface OrderDeliveryTicketAllocationMapper extends BaseMapper<OrderDel
             FROM order_delivery_ticket_allocation alloc
             LEFT JOIN order_rfq rfq ON rfq.id = alloc.rfq_id
             LEFT JOIN order_delivery_ticket ticket ON ticket.id = alloc.ticket_id
-            LEFT JOIN sales_order_item sales_item ON sales_item.allocation_id = alloc.id
+            LEFT JOIN LATERAL (
+                SELECT item.*
+                FROM sales_order_item item
+                WHERE item.allocation_id = alloc.id
+                   OR (item.allocation_id IS NULL AND item.source_ticket_id = alloc.ticket_id)
+                   OR (item.allocation_id IS NULL
+                       AND alloc.source_type = 'SALES_ORDER'
+                       AND item.id = alloc.source_item_id)
+                ORDER BY CASE
+                    WHEN item.allocation_id = alloc.id THEN 1
+                    WHEN alloc.source_type = 'SALES_ORDER' AND item.id = alloc.source_item_id THEN 2
+                    ELSE 3
+                END, item.line_no ASC, item.id ASC
+                LIMIT 1
+            ) sales_item ON TRUE
             LEFT JOIN sales_order_header sales_header ON sales_header.id = sales_item.sales_order_id
             ${ew.customSqlSegment}
             </script>
@@ -398,7 +461,21 @@ public interface OrderDeliveryTicketAllocationMapper extends BaseMapper<OrderDel
             FROM order_delivery_ticket_allocation alloc
             LEFT JOIN order_rfq rfq ON rfq.id = alloc.rfq_id
             LEFT JOIN order_delivery_ticket ticket ON ticket.id = alloc.ticket_id
-            LEFT JOIN sales_order_item sales_item ON sales_item.allocation_id = alloc.id
+            LEFT JOIN LATERAL (
+                SELECT item.*
+                FROM sales_order_item item
+                WHERE item.allocation_id = alloc.id
+                   OR (item.allocation_id IS NULL AND item.source_ticket_id = alloc.ticket_id)
+                   OR (item.allocation_id IS NULL
+                       AND alloc.source_type = 'SALES_ORDER'
+                       AND item.id = alloc.source_item_id)
+                ORDER BY CASE
+                    WHEN item.allocation_id = alloc.id THEN 1
+                    WHEN alloc.source_type = 'SALES_ORDER' AND item.id = alloc.source_item_id THEN 2
+                    ELSE 3
+                END, item.line_no ASC, item.id ASC
+                LIMIT 1
+            ) sales_item ON TRUE
             LEFT JOIN sales_order_header sales_header ON sales_header.id = sales_item.sales_order_id
             ${ew.customSqlSegment}
             ORDER BY customer_name ASC

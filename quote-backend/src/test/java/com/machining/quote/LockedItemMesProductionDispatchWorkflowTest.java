@@ -110,7 +110,7 @@ class LockedItemMesProductionDispatchWorkflowTest extends LockedItemMesProductio
         assertThat(request.getSurfaceTreatment()).isEqualTo("Anodized");
         assertThat(request.getDescription()).isEqualTo("Bracket");
         assertThat(request.getItems()).singleElement().satisfies(item ->
-                assertThat(item.getSaleOrderItemNo()).isNull());
+                assertThat(item.getSaleOrderItemNo()).isEqualTo("1"));
         assertThat(request.getItems()).singleElement().satisfies(item ->
                 assertThat(item.getCustomerRequirements()).isEqualTo("材料名称：6061\n表面处理：Anodized"));
         assertThat(request.getRemark()).isEqualTo("Rush");
@@ -155,29 +155,30 @@ class LockedItemMesProductionDispatchWorkflowTest extends LockedItemMesProductio
         MesProductionDispatchService service = new MesProductionDispatchService();
         OrderDeliveryTicketAllocationMapper allocationMapper = mock(OrderDeliveryTicketAllocationMapper.class);
         MesProductionDispatchClient client = mock(MesProductionDispatchClient.class);
-        ItemAssemblyRelationMapper relationMapper = mock(ItemAssemblyRelationMapper.class);
-        ItemQuoteVersionMapper itemMapper = mock(ItemQuoteVersionMapper.class);
+        SalesOrderItemAssemblyRelationMapper relationMapper = mock(SalesOrderItemAssemblyRelationMapper.class);
+        SalesOrderItemMapper itemMapper = mock(SalesOrderItemMapper.class);
         OrderDeliveryTicketAllocation allocation = allocation(4, "PRODUCTION_REQUIRED", "PENDING");
-        allocation.setSourceType("RFQ");
-        allocation.setSourceOrderId(204L);
+        allocation.setSourceOrderId(3303L);
         allocation.setSourceItemId(501L);
         allocation.setPartNo("ASM-501");
         allocation.setVersion("B");
-        ItemAssemblyRelation relation = new ItemAssemblyRelation();
-        relation.setParentItemId(501);
-        relation.setChildItemId(502);
-        relation.setChildQtyPerParent(2.5);
+        SalesOrderItemAssemblyRelation relation = new SalesOrderItemAssemblyRelation();
+        relation.setParentItemId(501L);
+        relation.setChildItemId(502L);
+        relation.setQtyPerParent(new BigDecimal("2.5"));
         relation.setSortNo(7);
-        ItemQuoteVersion parent = rfqItem(501, "ASM-501", "B");
-        ItemQuoteVersion child = rfqItem(502, "CH-502", "C");
+        SalesOrderItem parent = salesItem(501L, "ASM-501", "B");
+        SalesOrderItem child = salesItem(502L, "CH-502", "C");
         when(allocationMapper.selectById(4)).thenReturn(allocation);
         when(allocationMapper.update(any(OrderDeliveryTicketAllocation.class), any())).thenReturn(1);
         when(relationMapper.selectList(any())).thenReturn(List.of(relation));
-        when(itemMapper.selectById(501)).thenReturn(parent);
-        when(itemMapper.selectById(502)).thenReturn(child);
+        when(itemMapper.selectByAllocationIds(List.of(4L))).thenReturn(List.of(parent));
+        when(itemMapper.selectBatchIds(List.of(502L))).thenReturn(List.of(child));
+        when(itemMapper.selectById(501L)).thenReturn(parent);
+        when(itemMapper.selectById(502L)).thenReturn(child);
         when(client.dispatch(any())).thenReturn(success("MES-PROD-RFQ", "accepted"));
         wireDispatchService(service, allocationMapper, null, client, null, null,
-                relationMapper, itemMapper, null, null);
+                null, null, relationMapper, itemMapper);
 
         Map<String, Object> result = service.dispatchBatch(List.of(4), 9104L);
 
@@ -207,10 +208,9 @@ class LockedItemMesProductionDispatchWorkflowTest extends LockedItemMesProductio
         MesProductionDispatchService service = new MesProductionDispatchService();
         OrderDeliveryTicketAllocationMapper allocationMapper = mock(OrderDeliveryTicketAllocationMapper.class);
         MesProductionDispatchClient client = mock(MesProductionDispatchClient.class);
-        ItemAssemblyRelationMapper relationMapper = mock(ItemAssemblyRelationMapper.class);
-        ItemQuoteVersionMapper itemMapper = mock(ItemQuoteVersionMapper.class);
+        SalesOrderItemAssemblyRelationMapper relationMapper = mock(SalesOrderItemAssemblyRelationMapper.class);
+        SalesOrderItemMapper itemMapper = mock(SalesOrderItemMapper.class);
         OrderDeliveryTicketAllocation allocation = allocation(14, "PRODUCTION_REQUIRED", "PENDING");
-        allocation.setSourceType("RFQ");
         allocation.setSourceOrderId(214L);
         allocation.setSourceItemId(1501L);
         allocation.setItemType("组合件");
@@ -218,19 +218,21 @@ class LockedItemMesProductionDispatchWorkflowTest extends LockedItemMesProductio
         allocation.setVersion("B");
         allocation.setEngineeringMaterialCode(null);
         allocation.setMaterialGrossWeight(0.0);
-        ItemAssemblyRelation relation = new ItemAssemblyRelation();
-        relation.setParentItemId(1501);
-        relation.setChildItemId(1502);
-        relation.setChildQtyPerParent(2.0);
+        SalesOrderItemAssemblyRelation relation = new SalesOrderItemAssemblyRelation();
+        relation.setParentItemId(1501L);
+        relation.setChildItemId(1502L);
+        relation.setQtyPerParent(new BigDecimal("2.0"));
         relation.setSortNo(3);
         when(allocationMapper.selectById(14)).thenReturn(allocation);
         when(allocationMapper.update(any(OrderDeliveryTicketAllocation.class), any())).thenReturn(1);
         when(relationMapper.selectList(any())).thenReturn(List.of(relation));
-        when(itemMapper.selectById(1501)).thenReturn(rfqItem(1501, "ASM-1501", "B"));
-        when(itemMapper.selectById(1502)).thenReturn(rfqItem(1502, "CH-1502", "A"));
+        when(itemMapper.selectByAllocationIds(List.of(14L))).thenReturn(List.of(salesItem(1501L, "ASM-1501", "B")));
+        when(itemMapper.selectBatchIds(List.of(1502L))).thenReturn(List.of(salesItem(1502L, "CH-1502", "A")));
+        when(itemMapper.selectById(1501L)).thenReturn(salesItem(1501L, "ASM-1501", "B"));
+        when(itemMapper.selectById(1502L)).thenReturn(salesItem(1502L, "CH-1502", "A"));
         when(client.dispatch(any())).thenReturn(success("MES-PROD-ASM", "accepted"));
         wireDispatchService(service, allocationMapper, null, client, null, null,
-                relationMapper, itemMapper, null, null);
+                null, null, relationMapper, itemMapper);
 
         Map<String, Object> result = service.dispatchBatch(List.of(14), 9114L);
 
@@ -315,8 +317,10 @@ class LockedItemMesProductionDispatchWorkflowTest extends LockedItemMesProductio
         when(allocationMapper.selectById(5)).thenReturn(allocation(5, "PRODUCTION_REQUIRED", "PENDING"));
         when(allocationMapper.update(any(OrderDeliveryTicketAllocation.class), any())).thenReturn(1);
         when(relationMapper.selectList(any())).thenReturn(List.of(relation));
-        when(itemMapper.selectById(9001L)).thenReturn(salesItem(9001L, "SO-ASM", "A"));
-        when(itemMapper.selectById(9002L)).thenReturn(salesItem(9002L, "SO-CH", "A1"));
+        SalesOrderItem parentItem = salesItem(9001L, "SO-ASM", "A");
+        SalesOrderItem childItem = salesItem(9002L, "SO-CH", "A1");
+        when(itemMapper.selectByAllocationIds(any())).thenReturn(List.of(parentItem));
+        when(itemMapper.selectBatchIds(any())).thenReturn(List.of(childItem));
         when(client.dispatch(any())).thenReturn(success("MES-PROD-SO", "accepted"));
         wireDispatchService(service, allocationMapper, null, client, null, null,
                 null, null, relationMapper, itemMapper);

@@ -253,12 +253,6 @@ public class WmsReservationBatchService {
                 || Boolean.TRUE.equals(allocation.getDiscarded())) {
             return "Allocation is not an active production row";
         }
-        if (allocation.getQty() == null || allocation.getQty() <= 0) {
-            return "Allocation quantity is not positive";
-        }
-        if (trim(allocation.getMaterialNo()) == null) {
-            return "Material number is not confirmed";
-        }
         if (allocation.getAllocationSplitSource() != null) {
             return "Allocation has already completed an initial split";
         }

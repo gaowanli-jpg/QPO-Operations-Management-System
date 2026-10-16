@@ -151,6 +151,7 @@ public interface DashboardAggregationMapper {
             SELECT COUNT(*)
             FROM order_delivery_ticket_allocation alloc
             LEFT JOIN order_delivery_ticket ticket ON ticket.id = alloc.ticket_id
+            LEFT JOIN sales_order_item sales_item ON sales_item.allocation_id = alloc.id
             ${ew.customSqlSegment}
             </script>
             """)
@@ -161,6 +162,7 @@ public interface DashboardAggregationMapper {
             SELECT COUNT(*)
             FROM order_delivery_ticket_allocation alloc
             LEFT JOIN order_delivery_ticket ticket ON ticket.id = alloc.ticket_id
+            LEFT JOIN sales_order_item sales_item ON sales_item.allocation_id = alloc.id
             ${ew.customSqlSegment}
             </script>
             """)

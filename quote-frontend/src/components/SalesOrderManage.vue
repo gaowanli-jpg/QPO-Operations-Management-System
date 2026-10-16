@@ -383,19 +383,7 @@
             <el-table :data="detailItemList" border stripe height="380" v-loading="detailItemsLoading">
               <el-table-column prop="partNo" label="图号" min-width="150" fixed show-overflow-tooltip />
               <el-table-column prop="lineNo" label="行号" width="80" align="center" />
-              <el-table-column prop="version" label="版本" width="110" align="center">
-                <template #default="{ row }">
-                  <el-input
-                    v-if="itemDrafts[row.id]"
-                    v-model="itemDrafts[row.id].version"
-                    class="item-edit-input"
-                    clearable
-                    :disabled="salesOrderEditLocked"
-                    placeholder="版本"
-                  />
-                  <span v-else>{{ row.version || '-' }}</span>
-                </template>
-              </el-table-column>
+              <el-table-column prop="version" label="版本" width="110" align="center" show-overflow-tooltip />
               <el-table-column prop="materialNo" label="物料号" min-width="130" show-overflow-tooltip />
               <el-table-column prop="materialNoStatus" label="物料号状态" width="120" show-overflow-tooltip />
               <el-table-column prop="matchStatus" label="匹配状态" width="120" align="center" show-overflow-tooltip>
@@ -1102,7 +1090,6 @@ const SALES_ORDER_HEADER_EDITABLE_FIELDS = [
   'internalProjectNo'
 ]
 const SALES_ORDER_ITEM_EDITABLE_FIELDS = [
-  'version',
   'qty',
   'status',
   'untaxedUnitPrice',
@@ -1860,7 +1847,6 @@ const resetItemDrafts = (rows = []) => {
 }
 
 const buildItemDraft = (row = {}) => ({
-  version: draftValue(row.version),
   qty: row.qty ?? null,
   status: draftValue(row.status),
   untaxedUnitPrice: draftValue(row.untaxedUnitPrice),

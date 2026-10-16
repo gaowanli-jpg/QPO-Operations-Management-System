@@ -92,6 +92,8 @@ public class SalesOrderAllocationContextLoader {
             if (fallbackItem != null) {
                 itemsByAllocationId.put(allocation.getId(), fallbackItem);
                 linkedFlags.put(allocation.getId(), false);
+                errors.putIfAbsent(allocation.getId(),
+                        "sales order item is resolved from a legacy source and is not directly linked to allocation");
             } else {
                 linkedFlags.put(allocation.getId(), false);
                 errors.putIfAbsent(allocation.getId(), "sales order item is not linked to allocation");

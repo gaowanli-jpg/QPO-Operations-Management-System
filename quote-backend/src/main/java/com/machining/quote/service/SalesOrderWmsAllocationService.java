@@ -4,11 +4,13 @@ import com.machining.quote.entity.OrderDeliveryTicketAllocation;
 import com.machining.quote.entity.SalesOrderHeader;
 import com.machining.quote.mapper.OrderDeliveryTicketAllocationMapper;
 import com.machining.quote.mapper.SalesOrderHeaderMapper;
+import com.machining.quote.service.SalesOrderAllocationContextLoader;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.LinkedHashSet;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
@@ -22,6 +24,8 @@ public class SalesOrderWmsAllocationService {
     private OrderDeliveryTicketAllocationMapper allocationMapper;
     @Autowired(required = false)
     private DataScopeService dataScopeService;
+    @Autowired(required = false)
+    private SalesOrderAllocationContextLoader contextLoader;
 
     public SalesOrderHeader requireAccessibleSalesOrder(Long salesOrderId) {
         if (salesOrderId == null) {
@@ -52,8 +56,10 @@ public class SalesOrderWmsAllocationService {
 
     public List<Integer> resolveEligibleAllocationIds(Long salesOrderId) {
         requireAccessibleSalesOrder(salesOrderId);
-        return allocationMapper.selectSalesOrderProductionAllocations(salesOrderId).stream()
-                .filter(this::isEligible)
+        List<OrderDeliveryTicketAllocation> allocations = allocationMapper.selectSalesOrderProductionAllocations(salesOrderId);
+        Map<Integer, SalesOrderAllocationContextLoader.Context> contexts = loadContexts(allocations);
+        return allocations.stream()
+                .filter(allocation -> isEligible(allocation, contexts.get(allocation.getId())))
                 .map(OrderDeliveryTicketAllocation::getId)
                 .filter(Objects::nonNull)
                 .distinct()
@@ -81,9 +87,11 @@ public class SalesOrderWmsAllocationService {
 
     public List<Integer> resolveEligibleAllocationIds(Long salesOrderId, List<Integer> requestedAllocationIds) {
         Set<Integer> requested = new LinkedHashSet<>(resolveSelectedAllocationIds(salesOrderId, requestedAllocationIds));
-        return allocationMapper.selectSalesOrderProductionAllocations(salesOrderId).stream()
+        List<OrderDeliveryTicketAllocation> allocations = allocationMapper.selectSalesOrderProductionAllocations(salesOrderId);
+        Map<Integer, SalesOrderAllocationContextLoader.Context> contexts = loadContexts(allocations);
+        return allocations.stream()
                 .filter(allocation -> allocation.getId() != null && requested.contains(allocation.getId()))
-                .filter(this::isEligible)
+                .filter(allocation -> isEligible(allocation, contexts.get(allocation.getId())))
                 .map(OrderDeliveryTicketAllocation::getId)
                 .distinct()
                 .toList();
@@ -91,20 +99,24 @@ public class SalesOrderWmsAllocationService {
 
     public List<String> resolveSkippedReasons(Long salesOrderId) {
         requireAccessibleSalesOrder(salesOrderId);
-        return allocationMapper.selectSalesOrderProductionAllocations(salesOrderId).stream()
+        List<OrderDeliveryTicketAllocation> allocations = allocationMapper.selectSalesOrderProductionAllocations(salesOrderId);
+        Map<Integer, SalesOrderAllocationContextLoader.Context> contexts = loadContexts(allocations);
+        return allocations.stream()
                 .map(allocation -> {
-                    String reason = skipReason(allocation);
+                    String reason = skipReason(allocation, contexts.get(allocation.getId()));
                     return reason == null ? null : "Allocation " + allocation.getId() + ": " + reason;
                 })
                 .filter(Objects::nonNull)
                 .toList();
     }
 
-    private boolean isEligible(OrderDeliveryTicketAllocation allocation) {
-        return skipReason(allocation) == null;
+    private boolean isEligible(OrderDeliveryTicketAllocation allocation,
+                               SalesOrderAllocationContextLoader.Context context) {
+        return skipReason(allocation, context) == null;
     }
 
-    private String skipReason(OrderDeliveryTicketAllocation allocation) {
+    private String skipReason(OrderDeliveryTicketAllocation allocation,
+                              SalesOrderAllocationContextLoader.Context context) {
         if (allocation == null || allocation.getId() == null) {
             return "Production allocation does not exist";
         }
@@ -115,10 +127,19 @@ public class SalesOrderWmsAllocationService {
         if (Boolean.TRUE.equals(allocation.getDiscarded())) {
             return "Allocation is discarded";
         }
-        if (allocation.getQty() == null || allocation.getQty() <= 0) {
+        if (context != null && context.error() != null) {
+            return context.error();
+        }
+        Integer qty = context != null && context.item() != null
+                ? context.item().getQty()
+                : allocation.getQty();
+        String materialNo = context != null && context.item() != null
+                ? context.item().getMaterialNo()
+                : allocation.getMaterialNo();
+        if (qty == null || qty <= 0) {
             return "Allocation quantity is not positive";
         }
-        if (trim(allocation.getMaterialNo()) == null) {
+        if (trim(materialNo) == null) {
             return "Material number is not confirmed";
         }
         String mesStatus = trim(allocation.getMesProductionStatus());
@@ -132,6 +153,14 @@ public class SalesOrderWmsAllocationService {
             return "WMS reservation has already been applied";
         }
         return null;
+    }
+
+    private Map<Integer, SalesOrderAllocationContextLoader.Context> loadContexts(
+            List<OrderDeliveryTicketAllocation> allocations) {
+        if (contextLoader == null || allocations == null || allocations.isEmpty()) {
+            return Map.of();
+        }
+        return contextLoader.load(allocations);
     }
 
     private String trim(String value) {

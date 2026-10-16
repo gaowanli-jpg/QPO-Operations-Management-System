@@ -79,11 +79,16 @@ class MaterialMasterExportExternalFieldsContractTest {
         String dispatchService = read(MAIN.resolve(Path.of("service", "mes", "MesProductionDispatchService.java")));
         assertThat(dispatchService)
                 .contains(
+                        "req.setEngineeringMaterialCode(salesItem.getEngineeringMaterialCode());",
+                        "req.setEngineeringMaterialTypeCode(salesItem.getEngineeringMaterialTypeCode());",
+                        "req.setEngineeringMaterialTypeName(salesItem.getEngineeringMaterialTypeName());",
+                        "req.setEngineeringMaterialCategory(salesItem.getEngineeringMaterialCategory());")
+                .doesNotContain(
                         "req.setEngineeringMaterialCode(allocation.getEngineeringMaterialCode());",
                         "req.setEngineeringMaterialTypeCode(allocation.getEngineeringMaterialTypeCode());",
                         "req.setEngineeringMaterialTypeName(allocation.getEngineeringMaterialTypeName());",
-                        "req.setEngineeringMaterialCategory(allocation.getEngineeringMaterialCategory());")
-                .doesNotContain("req.setMaterialData(allocation.getMaterialData());");
+                        "req.setEngineeringMaterialCategory(allocation.getEngineeringMaterialCategory());",
+                        "req.setMaterialData(allocation.getMaterialData());");
     }
 
     @Test

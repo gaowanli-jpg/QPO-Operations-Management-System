@@ -5,9 +5,10 @@
 > `PRODUCTION_REQUIRED` 行；WMS 拆分后原行保留为待产行，锁已入库 / 锁在产行追加到订单末尾。
 > 库存完全覆盖时，原待产行和 allocation 仍保留，数量为 `0`，仅从待产池、锁库池和仪表盘操作统计中过滤。
 > 销售订单零件与锁库拆行的数量均可编辑，编辑会同步对应 allocation；WMS 已完成后不回写提单及历史外部请求快照。
-> 2026-10-10 WMS 请求口径修正：销售订单入口仅处理数量大于 0 的有效 `PRODUCTION_REQUIRED` Allocation，
-> WMS 请求数量、请求快照、恢复和响应拆分校验均以 Allocation 为准。提单只用于来源追溯，
-> 不参与新流程的数量校验，也不写入新流程 WMS 状态。V59 将活动快照唯一性按 Allocation 隔离，保留历史无 Allocation 快照按提单恢复。
+> 2026-10-10 WMS 请求口径修正：销售订单入口仅处理关联销售订单零件、数量大于 0 的有效
+> `PRODUCTION_REQUIRED` Allocation。图号、版本、物料号、数量和项目字段读取 `sales_order_item`；
+> Allocation 只负责拆分关系、状态和并发认领。WMS 请求快照保存请求时的销售订单零件数据，
+> 提单只用于来源追溯。V59 将活动快照唯一性按 Allocation 隔离，保留历史无 Allocation 快照按提单恢复。
 
 ## 1. 目标流程
 
@@ -23,7 +24,7 @@
 
 ## 2. 默认生产 allocation
 
-`ProductionAllocationLifecycleService.recordMaterialSuccess` 是统一幂等入口。MES 即时成功、回调成功、去重 follower 成功和处理中任务恢复成功都调用该服务。它锁定提单行，更新已确认物料号，并在尚无对应分配时创建全量 `PRODUCTION_REQUIRED` 行。初始数量来自物料号成功时的提单需求；之后 WMS 只读取并处理 Allocation 当前数量，不读取提单数量。
+`ProductionAllocationLifecycleService.recordMaterialSuccess` 是统一幂等入口。MES 即时成功、回调成功、去重 follower 成功和处理中任务恢复成功都调用该服务。它锁定提单行，更新已确认物料号，并在尚无对应分配时创建全量 `PRODUCTION_REQUIRED` 行，同时绑定对应销售订单零件。之后待产、锁库和 WMS 读取关联销售订单零件的当前图号、版本、物料号和数量；Allocation 只保存拆分、状态和任务追踪信息。
 
 allocation 使用 `allocation_source` 区分 `MES_MATERIAL`、`WMS_RESERVATION` 和历史 `LEGACY` 行。V57 为每个安全的历史物料号成功提单补建全量生产行。已有 allocation 保持原样；存在 WMS 处理中、未知结果、响应已保存或本地应用失败的提单不自动补建，需沿原批次恢复核对。
 
@@ -40,7 +41,7 @@ allocation 使用 `allocation_source` 区分 `MES_MATERIAL`、`WMS_RESERVATION` 
 
 ## 4. 数量拆分与互斥
 
-WMS 请求以每条有效生产 Allocation 的 `qty` 生成请求快照。同一销售订单、客户订单号、物料号和客户项目号下的请求数量为参与聚合的 Allocation 数量之和。响应应用事务锁定销售订单、来源提单和对应 Allocation，逐条验证 `stockFrozenCount + inProductionCount + surplusCount = reservation.reserveCount = allocation.qty`。来源提单只用于追溯，不参与新流程数量校验或状态更新。库存锁定和在产锁定数量生成相应锁库 allocation；`surplusCount` 更新到对应待生产行。无剩余待生产数量时，原待生产 allocation 与销售订单待产行仍保留并置为 `0`，不从销售订单明细删除。
+WMS 请求以每条有效生产 Allocation 关联的销售订单零件 `qty` 生成请求快照。同一销售订单、客户订单号、物料号和客户项目号下的请求数量为参与聚合的销售订单零件数量之和。响应应用事务锁定销售订单、来源提单、对应 Allocation 和销售订单零件，逐条验证 `stockFrozenCount + inProductionCount + surplusCount = reservation.reserveCount`，并核对当前销售订单零件的关联 ID、行号、物料号和数量仍与请求快照一致。来源提单只用于追溯，不参与新流程数量校验或状态更新。库存锁定和在产锁定数量生成相应锁库 allocation；`surplusCount` 更新到对应待生产行。无剩余待生产数量时，原待生产 allocation 与销售订单待产行仍保留并置为 `0`，不从销售订单明细删除。
 
 MES 生产与 WMS 获取均先以稳定顺序锁定相同的 `order_delivery_ticket` 行：
 

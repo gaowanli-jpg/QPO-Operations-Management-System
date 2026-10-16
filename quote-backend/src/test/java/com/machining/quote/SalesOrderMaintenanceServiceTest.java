@@ -178,7 +178,6 @@ class SalesOrderMaintenanceServiceTest {
         line.setSalesOrderItemId(item.getId());
         line.setQty(3);
         line.setUntaxedUnitPrice(new BigDecimal("200.00"));
-        line.setVersion(" B ");
         line.setMaterialName(" 6061-T6 ");
         line.setSurfaceTreatment(" Anodized ");
         line.setCustomerDeliveryDate(LocalDate.of(2026, 10, 1));
@@ -200,7 +199,6 @@ class SalesOrderMaintenanceServiceTest {
         assertThat(result.getChangedFields()).containsExactlyInAnyOrder(
                 "qty",
                 "untaxedUnitPrice",
-                "version",
                 "materialName",
                 "surfaceTreatment",
                 "customerDeliveryDate",
@@ -216,7 +214,7 @@ class SalesOrderMaintenanceServiceTest {
         assertThat(item.getQty()).isEqualTo(3);
         assertThat(item.getUntaxedUnitPrice()).isEqualByComparingTo("200.00");
         assertThat(item.getTaxIncludedUnitPrice()).isEqualByComparingTo("113.00");
-        assertThat(item.getVersion()).isEqualTo("B");
+        assertThat(item.getVersion()).isEqualTo("A");
         assertThat(item.getMaterialName()).isEqualTo("6061-T6");
         assertThat(item.getSurfaceTreatment()).isEqualTo("Anodized");
         assertThat(item.getUntaxedTotalPrice()).isEqualByComparingTo("600.00");
@@ -238,6 +236,28 @@ class SalesOrderMaintenanceServiceTest {
         verify(fixture.itemMapper).update(isNull(), any(UpdateWrapper.class));
         verify(fixture.ticketMapper, never()).update(any(), any());
         verifyAudit(fixture.auditService, "SALES_ORDER_ITEM_UPDATE", header.getId());
+    }
+
+    @Test
+    void saveItemsRejectsVersionChangesFromLegacyClients() {
+        Fixture fixture = fixture();
+        SalesOrderHeader header = header(111L, "NOT_SYNCED");
+        SalesOrderItem item = item(2111L, 111L);
+        item.setAllocationId(7111L);
+        fixture.withOrder(header, List.of(item));
+
+        SalesOrderItemUpdateLineReq line = new SalesOrderItemUpdateLineReq();
+        line.setSalesOrderItemId(item.getId());
+        line.setVersion("B");
+        SalesOrderItemUpdateReq req = new SalesOrderItemUpdateReq();
+        req.setItems(List.of(line));
+
+        assertThatThrownBy(() -> fixture.maintenanceService.saveItems(header.getId(), req))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("不可修改");
+
+        assertThat(item.getVersion()).isEqualTo("A");
+        verify(fixture.itemMapper, never()).update(isNull(), any(UpdateWrapper.class));
     }
 
     @Test

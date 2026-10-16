@@ -10,6 +10,7 @@ import com.machining.quote.entity.ItemAssemblyRelation;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.OrderDeliveryTicketAllocation;
+import com.machining.quote.entity.SalesOrderHeader;
 import com.machining.quote.entity.SalesOrderItem;
 import com.machining.quote.entity.SalesOrderItemAssemblyRelation;
 import com.machining.quote.entity.SystemTask;
@@ -36,6 +37,7 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -104,6 +106,88 @@ abstract class LockedItemMesProductionDispatchTestSupport {
         ReflectionTestUtils.setField(service, "itemQuoteVersionMapper", itemQuoteVersionMapper);
         ReflectionTestUtils.setField(service, "salesOrderItemAssemblyRelationMapper", salesOrderItemAssemblyRelationMapper);
         ReflectionTestUtils.setField(service, "salesOrderItemMapper", salesOrderItemMapper);
+        wireLinkedSalesOrderContexts(service, salesOrderItemMapper);
+    }
+
+    private void wireLinkedSalesOrderContexts(
+            MesProductionDispatchService service,
+            SalesOrderItemMapper salesOrderItemMapper) {
+        com.machining.quote.service.SalesOrderAllocationContextLoader contextLoader =
+                mock(com.machining.quote.service.SalesOrderAllocationContextLoader.class);
+        when(contextLoader.load(any())).thenAnswer(invocation -> {
+            List<OrderDeliveryTicketAllocation> allocations = invocation.getArgument(0);
+            Map<Integer, com.machining.quote.service.SalesOrderAllocationContextLoader.Context> contexts =
+                    new LinkedHashMap<>();
+            for (OrderDeliveryTicketAllocation allocation : allocations) {
+                SalesOrderItem item = null;
+                if (salesOrderItemMapper != null && allocation.getId() != null) {
+                    List<SalesOrderItem> linked = salesOrderItemMapper.selectByAllocationIds(
+                            List.of(allocation.getId().longValue()));
+                    if (linked != null && !linked.isEmpty()) {
+                        item = linked.get(0);
+                    }
+                }
+                if (item == null) {
+                    item = salesOrderItemFromAllocation(allocation);
+                }
+                fillLinkedItem(item, allocation);
+                SalesOrderHeader header = new SalesOrderHeader();
+                header.setId(allocation.getSourceOrderId());
+                header.setDocumentNo(allocation.getRfqNo());
+                header.setSalesOrderNo(allocation.getRfqNo());
+                header.setCustomerCode("C001");
+                header.setCustomerName(allocation.getCustomerName());
+                header.setSalesOrderDate(allocation.getDeliveryDate());
+                contexts.put(allocation.getId(), new com.machining.quote.service.SalesOrderAllocationContextLoader.Context(
+                        item, header, true, null));
+            }
+            return contexts;
+        });
+        ReflectionTestUtils.setField(service, "contextLoader", contextLoader);
+    }
+
+    private SalesOrderItem salesOrderItemFromAllocation(OrderDeliveryTicketAllocation allocation) {
+        SalesOrderItem item = new SalesOrderItem();
+        item.setId(allocation.getSourceItemId());
+        return item;
+    }
+
+    private void fillLinkedItem(SalesOrderItem item, OrderDeliveryTicketAllocation allocation) {
+        item.setAllocationId(allocation.getId() == null ? null : allocation.getId().longValue());
+        item.setSalesOrderId(firstNonNull(item.getSalesOrderId(), allocation.getSourceOrderId()));
+        item.setLineNo(firstNonNull(item.getLineNo(), allocation.getId()));
+        item.setQty(firstNonNull(item.getQty(), allocation.getQty()));
+        item.setMaterialNo(firstNonBlank(item.getMaterialNo(), allocation.getMaterialNo()));
+        item.setPartNo(firstNonBlank(item.getPartNo(), allocation.getPartNo()));
+        item.setVersion(firstNonBlank(item.getVersion(), allocation.getVersion()));
+        item.setOrderType(firstNonBlank(item.getOrderType(), allocation.getOrderType()));
+        item.setItemType(firstNonBlank(item.getItemType(), allocation.getItemType()));
+        item.setInternalProjectNo(firstNonBlank(item.getInternalProjectNo(), allocation.getInternalProjectNo()));
+        item.setCustomerOrderNo(firstNonBlank(item.getCustomerOrderNo(), allocation.getCustomerOrderNo()));
+        item.setCustomerProjectNo(firstNonBlank(item.getCustomerProjectNo(), allocation.getCustomerProjectNo()));
+        item.setMaterialName(firstNonBlank(item.getMaterialName(), allocation.getMaterialName()));
+        item.setEngineeringMaterialCode(firstNonBlank(item.getEngineeringMaterialCode(), allocation.getEngineeringMaterialCode()));
+        item.setEngineeringMaterialName(firstNonBlank(item.getEngineeringMaterialName(), allocation.getEngineeringMaterialName()));
+        item.setEngineeringMaterialTypeCode(firstNonBlank(item.getEngineeringMaterialTypeCode(), allocation.getEngineeringMaterialTypeCode()));
+        item.setEngineeringMaterialTypeName(firstNonBlank(item.getEngineeringMaterialTypeName(), allocation.getEngineeringMaterialTypeName()));
+        item.setEngineeringMaterialCategory(firstNonBlank(item.getEngineeringMaterialCategory(), allocation.getEngineeringMaterialCategory()));
+        item.setMaterialShape(firstNonBlank(item.getMaterialShape(), allocation.getMaterialShape()));
+        item.setSurfaceTreatment(firstNonBlank(item.getSurfaceTreatment(), allocation.getSurfaceTreatment()));
+        item.setRemark(firstNonBlank(item.getRemark(), allocation.getRemark()));
+        item.setDescription(firstNonBlank(item.getDescription(), allocation.getDescription()));
+        item.setInternalDeliveryDate(item.getInternalDeliveryDate() == null ? allocation.getDeliveryDate() : item.getInternalDeliveryDate());
+        item.setMaterialData(item.getMaterialData() == null ? allocation.getMaterialData() : item.getMaterialData());
+        item.setProcessRoute(item.getProcessRoute() == null ? allocation.getProcessRoute() : item.getProcessRoute());
+        item.setMaterialGrossWeight(item.getMaterialGrossWeight() == null ? allocation.getMaterialGrossWeight() : item.getMaterialGrossWeight());
+        item.setPartNetWeight(item.getPartNetWeight() == null ? allocation.getPartNetWeight() : item.getPartNetWeight());
+    }
+
+    private <T> T firstNonNull(T first, T fallback) {
+        return first == null ? fallback : first;
+    }
+
+    private String firstNonBlank(String first, String fallback) {
+        return first == null || first.isBlank() ? fallback : first;
     }
 
     protected OrderDeliveryTicketAllocation allocation(Integer id, String allocationType, String productionStatus) {

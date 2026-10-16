@@ -82,6 +82,9 @@ public class AllocationSplitService {
         int inProduction = requireNonNegativeInteger(inProductionQty, "in-production quantity");
 
         SalesOrderItem linkedItem = salesOrderAllocationLinkService.lockSalesOrderForAllocation(allocationId);
+        if (linkedItem == null) {
+            throw new IllegalStateException("sales order item must be directly linked to allocation before split");
+        }
         if (salesOrderId != null && !Objects.equals(salesOrderId, linkedItem.getSalesOrderId())) {
             throw new IllegalArgumentException("allocation does not belong to the current sales order");
         }
@@ -251,6 +254,9 @@ public class AllocationSplitService {
         }
         if (linked && !Objects.equals(linkedItem.getAllocationId(), allocation.getId().longValue())) {
             throw new IllegalStateException("sales order item allocation link does not match allocation");
+        }
+        if (!linked || linkedItem == null) {
+            throw new IllegalStateException("sales order item must be directly linked to allocation before split");
         }
         if (linkedItem == null && isBlank(allocation.getMaterialNo())) {
             throw new IllegalStateException("legacy allocation material number is missing");

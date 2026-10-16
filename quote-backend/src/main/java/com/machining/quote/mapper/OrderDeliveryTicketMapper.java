@@ -23,6 +23,20 @@ public interface OrderDeliveryTicketMapper extends BaseMapper<OrderDeliveryTicke
     @Select("SELECT * FROM order_delivery_ticket WHERE id = #{id} FOR UPDATE")
     OrderDeliveryTicket selectByIdForUpdate(@Param("id") Integer id);
 
+    @Select("""
+            <script>
+            SELECT *
+            FROM order_delivery_ticket
+            WHERE id IN
+            <foreach collection="ticketIds" item="ticketId" open="(" separator="," close=")">
+                #{ticketId}
+            </foreach>
+            ORDER BY id ASC
+            FOR UPDATE
+            </script>
+            """)
+    List<OrderDeliveryTicket> selectBatchIdsForUpdate(@Param("ticketIds") List<Integer> ticketIds);
+
     @Select("SELECT * FROM order_delivery_ticket WHERE source_type = 'SALES_ORDER' AND source_item_id = #{sourceItemId} ORDER BY id ASC FOR UPDATE")
     List<OrderDeliveryTicket> selectSalesOrderTicketsBySourceItemIdForUpdate(@Param("sourceItemId") Long sourceItemId);
 

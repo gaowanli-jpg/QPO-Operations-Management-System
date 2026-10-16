@@ -48,7 +48,9 @@ class MaterialShapeSnapshotTest {
     @Test
     void mesProductionDispatchSendsMaterialShapeAsFirstClassField() throws IOException {
         assertThat(read(MES_REQ)).contains("private String materialShape;");
-        assertThat(read(MES_SERVICE)).contains("req.setMaterialShape(allocation.getMaterialShape())");
+        assertThat(read(MES_SERVICE))
+                .contains("req.setMaterialShape(salesItem.getMaterialShape())")
+                .doesNotContain("req.setMaterialShape(allocation.getMaterialShape())");
         assertThat(read(MES_INTERFACE_DOC))
                 .contains(
                         "`materialShape`",
