@@ -321,9 +321,7 @@ public class MesProductionDispatchService {
         SalesOrderHeader salesHeader = context == null ? null : context.header();
         String materialNo = linked ? salesItem.getMaterialNo() : allocation.getMaterialNo();
         Integer quantity = linked ? salesItem.getQty() : allocation.getQty();
-        LocalDate requiredDate = linked
-                ? firstDate(salesItem.getInternalDeliveryDate(), salesItem.getSalesOrderDate(), salesHeader.getSalesOrderDate())
-                : allocation.getDeliveryDate();
+        LocalDate requiredDate = linked ? salesItem.getInternalDeliveryDate() : null;
         String validationError = productionValidationError(quantity, materialNo, requiredDate);
         if (validationError != null) {
             throw new RuntimeException(validationError);
@@ -342,6 +340,9 @@ public class MesProductionDispatchService {
         item.setSaleOrderNo(resolution.saleOrderNo());
         item.setSaleOrderItemNo(resolution.saleOrderItemNo());
         item.setProductCode(trimToNull(materialNo));
+        item.setPartNo(trimToNull(linked ? salesItem.getPartNo() : null));
+        item.setVersion(trimToNull(linked ? salesItem.getVersion() : null));
+        item.setManufacturingProcessType(trimToNull(linked ? salesItem.getManufacturingProcessType() : null));
         item.setDemandQty(quantity);
         item.setMakeQty(quantity);
         item.setBuyQty(0);
@@ -427,15 +428,6 @@ public class MesProductionDispatchService {
             throw new RuntimeException("Official sales order number is required before MES production dispatch");
         }
         return new SalesOrderResolution(context.header(), saleOrderNo, String.valueOf(context.item().getLineNo()));
-    }
-
-    private LocalDate firstDate(LocalDate... values) {
-        for (LocalDate value : values) {
-            if (value != null) {
-                return value;
-            }
-        }
-        return null;
     }
 
     private SalesOrderResolution resolveSalesOrder(OrderDeliveryTicketAllocation allocation) {
@@ -947,11 +939,14 @@ public class MesProductionDispatchService {
         item.setSaleOrderNo(resolution == null ? trimToNull(allocation.getRfqNo()) : resolution.saleOrderNo());
         item.setSaleOrderItemNo(resolution == null ? null : resolution.saleOrderItemNo());
         item.setProductCode(trimToNull(salesItem.getMaterialNo()));
+        item.setPartNo(trimToNull(salesItem.getPartNo()));
+        item.setVersion(trimToNull(salesItem.getVersion()));
+        item.setManufacturingProcessType(trimToNull(salesItem.getManufacturingProcessType()));
         item.setDemandQty(salesItem.getQty());
         item.setMakeQty(salesItem.getQty());
         item.setBuyQty(0);
         item.setStockQty(0);
-        LocalDate requiredDate = firstDate(salesItem.getInternalDeliveryDate(), salesItem.getSalesOrderDate(), salesHeader.getSalesOrderDate());
+        LocalDate requiredDate = salesItem.getInternalDeliveryDate();
         if (requiredDate != null) {
             item.setRequiredDate(requiredDate.atTime(23, 59, 59));
         }
@@ -1458,10 +1453,7 @@ public class MesProductionDispatchService {
                     ? "sales order item must be directly linked to allocation before MES production dispatch"
                     : context.error();
         }
-        LocalDate requiredDate = firstDate(
-                context.item().getInternalDeliveryDate(),
-                context.item().getSalesOrderDate(),
-                context.header().getSalesOrderDate());
+        LocalDate requiredDate = context.item().getInternalDeliveryDate();
         return productionValidationError(context.item().getQty(), context.item().getMaterialNo(), requiredDate);
     }
 

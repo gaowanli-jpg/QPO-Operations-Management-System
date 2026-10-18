@@ -114,6 +114,12 @@ class MesProductionBatchDispatchIntegrationTest {
                 .containsExactly("10", "20");
         assertThat(request.getItems()).extracting(MesProductionDispatchReq.Item::getProductCode)
                 .containsExactly("MAT-001", "MAT-002");
+        assertThat(request.getItems()).extracting(MesProductionDispatchReq.Item::getPartNo)
+                .containsExactly("P-1", "P-2");
+        assertThat(request.getItems()).extracting(MesProductionDispatchReq.Item::getVersion)
+                .containsExactly("A", "A");
+        assertThat(request.getItems()).extracting(MesProductionDispatchReq.Item::getManufacturingProcessType)
+                .containsExactly("CNC", "CNC");
         assertThat(request.getItems()).extracting(MesProductionDispatchReq.Item::getCustomerRequirements)
                 .containsExactly(
                         "材料名称：Material note P-1\n表面处理：Anodized",
@@ -269,7 +275,9 @@ class MesProductionBatchDispatchIntegrationTest {
         when(fixture.salesItemMapper.selectByIdForUpdate(9404L)).thenReturn(salesItem(9404L, 40, 3404L, null, 4L, "MAT-OK", 2));
         when(fixture.salesItemMapper.selectByIdForUpdate(9405L)).thenReturn(salesItem(9405L, null, 3404L, null, 5L, "MAT-BAD", 2));
         when(fixture.salesItemMapper.selectByIdForUpdate(9406L)).thenReturn(salesItem(9406L, 60, 3404L, null, 6L, null, 2));
-        when(fixture.salesItemMapper.selectByIdForUpdate(9407L)).thenReturn(salesItem(9407L, 70, 3404L, null, 7L, "MAT-NODATE", 2, null));
+        SalesOrderItem missingInternalDate = salesItem(9407L, 70, 3404L, null, 7L, "MAT-NODATE", 2, null);
+        missingInternalDate.setSalesOrderDate(LocalDate.of(2026, 8, 19));
+        when(fixture.salesItemMapper.selectByIdForUpdate(9407L)).thenReturn(missingInternalDate);
         when(fixture.headerMapper.selectById(3404L)).thenReturn(header(3404L, "SO-DOC-VALID"));
         mockReserve(fixture, "QPO-DEM-VALID", List.of(line(4, "QPO-DEML-4", "MAT-OK")));
         when(fixture.client.dispatch(any())).thenReturn(success("QPO-DEM-VALID", item("SO-DOC-VALID", "40", "MAT-OK", "PLAN-OK")));
@@ -534,6 +542,7 @@ class MesProductionBatchDispatchIntegrationTest {
         item.setCustomerProjectNo("CP-9");
         item.setPartNo("P-" + allocationId);
         item.setVersion("A");
+        item.setManufacturingProcessType("CNC");
         item.setMaterialName("Material note P-" + allocationId);
         item.setSurfaceTreatment("Anodized");
         item.setRemark("Rush");

@@ -82,6 +82,9 @@ class MesRealContractTest {
         item.setSaleOrderNo("QPO-MES-E2E-SO-20260812-001");
         item.setSaleOrderItemNo("1");
         item.setProductCode("SY100399000001");
+        item.setPartNo("P-1001");
+        item.setVersion("A");
+        item.setManufacturingProcessType("CNC");
         item.setDemandQty(5);
         item.setMakeQty(5);
         item.setBuyQty(0);
@@ -106,6 +109,9 @@ class MesRealContractTest {
                 .containsEntry("saleOrderNo", "QPO-MES-E2E-SO-20260812-001")
                 .containsEntry("saleOrderItemNo", "1")
                 .containsEntry("productCode", "SY100399000001")
+                .containsEntry("partNo", "P-1001")
+                .containsEntry("version", "A")
+                .containsEntry("manufacturingProcessType", "CNC")
                 .containsEntry("demandQty", 5)
                 .containsEntry("makeQty", 5)
                 .containsEntry("buyQty", 0)
@@ -113,7 +119,7 @@ class MesRealContractTest {
                 .containsEntry("requiredDate", "2026-08-20T23:59:59")
                 .containsEntry("customerRequirements", "材料名称：精密安装板\n表面处理：本色阳极氧化")
                 .containsEntry("remark", "QPO MES E2E production demand")
-                .doesNotContainKeys("allocationId", "ticketId", "sourceType", "sourceOrderId", "sourceItemId", "partNo", "version", "materialNo", "productionQty", "ticketQty", "assemblyRelations");
+                .doesNotContainKeys("allocationId", "ticketId", "sourceType", "sourceOrderId", "sourceItemId", "materialNo", "productionQty", "ticketQty", "assemblyRelations");
         assertThat(row.get("bom")).asList().singleElement().satisfies(bom -> assertThat(castMap(bom))
                 .containsEntry("itemCode", "CHILD-MATERIAL-001")
                 .containsEntry("quantity", 2.5));

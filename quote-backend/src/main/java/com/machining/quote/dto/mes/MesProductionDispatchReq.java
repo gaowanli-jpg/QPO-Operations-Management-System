@@ -241,6 +241,9 @@ public class MesProductionDispatchReq {
         private String saleOrderNo;
         private String saleOrderItemNo;
         private String productCode;
+        private String partNo;
+        private String version;
+        private String manufacturingProcessType;
         private Integer demandQty;
         private Integer makeQty;
         private Integer buyQty;

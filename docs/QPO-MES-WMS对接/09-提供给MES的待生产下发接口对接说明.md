@@ -42,60 +42,44 @@ ERP_MES_TIMEOUT_MS=60000
 
 ## 3. 请求体
 
+QPO 向数据中心发送的生产需求请求使用批量外层结构。Allocation、提单和内部关联字段只用于 QPO 内部认领、状态回写和审计，不会序列化到请求体。
+
 ```json
 {
-  "requestId": "QPO-PROD-20260803-000001",
-  "allocationId": 101,
-  "ticketId": 88,
-  "sourceType": "SALES_ORDER",
-  "sourceOrderId": 12,
-  "sourceItemId": 230,
-  "sourceOrderNo": "SO-20260803-001",
+  "bizId": "QPO-DEM-20261018-A1B2C3D4E5F6",
+  "customerCode": "CUST-001",
   "customerName": "示例客户",
-  "partNo": "P-1001",
-  "version": "A",
-  "materialNo": "MAT-000123",
-  "itemType": "组合件",
-  "allocationType": "PRODUCTION_REQUIRED",
-  "productionQty": 4,
-  "ticketQty": 10,
-  "orderType": "SO01",
-  "internalProjectNo": "IP-20260803-001",
-  "customerOrderNo": "CO-001",
-  "customerProjectNo": "CP-001",
-  "materialName": "铝板",
-  "engineeringMaterialCode": "MAT-AL6061",
-  "engineeringMaterialName": "AL6061",
-  "engineeringMaterialTypeCode": "RAW_MATERIAL",
-  "engineeringMaterialTypeName": "原材料",
-  "engineeringMaterialCategory": "铝",
-  "materialShape": "板材",
-  "surfaceTreatment": "阳极氧化",
-  "description": "生产备注",
-  "remark": "QPO锁库待生产下发",
-  "deliveryDate": "2026-08-20",
-  "processRoute": [
+  "internalProjectNo": "项目-2026-01",
+  "items": [
     {
-      "processCode": "PACKAGING",
-      "categoryName": "包装",
-      "detailName": "精细包装",
-      "unitWorkHours": 1.5,
-      "sortNo": 10
-    }
-  ],
-  "materialGrossWeight": 1.25,
-  "partNetWeight": 0.98,
-  "assemblyRelations": [
-    {
-      "parentItemId": 230,
-      "childItemId": 231,
-      "parentPartNo": "ASM-100",
-      "parentVersion": "A",
-      "childPartNo": "P-1001-01",
-      "childVersion": "A",
-      "qtyPerSet": 2,
-      "sortOrder": 1,
-      "historySourceItemId": 998
+      "saleOrderNo": "SO-2026-001",
+      "saleOrderItemNo": "10",
+      "productCode": "MAT-001",
+      "partNo": "P-1001",
+      "version": "A",
+      "manufacturingProcessType": "CNC",
+      "demandQty": 5,
+      "makeQty": 5,
+      "buyQty": 0,
+      "stockQty": 0,
+      "requiredDate": "2026-11-20T23:59:59",
+      "remark": "零件备注",
+      "customerRequirements": "材料名称：铝合金\n表面处理：阳极氧化",
+      "bom": [
+        {
+          "itemCode": "ENG-MAT-01",
+          "quantity": 2.5
+        }
+      ],
+      "processRoute": [
+        {
+          "programNum": "1",
+          "processName": "数控加工",
+          "processTypeCode": "CNC",
+          "workHour": 1.5,
+          "processDescription": "加工说明"
+        }
+      ]
     }
   ]
 }
@@ -118,48 +102,33 @@ ERP_MES_TIMEOUT_MS=60000
 
 | 字段 | 必填 | 来源 / 含义 |
 | --- | --- | --- |
-| `requestId` | 是 | QPO 生成的本次生产下发唯一请求号，用于日志和幂等排查。 |
-| `allocationId` | 是 | `order_delivery_ticket_allocation.id`。 |
-| `ticketId` | 是 | `order_delivery_ticket.id`，原始提单行 ID。 |
-| `sourceType` | 是 | `RFQ` 或 `SALES_ORDER`。 |
-| `sourceOrderId` | 是 | 来源订单主表 ID。 |
-| `sourceItemId` | 是 | 来源零件主表 ID；RFQ 对应 `item_quote_version.id`，销售订单对应 `sales_order_item.id`。 |
-| `sourceOrderNo` | 是 | RFQ 号或销售订单号。 |
-| `customerName` | 是 | 来源订单客户名称。 |
-| `partNo` | 是 | 图号。 |
-| `version` | 否 | 版本，空版本传空字符串。 |
-| `materialNo` | 是 | 已确认物料号。 |
-| `itemType` | 否 | 普通件 / 组合件等零件类型。 |
-| `allocationType` | 是 | 只允许 `PRODUCTION_REQUIRED`。 |
-| `productionQty` | 是 | 本次待生产数量，即 allocation 当前 `qty`。 |
-| `ticketQty` | 是 | 原始提单数量快照，即 `order_delivery_ticket_allocation.ticket_qty`。 |
-| `orderType` | 否 | 来源订单类型 / 单据类型编码。 |
-| `internalProjectNo` | 否 | 内部项目号。 |
-| `customerOrderNo` | 否 | 客户订单号。 |
-| `customerProjectNo` | 否 | 客户项目号。 |
-| `materialName` | 否 | 生产侧有效材料名称。QPO 按 `engineeringMaterialName -> materialData.name -> 导入材料 material_name` 降级得到，用于 MES 生产侧识别材料。 |
-| `engineeringMaterialCode` | 否 | 工程材料编码，来自 `order_delivery_ticket_allocation.engineering_material_code` 快照。 |
-| `engineeringMaterialName` | 否 | 真实材料 / 核价材料名称，来源于 RFQ 核价或销售匹配补全的 `engineering_material_name`；为空时可结合 `materialData.name` 理解。 |
-| `engineeringMaterialTypeCode` | 否 | 工程材料类型编码，来自材料类型字典快照，例如 `RAW_MATERIAL`。 |
-| `engineeringMaterialTypeName` | 否 | 工程材料类型名称，来自材料类型字典快照，例如 `原材料`。 |
-| `engineeringMaterialCategory` | 否 | 材质分类，保存钢铁、铝、塑料等分类快照。 |
-| `materialShape` | 否 | 材料形态，来自显式快照字段；通常为 `板材 / 棒材 / 管材`，来源于核价材料快照里的 `materialData.shape`。 |
-| `surfaceTreatment` | 否 | 表面处理。 |
-| `description` | 否 | 说明。 |
-| `remark` | 否 | 备注。 |
-| `deliveryDate` | 否 | 交货日期。 |
-| `processRoute` | 否 | 结构化工艺路线数组。每行只传 `processCode`、`categoryName`、`detailName`、`unitWorkHours`、`sortNo`；不传 QPO 内部工艺成本字段，如 `hourlyRate`、`unitRate`、`lineCost`、`cost`。 |
-| `materialGrossWeight` | 否 | 材料毛重。 |
-| `partNetWeight` | 否 | 零件净重。 |
-| `assemblyRelations` | 是 | 组合件父子关系数组；普通件或无父子关系时传空数组。 |
+| `bizId` | 是 | QPO 生成的本次批量生产下发唯一业务号。 |
+| `customerCode` | 否 | 销售订单客户编码。 |
+| `customerName` | 否 | 销售订单客户名称。 |
+| `internalProjectNo` | 否 | 本批次销售订单零件的内部项目号。 |
+| `items[].saleOrderNo` | 是 | `sales_order_header.document_no`，为空时使用销售订单号。 |
+| `items[].saleOrderItemNo` | 是 | `sales_order_item.line_no`，即销售订单内的系统零件行号，不是数据库主键 `id`。 |
+| `items[].productCode` | 是 | 关联销售订单零件行当前物料号。 |
+| `items[].partNo` | 否 | 关联销售订单零件行当前图号。 |
+| `items[].version` | 否 | 关联销售订单零件行当前版本。 |
+| `items[].manufacturingProcessType` | 否 | 关联销售订单零件行当前制造加工类型。 |
+| `items[].demandQty` | 是 | 关联销售订单零件行当前数量。 |
+| `items[].makeQty` | 是 | 本次 MES 生产数量，与 `demandQty` 相同。 |
+| `items[].buyQty` | 是 | 外购数量，当前固定为 `0`。 |
+| `items[].stockQty` | 是 | 库存数量，当前固定为 `0`。 |
+| `items[].requiredDate` | 是 | 只取 `sales_order_item.internal_delivery_date`；有值时补为当天 `23:59:59`，没有内部交期则不使用其他日期兜底并阻止下发。 |
+| `items[].remark` | 否 | 关联销售订单零件行当前备注。 |
+| `items[].customerRequirements` | 否 | 由当前材料名称和表面处理拼接。 |
+| `items[].bom` | 否 | 工程材料编码和毛重生成的 BOM 摘要。 |
+| `items[].processRoute` | 否 | 当前销售订单零件行的结构化工艺路线。 |
 
 数量口径：
 
 ```text
-已入库库存锁定数量 + 在产库存锁定数量 + productionQty = ticketQty
+已入库库存锁定数量 + 在产库存锁定数量 + demandQty = 销售订单零件当前数量
 ```
 
-其中 `productionQty` 只表示本次需要 MES 生产的剩余数量，`ticketQty` 表示锁库前的原始提单数量。
+其中 `demandQty` 和 `makeQty` 表示本次需要 MES 生产的销售订单零件当前数量。提单和 Allocation 的数量快照只用于 QPO 内部兼容与追溯，不作为该请求体的业务来源。
 
 ## 5. BOM 与组合件父子关系
 
