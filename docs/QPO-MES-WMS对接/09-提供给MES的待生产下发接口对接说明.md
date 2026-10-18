@@ -3,9 +3,9 @@
 
 > 数据中心统一对接阶段 8 收口：本接口说明交付对象为数据中心。QPO 生产下发底层调用使用 `MES_PRODUCTION_DISPATCH` endpoint，链路为 `QPO -> 数据中心 -> MES`，数据中心负责转发到 MES 生产接口；MES 具体接收 path 由数据中心和 MES 团队在数据中心侧维护。
 
-> 2026-08-08 两级工艺主数据阶段 15 收口：本接口只发送结构化工艺路线 `processCode / categoryName / detailName / unitWorkHours / sortNo`。`hourlyRate / unitRate / lineCost / cost` 等 QPO 内部核价成本字段只保留在 QPO 快照和内部展示中，不进入 MES 生产下发请求。
+> 2026-08-08 两级工艺主数据阶段 15 收口：本接口只发送结构化工艺路线 `processCode / categoryName / detailName / unitWorkHours / sortNo`。不传 QPO 内部工艺成本字段，具体包括 `hourlyRate / unitRate / lineCost / cost`；这些字段只保留在 QPO 快照和内部展示中，不进入 MES 生产下发请求。
 
-> 2026-08-09 材料主数据阶段 10 收口：本接口只发送工程材料身份摘要字段 `engineeringMaterialCode / engineeringMaterialTypeCode / engineeringMaterialTypeName / engineeringMaterialCategory / engineeringMaterialName / materialShape`。材料编码和材料类型用于 MES 生产侧识别或追溯材料摘要，材质分类与材料形态分开；完整 `materialData`、完整材料价格矩阵和 QPO 内部材料成本不进入 MES 生产下发请求。
+> 2026-08-09 材料主数据阶段 10 收口：本接口只发送工程材料身份摘要字段 `engineeringMaterialCode / engineeringMaterialTypeCode / engineeringMaterialTypeName / engineeringMaterialCategory / engineeringMaterialName / materialShape`。单独字段 `materialShape` 表示材料形态，来源于 `materialData.shape`，示例为 `板材 / 棒材 / 管材`。材料编码和材料类型用于 MES 生产侧识别或追溯材料摘要，材质分类与材料形态分开；完整 `materialData`、完整材料价格矩阵和 QPO 内部材料成本不进入 MES 生产下发请求。
 
 > 2026-08-13 MES 主数据同步阶段 9 收口：MES 工艺/材料主数据同步后，QPO 生产下发 DTO 字段名不变，payload 仍满足 `processRoute[].processTypeCode = QPO processCode = MES code`、`processRoute[].processName = QPO detailName`、`bom[].itemCode = QPO engineeringMaterialCode = MES material code`、`bom[].quantity = QPO materialGrossWeight kg`。同步只保证字典和报价快照使用 MES 编码体系，不把 QPO 单价、完整材料价格矩阵、完整请求/响应或 token 写入 MES 下发 payload。
 
@@ -57,6 +57,7 @@ QPO 向数据中心发送的生产需求请求使用批量外层结构。Allocat
       "productCode": "MAT-001",
       "partNo": "P-1001",
       "version": "A",
+      "materialShape": "板材",
       "manufacturingProcessType": "CNC",
       "demandQty": 5,
       "makeQty": 5,
@@ -111,6 +112,7 @@ QPO 向数据中心发送的生产需求请求使用批量外层结构。Allocat
 | `items[].productCode` | 是 | 关联销售订单零件行当前物料号。 |
 | `items[].partNo` | 否 | 关联销售订单零件行当前图号。 |
 | `items[].version` | 否 | 关联销售订单零件行当前版本。 |
+| `items[].materialShape` | 否 | 材料形态，来源于材料快照 `materialData.shape`；示例为 `板材 / 棒材 / 管材`。 |
 | `items[].manufacturingProcessType` | 否 | 关联销售订单零件行当前制造加工类型。 |
 | `items[].demandQty` | 是 | 关联销售订单零件行当前数量。 |
 | `items[].makeQty` | 是 | 本次 MES 生产数量，与 `demandQty` 相同。 |
