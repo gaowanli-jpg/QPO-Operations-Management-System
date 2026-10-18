@@ -110,15 +110,6 @@
                 <el-form-item label="制造加工类型">
                   <el-input v-model="releaseForm.manufacturingProcessType" placeholder="请输入制造加工类型（可选）" maxlength="120" clearable />
                 </el-form-item>
-                <el-form-item label="备用字段1">
-                  <el-input v-model="releaseForm.reservedField1" placeholder="请输入备用字段1（可选）" maxlength="120" clearable />
-                </el-form-item>
-                <el-form-item label="备用字段2">
-                  <el-input v-model="releaseForm.reservedField2" placeholder="请输入备用字段2（可选）" maxlength="120" clearable />
-                </el-form-item>
-                <el-form-item label="备用字段3">
-                  <el-input v-model="releaseForm.reservedField3" placeholder="请输入备用字段3（可选）" maxlength="120" clearable />
-                </el-form-item>
                 <el-form-item label="客户下单抬头">
                   <el-input v-model="releaseForm.customerOrderTitle" placeholder="请输入客户下单抬头（可选）" maxlength="255" clearable />
                 </el-form-item>
@@ -137,6 +128,15 @@
                     <el-option label="加急" value="加急" />
                     <el-option label="备货" value="备货" />
                   </el-select>
+                </el-form-item>
+                <el-form-item label="备用字段1">
+                  <el-input v-model="releaseForm.reservedField1" placeholder="请输入备用字段1（可选）" maxlength="120" clearable />
+                </el-form-item>
+                <el-form-item label="备用字段2">
+                  <el-input v-model="releaseForm.reservedField2" placeholder="请输入备用字段2（可选）" maxlength="120" clearable />
+                </el-form-item>
+                <el-form-item label="备用字段3">
+                  <el-input v-model="releaseForm.reservedField3" placeholder="请输入备用字段3（可选）" maxlength="120" clearable />
                 </el-form-item>
               </el-form>
             </section>
@@ -552,7 +552,7 @@
                 </template>
               </el-table-column>
               <el-table-column
-                v-for="field in manufacturingFields"
+                v-for="field in manufacturingTypeFields"
                 :key="field.key"
                 :label="field.label"
                 width="240"
@@ -656,6 +656,36 @@
                 </template>
               </el-table-column>
               <el-table-column prop="status" label="状态" width="110" align="center" />
+              <el-table-column
+                v-for="field in reservedFields"
+                :key="field.key"
+                :label="field.label"
+                width="240"
+                show-overflow-tooltip
+              >
+                <template #default="{ row }">
+                  <div class="row-field-editor row-order-field-editor">
+                    <el-input
+                      v-model="row[`${field.key}Draft`]"
+                      size="small"
+                      maxlength="120"
+                      clearable
+                      :placeholder="orderFieldPlaceholder(row, field.key)"
+                      :disabled="!canEditReleaseItemOrderFields(row)"
+                      class="row-order-field-input"
+                    />
+                    <el-button
+                      v-permission="'market:release:create'"
+                      size="small"
+                      type="primary"
+                      plain
+                      :disabled="!canEditReleaseItemOrderFields(row) || !hasUnsavedOrderFieldDraft(row, field.key) || isOrderFieldSaving(row, field.key) || submitting"
+                      :loading="isOrderFieldSaving(row, field.key)"
+                      @click.stop="saveReleaseItemOrderField(row, field.key)"
+                    >保存</el-button>
+                  </div>
+                </template>
+              </el-table-column>
             </el-table>
             <div v-if="releaseItemTotal" class="erp-pagination">
               <el-pagination
@@ -1172,6 +1202,8 @@ const manufacturingFields = [
   { key: 'reservedField2', label: '备用字段2' },
   { key: 'reservedField3', label: '备用字段3' },
 ]
+const manufacturingTypeFields = manufacturingFields.slice(0, 1)
+const reservedFields = manufacturingFields.slice(1)
 
 const orderFieldPlaceholder = (row, field) => {
   if (normalizeOrderFieldDraft(row?.[field])) return ''

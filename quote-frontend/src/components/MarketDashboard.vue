@@ -214,6 +214,9 @@
                           :disabled="isPending(IMPORT_SALES_ORDER_ACTION_KEY)"
                         />
                       </el-form-item>
+                      <el-form-item label="制造加工类型">
+                        <el-input v-model.trim="salesOrderForm.manufacturingProcessType" placeholder="请输入制造加工类型" maxlength="120" clearable :disabled="isPending(IMPORT_SALES_ORDER_ACTION_KEY)" />
+                      </el-form-item>
                       <el-form-item label="客户项目号">
                         <el-input
                           v-model.trim="salesOrderForm.customerProjectNo"
@@ -223,17 +226,8 @@
                           :disabled="isPending(IMPORT_SALES_ORDER_ACTION_KEY)"
                         />
                       </el-form-item>
-                      <el-form-item label="制造加工类型">
-                        <el-input v-model.trim="salesOrderForm.manufacturingProcessType" placeholder="请输入制造加工类型" maxlength="120" clearable :disabled="isPending(IMPORT_SALES_ORDER_ACTION_KEY)" />
-                      </el-form-item>
                       <el-form-item label="备用字段1">
                         <el-input v-model.trim="salesOrderForm.reservedField1" placeholder="请输入备用字段1" maxlength="120" clearable :disabled="isPending(IMPORT_SALES_ORDER_ACTION_KEY)" />
-                      </el-form-item>
-                      <el-form-item label="备用字段2">
-                        <el-input v-model.trim="salesOrderForm.reservedField2" placeholder="请输入备用字段2" maxlength="120" clearable :disabled="isPending(IMPORT_SALES_ORDER_ACTION_KEY)" />
-                      </el-form-item>
-                      <el-form-item label="备用字段3">
-                        <el-input v-model.trim="salesOrderForm.reservedField3" placeholder="请输入备用字段3" maxlength="120" clearable :disabled="isPending(IMPORT_SALES_ORDER_ACTION_KEY)" />
                       </el-form-item>
                       <el-form-item label="客户下单抬头">
                         <el-input
@@ -244,6 +238,9 @@
                           :disabled="isPending(IMPORT_SALES_ORDER_ACTION_KEY)"
                         />
                       </el-form-item>
+                      <el-form-item label="备用字段2">
+                        <el-input v-model.trim="salesOrderForm.reservedField2" placeholder="请输入备用字段2" maxlength="120" clearable :disabled="isPending(IMPORT_SALES_ORDER_ACTION_KEY)" />
+                      </el-form-item>
                       <el-form-item label="内部项目号">
                         <el-input
                           v-model.trim="salesOrderForm.internalProjectNo"
@@ -252,6 +249,9 @@
                           clearable
                           :disabled="isPending(IMPORT_SALES_ORDER_ACTION_KEY)"
                         />
+                      </el-form-item>
+                      <el-form-item label="备用字段3">
+                        <el-input v-model.trim="salesOrderForm.reservedField3" placeholder="请输入备用字段3" maxlength="120" clearable :disabled="isPending(IMPORT_SALES_ORDER_ACTION_KEY)" />
                       </el-form-item>
                     </div>
                   </div>

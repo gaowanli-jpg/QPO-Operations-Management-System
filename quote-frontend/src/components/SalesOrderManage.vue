@@ -569,7 +569,7 @@
                 </template>
               </el-table-column>
               <el-table-column
-                v-for="field in manufacturingFields"
+                v-for="field in manufacturingTypeFields"
                 :key="field.key"
                 :prop="field.key"
                 :label="field.label"
@@ -716,6 +716,27 @@
                     placeholder="备注"
                   />
                   <span v-else>{{ row.remark || '-' }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column
+                v-for="field in reservedFields"
+                :key="field.key"
+                :prop="field.key"
+                :label="field.label"
+                min-width="180"
+                show-overflow-tooltip
+              >
+                <template #default="{ row }">
+                  <el-input
+                    v-if="itemDrafts[row.id]"
+                    v-model="itemDrafts[row.id][field.key]"
+                    class="item-edit-input"
+                    maxlength="120"
+                    clearable
+                    :disabled="salesOrderEditLocked"
+                    :placeholder="field.label"
+                  />
+                  <span v-else>{{ row[field.key] || '-' }}</span>
                 </template>
               </el-table-column>
             </el-table>
@@ -1124,6 +1145,8 @@ const manufacturingFields = [
   { key: 'reservedField2', label: '备用字段2' },
   { key: 'reservedField3', label: '备用字段3' },
 ]
+const manufacturingTypeFields = manufacturingFields.slice(0, 1)
+const reservedFields = manufacturingFields.slice(1)
 const SALES_ORDER_HEADER_EDITABLE_FIELDS = [
   ...manufacturingFields.map(field => field.key),
   'documentTypeCode',
@@ -1153,7 +1176,7 @@ const SALES_ORDER_ITEM_EDITABLE_FIELDS = [
   'remark'
 ]
 const SALES_ORDER_ITEM_FIELD_REPLACEMENTS = [
-  ...manufacturingFields.map(field => ({ ...field, type: 'text' })),
+  ...manufacturingTypeFields.map(field => ({ ...field, type: 'text' })),
   { key: 'customerOrderTitle', label: '客户下单抬头', type: 'text' },
   { key: 'customerOrderNo', label: '客户订单号', type: 'text' },
   { key: 'customerProjectNo', label: '客户项目号', type: 'text' },
