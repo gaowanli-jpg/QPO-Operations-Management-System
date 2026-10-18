@@ -49,6 +49,7 @@
             <el-table-column prop="salesOrderNo" label="销售订单号" min-width="170" fixed show-overflow-tooltip />
             <el-table-column prop="customerOrderNo" label="客户订单号" min-width="150" show-overflow-tooltip />
             <el-table-column prop="customerProjectNo" label="客户项目号" min-width="140" show-overflow-tooltip />
+            <el-table-column prop="manufacturingProcessType" label="制造加工类型" min-width="160" show-overflow-tooltip />
             <el-table-column prop="internalProjectNo" label="内部项目号" min-width="140" show-overflow-tooltip />
             <el-table-column prop="documentTypeCode" label="单据类型编码" width="130" />
             <el-table-column prop="status" label="状态" width="120" align="center">
@@ -142,6 +143,10 @@
           <el-descriptions-item label="销售订单号">{{ orderDetail.orderInfo?.salesOrderNo || '-' }}</el-descriptions-item>
           <el-descriptions-item label="客户订单号">{{ orderDetail.orderInfo?.customerOrderNo || '-' }}</el-descriptions-item>
           <el-descriptions-item label="客户项目号">{{ orderDetail.orderInfo?.customerProjectNo || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="制造加工类型">{{ orderDetail.orderInfo?.manufacturingProcessType || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="备用字段1">{{ orderDetail.orderInfo?.reservedField1 || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="备用字段2">{{ orderDetail.orderInfo?.reservedField2 || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="备用字段3">{{ orderDetail.orderInfo?.reservedField3 || '-' }}</el-descriptions-item>
           <el-descriptions-item label="内部项目号">{{ orderDetail.orderInfo?.internalProjectNo || '-' }}</el-descriptions-item>
           <el-descriptions-item label="状态">{{ orderDetail.orderInfo?.status || '-' }}</el-descriptions-item>
           <el-descriptions-item label="U9状态">{{ orderDetail.orderInfo?.u9SyncStatus || '-' }}</el-descriptions-item>
@@ -196,6 +201,18 @@
             </el-form-item>
             <el-form-item label="客户项目号">
               <el-input v-model="orderEditDraft.customerProjectNo" clearable :disabled="salesOrderEditLocked" placeholder="客户项目号" />
+            </el-form-item>
+            <el-form-item label="制造加工类型">
+              <el-input v-model="orderEditDraft.manufacturingProcessType" maxlength="120" clearable :disabled="salesOrderEditLocked" placeholder="制造加工类型" />
+            </el-form-item>
+            <el-form-item label="备用字段1">
+              <el-input v-model="orderEditDraft.reservedField1" maxlength="120" clearable :disabled="salesOrderEditLocked" placeholder="备用字段1" />
+            </el-form-item>
+            <el-form-item label="备用字段2">
+              <el-input v-model="orderEditDraft.reservedField2" maxlength="120" clearable :disabled="salesOrderEditLocked" placeholder="备用字段2" />
+            </el-form-item>
+            <el-form-item label="备用字段3">
+              <el-input v-model="orderEditDraft.reservedField3" maxlength="120" clearable :disabled="salesOrderEditLocked" placeholder="备用字段3" />
             </el-form-item>
             <el-form-item label="客户下单抬头">
               <el-input v-model="orderEditDraft.customerOrderTitle" clearable :disabled="salesOrderEditLocked" placeholder="客户下单抬头" />
@@ -549,6 +566,27 @@
                     placeholder="客户项目号"
                   />
                   <span v-else>{{ row.customerProjectNo || '-' }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column
+                v-for="field in manufacturingFields"
+                :key="field.key"
+                :prop="field.key"
+                :label="field.label"
+                min-width="180"
+                show-overflow-tooltip
+              >
+                <template #default="{ row }">
+                  <el-input
+                    v-if="itemDrafts[row.id]"
+                    v-model="itemDrafts[row.id][field.key]"
+                    class="item-edit-input"
+                    maxlength="120"
+                    clearable
+                    :disabled="salesOrderEditLocked"
+                    :placeholder="field.label"
+                  />
+                  <span v-else>{{ row[field.key] || '-' }}</span>
                 </template>
               </el-table-column>
               <el-table-column prop="internalProjectNo" label="内部项目号" min-width="160" show-overflow-tooltip>
@@ -1080,7 +1118,14 @@ const salesOrderActionKeys = {
   productionTaskNoticeExport: (orderId) => `sales-order:production-task-notice-export:${orderId || 'none'}`,
   wmsAllocation: (orderId) => `sales-order:wms-allocation:${orderId || 'none'}`
 }
+const manufacturingFields = [
+  { key: 'manufacturingProcessType', label: '制造加工类型' },
+  { key: 'reservedField1', label: '备用字段1' },
+  { key: 'reservedField2', label: '备用字段2' },
+  { key: 'reservedField3', label: '备用字段3' },
+]
 const SALES_ORDER_HEADER_EDITABLE_FIELDS = [
+  ...manufacturingFields.map(field => field.key),
   'documentTypeCode',
   'salesOrderDate',
   'customerOrderNo',
@@ -1090,6 +1135,7 @@ const SALES_ORDER_HEADER_EDITABLE_FIELDS = [
   'internalProjectNo'
 ]
 const SALES_ORDER_ITEM_EDITABLE_FIELDS = [
+  ...manufacturingFields.map(field => field.key),
   'qty',
   'status',
   'untaxedUnitPrice',
@@ -1107,6 +1153,7 @@ const SALES_ORDER_ITEM_EDITABLE_FIELDS = [
   'remark'
 ]
 const SALES_ORDER_ITEM_FIELD_REPLACEMENTS = [
+  ...manufacturingFields.map(field => ({ ...field, type: 'text' })),
   { key: 'customerOrderTitle', label: '客户下单抬头', type: 'text' },
   { key: 'customerOrderNo', label: '客户订单号', type: 'text' },
   { key: 'customerProjectNo', label: '客户项目号', type: 'text' },
@@ -1201,6 +1248,10 @@ const currentDrawingFolderUrl = ref('')
 const currentDrawingFolderTitle = ref('')
 const customerPickerVisible = ref(false)
 const orderEditDraft = reactive({
+  manufacturingProcessType: '',
+  reservedField1: '',
+  reservedField2: '',
+  reservedField3: '',
   documentTypeCode: '',
   salesOrderDate: '',
   customerOrderNo: '',
@@ -1847,6 +1898,10 @@ const resetItemDrafts = (rows = []) => {
 }
 
 const buildItemDraft = (row = {}) => ({
+  manufacturingProcessType: draftValue(row.manufacturingProcessType),
+  reservedField1: draftValue(row.reservedField1),
+  reservedField2: draftValue(row.reservedField2),
+  reservedField3: draftValue(row.reservedField3),
   qty: row.qty ?? null,
   status: draftValue(row.status),
   untaxedUnitPrice: draftValue(row.untaxedUnitPrice),

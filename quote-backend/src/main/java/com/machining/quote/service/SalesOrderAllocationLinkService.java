@@ -474,6 +474,10 @@ public class SalesOrderAllocationLinkService {
         item.setOrderType(source.getOrderType());
         item.setCustomerOrderNo(source.getCustomerOrderNo());
         item.setCustomerProjectNo(source.getCustomerProjectNo());
+        item.setManufacturingProcessType(source.getManufacturingProcessType());
+        item.setReservedField1(source.getReservedField1());
+        item.setReservedField2(source.getReservedField2());
+        item.setReservedField3(source.getReservedField3());
         item.setCustomerOrderTitle(source.getCustomerOrderTitle());
         item.setInternalProjectNo(source.getInternalProjectNo());
         item.setMaterialNo(source.getMaterialNo());

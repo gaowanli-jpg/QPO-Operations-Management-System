@@ -15,5 +15,9 @@ public class SalesOrderQpoOrderGroupDTO {
     private String customerProjectNo;
     private String customerOrderTitle;
     private String orderType;
+    private String manufacturingProcessType;
+    private String reservedField1;
+    private String reservedField2;
+    private String reservedField3;
     private List<SalesOrderQpoExcelLineDTO> lines = new ArrayList<>();
 }

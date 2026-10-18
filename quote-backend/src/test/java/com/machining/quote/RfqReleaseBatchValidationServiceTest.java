@@ -6,6 +6,7 @@ import com.machining.quote.dto.ReleaseSourceType;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.mapper.OrderRfqMapper;
+import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.service.DataScopeService;
 import com.machining.quote.service.RfqReleaseBatchValidationService;
 import org.junit.jupiter.api.BeforeEach;
@@ -20,16 +21,28 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.anyList;
 
 class RfqReleaseBatchValidationServiceTest {
     private RfqReleaseBatchValidationService service;
     private OrderRfqMapper orderMapper;
+    private ItemQuoteVersionMapper itemMapper;
     private DataScopeService dataScopeService;
 
     @BeforeEach
     void setUp() {
         service = new RfqReleaseBatchValidationService();
         orderMapper = mock(OrderRfqMapper.class);
+        itemMapper = mock(ItemQuoteVersionMapper.class);
+        when(itemMapper.selectBatchIds(anyList())).thenAnswer(invocation -> {
+            List<Integer> ids = invocation.getArgument(0);
+            return ids.stream().map(id -> {
+                ItemQuoteVersion item = new ItemQuoteVersion();
+                item.setId(id);
+                return item;
+            }).toList();
+        });
+        ReflectionTestUtils.setField(service, "itemMapper", itemMapper);
         dataScopeService = mock(DataScopeService.class);
         ReflectionTestUtils.setField(service, "orderRfqMapper", orderMapper);
         ReflectionTestUtils.setField(service, "dataScopeService", dataScopeService);

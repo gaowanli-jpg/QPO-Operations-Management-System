@@ -57,6 +57,83 @@ import static org.mockito.Mockito.when;
 
 class SalesOrderMaintenanceServiceTest {
     @Test
+    void excelReplacementUpdatesAndClearsManufacturingFields() {
+        Fixture fixture = fixture();
+        SalesOrderHeader header = header(10L, "未同步");
+        SalesOrderItem row = item(101L, 10L);
+        row.setReservedField1("原备用1");
+        fixture.withOrder(header, List.of(row));
+        byte[] bytes = excel(List.of("图号", "版本", "制造加工类型", "备用字段1", "备用字段2", "备用字段3"),
+                List.of(row.getPartNo(), row.getVersion(), "新加工", "新备用1", "新备用2", "新备用3"));
+        var preview = fixture.replacementService.preview(header.getId(), new ByteArrayInputStream(bytes));
+        fixture.replacementService.confirm(header.getId(), new ByteArrayInputStream(bytes), preview.getPreviewFingerprint());
+        assertThat(row.getManufacturingProcessType()).isEqualTo("新加工");
+        assertThat(row.getReservedField1()).isEqualTo("新备用1");
+        assertThat(row.getReservedField2()).isEqualTo("新备用2");
+        assertThat(row.getReservedField3()).isEqualTo("新备用3");
+    }
+
+    @Test
+    void manufacturingDefaultsDoNotCascadeAndItemValuesCanBeCleared() {
+        Fixture fixture = fixture();
+        SalesOrderHeader header = header(10L, "未同步");
+        SalesOrderItem row = item(101L, 10L);
+        row.setManufacturingProcessType("零件制造类型");
+        row.setReservedField1("零件备用1");
+        row.setReservedField2("零件备用2");
+        row.setReservedField3("零件备用3");
+        SalesOrderItem blank = item(102L, 10L);
+        fixture.withOrder(header, List.of(row, blank));
+        SalesOrderMaintenanceOrderUpdateReq orderReq = new SalesOrderMaintenanceOrderUpdateReq();
+        orderReq.setManufacturingProcessType(" 订单制造类型 ");
+        orderReq.setReservedField1("订单备用1");
+        orderReq.setReservedField2("订单备用2");
+        orderReq.setReservedField3("订单备用3");
+
+        fixture.maintenanceService.saveOrder(header.getId(), orderReq);
+
+        assertThat(header.getManufacturingProcessType()).isEqualTo("订单制造类型");
+        assertThat(row.getManufacturingProcessType()).isEqualTo("零件制造类型");
+        assertThat(blank.getManufacturingProcessType()).isNull();
+        assertThat(blank.getReservedField1()).isNull();
+        verify(fixture.itemMapper, never()).update(isNull(), any(UpdateWrapper.class));
+
+        SalesOrderItemUpdateLineReq line = new SalesOrderItemUpdateLineReq();
+        line.setSalesOrderItemId(row.getId());
+        line.setManufacturingProcessType(" ");
+        line.setReservedField1(null);
+        line.setReservedField2("");
+        line.setReservedField3(null);
+        SalesOrderItemUpdateReq itemReq = new SalesOrderItemUpdateReq();
+        itemReq.setItems(List.of(line));
+        fixture.maintenanceService.saveItems(header.getId(), itemReq);
+
+        assertThat(row.getManufacturingProcessType()).isNull();
+        assertThat(row.getReservedField1()).isNull();
+        assertThat(row.getReservedField2()).isNull();
+        assertThat(row.getReservedField3()).isNull();
+        orderReq.setManufacturingProcessType(null);
+        orderReq.setReservedField1(null);
+        orderReq.setReservedField2(null);
+        orderReq.setReservedField3(null);
+        fixture.maintenanceService.saveOrder(header.getId(), orderReq);
+        assertThat(header.getManufacturingProcessType()).isNull();
+        assertThat(header.getReservedField1()).isNull();
+    }
+
+    @Test
+    void rejectsManufacturingFieldsLongerThan120Characters() {
+        Fixture fixture = fixture();
+        SalesOrderHeader header = header(10L, "未同步");
+        fixture.withOrder(header, List.of(item(101L, 10L)));
+        SalesOrderMaintenanceOrderUpdateReq req = new SalesOrderMaintenanceOrderUpdateReq();
+        req.setManufacturingProcessType("字".repeat(121));
+        assertThatThrownBy(() -> fixture.maintenanceService.saveOrder(header.getId(), req))
+                .hasMessageContaining("120");
+        verify(fixture.headerMapper, never()).update(isNull(), any(UpdateWrapper.class));
+    }
+
+    @Test
     void controllerExposesSalesOrderMaintenanceWriteApisWithSalesOrderUpdatePermission() throws Exception {
         assertRoute("saveOrder", new Class<?>[]{Long.class, SalesOrderMaintenanceOrderUpdateReq.class},
                 PutMapping.class, "/orders/{salesOrderId}", "market:sales-order:update");

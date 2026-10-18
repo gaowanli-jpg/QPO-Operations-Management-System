@@ -81,6 +81,11 @@ class RfqReleaseAppendSalesOrderIntegrationTest {
     void appendsRfqReleaseLinesToExistingUnsyncedSalesOrderWithItemFieldsFirstAndReplaysIdempotently() {
         String suffix = String.valueOf(System.nanoTime());
         SalesOrderHeader target = targetSalesOrder("APPEND-CUST-" + suffix, "同步失败");
+        target.setManufacturingProcessType("目标订单加工");
+        target.setReservedField1("目标备用1");
+        target.setReservedField2("目标备用2");
+        target.setReservedField3("目标备用3");
+        headerMapper.updateById(target);
         SalesOrderItem existing = existingSalesItem(target, 5);
         OrderRfq rfq = rfq(target, "APPEND-RFQ-" + suffix);
         ItemQuoteVersion parent = rfqItem(rfq, "APPEND-PARENT-" + suffix, 2, 10, true);
@@ -88,6 +93,8 @@ class RfqReleaseAppendSalesOrderIntegrationTest {
         parent.setSalesOrderDate(LocalDate.of(2026, 9, 9));
         parent.setCustomerOrderNo("ROW-PO-SHOULD-WIN");
         parent.setCustomerProjectNo("ROW-CP-SHOULD-WIN");
+        parent.setManufacturingProcessType("零件加工");
+        parent.setReservedField1("零件备用1");
         parent.setCustomerOrderTitle("ROW-TITLE-SHOULD-WIN");
         parent.setOrderType("正式订单");
         parent.setInternalProjectNo("ROW-INTERNAL-SHOULD-WIN");
@@ -130,6 +137,13 @@ class RfqReleaseAppendSalesOrderIntegrationTest {
         SalesOrderItem childSalesItem = appendedBySource.get(child.getId().longValue());
         assertThat(parentSalesItem).isNotNull();
         assertThat(childSalesItem).isNotNull();
+        assertThat(parentSalesItem.getManufacturingProcessType()).isEqualTo("零件加工");
+        assertThat(parentSalesItem.getReservedField1()).isEqualTo("零件备用1");
+        assertThat(parentSalesItem.getReservedField2()).isEqualTo("目标备用2");
+        assertThat(childSalesItem.getManufacturingProcessType()).isEqualTo("目标订单加工");
+        assertThat(childSalesItem.getReservedField1()).isEqualTo("目标备用1");
+        assertThat(childSalesItem.getReservedField2()).isEqualTo("目标备用2");
+        assertThat(childSalesItem.getReservedField3()).isEqualTo("目标备用3");
         assertThat(parentSalesItem.getSourceType()).isEqualTo("RFQ");
         assertThat(parentSalesItem.getSourceTicketId()).isNotNull();
         assertThat(parentSalesItem.getCustomerOrderNo()).isEqualTo("ROW-PO-SHOULD-WIN");
@@ -194,6 +208,11 @@ class RfqReleaseAppendSalesOrderIntegrationTest {
         assertThat(salesItems(target.getId())).hasSize(3);
         assertThat(ticketCount(rfq.getId())).isEqualTo(2);
         verifyNoInteractions(autoMesMaterialSyncService);
+
+        parent.setReservedField1("changed-after-append");
+        itemMapper.updateById(parent);
+        assertThatThrownBy(() -> deliveryService.appendRfqReleaseToSalesOrder(req))
+                .hasMessageContaining("追加批次参数与首次提交不一致");
 
         ItemQuoteVersion reloadedParent = itemMapper.selectById(parent.getId());
         assertThat(reloadedParent.getCustomerOrderNo()).isEqualTo("ROW-PO-SHOULD-WIN");

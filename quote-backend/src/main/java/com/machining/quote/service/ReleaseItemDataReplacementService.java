@@ -1,6 +1,7 @@
 package com.machining.quote.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.machining.quote.config.AuthContext;
 import com.machining.quote.config.DataScopeAccessDeniedException;
 import com.machining.quote.config.PreviewFingerprintConflictException;
@@ -349,7 +350,23 @@ public class ReleaseItemDataReplacementService {
                 applyChange(item, change);
                 changedFieldCounts.merge(change.getField(), 1, Integer::sum);
             }
-            if (itemMapper.updateById(item) != 1) {
+            UpdateWrapper<ItemQuoteVersion> clearedFields = new UpdateWrapper<>();
+            for (ReleaseItemDataReplacementChangeDTO change : row.getChanges()) {
+                String column = switch (change.getField()) {
+                    case "manufacturingProcessType" -> "manufacturing_process_type";
+                    case "reservedField1" -> "reserved_field_1";
+                    case "reservedField2" -> "reserved_field_2";
+                    case "reservedField3" -> "reserved_field_3";
+                    default -> null;
+                };
+                if (column != null && change.getAfterValue() == null) {
+                    clearedFields.set(column, null);
+                }
+            }
+            int updated = clearedFields.getSqlSet() == null
+                    ? itemMapper.updateById(item)
+                    : itemMapper.update(item, clearedFields.eq("id", item.getId()).eq("rfq_id", item.getRfqId()));
+            if (updated != 1) {
                 throw new IllegalStateException("议价提单表格数据替换保存失败");
             }
             updatedItemCount++;
@@ -406,6 +423,10 @@ public class ReleaseItemDataReplacementService {
             case "salesOrderDate" -> item.setSalesOrderDate((LocalDate) value);
             case "customerOrderNo" -> item.setCustomerOrderNo(stringValue(value));
             case "customerProjectNo" -> item.setCustomerProjectNo(stringValue(value));
+            case "manufacturingProcessType" -> item.setManufacturingProcessType(stringValue(value));
+            case "reservedField1" -> item.setReservedField1(stringValue(value));
+            case "reservedField2" -> item.setReservedField2(stringValue(value));
+            case "reservedField3" -> item.setReservedField3(stringValue(value));
             case "customerOrderTitle" -> item.setCustomerOrderTitle(stringValue(value));
             case "orderType" -> item.setOrderType(stringValue(value));
             case "internalProjectNo" -> item.setInternalProjectNo(stringValue(value));
@@ -704,6 +725,10 @@ public class ReleaseItemDataReplacementService {
             case SALES_ORDER_DATE -> item.getSalesOrderDate();
             case CUSTOMER_ORDER_NO -> item.getCustomerOrderNo();
             case CUSTOMER_PROJECT_NO -> item.getCustomerProjectNo();
+            case MANUFACTURING_PROCESS_TYPE -> item.getManufacturingProcessType();
+            case RESERVED_FIELD_1 -> item.getReservedField1();
+            case RESERVED_FIELD_2 -> item.getReservedField2();
+            case RESERVED_FIELD_3 -> item.getReservedField3();
             case CUSTOMER_ORDER_TITLE -> item.getCustomerOrderTitle();
             case ORDER_TYPE -> item.getOrderType();
             case INTERNAL_PROJECT_NO -> item.getInternalProjectNo();

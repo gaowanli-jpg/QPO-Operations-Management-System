@@ -34,7 +34,7 @@ class SalesOrderItemDetailExportTest {
     private static final String[] DETAIL_HEADERS = {
             "图号", "行号", "版本", "物料号", "物料号状态", "匹配状态", "匹配说明", "数量", "订单状态",
             "U9/变更", "图纸", "图纸预览", "客户下单抬头", "物料描述", "订单类型", "客户订单号", "客户项目号",
-            "内部项目号", "客户交期", "内部交期", "材料", "表面处理", "未税单价", "含税单价", "未税总价", "含税总价", "备注"
+            "制造加工类型", "备用字段1", "备用字段2", "备用字段3", "内部项目号", "客户交期", "内部交期", "材料", "表面处理", "未税单价", "含税单价", "未税总价", "含税总价", "备注"
     };
 
     @Test
@@ -90,6 +90,10 @@ class SalesOrderItemDetailExportTest {
         first.setUntaxedUnitPrice(new BigDecimal("12.30"));
         first.setTaxIncludedUnitPrice(new BigDecimal("13.90"));
         first.setRemark("首件备注");
+        first.setManufacturingProcessType("精密加工");
+        first.setReservedField1("备用1");
+        first.setReservedField2("备用2");
+        first.setReservedField3("备用3");
 
         Fixture fixture = fixture(header, List.of(later, first));
 
@@ -126,18 +130,22 @@ class SalesOrderItemDetailExportTest {
             assertThat(text(sheet, 1, 9)).isEqualTo("正常");
             assertThat(text(sheet, 1, 10)).isEqualTo("已绑定");
             assertThat(text(sheet, 1, 11)).isEqualTo("预览");
-            assertThat(text(sheet, 1, 18)).isEqualTo("2026-09-20");
-            assertThat(text(sheet, 1, 22)).isEqualTo("¥ 12.30");
-            assertThat(text(sheet, 1, 24)).isEqualTo("¥ 36.90");
-            assertThat(text(sheet, 1, 25)).isEqualTo("¥ 41.70");
+            assertThat(text(sheet, 1, 17)).isEqualTo("精密加工");
+            assertThat(text(sheet, 1, 18)).isEqualTo("备用1");
+            assertThat(text(sheet, 1, 19)).isEqualTo("备用2");
+            assertThat(text(sheet, 1, 20)).isEqualTo("备用3");
+            assertThat(text(sheet, 1, 22)).isEqualTo("2026-09-20");
+            assertThat(text(sheet, 1, 26)).isEqualTo("¥ 12.30");
+            assertThat(text(sheet, 1, 28)).isEqualTo("¥ 36.90");
+            assertThat(text(sheet, 1, 29)).isEqualTo("¥ 41.70");
 
             assertThat(text(sheet, 2, 0)).isEqualTo("PN-002");
             assertThat(text(sheet, 2, 8)).isEqualTo("废弃");
             assertThat(text(sheet, 2, 9)).isEqualTo("已废弃");
             assertThat(text(sheet, 2, 10)).isEqualTo("缺图");
             assertThat(text(sheet, 2, 11)).isEqualTo("无图");
-            assertThat(text(sheet, 2, 24)).isEqualTo("¥ 99.00");
-            assertThat(text(sheet, 2, 25)).isEqualTo("¥ 111.85");
+            assertThat(text(sheet, 2, 28)).isEqualTo("¥ 99.00");
+            assertThat(text(sheet, 2, 29)).isEqualTo("¥ 111.85");
         }
     }
 

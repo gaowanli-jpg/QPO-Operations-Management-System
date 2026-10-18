@@ -29,6 +29,10 @@ public class SalesOrderQpoExcelParser {
     private static final String SALES_ORDER_DATE = "\u4e0b\u5355\u65e5\u671f";
     private static final String CUSTOMER_ORDER_NO = "\u5ba2\u6237\u8ba2\u5355\u53f7";
     private static final String CUSTOMER_PROJECT_NO = "\u5ba2\u6237\u9879\u76ee\u53f7";
+    private static final String MANUFACTURING_PROCESS_TYPE = "\u5236\u9020\u52a0\u5de5\u7c7b\u578b";
+    private static final String RESERVED_FIELD_1 = "\u5907\u7528\u5b57\u6bb51";
+    private static final String RESERVED_FIELD_2 = "\u5907\u7528\u5b57\u6bb52";
+    private static final String RESERVED_FIELD_3 = "\u5907\u7528\u5b57\u6bb53";
     private static final String CUSTOMER_ORDER_TITLE = "\u5ba2\u6237\u4e0b\u5355\u62ac\u5934";
     private static final String ORDER_TYPE = "\u8ba2\u5355\u7c7b\u578b";
     private static final String INTERNAL_PROJECT_NO = "\u5185\u90e8\u9879\u76ee\u53f7";
@@ -95,6 +99,10 @@ public class SalesOrderQpoExcelParser {
                     group.setCustomerProjectNo(resolveGroupValue(
                             defaults == null ? null : defaults.getCustomerProjectNo(),
                             line.getCustomerProjectNo()));
+                    group.setManufacturingProcessType(defaults == null ? null : clean(defaults.getManufacturingProcessType()));
+                    group.setReservedField1(defaults == null ? null : clean(defaults.getReservedField1()));
+                    group.setReservedField2(defaults == null ? null : clean(defaults.getReservedField2()));
+                    group.setReservedField3(defaults == null ? null : clean(defaults.getReservedField3()));
                     group.setCustomerOrderTitle(resolveGroupValue(
                             defaults == null ? null : defaults.getCustomerOrderTitle(),
                             line.getCustomerOrderTitle()));
@@ -148,6 +156,19 @@ public class SalesOrderQpoExcelParser {
                 defaults == null ? null : defaults.getCustomerOrderNo()));
         line.setCustomerProjectNo(fallbackText(row, headerIndexes, CUSTOMER_PROJECT_NO, formatter, evaluator,
                 defaults == null ? null : defaults.getCustomerProjectNo()));
+        line.setManufacturingProcessType(validateOptionalLength(
+                fallbackText(row, headerIndexes, MANUFACTURING_PROCESS_TYPE, formatter, evaluator,
+                        defaults == null ? null : defaults.getManufacturingProcessType()),
+                MANUFACTURING_PROCESS_TYPE, excelRowNumber));
+        line.setReservedField1(validateOptionalLength(
+                fallbackText(row, headerIndexes, RESERVED_FIELD_1, formatter, evaluator,
+                        defaults == null ? null : defaults.getReservedField1()), RESERVED_FIELD_1, excelRowNumber));
+        line.setReservedField2(validateOptionalLength(
+                fallbackText(row, headerIndexes, RESERVED_FIELD_2, formatter, evaluator,
+                        defaults == null ? null : defaults.getReservedField2()), RESERVED_FIELD_2, excelRowNumber));
+        line.setReservedField3(validateOptionalLength(
+                fallbackText(row, headerIndexes, RESERVED_FIELD_3, formatter, evaluator,
+                        defaults == null ? null : defaults.getReservedField3()), RESERVED_FIELD_3, excelRowNumber));
         line.setCustomerOrderTitle(fallbackText(row, headerIndexes, CUSTOMER_ORDER_TITLE, formatter, evaluator,
                 defaults == null ? null : defaults.getCustomerOrderTitle()));
         line.setOrderType(fallbackText(row, headerIndexes, ORDER_TYPE, formatter, evaluator,
@@ -171,6 +192,13 @@ public class SalesOrderQpoExcelParser {
         line.setUntaxedTotalPrice(untaxedTotalPrice);
         line.setRemark(optionalText(row, headerIndexes, REMARK, formatter, evaluator));
         return line;
+    }
+
+    private String validateOptionalLength(String value, String field, int excelRowNumber) {
+        if (value != null && value.length() > 120) {
+            throw rowError(excelRowNumber, field, "不能超过 120 个字符");
+        }
+        return value;
     }
 
     private HeaderContext findHeader(Sheet sheet, DataFormatter formatter, FormulaEvaluator evaluator) {

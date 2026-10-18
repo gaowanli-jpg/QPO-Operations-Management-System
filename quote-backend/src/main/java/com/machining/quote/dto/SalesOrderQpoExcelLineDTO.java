@@ -20,6 +20,10 @@ public class SalesOrderQpoExcelLineDTO {
     @Deprecated
     private String salesMaterialNo;
     private String internalProjectNo;
+    private String manufacturingProcessType;
+    private String reservedField1;
+    private String reservedField2;
+    private String reservedField3;
     private LocalDate customerDeliveryDate;
     private LocalDate internalDeliveryDate;
     private String partNo;

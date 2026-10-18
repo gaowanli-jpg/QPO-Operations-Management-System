@@ -46,6 +46,10 @@ public class SalesOrderMaintenanceService {
             SalesOrderItemUpdateLineReq.FIELD_CUSTOMER_ORDER_TITLE,
             SalesOrderItemUpdateLineReq.FIELD_CUSTOMER_ORDER_NO,
             SalesOrderItemUpdateLineReq.FIELD_CUSTOMER_PROJECT_NO,
+            SalesOrderItemUpdateLineReq.FIELD_MANUFACTURING_PROCESS_TYPE,
+            SalesOrderItemUpdateLineReq.FIELD_RESERVED_FIELD_1,
+            SalesOrderItemUpdateLineReq.FIELD_RESERVED_FIELD_2,
+            SalesOrderItemUpdateLineReq.FIELD_RESERVED_FIELD_3,
             SalesOrderItemUpdateLineReq.FIELD_INTERNAL_PROJECT_NO,
             SalesOrderItemUpdateLineReq.FIELD_ORDER_TYPE);
     private static final int TEXT_50 = 50;
@@ -375,6 +379,14 @@ public class SalesOrderMaintenanceService {
                 SalesOrderItemUpdateLineReq.FIELD_CUSTOMER_ORDER_NO, changed, line, item::setCustomerOrderNo);
         applyText(item.getCustomerProjectNo(), line.getCustomerProjectNo(), TEXT_120,
                 SalesOrderItemUpdateLineReq.FIELD_CUSTOMER_PROJECT_NO, changed, line, item::setCustomerProjectNo);
+        applyText(item.getManufacturingProcessType(), line.getManufacturingProcessType(), TEXT_120,
+                SalesOrderItemUpdateLineReq.FIELD_MANUFACTURING_PROCESS_TYPE, changed, line, item::setManufacturingProcessType);
+        applyText(item.getReservedField1(), line.getReservedField1(), TEXT_120,
+                SalesOrderItemUpdateLineReq.FIELD_RESERVED_FIELD_1, changed, line, item::setReservedField1);
+        applyText(item.getReservedField2(), line.getReservedField2(), TEXT_120,
+                SalesOrderItemUpdateLineReq.FIELD_RESERVED_FIELD_2, changed, line, item::setReservedField2);
+        applyText(item.getReservedField3(), line.getReservedField3(), TEXT_120,
+                SalesOrderItemUpdateLineReq.FIELD_RESERVED_FIELD_3, changed, line, item::setReservedField3);
         applyText(item.getCustomerOrderTitle(), line.getCustomerOrderTitle(), TEXT_255,
                 SalesOrderItemUpdateLineReq.FIELD_CUSTOMER_ORDER_TITLE, changed, line, item::setCustomerOrderTitle);
         applyText(item.getInternalProjectNo(), line.getInternalProjectNo(), TEXT_120,
@@ -437,6 +449,14 @@ public class SalesOrderMaintenanceService {
                 SalesOrderMaintenanceOrderUpdateReq.FIELD_CUSTOMER_ORDER_NO, changed, req, header::setCustomerOrderNo);
         applyOrderText(header.getCustomerProjectNo(), req.getCustomerProjectNo(), TEXT_120,
                 SalesOrderMaintenanceOrderUpdateReq.FIELD_CUSTOMER_PROJECT_NO, changed, req, header::setCustomerProjectNo);
+        applyOrderText(header.getManufacturingProcessType(), req.getManufacturingProcessType(), TEXT_120,
+                SalesOrderMaintenanceOrderUpdateReq.FIELD_MANUFACTURING_PROCESS_TYPE, changed, req, header::setManufacturingProcessType);
+        applyOrderText(header.getReservedField1(), req.getReservedField1(), TEXT_120,
+                SalesOrderMaintenanceOrderUpdateReq.FIELD_RESERVED_FIELD_1, changed, req, header::setReservedField1);
+        applyOrderText(header.getReservedField2(), req.getReservedField2(), TEXT_120,
+                SalesOrderMaintenanceOrderUpdateReq.FIELD_RESERVED_FIELD_2, changed, req, header::setReservedField2);
+        applyOrderText(header.getReservedField3(), req.getReservedField3(), TEXT_120,
+                SalesOrderMaintenanceOrderUpdateReq.FIELD_RESERVED_FIELD_3, changed, req, header::setReservedField3);
         applyOrderText(header.getCustomerOrderTitle(), req.getCustomerOrderTitle(), TEXT_200,
                 SalesOrderMaintenanceOrderUpdateReq.FIELD_CUSTOMER_ORDER_TITLE, changed, req, header::setCustomerOrderTitle);
         if (req.hasField(SalesOrderMaintenanceOrderUpdateReq.FIELD_ORDER_TYPE)) {
@@ -620,6 +640,10 @@ public class SalesOrderMaintenanceService {
             case SalesOrderItemUpdateLineReq.FIELD_CUSTOMER_ORDER_TITLE -> TEXT_255;
             case SalesOrderItemUpdateLineReq.FIELD_CUSTOMER_ORDER_NO,
                  SalesOrderItemUpdateLineReq.FIELD_CUSTOMER_PROJECT_NO,
+                 SalesOrderItemUpdateLineReq.FIELD_MANUFACTURING_PROCESS_TYPE,
+                 SalesOrderItemUpdateLineReq.FIELD_RESERVED_FIELD_1,
+                 SalesOrderItemUpdateLineReq.FIELD_RESERVED_FIELD_2,
+                 SalesOrderItemUpdateLineReq.FIELD_RESERVED_FIELD_3,
                  SalesOrderItemUpdateLineReq.FIELD_INTERNAL_PROJECT_NO -> TEXT_120;
             default -> TEXT_255;
         };
@@ -631,6 +655,10 @@ public class SalesOrderMaintenanceService {
             case SalesOrderItemUpdateLineReq.FIELD_CUSTOMER_ORDER_TITLE -> line.setCustomerOrderTitle(value);
             case SalesOrderItemUpdateLineReq.FIELD_CUSTOMER_ORDER_NO -> line.setCustomerOrderNo(value);
             case SalesOrderItemUpdateLineReq.FIELD_CUSTOMER_PROJECT_NO -> line.setCustomerProjectNo(value);
+            case SalesOrderItemUpdateLineReq.FIELD_MANUFACTURING_PROCESS_TYPE -> line.setManufacturingProcessType(value);
+            case SalesOrderItemUpdateLineReq.FIELD_RESERVED_FIELD_1 -> line.setReservedField1(value);
+            case SalesOrderItemUpdateLineReq.FIELD_RESERVED_FIELD_2 -> line.setReservedField2(value);
+            case SalesOrderItemUpdateLineReq.FIELD_RESERVED_FIELD_3 -> line.setReservedField3(value);
             case SalesOrderItemUpdateLineReq.FIELD_INTERNAL_PROJECT_NO -> line.setInternalProjectNo(value);
             case SalesOrderItemUpdateLineReq.FIELD_ORDER_TYPE -> line.setOrderType(value);
             default -> throw new RuntimeException("不支持整单替换字段：" + field);
@@ -741,6 +769,10 @@ public class SalesOrderMaintenanceService {
                 .set("customer_order_no", header.getCustomerOrderNo())
                 .set("customer_project_no", header.getCustomerProjectNo())
                 .set("customer_order_title", header.getCustomerOrderTitle())
+                .set("manufacturing_process_type", header.getManufacturingProcessType())
+                .set("reserved_field_1", header.getReservedField1())
+                .set("reserved_field_2", header.getReservedField2())
+                .set("reserved_field_3", header.getReservedField3())
                 .set("order_type", header.getOrderType())
                 .set("internal_project_no", header.getInternalProjectNo())
                 .set("updated_at", updatedAt);
@@ -778,6 +810,10 @@ public class SalesOrderMaintenanceService {
                 .set("customer_order_no", item.getCustomerOrderNo())
                 .set("customer_project_no", item.getCustomerProjectNo())
                 .set("customer_order_title", item.getCustomerOrderTitle())
+                .set("manufacturing_process_type", item.getManufacturingProcessType())
+                .set("reserved_field_1", item.getReservedField1())
+                .set("reserved_field_2", item.getReservedField2())
+                .set("reserved_field_3", item.getReservedField3())
                 .set("internal_project_no", item.getInternalProjectNo())
                 .set("order_type", item.getOrderType())
                 .set("description", item.getDescription())
@@ -850,6 +886,10 @@ public class SalesOrderMaintenanceService {
         data.put("salesOrderDate", header.getSalesOrderDate());
         data.put("customerOrderNo", header.getCustomerOrderNo());
         data.put("customerProjectNo", header.getCustomerProjectNo());
+        data.put("manufacturingProcessType", header.getManufacturingProcessType());
+        data.put("reservedField1", header.getReservedField1());
+        data.put("reservedField2", header.getReservedField2());
+        data.put("reservedField3", header.getReservedField3());
         data.put("customerOrderTitle", header.getCustomerOrderTitle());
         data.put("orderType", header.getOrderType());
         data.put("internalProjectNo", header.getInternalProjectNo());
@@ -916,6 +956,18 @@ public class SalesOrderMaintenanceService {
         }
         if (SalesOrderItemUpdateLineReq.FIELD_CUSTOMER_PROJECT_NO.equals(field)) {
             return "客户项目号";
+        }
+        if (SalesOrderItemUpdateLineReq.FIELD_MANUFACTURING_PROCESS_TYPE.equals(field)) {
+            return "制造加工类型";
+        }
+        if (SalesOrderItemUpdateLineReq.FIELD_RESERVED_FIELD_1.equals(field)) {
+            return "备用字段1";
+        }
+        if (SalesOrderItemUpdateLineReq.FIELD_RESERVED_FIELD_2.equals(field)) {
+            return "备用字段2";
+        }
+        if (SalesOrderItemUpdateLineReq.FIELD_RESERVED_FIELD_3.equals(field)) {
+            return "备用字段3";
         }
         if (SalesOrderItemUpdateLineReq.FIELD_CUSTOMER_ORDER_TITLE.equals(field)) {
             return "客户下单抬头";

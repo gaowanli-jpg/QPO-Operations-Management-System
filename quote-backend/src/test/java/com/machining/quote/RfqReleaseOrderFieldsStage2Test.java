@@ -76,7 +76,7 @@ class RfqReleaseOrderFieldsStage2Test {
         assertThat(item.getCustomerOrderTitle()).isEqualTo("Customer title");
         assertThat(item.getOrderType()).isEqualTo("正式订单");
         assertThat(item.getInternalProjectNo()).isEqualTo("IP-001");
-        verify(context.itemMapper).updateById(item);
+        verify(context.itemMapper).update(eq(item), any());
         verify(context.auditService).record(
                 eq("RELEASE_ITEM_ORDER_FIELDS_UPDATE"),
                 eq("item_quote_version"),
@@ -124,7 +124,7 @@ class RfqReleaseOrderFieldsStage2Test {
         when(partial.ticketMapper.selectList(any())).thenReturn(List.of(ticket(9001, 4)));
 
         partial.service.updateReleaseItemOrderFields(201, validRequest());
-        verify(partial.itemMapper).updateById(partialItem);
+        verify(partial.itemMapper).update(eq(partialItem), any());
 
         TestContext full = context();
         ItemQuoteVersion fullItem = item(202, 101, 10);
@@ -136,7 +136,7 @@ class RfqReleaseOrderFieldsStage2Test {
         when(full.ticketMapper.selectList(any())).thenReturn(List.of(fullTicket));
 
         full.service.updateReleaseItemOrderFields(202, validRequest());
-        verify(full.itemMapper).updateById(fullItem);
+        verify(full.itemMapper).update(eq(fullItem), any());
         verify(full.ticketMapper, never()).updateById(any());
         assertThat(fullTicket.getQty()).isEqualTo(10);
     }

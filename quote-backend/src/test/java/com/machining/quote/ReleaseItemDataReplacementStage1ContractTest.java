@@ -44,6 +44,10 @@ class ReleaseItemDataReplacementStage1ContractTest {
                         tuple("下单日期", "salesOrderDate", DATE, null, true),
                         tuple("客户订单号", "customerOrderNo", TEXT, 120, true),
                         tuple("客户项目号", "customerProjectNo", TEXT, 120, true),
+                        tuple("制造加工类型", "manufacturingProcessType", TEXT, 120, true),
+                        tuple("备用字段1", "reservedField1", TEXT, 120, true),
+                        tuple("备用字段2", "reservedField2", TEXT, 120, true),
+                        tuple("备用字段3", "reservedField3", TEXT, 120, true),
                         tuple("客户下单抬头", "customerOrderTitle", TEXT, 255, true),
                         tuple("订单类型", "orderType", ORDER_TYPE, 20, true),
                         tuple("内部项目号", "internalProjectNo", TEXT, 120, true));
@@ -52,8 +56,8 @@ class ReleaseItemDataReplacementStage1ContractTest {
                 .containsExactly(
                         ReleaseItemDataReplacementField.PART_NO,
                         ReleaseItemDataReplacementField.VERSION);
-        assertThat(ReleaseItemDataReplacementField.replaceableFields()).hasSize(11);
-        assertThat(ReleaseItemDataReplacementField.persistentFields()).hasSize(10);
+        assertThat(ReleaseItemDataReplacementField.replaceableFields()).hasSize(15);
+        assertThat(ReleaseItemDataReplacementField.persistentFields()).hasSize(14);
         assertThat(ReleaseItemDataReplacementField.ACCEPTED_QTY.isReplaceable()).isTrue();
         assertThat(ReleaseItemDataReplacementField.ACCEPTED_QTY.isPersistent()).isFalse();
     }

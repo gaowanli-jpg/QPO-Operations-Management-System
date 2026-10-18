@@ -285,6 +285,10 @@ public class SalesOrderItemDataReplacementService {
             case "surfaceTreatment" -> line.setSurfaceTreatment(stringValue(value));
             case "customerOrderNo" -> line.setCustomerOrderNo(stringValue(value));
             case "customerProjectNo" -> line.setCustomerProjectNo(stringValue(value));
+            case "manufacturingProcessType" -> line.setManufacturingProcessType(stringValue(value));
+            case "reservedField1" -> line.setReservedField1(stringValue(value));
+            case "reservedField2" -> line.setReservedField2(stringValue(value));
+            case "reservedField3" -> line.setReservedField3(stringValue(value));
             case "customerOrderTitle" -> line.setCustomerOrderTitle(stringValue(value));
             case "internalProjectNo" -> line.setInternalProjectNo(stringValue(value));
             case "orderType" -> line.setOrderType(stringValue(value));
@@ -345,6 +349,10 @@ public class SalesOrderItemDataReplacementService {
             case SURFACE_TREATMENT -> item.getSurfaceTreatment();
             case CUSTOMER_ORDER_NO -> item.getCustomerOrderNo();
             case CUSTOMER_PROJECT_NO -> item.getCustomerProjectNo();
+            case MANUFACTURING_PROCESS_TYPE -> item.getManufacturingProcessType();
+            case RESERVED_FIELD_1 -> item.getReservedField1();
+            case RESERVED_FIELD_2 -> item.getReservedField2();
+            case RESERVED_FIELD_3 -> item.getReservedField3();
             case CUSTOMER_ORDER_TITLE -> item.getCustomerOrderTitle();
             case INTERNAL_PROJECT_NO -> item.getInternalProjectNo();
             case ORDER_TYPE -> item.getOrderType();

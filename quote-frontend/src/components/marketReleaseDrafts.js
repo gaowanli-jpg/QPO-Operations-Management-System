@@ -7,6 +7,10 @@ export const RELEASE_ITEM_DRAFT_SOURCES = {
   salesOrderDateDraft: 'salesOrderDate',
   customerOrderNoDraft: 'customerOrderNo',
   customerProjectNoDraft: 'customerProjectNo',
+  manufacturingProcessTypeDraft: 'manufacturingProcessType',
+  reservedField1Draft: 'reservedField1',
+  reservedField2Draft: 'reservedField2',
+  reservedField3Draft: 'reservedField3',
   customerOrderTitleDraft: 'customerOrderTitle',
   orderTypeDraft: 'orderType',
   internalProjectNoDraft: 'internalProjectNo'
@@ -24,6 +28,10 @@ const RELEASE_DRAFT_CHANGE_GROUPS = {
     ['salesOrderDateDraft', 'salesOrderDate'],
     ['customerOrderNoDraft', 'customerOrderNo'],
     ['customerProjectNoDraft', 'customerProjectNo'],
+    ['manufacturingProcessTypeDraft', 'manufacturingProcessType'],
+    ['reservedField1Draft', 'reservedField1'],
+    ['reservedField2Draft', 'reservedField2'],
+    ['reservedField3Draft', 'reservedField3'],
     ['customerOrderTitleDraft', 'customerOrderTitle'],
     ['orderTypeDraft', 'orderType'],
     ['internalProjectNoDraft', 'internalProjectNo']

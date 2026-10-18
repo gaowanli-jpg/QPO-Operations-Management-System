@@ -32,6 +32,10 @@ public class SalesOrderQpoImportController {
             @RequestParam(value = "customerOrderTitle", required = false) String customerOrderTitle,
             @RequestParam(value = "orderType", required = false) String orderType,
             @RequestParam(value = "internalProjectNo", required = false) String internalProjectNo,
+            @RequestParam(value = "manufacturingProcessType", required = false) String manufacturingProcessType,
+            @RequestParam(value = "reservedField1", required = false) String reservedField1,
+            @RequestParam(value = "reservedField2", required = false) String reservedField2,
+            @RequestParam(value = "reservedField3", required = false) String reservedField3,
             @RequestParam("excelFile") MultipartFile excelFile,
             @RequestParam(value = "drawings", required = false) List<MultipartFile> drawings,
             @RequestParam(value = "versionDrawings", required = false) List<MultipartFile> versionDrawings,
@@ -43,12 +47,50 @@ public class SalesOrderQpoImportController {
                 customerProjectNo,
                 customerOrderTitle,
                 orderType,
-                internalProjectNo);
+                internalProjectNo,
+                manufacturingProcessType,
+                reservedField1,
+                reservedField2,
+                reservedField3);
         return salesOrderQpoImportService.importQpo(
                 excelFile,
                 customerId,
                 documentTypeCode,
                 defaults,
+                drawings,
+                versionDrawings,
+                drawingFolderFiles,
+                drawingFolderName);
+    }
+
+    public SalesOrderQpoImportResp importQpo(
+            Long customerId,
+            String documentTypeCode,
+            String salesOrderDate,
+            String customerOrderNo,
+            String customerProjectNo,
+            String customerOrderTitle,
+            String orderType,
+            String internalProjectNo,
+            MultipartFile excelFile,
+            List<MultipartFile> drawings,
+            List<MultipartFile> versionDrawings,
+            List<MultipartFile> drawingFolderFiles,
+            String drawingFolderName) {
+        return importQpo(
+                customerId,
+                documentTypeCode,
+                salesOrderDate,
+                customerOrderNo,
+                customerProjectNo,
+                customerOrderTitle,
+                orderType,
+                internalProjectNo,
+                null,
+                null,
+                null,
+                null,
+                excelFile,
                 drawings,
                 versionDrawings,
                 drawingFolderFiles,
@@ -61,7 +103,11 @@ public class SalesOrderQpoImportController {
             String customerProjectNo,
             String customerOrderTitle,
             String orderType,
-            String internalProjectNo) {
+            String internalProjectNo,
+            String manufacturingProcessType,
+            String reservedField1,
+            String reservedField2,
+            String reservedField3) {
         SalesOrderQpoImportDefaultsDTO defaults = new SalesOrderQpoImportDefaultsDTO();
         defaults.setSalesOrderDate(parseRequiredDate(salesOrderDate));
         defaults.setCustomerOrderNo(optionalText(customerOrderNo));
@@ -69,6 +115,10 @@ public class SalesOrderQpoImportController {
         defaults.setCustomerOrderTitle(optionalText(customerOrderTitle));
         defaults.setOrderType(requiredText(orderType, "订单类型"));
         defaults.setInternalProjectNo(optionalText(internalProjectNo));
+        defaults.setManufacturingProcessType(optionalText(manufacturingProcessType));
+        defaults.setReservedField1(optionalText(reservedField1));
+        defaults.setReservedField2(optionalText(reservedField2));
+        defaults.setReservedField3(optionalText(reservedField3));
         return defaults;
     }
 

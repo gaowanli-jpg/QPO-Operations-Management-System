@@ -12,4 +12,8 @@ public class SalesOrderQpoImportDefaultsDTO {
     private String customerOrderTitle;
     private String orderType;
     private String internalProjectNo;
+    private String manufacturingProcessType;
+    private String reservedField1;
+    private String reservedField2;
+    private String reservedField3;
 }

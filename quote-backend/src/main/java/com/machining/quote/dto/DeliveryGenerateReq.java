@@ -17,6 +17,10 @@ public class DeliveryGenerateReq {
     private String internalProjectNo;
     private String customerOrderNo;
     private String customerProjectNo;
+    private String manufacturingProcessType;
+    private String reservedField1;
+    private String reservedField2;
+    private String reservedField3;
     private String arrangeType;
     private List<DeliveryItemReq> items;
 

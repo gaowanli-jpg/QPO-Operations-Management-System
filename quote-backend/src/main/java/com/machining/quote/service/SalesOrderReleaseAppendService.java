@@ -232,6 +232,10 @@ public class SalesOrderReleaseAppendService {
         defaults.setSalesOrderDate(target.getSalesOrderDate());
         defaults.setCustomerOrderNo(trimToNull(target.getCustomerOrderNo()));
         defaults.setCustomerProjectNo(trimToNull(target.getCustomerProjectNo()));
+        defaults.setManufacturingProcessType(trimToNull(target.getManufacturingProcessType()));
+        defaults.setReservedField1(trimToNull(target.getReservedField1()));
+        defaults.setReservedField2(trimToNull(target.getReservedField2()));
+        defaults.setReservedField3(trimToNull(target.getReservedField3()));
         defaults.setCustomerOrderTitle(trimToNull(target.getCustomerOrderTitle()));
         defaults.setOrderType(requiredText(target.getOrderType(), "目标销售订单订单类型不能为空"));
         defaults.setInternalProjectNo(trimToNull(target.getInternalProjectNo()));
@@ -283,6 +287,10 @@ public class SalesOrderReleaseAppendService {
         item.setOrderType(line.getOrderType());
         item.setCustomerOrderNo(line.getCustomerOrderNo());
         item.setCustomerProjectNo(line.getCustomerProjectNo());
+        item.setManufacturingProcessType(line.getManufacturingProcessType());
+        item.setReservedField1(line.getReservedField1());
+        item.setReservedField2(line.getReservedField2());
+        item.setReservedField3(line.getReservedField3());
         item.setCustomerOrderTitle(line.getCustomerOrderTitle());
         item.setInternalProjectNo(line.getInternalProjectNo());
         item.setSalesMaterialNo(null);
@@ -323,6 +331,18 @@ public class SalesOrderReleaseAppendService {
         }
         if (isBlank(source.getCustomerProjectNo())) {
             source.setCustomerProjectNo(target.getCustomerProjectNo());
+        }
+        if (isBlank(source.getManufacturingProcessType())) {
+            source.setManufacturingProcessType(target.getManufacturingProcessType());
+        }
+        if (isBlank(source.getReservedField1())) {
+            source.setReservedField1(target.getReservedField1());
+        }
+        if (isBlank(source.getReservedField2())) {
+            source.setReservedField2(target.getReservedField2());
+        }
+        if (isBlank(source.getReservedField3())) {
+            source.setReservedField3(target.getReservedField3());
         }
         if (isBlank(source.getCustomerOrderTitle())) {
             source.setCustomerOrderTitle(target.getCustomerOrderTitle());

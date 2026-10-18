@@ -107,6 +107,18 @@
                 <el-form-item label="客户项目号">
                   <el-input v-model="releaseForm.customerProjectNo" placeholder="请输入客户项目号（可选）" maxlength="100" clearable />
                 </el-form-item>
+                <el-form-item label="制造加工类型">
+                  <el-input v-model="releaseForm.manufacturingProcessType" placeholder="请输入制造加工类型（可选）" maxlength="120" clearable />
+                </el-form-item>
+                <el-form-item label="备用字段1">
+                  <el-input v-model="releaseForm.reservedField1" placeholder="请输入备用字段1（可选）" maxlength="120" clearable />
+                </el-form-item>
+                <el-form-item label="备用字段2">
+                  <el-input v-model="releaseForm.reservedField2" placeholder="请输入备用字段2（可选）" maxlength="120" clearable />
+                </el-form-item>
+                <el-form-item label="备用字段3">
+                  <el-input v-model="releaseForm.reservedField3" placeholder="请输入备用字段3（可选）" maxlength="120" clearable />
+                </el-form-item>
                 <el-form-item label="客户下单抬头">
                   <el-input v-model="releaseForm.customerOrderTitle" placeholder="请输入客户下单抬头（可选）" maxlength="255" clearable />
                 </el-form-item>
@@ -539,6 +551,36 @@
                   </div>
                 </template>
               </el-table-column>
+              <el-table-column
+                v-for="field in manufacturingFields"
+                :key="field.key"
+                :label="field.label"
+                width="240"
+                show-overflow-tooltip
+              >
+                <template #default="{ row }">
+                  <div class="row-field-editor row-order-field-editor">
+                    <el-input
+                      v-model="row[`${field.key}Draft`]"
+                      size="small"
+                      maxlength="120"
+                      clearable
+                      :placeholder="orderFieldPlaceholder(row, field.key)"
+                      :disabled="!canEditReleaseItemOrderFields(row)"
+                      class="row-order-field-input"
+                    />
+                    <el-button
+                      v-permission="'market:release:create'"
+                      size="small"
+                      type="primary"
+                      plain
+                      :disabled="!canEditReleaseItemOrderFields(row) || !hasUnsavedOrderFieldDraft(row, field.key) || isOrderFieldSaving(row, field.key) || submitting"
+                      :loading="isOrderFieldSaving(row, field.key)"
+                      @click.stop="saveReleaseItemOrderField(row, field.key)"
+                    >保存</el-button>
+                  </div>
+                </template>
+              </el-table-column>
               <el-table-column label="客户下单抬头" width="240" show-overflow-tooltip>
                 <template #default="{ row }">
                   <div class="row-field-editor row-order-field-editor">
@@ -826,6 +868,10 @@ const releaseForm = reactive({
   internalProjectNo: '',
   customerOrderNo: '',
   customerProjectNo: '',
+  manufacturingProcessType: '',
+  reservedField1: '',
+  reservedField2: '',
+  reservedField3: '',
   arrangeType: '计划'
 })
 const releaseBatchState = reactive({ fingerprint: '', key: '' })
@@ -1037,6 +1083,10 @@ const resetReleaseFormForOrders = () => {
   releaseForm.internalProjectNo = ''
   releaseForm.customerOrderNo = ''
   releaseForm.customerProjectNo = ''
+  releaseForm.manufacturingProcessType = ''
+  releaseForm.reservedField1 = ''
+  releaseForm.reservedField2 = ''
+  releaseForm.reservedField3 = ''
   releaseBatchState.fingerprint = ''
   releaseBatchState.key = ''
   appendBatchState.fingerprint = ''
@@ -1091,6 +1141,10 @@ const normalizeOrderFieldDraft = (value) => {
 }
 
 const orderFieldDefaults = {
+  manufacturingProcessType: 'manufacturingProcessType',
+  reservedField1: 'reservedField1',
+  reservedField2: 'reservedField2',
+  reservedField3: 'reservedField3',
   salesOrderDate: 'salesOrderDate',
   customerOrderNo: 'customerOrderNo',
   customerProjectNo: 'customerProjectNo',
@@ -1100,6 +1154,10 @@ const orderFieldDefaults = {
 }
 
 const orderFieldLabels = {
+  manufacturingProcessType: '制造加工类型',
+  reservedField1: '备用字段1',
+  reservedField2: '备用字段2',
+  reservedField3: '备用字段3',
   salesOrderDate: '下单日期',
   customerOrderNo: '客户订单号',
   customerProjectNo: '客户项目号',
@@ -1107,6 +1165,13 @@ const orderFieldLabels = {
   orderType: '订单类型',
   internalProjectNo: '内部项目号'
 }
+
+const manufacturingFields = [
+  { key: 'manufacturingProcessType', label: '制造加工类型' },
+  { key: 'reservedField1', label: '备用字段1' },
+  { key: 'reservedField2', label: '备用字段2' },
+  { key: 'reservedField3', label: '备用字段3' },
+]
 
 const orderFieldPlaceholder = (row, field) => {
   if (normalizeOrderFieldDraft(row?.[field])) return ''
@@ -1731,6 +1796,10 @@ const submitTicket = async () => {
         internalProjectNo,
         customerOrderNo,
         customerProjectNo,
+        manufacturingProcessType: releaseForm.manufacturingProcessType.trim(),
+        reservedField1: releaseForm.reservedField1.trim(),
+        reservedField2: releaseForm.reservedField2.trim(),
+        reservedField3: releaseForm.reservedField3.trim(),
         arrangeType: releaseForm.arrangeType,
         items: orderedSelectedRows.map(row => ({
           sourceType: 'RFQ',

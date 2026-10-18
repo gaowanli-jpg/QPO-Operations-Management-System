@@ -393,6 +393,10 @@ public class SalesOrderQpoImportService {
         header.setSalesOrderDate(group.getSalesOrderDate());
         header.setCustomerOrderNo(group.getCustomerOrderNo());
         header.setCustomerProjectNo(group.getCustomerProjectNo());
+        header.setManufacturingProcessType(group.getManufacturingProcessType());
+        header.setReservedField1(group.getReservedField1());
+        header.setReservedField2(group.getReservedField2());
+        header.setReservedField3(group.getReservedField3());
         header.setCustomerOrderTitle(group.getCustomerOrderTitle());
         header.setOrderType(group.getOrderType());
         header.setInternalProjectNo(group.getInternalProjectNo());
@@ -633,6 +637,10 @@ public class SalesOrderQpoImportService {
         item.setOrderType(line.getOrderType());
         item.setCustomerOrderNo(line.getCustomerOrderNo());
         item.setCustomerProjectNo(line.getCustomerProjectNo());
+        item.setManufacturingProcessType(line.getManufacturingProcessType());
+        item.setReservedField1(line.getReservedField1());
+        item.setReservedField2(line.getReservedField2());
+        item.setReservedField3(line.getReservedField3());
         item.setCustomerOrderTitle(line.getCustomerOrderTitle());
         item.setInternalProjectNo(line.getInternalProjectNo());
         item.setSalesMaterialNo(null);
@@ -825,6 +833,16 @@ public class SalesOrderQpoImportService {
         }
         if (!isAllowedOrderType(isBlank(defaults.getOrderType()) ? null : defaults.getOrderType().trim())) {
             throw new IllegalArgumentException(INVALID_ORDER_TYPE_MESSAGE);
+        }
+        validateOptionalOrderText(defaults.getManufacturingProcessType(), "制造加工类型");
+        validateOptionalOrderText(defaults.getReservedField1(), "备用字段1");
+        validateOptionalOrderText(defaults.getReservedField2(), "备用字段2");
+        validateOptionalOrderText(defaults.getReservedField3(), "备用字段3");
+    }
+
+    private void validateOptionalOrderText(String value, String fieldName) {
+        if (value != null && value.trim().length() > 120) {
+            throw new IllegalArgumentException(fieldName + "不能超过 120 个字符");
         }
     }
 

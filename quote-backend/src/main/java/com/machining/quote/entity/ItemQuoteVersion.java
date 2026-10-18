@@ -28,6 +28,13 @@ public class ItemQuoteVersion {
     private String customerProjectNo;
     private String customerOrderTitle;
     private String internalProjectNo;
+    private String manufacturingProcessType;
+    @TableField("reserved_field_1")
+    private String reservedField1;
+    @TableField("reserved_field_2")
+    private String reservedField2;
+    @TableField("reserved_field_3")
+    private String reservedField3;
     @Deprecated
     private String salesMaterialNo;
     @Deprecated

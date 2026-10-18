@@ -192,7 +192,12 @@ class SalesOrderReleaseAppendServiceTest extends SalesOrderQpoImportTestSupport 
         SalesOrderHeader target = targetSalesOrder(301L, "未同步");
         target.setCustomerOrderNo(null);
         target.setInternalProjectNo(null);
+        target.setManufacturingProcessType("订单加工");
+        target.setReservedField1("订单备用1");
+        target.setReservedField2("订单备用2");
+        target.setReservedField3("订单备用3");
         SalesOrderQpoExcelParseResult parsed = appendParseResult();
+        parsed.getOrders().get(0).getLines().get(0).setManufacturingProcessType("零件加工");
         parsed.getOrders().forEach(group -> group.getLines().forEach(line -> {
             line.setCustomerOrderNo("EXCEL-PO");
             line.setInternalProjectNo("EXCEL-INTERNAL");
@@ -233,6 +238,14 @@ class SalesOrderReleaseAppendServiceTest extends SalesOrderQpoImportTestSupport 
         verify(parser).parse(any(InputStream.class), defaultsCaptor.capture());
         assertThat(defaultsCaptor.getValue().getCustomerOrderNo()).isNull();
         assertThat(defaultsCaptor.getValue().getInternalProjectNo()).isNull();
+        assertThat(defaultsCaptor.getValue().getManufacturingProcessType()).isEqualTo("订单加工");
+        assertThat(insertedCaptor.getAllValues().get(0).getManufacturingProcessType()).isEqualTo("零件加工");
+        assertThat(insertedCaptor.getAllValues().get(1).getManufacturingProcessType()).isEqualTo("订单加工");
+        assertThat(insertedCaptor.getAllValues()).allSatisfy(item -> {
+            assertThat(item.getReservedField1()).isEqualTo("订单备用1");
+            assertThat(item.getReservedField2()).isEqualTo("订单备用2");
+            assertThat(item.getReservedField3()).isEqualTo("订单备用3");
+        });
     }
 
     @Test

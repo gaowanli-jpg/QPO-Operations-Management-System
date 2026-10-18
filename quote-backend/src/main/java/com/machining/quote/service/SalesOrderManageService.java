@@ -1186,6 +1186,10 @@ public class SalesOrderManageService {
         row.put("salesOrderDate", order.getSalesOrderDate());
         row.put("customerOrderNo", order.getCustomerOrderNo());
         row.put("customerProjectNo", order.getCustomerProjectNo());
+        row.put("manufacturingProcessType", order.getManufacturingProcessType());
+        row.put("reservedField1", order.getReservedField1());
+        row.put("reservedField2", order.getReservedField2());
+        row.put("reservedField3", order.getReservedField3());
         row.put("customerOrderTitle", order.getCustomerOrderTitle());
         row.put("orderType", order.getOrderType());
         row.put("internalProjectNo", order.getInternalProjectNo());

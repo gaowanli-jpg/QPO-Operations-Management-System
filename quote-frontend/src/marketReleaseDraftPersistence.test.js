@@ -7,6 +7,29 @@ import {
 } from './components/marketReleaseDrafts'
 
 describe('market release draft persistence', () => {
+  test('retains manufacturing field drafts across pagination and detects cleared values', () => {
+    const fresh = {
+      id: 301,
+      manufacturingProcessType: '加工',
+      reservedField1: '备用1',
+      reservedField2: '备用2',
+      reservedField3: '备用3'
+    }
+    const hydrated = hydrateReleaseItemDrafts(fresh, {
+      ...fresh,
+      manufacturingProcessTypeDraft: '人工覆盖',
+      reservedField1Draft: '',
+      reservedField2Draft: '新备用2',
+      reservedField3Draft: '新备用3'
+    })
+    expect(hydrated.manufacturingProcessTypeDraft).toBe('人工覆盖')
+    expect(hydrated.reservedField1Draft).toBe('')
+    expect(hydrated.reservedField2Draft).toBe('新备用2')
+    expect(hydrated.reservedField3Draft).toBe('新备用3')
+    expect(hasReleaseDraftChange(hydrated, 'reservedField1Draft', 'reservedField1')).toBe(true)
+    expect(releaseDraftChangeSummary(hydrated)).toMatchObject({ orderFields: true, any: true })
+  })
+
   test('preserves selected row drafts when a page is reloaded', () => {
     const freshRow = {
       id: 301,

@@ -270,6 +270,11 @@ public class InternalTargetLeadTimeService {
                 req.getCustomerOrderNo(), "客户订单号", CUSTOMER_ORDER_NO_MAX_LENGTH);
         String customerProjectNo = normalizeReleaseOrderText(
                 req.getCustomerProjectNo(), "客户项目号", CUSTOMER_PROJECT_NO_MAX_LENGTH);
+        String manufacturingProcessType = normalizeReleaseOrderText(
+                req.getManufacturingProcessType(), "制造加工类型", CUSTOMER_PROJECT_NO_MAX_LENGTH);
+        String reservedField1 = normalizeReleaseOrderText(req.getReservedField1(), "备用字段1", CUSTOMER_PROJECT_NO_MAX_LENGTH);
+        String reservedField2 = normalizeReleaseOrderText(req.getReservedField2(), "备用字段2", CUSTOMER_PROJECT_NO_MAX_LENGTH);
+        String reservedField3 = normalizeReleaseOrderText(req.getReservedField3(), "备用字段3", CUSTOMER_PROJECT_NO_MAX_LENGTH);
         String customerOrderTitle = normalizeReleaseOrderText(
                 req.getCustomerOrderTitle(), "客户下单抬头", CUSTOMER_ORDER_TITLE_MAX_LENGTH);
         String orderType = normalizeReleaseOrderType(req.getOrderType());
@@ -280,6 +285,10 @@ public class InternalTargetLeadTimeService {
                 salesOrderDate,
                 customerOrderNo,
                 customerProjectNo,
+                manufacturingProcessType,
+                reservedField1,
+                reservedField2,
+                reservedField3,
                 customerOrderTitle,
                 orderType,
                 internalProjectNo);
@@ -288,10 +297,21 @@ public class InternalTargetLeadTimeService {
         item.setSalesOrderDate(salesOrderDate);
         item.setCustomerOrderNo(customerOrderNo);
         item.setCustomerProjectNo(customerProjectNo);
+        item.setManufacturingProcessType(manufacturingProcessType);
+        item.setReservedField1(reservedField1);
+        item.setReservedField2(reservedField2);
+        item.setReservedField3(reservedField3);
         item.setCustomerOrderTitle(customerOrderTitle);
         item.setOrderType(orderType);
         item.setInternalProjectNo(internalProjectNo);
-        itemMapper.updateById(item);
+        UpdateWrapper<ItemQuoteVersion> update = new UpdateWrapper<>();
+        update.eq("id", item.getId())
+                .eq("rfq_id", req.getRfqId())
+                .set(manufacturingProcessType == null, "manufacturing_process_type", null)
+                .set(reservedField1 == null, "reserved_field_1", null)
+                .set(reservedField2 == null, "reserved_field_2", null)
+                .set(reservedField3 == null, "reserved_field_3", null);
+        itemMapper.update(item, update);
 
         ItemQuoteVersion saved = itemMapper.selectById(item.getId());
         Map<String, Object> savedRow = buildItemRow(saved == null ? item : saved);
@@ -316,6 +336,10 @@ public class InternalTargetLeadTimeService {
             LocalDate salesOrderDate,
             String customerOrderNo,
             String customerProjectNo,
+            String manufacturingProcessType,
+            String reservedField1,
+            String reservedField2,
+            String reservedField3,
             String customerOrderTitle,
             String orderType,
             String internalProjectNo) {
@@ -328,6 +352,18 @@ public class InternalTargetLeadTimeService {
         }
         if (!Objects.equals(item.getCustomerProjectNo(), customerProjectNo)) {
             changedFields.add("customerProjectNo");
+        }
+        if (!Objects.equals(item.getManufacturingProcessType(), manufacturingProcessType)) {
+            changedFields.add("manufacturingProcessType");
+        }
+        if (!Objects.equals(item.getReservedField1(), reservedField1)) {
+            changedFields.add("reservedField1");
+        }
+        if (!Objects.equals(item.getReservedField2(), reservedField2)) {
+            changedFields.add("reservedField2");
+        }
+        if (!Objects.equals(item.getReservedField3(), reservedField3)) {
+            changedFields.add("reservedField3");
         }
         if (!Objects.equals(item.getCustomerOrderTitle(), customerOrderTitle)) {
             changedFields.add("customerOrderTitle");
@@ -1494,6 +1530,10 @@ public class InternalTargetLeadTimeService {
         row.put("salesOrderDate", item.getSalesOrderDate());
         row.put("customerOrderNo", item.getCustomerOrderNo());
         row.put("customerProjectNo", item.getCustomerProjectNo());
+        row.put("manufacturingProcessType", item.getManufacturingProcessType());
+        row.put("reservedField1", item.getReservedField1());
+        row.put("reservedField2", item.getReservedField2());
+        row.put("reservedField3", item.getReservedField3());
         row.put("customerOrderTitle", item.getCustomerOrderTitle());
         row.put("orderType", item.getOrderType());
         row.put("internalProjectNo", item.getInternalProjectNo());

@@ -121,6 +121,43 @@ class ReleaseItemDataReplacementStage4ConfirmServiceTest {
     }
 
     @Test
+    void confirmUpdatesManufacturingTypeAndPersistsClearedReservedFields() {
+        ReleaseItemDataReplacementExcelParseResult parsed = parseResult(
+                List.of("manufacturingProcessType", "reservedField1", "reservedField2", "reservedField3"),
+                excelRow(2, "P-001", "A", values(
+                        "manufacturingProcessType", "精加工",
+                        "reservedField1", null,
+                        "reservedField2", null,
+                        "reservedField3", null)));
+        ItemQuoteVersion changed = item(201, 101, "P-001", "A", 10);
+        changed.setManufacturingProcessType("粗加工");
+        changed.setReservedField1("旧备用1");
+        changed.setReservedField2("旧备用2");
+        changed.setReservedField3("旧备用3");
+        TestContext context = context(parsed, List.of(order(101, "RFQ-101", "ACME")), List.of(changed), List.of());
+        when(context.itemMapper.update(any(ItemQuoteVersion.class), any(Wrapper.class))).thenReturn(1);
+
+        String fingerprint = context.service.preview(List.of(ReleaseOrderSource.rfq(101)), stream())
+                .getPreviewFingerprint();
+        ReleaseItemDataReplacementConfirmDTO result = context.service.confirm(
+                List.of(ReleaseOrderSource.rfq(101)), stream(), fingerprint);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getSummary().getUpdatedItemCount()).isEqualTo(1);
+        assertThat(changed.getManufacturingProcessType()).isEqualTo("精加工");
+        assertThat(changed.getReservedField1()).isNull();
+        assertThat(changed.getReservedField2()).isNull();
+        assertThat(changed.getReservedField3()).isNull();
+        assertThat(changed.getQty()).isEqualTo(10);
+        verify(context.itemMapper).update(eq(changed), argThat(wrapper ->
+                wrapper.getSqlSet().contains("reserved_field_1")
+                        && wrapper.getSqlSet().contains("reserved_field_2")
+                        && wrapper.getSqlSet().contains("reserved_field_3")
+                        && !wrapper.getSqlSet().contains("manufacturing_process_type")));
+        verify(context.itemMapper, never()).updateById(any(ItemQuoteVersion.class));
+    }
+
+    @Test
     void confirmWithoutItemIdentifierUpdatesAllMatchingPartVersionRows() {
         ReleaseItemDataReplacementExcelParseResult parsed = parseResult(
                 List.of("materialName"),

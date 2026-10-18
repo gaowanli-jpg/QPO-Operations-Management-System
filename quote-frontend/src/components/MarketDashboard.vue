@@ -223,6 +223,18 @@
                           :disabled="isPending(IMPORT_SALES_ORDER_ACTION_KEY)"
                         />
                       </el-form-item>
+                      <el-form-item label="制造加工类型">
+                        <el-input v-model.trim="salesOrderForm.manufacturingProcessType" placeholder="请输入制造加工类型" maxlength="120" clearable :disabled="isPending(IMPORT_SALES_ORDER_ACTION_KEY)" />
+                      </el-form-item>
+                      <el-form-item label="备用字段1">
+                        <el-input v-model.trim="salesOrderForm.reservedField1" placeholder="请输入备用字段1" maxlength="120" clearable :disabled="isPending(IMPORT_SALES_ORDER_ACTION_KEY)" />
+                      </el-form-item>
+                      <el-form-item label="备用字段2">
+                        <el-input v-model.trim="salesOrderForm.reservedField2" placeholder="请输入备用字段2" maxlength="120" clearable :disabled="isPending(IMPORT_SALES_ORDER_ACTION_KEY)" />
+                      </el-form-item>
+                      <el-form-item label="备用字段3">
+                        <el-input v-model.trim="salesOrderForm.reservedField3" placeholder="请输入备用字段3" maxlength="120" clearable :disabled="isPending(IMPORT_SALES_ORDER_ACTION_KEY)" />
+                      </el-form-item>
                       <el-form-item label="客户下单抬头">
                         <el-input
                           v-model.trim="salesOrderForm.customerOrderTitle"
@@ -254,7 +266,7 @@
               </div>
               <div class="upload-box step-panel">
                 <el-alert
-                  title="销售订单 Excel 需包含表头：图号、订单数量、版本；可选表头：下单日期、客户订单号、客户项目号、客户下单抬头、订单类型、内部项目号、客户交期、内部交期(给生产的交期)、描述、材料、表面处理、VAT单价-含税、未税单价(CNY)、（未税）金额、备注。订单级字段以下方“订单默认信息”为准；Excel 行内同名字段仅作为零件级覆盖值，行内为空时继承订单默认信息。价格允许为空，但 U9 同步前必须补齐。日期字段（下单日期、客户交期、内部交期）支持具体日期（如 2026-03-08、2026-3-8、2026.03.08、2026.3.8、2026/3/8、2026年3月8日）或 Excel 日期序列号（如 46089）；订单数量必须为正整数；（未税）金额为空且未税单价存在时按未税单价×订单数量计算。客户和单据类型在前两步选择。"
+                  title="销售订单 Excel 需包含表头：图号、订单数量、版本；可选表头：下单日期、客户订单号、客户项目号、制造加工类型、备用字段1、备用字段2、备用字段3、客户下单抬头、订单类型、内部项目号、客户交期、内部交期(给生产的交期)、描述、材料、表面处理、VAT单价-含税、未税单价(CNY)、（未税）金额、备注。订单级字段以上方“订单默认信息”为准；Excel 行内同名字段仅作为零件级覆盖值，行内为空时继承订单默认信息。制造加工类型和三个备用字段为可选文本，最多120字符。价格允许为空，但 U9 同步前必须补齐。日期字段（下单日期、客户交期、内部交期）支持具体日期（如 2026-03-08、2026-3-8、2026.03.08、2026.3.8、2026/3/8、2026年3月8日）或 Excel 日期序列号（如 46089）；订单数量必须为正整数；（未税）金额为空且未税单价存在时按未税单价×订单数量计算。客户和单据类型在前两步选择。"
                   type="info"
                   show-icon
                   :closable="false"
@@ -484,6 +496,10 @@ const salesOrderForm = reactive({
   salesOrderDate: todayLocalDate(),
   customerOrderNo: '',
   customerProjectNo: '',
+  manufacturingProcessType: '',
+  reservedField1: '',
+  reservedField2: '',
+  reservedField3: '',
   customerOrderTitle: '',
   orderType: '正式订单',
   internalProjectNo: ''
@@ -711,6 +727,10 @@ const submitSalesOrderImport = async () => {
     formData.append('salesOrderDate', salesOrderForm.salesOrderDate)
     formData.append('customerOrderNo', customerOrderNo)
     formData.append('customerProjectNo', salesOrderForm.customerProjectNo.trim())
+    formData.append('manufacturingProcessType', salesOrderForm.manufacturingProcessType.trim())
+    formData.append('reservedField1', salesOrderForm.reservedField1.trim())
+    formData.append('reservedField2', salesOrderForm.reservedField2.trim())
+    formData.append('reservedField3', salesOrderForm.reservedField3.trim())
     formData.append('customerOrderTitle', salesOrderForm.customerOrderTitle.trim())
     formData.append('orderType', salesOrderForm.orderType)
     formData.append('internalProjectNo', internalProjectNo)
@@ -754,6 +774,10 @@ const submitSalesOrderImport = async () => {
           salesOrderForm.salesOrderDate = todayLocalDate()
           salesOrderForm.customerOrderNo = ''
           salesOrderForm.customerProjectNo = ''
+          salesOrderForm.manufacturingProcessType = ''
+          salesOrderForm.reservedField1 = ''
+          salesOrderForm.reservedField2 = ''
+          salesOrderForm.reservedField3 = ''
           salesOrderForm.customerOrderTitle = ''
           salesOrderForm.orderType = '正式订单'
           salesOrderForm.internalProjectNo = ''

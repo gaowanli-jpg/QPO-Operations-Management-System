@@ -24,6 +24,12 @@ import com.machining.quote.mapper.SalesOrderItemAssemblyRelationMapper;
 import com.machining.quote.mapper.SalesOrderItemMapper;
 import com.machining.quote.mapper.SalesOrderSourceRfqMapper;
 import com.machining.quote.service.DeliveryService;
+import com.machining.quote.service.InternalTargetLeadTimeService;
+import com.machining.quote.service.SalesOrderMaintenanceService;
+import com.machining.quote.dto.ReleaseItemOrderFieldUpdateReq;
+import com.machining.quote.dto.SalesOrderMaintenanceOrderUpdateReq;
+import com.machining.quote.dto.SalesOrderItemUpdateLineReq;
+import com.machining.quote.dto.SalesOrderItemUpdateReq;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -67,6 +73,41 @@ class RfqReleaseSalesOrderIntegrationTest {
     private SalesOrderSourceRfqMapper sourceRfqMapper;
     @Autowired
     private SalesOrderItemAssemblyRelationMapper salesAssemblyMapper;
+    @Autowired
+    private InternalTargetLeadTimeService releaseItemService;
+    @Autowired
+    private SalesOrderMaintenanceService maintenanceService;
+
+    @Test
+    void persistsAndClearsRfqManufacturingFieldsWithoutSendingThemDownstream() {
+        String suffix = String.valueOf(System.nanoTime());
+        CustomerMaster customer = customer("字段维护-" + suffix, "FIELDS-" + suffix);
+        OrderRfq rfq = order(customer, "FIELDS-RFQ-" + suffix);
+        ItemQuoteVersion source = item(rfq, "FIELDS-PART-" + suffix, 10, 1);
+        ReleaseItemOrderFieldUpdateReq req = new ReleaseItemOrderFieldUpdateReq();
+        req.setRfqId(rfq.getId());
+        req.setManufacturingProcessType(" 自由加工类型 ");
+        req.setReservedField1("备用1");
+        req.setReservedField2("备用2");
+        req.setReservedField3("备用3");
+        releaseItemService.updateReleaseItemOrderFields(source.getId(), req);
+        ItemQuoteVersion saved = itemMapper.selectById(source.getId());
+        assertThat(saved.getManufacturingProcessType()).isEqualTo("自由加工类型");
+        assertThat(saved.getReservedField1()).isEqualTo("备用1");
+        assertThat(saved.getReservedField2()).isEqualTo("备用2");
+        assertThat(saved.getReservedField3()).isEqualTo("备用3");
+        req.setManufacturingProcessType(null);
+        req.setReservedField1("");
+        req.setReservedField2(" ");
+        req.setReservedField3(null);
+        releaseItemService.updateReleaseItemOrderFields(source.getId(), req);
+        saved = itemMapper.selectById(source.getId());
+        assertThat(saved.getManufacturingProcessType()).isNull();
+        assertThat(saved.getReservedField1()).isNull();
+        assertThat(saved.getReservedField2()).isNull();
+        assertThat(saved.getReservedField3()).isNull();
+        assertThat(ticketMapper.selectCount(new QueryWrapper<OrderDeliveryTicket>().eq("rfq_id", rfq.getId()))).isZero();
+    }
 
     @Test
     void atomicallyCreatesOneDerivedSalesOrderWithEffectiveItemValuesAndStableRelations() {
@@ -80,6 +121,10 @@ class RfqReleaseSalesOrderIntegrationTest {
         parent.setSalesOrderDate(LocalDate.of(2026, 8, 1));
         parent.setCustomerOrderNo("ITEM-CUSTOMER-ORDER");
         parent.setCustomerProjectNo("ITEM-CUSTOMER-PROJECT");
+        parent.setManufacturingProcessType("零件加工");
+        parent.setReservedField1("零件备用1");
+        parent.setReservedField2("零件备用2");
+        parent.setReservedField3("零件备用3");
         parent.setCustomerOrderTitle("ITEM-TITLE");
         parent.setOrderType("备货订单");
         parent.setInternalProjectNo("ITEM-INTERNAL");
@@ -97,6 +142,10 @@ class RfqReleaseSalesOrderIntegrationTest {
         assembly(firstOrder.getId(), parent.getId(), child.getId());
 
         DeliveryGenerateReq req = request(firstOrder, secondOrder, parent, child, other, "rfq-release-sales-order-" + suffix);
+        req.setManufacturingProcessType("默认加工");
+        req.setReservedField1("默认备用1");
+        req.setReservedField2("默认备用2");
+        req.setReservedField3("默认备用3");
 
         DeliveryBatchResultDTO result = deliveryService.generateRfqReleaseBatch(req);
 
@@ -127,6 +176,10 @@ class RfqReleaseSalesOrderIntegrationTest {
         assertThat(header.getOrderType()).isEqualTo("正式订单");
         assertThat(header.getInternalProjectNo()).isEqualTo("DEFAULT-INTERNAL");
         assertThat(header.getTotalItemCount()).isEqualTo(3);
+        assertThat(header.getManufacturingProcessType()).isEqualTo("默认加工");
+        assertThat(header.getReservedField1()).isEqualTo("默认备用1");
+        assertThat(header.getReservedField2()).isEqualTo("默认备用2");
+        assertThat(header.getReservedField3()).isEqualTo("默认备用3");
 
         List<SalesOrderSourceRfq> sources = sourceRfqMapper.selectList(
                 new QueryWrapper<SalesOrderSourceRfq>()
@@ -167,6 +220,14 @@ class RfqReleaseSalesOrderIntegrationTest {
         assertStandardProcessRoute(parentSalesItem.getProcessRoute());
 
         SalesOrderItem childSalesItem = salesItemBySource.get(child.getId().longValue());
+        assertThat(parentSalesItem.getManufacturingProcessType()).isEqualTo("零件加工");
+        assertThat(parentSalesItem.getReservedField1()).isEqualTo("零件备用1");
+        assertThat(parentSalesItem.getReservedField2()).isEqualTo("零件备用2");
+        assertThat(parentSalesItem.getReservedField3()).isEqualTo("零件备用3");
+        assertThat(childSalesItem.getManufacturingProcessType()).isEqualTo("默认加工");
+        assertThat(childSalesItem.getReservedField1()).isEqualTo("默认备用1");
+        assertThat(childSalesItem.getReservedField2()).isEqualTo("默认备用2");
+        assertThat(childSalesItem.getReservedField3()).isEqualTo("默认备用3");
         assertThat(childSalesItem.getSalesOrderDate()).isEqualTo(req.getSalesOrderDate());
         assertThat(childSalesItem.getCustomerOrderNo()).isEqualTo(req.getCustomerOrderNo());
         assertThat(childSalesItem.getCustomerProjectNo()).isEqualTo(req.getCustomerProjectNo());
@@ -223,6 +284,31 @@ class RfqReleaseSalesOrderIntegrationTest {
         assertThat(countHeaders(req.getReleaseBatchKey())).isEqualTo(1);
         assertThat(countSalesItems(header.getId())).isEqualTo(3);
         assertThat(countTickets(firstOrder.getId(), secondOrder.getId())).isEqualTo(3);
+
+        SalesOrderMaintenanceOrderUpdateReq headerUpdate = new SalesOrderMaintenanceOrderUpdateReq();
+        headerUpdate.setManufacturingProcessType("新订单默认加工");
+        maintenanceService.saveOrder(header.getId(), headerUpdate);
+        assertThat(headerMapper.selectById(header.getId()).getManufacturingProcessType()).isEqualTo("新订单默认加工");
+        assertThat(salesItemMapper.selectById(childSalesItem.getId()).getManufacturingProcessType()).isEqualTo("默认加工");
+        SalesOrderItemUpdateLineReq itemUpdate = new SalesOrderItemUpdateLineReq();
+        itemUpdate.setSalesOrderItemId(childSalesItem.getId());
+        itemUpdate.setManufacturingProcessType(null);
+        itemUpdate.setReservedField1(null);
+        itemUpdate.setReservedField2(null);
+        itemUpdate.setReservedField3(null);
+        SalesOrderItemUpdateReq itemReq = new SalesOrderItemUpdateReq();
+        itemReq.setItems(List.of(itemUpdate));
+        maintenanceService.saveItems(header.getId(), itemReq);
+        SalesOrderItem cleared = salesItemMapper.selectById(childSalesItem.getId());
+        assertThat(cleared.getManufacturingProcessType()).isNull();
+        assertThat(cleared.getReservedField1()).isNull();
+        assertThat(cleared.getReservedField2()).isNull();
+        assertThat(cleared.getReservedField3()).isNull();
+
+        parent.setReservedField3("changed-after-release");
+        itemMapper.updateById(parent);
+        assertThatThrownBy(() -> deliveryService.generateRfqReleaseBatch(req))
+                .hasMessageContaining("提单批次参数与首次提交不一致");
 
         req.setCustomerProjectNo("CHANGED-CUSTOMER-PROJECT");
         assertThatThrownBy(() -> deliveryService.generateRfqReleaseBatch(req))

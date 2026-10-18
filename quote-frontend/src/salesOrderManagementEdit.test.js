@@ -9,6 +9,22 @@ const replacementDialogSource = () => readFileSync(resolve(currentDir, 'componen
 const apiSource = () => readFileSync(resolve(currentDir, 'services', 'orderApi.js'), 'utf8')
 
 describe('sales order management editable detail', () => {
+  test('manufacturing fields are independently editable while only manufacturing type appears in the order list', () => {
+    const component = componentSource()
+    const orderList = component.slice(0, component.indexOf('<el-dialog'))
+    expect(orderList).toContain('prop="manufacturingProcessType"')
+    for (const field of ['manufacturingProcessType', 'reservedField1', 'reservedField2', 'reservedField3']) {
+      expect(component).toContain(`orderEditDraft.${field}`)
+      expect(component).toContain(`draftValue(row.${field})`)
+      expect(component).toContain(`key: '${field}'`)
+    }
+    for (const field of ['reservedField1', 'reservedField2', 'reservedField3']) {
+      expect(orderList).not.toContain(`prop="${field}"`)
+    }
+    expect(component).toContain('v-model="itemDrafts[row.id][field.key]"')
+    expect(component).toContain('maxlength="120"')
+  })
+
   test('order detail exposes header editing under sales order update permission', () => {
     const component = componentSource()
 

@@ -18,6 +18,10 @@ public enum ReleaseItemDataReplacementField {
     SALES_ORDER_DATE("下单日期", "salesOrderDate", ValueType.DATE, null, true),
     CUSTOMER_ORDER_NO("客户订单号", "customerOrderNo", ValueType.TEXT, 120, true),
     CUSTOMER_PROJECT_NO("客户项目号", "customerProjectNo", ValueType.TEXT, 120, true),
+    MANUFACTURING_PROCESS_TYPE("制造加工类型", "manufacturingProcessType", ValueType.TEXT, 120, true),
+    RESERVED_FIELD_1("备用字段1", "reservedField1", ValueType.TEXT, 120, true),
+    RESERVED_FIELD_2("备用字段2", "reservedField2", ValueType.TEXT, 120, true),
+    RESERVED_FIELD_3("备用字段3", "reservedField3", ValueType.TEXT, 120, true),
     CUSTOMER_ORDER_TITLE("客户下单抬头", "customerOrderTitle", ValueType.TEXT, 255, true),
     ORDER_TYPE("订单类型", "orderType", ValueType.ORDER_TYPE, 20, true),
     INTERNAL_PROJECT_NO("内部项目号", "internalProjectNo", ValueType.TEXT, 120, true);

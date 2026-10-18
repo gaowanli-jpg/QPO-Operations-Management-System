@@ -1,6 +1,7 @@
 package com.machining.quote.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
@@ -33,6 +34,13 @@ public class SalesOrderHeader {
     private String customerOrderTitle;
     private String orderType;
     private String internalProjectNo;
+    private String manufacturingProcessType;
+    @TableField("reserved_field_1")
+    private String reservedField1;
+    @TableField("reserved_field_2")
+    private String reservedField2;
+    @TableField("reserved_field_3")
+    private String reservedField3;
     private String status;
     private Boolean linkedDiscarded;
     private LocalDateTime linkedDiscardedAt;

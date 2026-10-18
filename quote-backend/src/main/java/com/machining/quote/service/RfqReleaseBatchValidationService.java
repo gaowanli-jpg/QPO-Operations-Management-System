@@ -6,6 +6,7 @@ import com.machining.quote.dto.ReleaseSourceType;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.mapper.OrderRfqMapper;
+import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -31,6 +32,8 @@ public class RfqReleaseBatchValidationService {
 
     @Autowired
     private OrderRfqMapper orderRfqMapper;
+    @Autowired
+    private ItemQuoteVersionMapper itemMapper;
     @Autowired(required = false)
     private DataScopeService dataScopeService;
 
@@ -79,6 +82,11 @@ public class RfqReleaseBatchValidationService {
                 ? normalizeOptional(req.getCustomerOrderNo(), "客户订单号", MAX_TEXT_LENGTH)
                 : normalizeRequired(req.getCustomerOrderNo(), "客户订单号", MAX_TEXT_LENGTH);
         String customerProjectNo = normalizeOptional(req.getCustomerProjectNo(), "客户项目号", MAX_TEXT_LENGTH);
+        String manufacturingProcessType = normalizeOptional(
+                req.getManufacturingProcessType(), "制造加工类型", MAX_TEXT_LENGTH);
+        String reservedField1 = normalizeOptional(req.getReservedField1(), "备用字段1", MAX_TEXT_LENGTH);
+        String reservedField2 = normalizeOptional(req.getReservedField2(), "备用字段2", MAX_TEXT_LENGTH);
+        String reservedField3 = normalizeOptional(req.getReservedField3(), "备用字段3", MAX_TEXT_LENGTH);
         String customerOrderTitle = normalizeOptional(req.getCustomerOrderTitle(), "客户下单抬头", MAX_TITLE_LENGTH);
         String projectNo = normalizeOptional(req.getProjectNo(), "项目号", MAX_TEXT_LENGTH);
         String arrangeType = defaultText(req.getArrangeType(), "计划");
@@ -117,7 +125,8 @@ public class RfqReleaseBatchValidationService {
         validateItemReferences(req.getItems(), rfqIds);
         String requestHash = calculateRequestHash(
                 customerCode, rfqIds, req, documentTypeCode, salesOrderDate, customerOrderTitle,
-                orderType, internalProjectNo, customerOrderNo, customerProjectNo, projectNo, arrangeType);
+                orderType, internalProjectNo, customerOrderNo, customerProjectNo, manufacturingProcessType,
+                reservedField1, reservedField2, reservedField3, projectNo, arrangeType);
         String releaseBatchKeySummary = sha256(releaseBatchKey).substring(0, 12);
         return new BatchContext(
                 rfqIds,
@@ -132,6 +141,10 @@ public class RfqReleaseBatchValidationService {
                 internalProjectNo,
                 customerOrderNo,
                 customerProjectNo,
+                manufacturingProcessType,
+                reservedField1,
+                reservedField2,
+                reservedField3,
                 projectNo,
                 arrangeType,
                 releaseBatchKey,
@@ -220,6 +233,10 @@ public class RfqReleaseBatchValidationService {
             String internalProjectNo,
             String customerOrderNo,
             String customerProjectNo,
+            String manufacturingProcessType,
+            String reservedField1,
+            String reservedField2,
+            String reservedField3,
             String projectNo,
             String arrangeType) {
         String lines = req.getItems().stream()
@@ -239,10 +256,44 @@ public class RfqReleaseBatchValidationService {
                 internalProjectNo,
                 customerOrderNo,
                 safe(customerProjectNo),
+                safe(manufacturingProcessType),
+                safe(reservedField1),
+                safe(reservedField2),
+                safe(reservedField3),
                 safe(projectNo),
                 arrangeType,
-                lines);
+                lines,
+                manufacturingFieldsFingerprint(
+                        req.getItems().stream().map(line -> toInteger(line.getSourceItemId())).toList(),
+                        java.util.Arrays.asList(manufacturingProcessType, reservedField1, reservedField2, reservedField3)));
         return sha256(canonical);
+    }
+
+    public String manufacturingFieldsFingerprint(List<Integer> itemIds, List<String> defaults) {
+        List<Integer> sortedIds = itemIds.stream().filter(Objects::nonNull).distinct().sorted().toList();
+        Map<Integer, ItemQuoteVersion> items = new LinkedHashMap<>();
+        if (!sortedIds.isEmpty()) {
+            itemMapper.selectBatchIds(sortedIds).forEach(item -> items.put(item.getId(), item));
+        }
+        StringBuilder canonical = new StringBuilder();
+        for (Integer itemId : sortedIds) {
+            ItemQuoteVersion item = items.get(itemId);
+            if (item == null) {
+                throw new RuntimeException("提单零件不存在");
+            }
+            canonical.append(itemId).append(':');
+            List<String> values = java.util.Arrays.asList(item.getManufacturingProcessType(),
+                    item.getReservedField1(), item.getReservedField2(), item.getReservedField3());
+            for (int index = 0; index < values.size(); index++) {
+                String value = normalizeOptional(values.get(index), "制造加工类型或备用字段", MAX_TEXT_LENGTH);
+                if (value == null) {
+                    value = defaults.get(index);
+                }
+                String normalized = safe(normalizeOptional(value, "制造加工类型或备用字段", MAX_TEXT_LENGTH));
+                canonical.append(normalized.length()).append(':').append(normalized);
+            }
+        }
+        return sha256(canonical.toString());
     }
 
     private List<Integer> normalizeRfqIds(List<Integer> rfqIds) {
@@ -312,11 +363,57 @@ public class RfqReleaseBatchValidationService {
             String internalProjectNo,
             String customerOrderNo,
             String customerProjectNo,
+            String manufacturingProcessType,
+            String reservedField1,
+            String reservedField2,
+            String reservedField3,
             String projectNo,
             String arrangeType,
             String releaseBatchKey,
             String releaseBatchKeySummary,
             String requestHash) {
+
+        public BatchContext(
+                List<Integer> rfqIds,
+                Map<Integer, OrderRfq> orders,
+                String customerCode,
+                String customerShortName,
+                String customerName,
+                String documentTypeCode,
+                LocalDate salesOrderDate,
+                String customerOrderTitle,
+                String orderType,
+                String internalProjectNo,
+                String customerOrderNo,
+                String customerProjectNo,
+                String projectNo,
+                String arrangeType,
+                String releaseBatchKey,
+                String releaseBatchKeySummary,
+                String requestHash) {
+            this(
+                    rfqIds,
+                    orders,
+                    customerCode,
+                    customerShortName,
+                    customerName,
+                    documentTypeCode,
+                    salesOrderDate,
+                    customerOrderTitle,
+                    orderType,
+                    internalProjectNo,
+                    customerOrderNo,
+                    customerProjectNo,
+                    null,
+                    null,
+                    null,
+                    null,
+                    projectNo,
+                    arrangeType,
+                    releaseBatchKey,
+                    releaseBatchKeySummary,
+                    requestHash);
+        }
     }
 
     private static final class SetHolder {

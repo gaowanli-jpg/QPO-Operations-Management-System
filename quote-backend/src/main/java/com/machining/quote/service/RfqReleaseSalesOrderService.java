@@ -329,6 +329,11 @@ public class RfqReleaseSalesOrderService {
                 ? context.salesOrderDate() : item.getSalesOrderDate();
         String customerOrderNo = firstText(item.getCustomerOrderNo(), context.customerOrderNo());
         String customerProjectNo = firstText(item.getCustomerProjectNo(), context.customerProjectNo());
+        String manufacturingProcessType = firstText(
+                item.getManufacturingProcessType(), context.manufacturingProcessType());
+        String reservedField1 = firstText(item.getReservedField1(), context.reservedField1());
+        String reservedField2 = firstText(item.getReservedField2(), context.reservedField2());
+        String reservedField3 = firstText(item.getReservedField3(), context.reservedField3());
         String customerOrderTitle = firstText(item.getCustomerOrderTitle(), context.customerOrderTitle());
         String orderType = firstText(item.getOrderType(), context.orderType());
         String internalProjectNo = firstText(item.getInternalProjectNo(), context.internalProjectNo());
@@ -345,6 +350,10 @@ public class RfqReleaseSalesOrderService {
                 salesOrderDate,
                 customerOrderNo,
                 customerProjectNo,
+                manufacturingProcessType,
+                reservedField1,
+                reservedField2,
+                reservedField3,
                 customerOrderTitle,
                 orderType,
                 internalProjectNo);
@@ -362,6 +371,18 @@ public class RfqReleaseSalesOrderService {
             }
             if (isBlank(item.getCustomerProjectNo())) {
                 item.setCustomerProjectNo(fields.customerProjectNo());
+            }
+            if (isBlank(item.getManufacturingProcessType())) {
+                item.setManufacturingProcessType(fields.manufacturingProcessType());
+            }
+            if (isBlank(item.getReservedField1())) {
+                item.setReservedField1(fields.reservedField1());
+            }
+            if (isBlank(item.getReservedField2())) {
+                item.setReservedField2(fields.reservedField2());
+            }
+            if (isBlank(item.getReservedField3())) {
+                item.setReservedField3(fields.reservedField3());
             }
             if (isBlank(item.getCustomerOrderTitle())) {
                 item.setCustomerOrderTitle(fields.customerOrderTitle());
@@ -396,6 +417,10 @@ public class RfqReleaseSalesOrderService {
         header.setSalesOrderDate(context.salesOrderDate());
         header.setCustomerOrderNo(context.customerOrderNo());
         header.setCustomerProjectNo(context.customerProjectNo());
+        header.setManufacturingProcessType(context.manufacturingProcessType());
+        header.setReservedField1(context.reservedField1());
+        header.setReservedField2(context.reservedField2());
+        header.setReservedField3(context.reservedField3());
         header.setCustomerOrderTitle(context.customerOrderTitle());
         header.setOrderType(context.orderType());
         header.setInternalProjectNo(context.internalProjectNo());
@@ -493,6 +518,10 @@ public class RfqReleaseSalesOrderService {
         item.setOrderType(fields.orderType());
         item.setCustomerOrderNo(fields.customerOrderNo());
         item.setCustomerProjectNo(fields.customerProjectNo());
+        item.setManufacturingProcessType(fields.manufacturingProcessType());
+        item.setReservedField1(fields.reservedField1());
+        item.setReservedField2(fields.reservedField2());
+        item.setReservedField3(fields.reservedField3());
         item.setCustomerOrderTitle(fields.customerOrderTitle());
         item.setInternalProjectNo(fields.internalProjectNo());
         copyConfirmedMaterial(source, item);
@@ -788,7 +817,10 @@ public class RfqReleaseSalesOrderService {
                 appendBatchKey,
                 String.valueOf(req.getTargetSalesOrderId()),
                 rfqIds.stream().map(String::valueOf).sorted().collect(Collectors.joining(",")),
-                lines));
+                lines,
+                validationService.manufacturingFieldsFingerprint(
+                        req.getItems().stream().map(this::toDeliveryLine).map(this::resolveItemId).toList(),
+                        java.util.Arrays.asList(null, null, null, null))));
     }
 
     private SalesOrderHeader lockAndValidateAppendTarget(Long targetSalesOrderId) {
@@ -829,6 +861,10 @@ public class RfqReleaseSalesOrderService {
         delegated.setInternalProjectNo(firstText(target.getInternalProjectNo(), ""));
         delegated.setCustomerOrderNo(firstText(target.getCustomerOrderNo(), ""));
         delegated.setCustomerProjectNo(trimToNull(target.getCustomerProjectNo()));
+        delegated.setManufacturingProcessType(trimToNull(target.getManufacturingProcessType()));
+        delegated.setReservedField1(trimToNull(target.getReservedField1()));
+        delegated.setReservedField2(trimToNull(target.getReservedField2()));
+        delegated.setReservedField3(trimToNull(target.getReservedField3()));
         delegated.setProjectNo(firstText(target.getSalesOrderNo(), target.getInternalProjectNo()));
         delegated.setArrangeType("计划");
         delegated.setItems(req.getItems().stream().map(this::toDeliveryLine).toList());
@@ -1119,8 +1155,32 @@ public class RfqReleaseSalesOrderService {
             LocalDate salesOrderDate,
             String customerOrderNo,
             String customerProjectNo,
+            String manufacturingProcessType,
+            String reservedField1,
+            String reservedField2,
+            String reservedField3,
             String customerOrderTitle,
             String orderType,
             String internalProjectNo) {
+
+        private EffectiveOrderFields(
+                LocalDate salesOrderDate,
+                String customerOrderNo,
+                String customerProjectNo,
+                String customerOrderTitle,
+                String orderType,
+                String internalProjectNo) {
+            this(
+                    salesOrderDate,
+                    customerOrderNo,
+                    customerProjectNo,
+                    null,
+                    null,
+                    null,
+                    null,
+                    customerOrderTitle,
+                    orderType,
+                    internalProjectNo);
+        }
     }
 }
