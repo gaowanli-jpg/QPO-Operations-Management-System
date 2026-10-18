@@ -123,7 +123,6 @@ import CustomerPickerDialog from './CustomerPickerDialog.vue'
 import CustomerAutocomplete from './CustomerAutocomplete.vue'
 import { listMarketOrders } from '../services/marketApi'
 import { listSetupOrders, listSupplementalPricingOrders } from '../services/engineerApi'
-import { listSalesOrderChangeOrders } from '../services/salesOrderChangeApi'
 
 const CUSTOMER_PERMISSION_BY_SCOPE = {
   'market-rfq': 'market:rfq:customer-select',
@@ -132,7 +131,6 @@ const CUSTOMER_PERMISSION_BY_SCOPE = {
   'release-append': 'market:release-append:customer-select',
   'delivery-document': 'market:delivery-document:customer-select',
   'u9-sync': 'market:u9-sync:customer-select',
-  'sales-order-change': 'change:sales-order:customer-select',
   'engineer-setup': 'engineer:setup:customer-select',
   'engineer-pricing': 'engineer:pricing:view',
   'market-order': 'market:order:customer-select'
@@ -145,7 +143,6 @@ const STATUS_OPTIONS_BY_SCOPE = {
   'release-append-sales-order': ['已生成提单'],
   'release-append': ['可追加'],
   'u9-sync': ['部分已提单', '已生成提单'],
-  'sales-order-change': ['部分已提单', '已生成提单'],
   'engineer-setup': ['未核价'],
   'engineer-supplemental-pricing': ['已核价', '已报价', '部分已提单', '已生成提单'],
   'quote-process-supplemental': ['已报价', '部分已提单', '已生成提单']
@@ -155,12 +152,11 @@ const ORDER_TYPE_LABEL_BY_SCOPE = {
   'release-append-sales-order': '销售订单',
   'release-append': '销售订单',
   'u9-sync': '销售订单',
-  'sales-order-change': '销售订单',
   'engineer-supplemental-pricing': '补图待核价 RFQ 订单',
   'quote-process-supplemental': '补充报价待确认 RFQ 订单'
 }
 
-const SALES_ORDER_SCOPES = ['release-append-sales-order', 'release-append', 'u9-sync', 'sales-order-change']
+const SALES_ORDER_SCOPES = ['release-append-sales-order', 'release-append', 'u9-sync']
 
 const props = defineProps({
   modelValue: {
@@ -393,9 +389,7 @@ const loadOrders = async () => {
       ? await listSetupOrders(params)
       : props.orderScope === 'engineer-supplemental-pricing'
         ? await listSupplementalPricingOrders(params)
-      : props.orderScope === 'sales-order-change'
-        ? await listSalesOrderChangeOrders(params)
-        : await listMarketOrders(params, props.orderScope)
+      : await listMarketOrders(params, props.orderScope)
     orders.value = response.records || []
     total.value = response.total || 0
   } catch (error) {

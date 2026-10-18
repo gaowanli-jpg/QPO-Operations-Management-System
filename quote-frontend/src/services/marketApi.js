@@ -28,8 +28,7 @@ const MARKET_ORDER_ENDPOINTS = {
   'release-append-sales-order': '/api/market/release/append-target-sales-orders',
   'release-append': '/api/market/release-append/sales-orders',
   'delivery-document': '/api/market/delivery-documents/orders',
-  'u9-sync': '/api/market/u9-sync/orders',
-  'sales-order-change': '/api/change/sales-orders'
+  'u9-sync': '/api/market/u9-sync/orders'
 }
 
 export const listMarketOrders = (params = {}, scope) => {

@@ -27,10 +27,6 @@ class SalesOrderLinkedChangeNoticePermissionTest {
                 .contains("@RequirePermission(\"change:linked-change:view\")")
                 .contains("@RequirePermission(\"change:linked-change:customer-select\")")
                 .contains("@RequirePermission(\"change:linked-change:handle\")");
-        assertThat(Files.readString(ROOT.resolve(Path.of(
-                "com", "machining", "quote", "controller", "SalesOrderChangeController.java")),
-                StandardCharsets.UTF_8))
-                .doesNotContain("linked-changes");
     }
 
     @Test

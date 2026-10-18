@@ -131,7 +131,6 @@ class PermissionCatalogCharacterizationTest {
                         "/engineering",
                         "/material-process",
                         "/linked-changes",
-                        "/sales-order-change",
                         "/users",
                         "/roles",
                         "/organization",
@@ -228,7 +227,6 @@ class PermissionCatalogCharacterizationTest {
                         "market:production-item:view",
                         "market:locked-item:view",
                         "change:linked-change:view",
-                        "change:sales-order:view",
                         "market:delivery-document:view",
                         "engineer:setup:view",
                         "system:role:view"
@@ -239,7 +237,11 @@ class PermissionCatalogCharacterizationTest {
                         "market:locked-item:mes-production-submit",
                         "common:customer:select",
                         "common:order:select",
-                        "market:sales-match:view"
+                        "market:sales-match:view",
+                        "change:sales-order:view",
+                        "change:sales-order:customer-select",
+                        "change:sales-order:order-select",
+                        "change:sales-order:update"
                 );
         assertThat(duplicates)
                 .as("Permission codes must be unique in the fallback catalog")

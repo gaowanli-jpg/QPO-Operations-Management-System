@@ -105,30 +105,28 @@ class PermissionRoleTreeServiceTest {
     }
 
     @Test
-    void permissionTreeGroupsSalesOrderChangeUnderChangeDirectory() {
+    void permissionTreeGroupsLinkedChangeUnderChangeDirectory() {
         SystemPermissionMapper permissionMapper = mock(SystemPermissionMapper.class);
         SystemRoleService service = new SystemRoleService();
         ReflectionTestUtils.setField(service, "permissionMapper", permissionMapper);
 
         when(permissionMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(
-                permission(202L, 0L, "MENU", "change:sales-order:view", "销售变更", true, true, 700),
-                permission(203L, 202L, "API", "change:sales-order:customer-select", "销售变更选择客户", false, true, 701),
-                permission(204L, 202L, "API", "change:sales-order:order-select", "销售变更选择订单", false, true, 702),
-                permission(205L, 202L, "BUTTON", "change:sales-order:update", "保存销售变更", false, true, 703)
+                permission(226L, 0L, "MENU", "change:linked-change:view", "Linked Changes", true, true, 700),
+                permission(227L, 226L, "API", "change:linked-change:customer-select", "Linked Change Customer", false, true, 701),
+                permission(228L, 226L, "BUTTON", "change:linked-change:handle", "Handle Linked Change", false, true, 702)
         ));
 
         List<PermissionTreeNodeDTO> tree = service.listPermissionTree();
 
         PermissionTreeNodeDTO changeGroup = findNode(tree, "group:change");
         assertThat(changeGroup.getLabel()).isEqualTo("变更");
-        PermissionTreeNodeDTO salesOrderChange = findNode(changeGroup.getChildren(), "change:sales-order:view");
-        assertThat(salesOrderChange.getPermissionName()).isEqualTo("销售变更");
-        assertThat(salesOrderChange.getChildren())
+        PermissionTreeNodeDTO linkedChange = findNode(changeGroup.getChildren(), "change:linked-change:view");
+        assertThat(linkedChange.getPermissionName()).isEqualTo("Linked Changes");
+        assertThat(linkedChange.getChildren())
                 .extracting(PermissionTreeNodeDTO::getPermissionCode)
                 .containsExactly(
-                        "change:sales-order:customer-select",
-                        "change:sales-order:order-select",
-                        "change:sales-order:update"
+                        "change:linked-change:customer-select",
+                        "change:linked-change:handle"
                 );
     }
 

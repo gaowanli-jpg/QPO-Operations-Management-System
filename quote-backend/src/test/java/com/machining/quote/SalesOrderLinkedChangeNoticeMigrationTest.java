@@ -49,7 +49,7 @@ class SalesOrderLinkedChangeNoticeMigrationTest {
                     .mapToInt(matcher -> Integer.parseInt(matcher.group(1)))
                     .max().orElse(0);
         }
-        assertThat(maxVersion).isEqualTo(62);
+        assertThat(maxVersion).isEqualTo(63);
 
         Path migration = MIGRATION_DIR.resolve("V56__sales_order_linked_change_notice_filter_fields.sql");
         assertThat(migration).exists();
@@ -105,5 +105,17 @@ class SalesOrderLinkedChangeNoticeMigrationTest {
                 .contains("Legacy quantity snapshot")
                 .contains("new linked allocations do not write it")
                 .doesNotContain("V1__qpo_baseline_schema.sql", "V2__qpo_baseline_seed_data.sql");
+    }
+
+    @Test
+    void version63RetiresSalesOrderChangeWithoutRemovingHistoricalStorage() throws Exception {
+        Path migration = MIGRATION_DIR.resolve("V63__retire_sales_order_change_module.sql");
+        assertThat(migration).exists();
+        String sql = Files.readString(migration, StandardCharsets.UTF_8);
+        assertThat(sql)
+                .contains("enabled = FALSE", "visible = FALSE", "assignable = FALSE")
+                .contains("change:sales-order:view", "change:sales-order:customer-select",
+                        "change:sales-order:order-select", "change:sales-order:update")
+                .doesNotContain("DROP TABLE", "DELETE FROM sales_order_change_record");
     }
 }
