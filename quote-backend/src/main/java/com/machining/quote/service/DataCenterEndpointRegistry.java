@@ -19,6 +19,7 @@ public class DataCenterEndpointRegistry {
     public static final String MES_STOCK_PICKING_ORDER_CREATE = "MES_STOCK_PICKING_ORDER_CREATE";
     public static final String MES_PROCESS_TYPE_LIST = "MES_PROCESS_TYPE_LIST";
     public static final String MES_MATERIAL_PAGE = "MES_MATERIAL_PAGE";
+    public static final String MES_SALES_ORDER_CHANGE_NOTICE = "MES_SALES_ORDER_CHANGE_NOTICE";
 
     private final Map<String, EndpointDefinition> definitions = Map.of(
             MES_MATERIAL_RESOLVE,
@@ -100,6 +101,16 @@ public class DataCenterEndpointRegistry {
                     "MES_MATERIAL_PAGE_V1",
                     "MES_MATERIAL_PAGE_RESPONSE_V1",
                     60000
+            ),
+            MES_SALES_ORDER_CHANGE_NOTICE,
+            new EndpointDefinition(
+                    MES_SALES_ORDER_CHANGE_NOTICE,
+                    "MES销售变更通知",
+                    "MES",
+                    "POST",
+                    "MES_SALES_ORDER_CHANGE_NOTICE_V1",
+                    "MES_SALES_ORDER_CHANGE_NOTICE_RESPONSE_V1",
+                    60000
             )
     );
 
@@ -112,7 +123,8 @@ public class DataCenterEndpointRegistry {
                 definitions.get(MES_PRODUCTION_DISPATCH),
                 definitions.get(MES_STOCK_PICKING_ORDER_CREATE),
                 definitions.get(MES_PROCESS_TYPE_LIST),
-                definitions.get(MES_MATERIAL_PAGE)
+                definitions.get(MES_MATERIAL_PAGE),
+                definitions.get(MES_SALES_ORDER_CHANGE_NOTICE)
         );
     }
 
@@ -164,6 +176,7 @@ public class DataCenterEndpointRegistry {
             case MES_STOCK_PICKING_ORDER_CREATE -> trimToNull(properties.getMesStockPickingOrderCreatePath());
             case MES_PROCESS_TYPE_LIST -> trimToNull(properties.getMesProcessTypeListPath());
             case MES_MATERIAL_PAGE -> trimToNull(properties.getMesMaterialPagePath());
+            case MES_SALES_ORDER_CHANGE_NOTICE -> null;
             default -> null;
         };
     }

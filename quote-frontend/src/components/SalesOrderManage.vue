@@ -2260,9 +2260,9 @@ const handleLinkedStatusAction = async (row) => {
     ? {
         handler: restoreSalesOrderLinked,
         type: 'success',
-        reason: '销售订单：整单关联恢复',
         title: '关联恢复销售订单',
         confirmButtonText: '确认关联恢复',
+        inputPlaceholder: '请输入关联恢复原因',
         successMessage: '销售订单及关联下游零件已恢复。',
         errorMessage: '整单关联恢复销售订单失败。',
         message: `确认关联恢复销售订单「${row.salesOrderNo || row.id}」吗？系统将恢复本次关联废弃产生的下游零件，人工废弃和已完成外部流程的零件不会被恢复。`
@@ -2270,25 +2270,38 @@ const handleLinkedStatusAction = async (row) => {
     : {
         handler: discardSalesOrderLinked,
         type: 'warning',
-        reason: '销售订单：整单关联废弃',
         title: '关联废弃销售订单',
         confirmButtonText: '确认关联废弃',
+        inputPlaceholder: '请输入关联废弃原因',
         successMessage: '销售订单及关联下游零件已废弃。',
         errorMessage: '整单关联废弃销售订单失败。',
         message: `确认关联废弃销售订单「${row.salesOrderNo || row.id}」吗？系统将废弃订单全部零件，并处理仍在已提、待产、锁库工作池中的关联零件。`
       }
+  let reason = ''
   try {
-    await ElMessageBox.confirm(action.message, action.title, {
+    const result = await ElMessageBox.prompt(action.message, action.title, {
+      inputPlaceholder: action.inputPlaceholder,
+      inputPattern: /\S+/,
+      inputErrorMessage: '原因不能为空',
+      inputValidator: (value) => {
+        const normalized = String(value ?? '').trim()
+        if (!normalized) return '原因不能为空'
+        if (normalized.length > 500) return '原因长度不能超过 500 个字符'
+        return true
+      },
       type: action.type,
       confirmButtonText: action.confirmButtonText,
       cancelButtonText: '取消'
     })
+    reason = String(result.value ?? '').trim()
   } catch {
     return
   }
+  if (!reason) return ElMessage.warning('原因不能为空')
+  if (reason.length > 500) return ElMessage.warning('原因长度不能超过 500 个字符')
   return runAction(salesOrderActionKeys.linkedStatusChange(row.id), async () => {
     try {
-      const response = await action.handler(row.id, { reason: action.reason })
+      const response = await action.handler(row.id, { reason })
       ElMessage.success(response?.message || action.successMessage)
       await loadOrders()
       await refreshCurrentDetail()

@@ -61,6 +61,8 @@ public class SalesOrderItemDataReplacementService {
     private DataScopeService dataScopeService;
     @Autowired(required = false)
     private AuditService auditService;
+    @Autowired(required = false)
+    private SalesOrderChangeNoticeService salesOrderChangeNoticeService;
 
     public SalesOrderU9ItemDataReplacementPreviewDTO preview(Long salesOrderId, InputStream excelInput) {
         if (salesOrderId == null) {
@@ -96,6 +98,12 @@ public class SalesOrderItemDataReplacementService {
             throw new IllegalArgumentException("当前替换数据不能确认，请重新预览");
         }
         ApplyResult applied = applyConfirmation(header, lockedItems, currentPreview);
+        if (salesOrderChangeNoticeService != null && !applied.changedFieldsByItem().isEmpty()) {
+            List<SalesOrderItem> changedItems = lockedItems.stream()
+                    .filter(item -> applied.changedFieldsByItem().containsKey(item.getId()))
+                    .toList();
+            salesOrderChangeNoticeService.captureModify(header, changedItems, applied.changedFieldsByItem());
+        }
         long durationMs = System.currentTimeMillis() - startedAt;
         auditSuccess(header, applied, currentPreview.getSummary(), durationMs);
         auditAllocationQtySuccess(header, applied, durationMs);
@@ -235,6 +243,7 @@ public class SalesOrderItemDataReplacementService {
                         LinkedHashMap::new));
         Set<String> changedFields = new LinkedHashSet<>();
         List<Map<String, Object>> allocationQtyChanges = new ArrayList<>();
+        Map<Long, Set<String>> changedFieldsByItem = new LinkedHashMap<>();
         int updatedCount = 0;
         LocalDateTime now = LocalDateTime.now();
         for (SalesOrderU9ItemDataReplacementRowDTO row : preview.getRows()) {
@@ -268,9 +277,10 @@ public class SalesOrderItemDataReplacementService {
                     allocationQtyChanges.add(change);
                 }
             }
+            changedFieldsByItem.put(item.getId(), rowChangedFields);
             updatedCount++;
         }
-        return new ApplyResult(updatedCount, changedFields, allocationQtyChanges);
+        return new ApplyResult(updatedCount, changedFields, allocationQtyChanges, changedFieldsByItem);
     }
 
     private void applyChange(SalesOrderItemUpdateLineReq line, SalesOrderU9ItemDataReplacementChangeDTO change) {
@@ -582,6 +592,7 @@ public class SalesOrderItemDataReplacementService {
     private record ApplyResult(
             int updatedCount,
             Set<String> changedFields,
-            List<Map<String, Object>> allocationQtyChanges) {
+            List<Map<String, Object>> allocationQtyChanges,
+            Map<Long, Set<String>> changedFieldsByItem) {
     }
 }

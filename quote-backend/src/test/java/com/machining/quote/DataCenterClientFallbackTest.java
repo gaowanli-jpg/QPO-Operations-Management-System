@@ -192,6 +192,42 @@ class DataCenterClientFallbackTest {
     }
 
     @Test
+    void salesChangeNoticeServerErrorIsUnknownAndDoesNotRetainResponseBody() throws IOException {
+        String responseBody = "{\"msg\":\"authorization=secret-token upstream details\"}";
+        HttpServer server = server(exchange -> respond(exchange, 500, responseBody));
+        try {
+            SystemDataCenterEndpointConfigMapper mapper = mock(SystemDataCenterEndpointConfigMapper.class);
+            DataCenterConfigService configService = mock(DataCenterConfigService.class);
+            DataCenterTokenService tokenService = mock(DataCenterTokenService.class);
+            DataCenterIntegrationClient client = dataCenterClient(mapper, configService, tokenService);
+            SystemDataCenterConfig activeConfig = dataCenterConfig(baseUrl(server));
+            when(configService.activeConfig()).thenReturn(activeConfig);
+            when(tokenService.fetchAccessToken(activeConfig)).thenReturn("secret-access-token");
+            when(mapper.selectOne(any(QueryWrapper.class))).thenReturn(endpoint(
+                    94L,
+                    DataCenterEndpointRegistry.MES_SALES_ORDER_CHANGE_NOTICE,
+                    "MES",
+                    "/api/v1/mes/openapi/sales-order/change-notice",
+                    60000,
+                    "POST"
+            ));
+
+            assertThatThrownBy(() -> client.call(
+                    DataCenterEndpointRegistry.MES_SALES_ORDER_CHANGE_NOTICE,
+                    Map.of("bizId", "QPO-SOC-1"), Map.class))
+                    .isInstanceOfSatisfying(DataCenterCallException.class, error -> {
+                        assertThat(error.getCertainty()).isEqualTo(DataCenterCallException.FailureCertainty.RESULT_UNKNOWN);
+                        assertThat(error.getHttpStatus()).isEqualTo(500);
+                        assertThat(error.getMessage()).contains("status=500")
+                                .doesNotContain("secret-access-token", "upstream details", "authorization");
+                        assertThat(error.getCause()).isNull();
+                    });
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
     void dataCenterCallExceptionTreatsDroppedResponseAfterRequestAsResultUnknown() throws IOException {
         HttpServer server = server(exchange -> {
             exchange.getRequestBody().readAllBytes();

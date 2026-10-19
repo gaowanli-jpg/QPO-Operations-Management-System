@@ -14,15 +14,20 @@ import com.machining.quote.mapper.SalesOrderItemMapper;
 import com.machining.quote.mapper.WmsReservationBatchMapper;
 import com.machining.quote.mapper.WmsReservationTicketMapper;
 import com.machining.quote.service.AuditService;
+import com.machining.quote.service.SalesOrderLinkedChangeNoticeService;
 import com.machining.quote.service.SalesOrderLinkedDiscardService;
 import com.machining.quote.service.SalesOrderManageService;
+import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.*;
@@ -30,6 +35,7 @@ import static org.mockito.Mockito.*;
 class SalesOrderLinkedDiscardBatchServiceTest {
     @Test
     void discardsWholeOrderWithOneBatchLoadPerDownstreamTableAndAllowsSyncedU9() {
+        String reason = "整单关联废弃";
         SalesOrderHeader order = order(100L, "已生成提单", "已同步");
         SalesOrderItem first = item(201L, order.getId(), 1, false, false, "已生成提单");
         SalesOrderItem second = item(202L, order.getId(), 2, false, true, "已生成提单");
@@ -37,7 +43,7 @@ class SalesOrderLinkedDiscardBatchServiceTest {
         OrderDeliveryTicketAllocation production = allocation(401, 301, order.getId(), 201L, "PRODUCTION_REQUIRED", "PENDING", null, false);
         Fixture fixture = fixture(order, List.of(first, second), List.of(activeTicket), List.of(production));
 
-        SalesOrderLinkedDiscardBatchResult result = fixture.service.discardOrder(order.getId(), reason("整单关联废弃"));
+        SalesOrderLinkedDiscardBatchResult result = fixture.service.discardOrder(order.getId(), reason("  " + reason + "  "));
 
         assertThat(result.isLinkedDiscarded()).isTrue();
         assertThat(result.getTotalItemCount()).isEqualTo(2);
@@ -46,16 +52,25 @@ class SalesOrderLinkedDiscardBatchServiceTest {
         assertThat(result.getProductionItemCount()).isEqualTo(1);
         assertThat(order.getStatus()).isEqualTo("废弃");
         assertThat(order.getLinkedDiscarded()).isTrue();
+        assertThat(order.getLinkedDiscardReason()).isEqualTo(reason);
         verify(fixture.itemMapper).selectBySalesOrderIdForUpdate(order.getId());
         verify(fixture.ticketMapper, times(1)).selectList(any(QueryWrapper.class));
         verify(fixture.allocationMapper, times(1)).selectList(any(QueryWrapper.class));
-        verify(fixture.itemMapper).markItemsU9ChangeExcluded(eq(order.getId()), any(), eq("整单关联废弃"), isNull(), any());
-        verify(fixture.itemMapper).markItemsLinkedDiscarded(eq(order.getId()), any(), any(), eq("整单关联废弃"), isNull(), any());
-        verify(fixture.auditService).record(eq("SALES_ORDER_LINKED_DISCARD"), eq("sales_order_header"), eq(order.getId()), any(), any(), eq("MARKET"), eq("SUCCESS"), any(), isNull());
+        verify(fixture.itemMapper).markItemsU9ChangeExcluded(eq(order.getId()), any(), eq(reason), isNull(), any());
+        verify(fixture.itemMapper).markItemsLinkedDiscarded(eq(order.getId()), any(), any(), eq(reason), isNull(), any());
+        verify(fixture.ticketMapper).markLinkedDiscarded(any(), eq(SalesOrderLinkedDiscardService.LINKED_DISCARD_SOURCE), eq(reason), isNull(), any());
+        verify(fixture.allocationMapper).markLinkedDiscarded(any(), eq(SalesOrderLinkedDiscardService.LINKED_DISCARD_SOURCE), eq(reason), isNull(), any());
+        verify(fixture.linkedChangeNoticeService).createForItems(
+                eq(order), eq(List.of(first, second)), anyMap(), anyMap(), anyMap(), anyMap(), eq(reason), any(), any());
+        ArgumentCaptor<Object> auditAfter = ArgumentCaptor.forClass(Object.class);
+        verify(fixture.auditService).record(eq("SALES_ORDER_LINKED_DISCARD"), eq("sales_order_header"), eq(order.getId()),
+                any(), auditAfter.capture(), eq("MARKET"), eq("SUCCESS"), any(), isNull());
+        assertThat(((Map<?, ?>) auditAfter.getValue()).get("reason")).isEqualTo(reason);
     }
 
     @Test
     void restoresLinkedDownstreamRowsAfterOrdinaryOrderRestoreWithoutRestoringManualRows() {
+        String reason = "整单关联恢复";
         SalesOrderHeader order = order(101L, "已生成提单", "已同步");
         order.setLinkedDiscarded(true);
         SalesOrderItem item = item(211L, order.getId(), 1, true, true, "已生成提单");
@@ -69,16 +84,36 @@ class SalesOrderLinkedDiscardBatchServiceTest {
         linkedAllocation.setDiscardSourceSalesOrderItemId(item.getId());
         Fixture fixture = fixture(order, List.of(item), List.of(linkedTicket, manualTicket), List.of(linkedAllocation));
 
-        SalesOrderLinkedDiscardBatchResult result = fixture.service.restoreOrder(order.getId(), reason("整单关联恢复"));
+        SalesOrderLinkedDiscardBatchResult result = fixture.service.restoreOrder(order.getId(), reason("  " + reason + "  "));
 
         assertThat(result.isLinkedDiscarded()).isFalse();
         assertThat(result.getProcessedItemCount()).isEqualTo(1);
         assertThat(order.getLinkedDiscarded()).isFalse();
-        verify(fixture.itemMapper).restoreItemsU9ChangeExcluded(eq(order.getId()), any(), eq("整单关联恢复"), isNull(), any());
-        verify(fixture.itemMapper).restoreItemsLinkedDiscarded(eq(order.getId()), any(), eq("整单关联恢复"), isNull(), any());
-        verify(fixture.ticketMapper).restoreLinkedDiscarded(any(), eq(SalesOrderLinkedDiscardService.LINKED_DISCARD_SOURCE), eq("整单关联恢复"), isNull(), any());
-        verify(fixture.allocationMapper).restoreLinkedDiscarded(any(), eq(SalesOrderLinkedDiscardService.LINKED_DISCARD_SOURCE), eq("整单关联恢复"), isNull(), any());
-        verify(fixture.auditService).record(eq("SALES_ORDER_LINKED_RESTORE"), eq("sales_order_header"), eq(order.getId()), any(), any(), eq("MARKET"), eq("SUCCESS"), any(), isNull());
+        assertThat(order.getLinkedRestoreReason()).isEqualTo(reason);
+        verify(fixture.itemMapper).restoreItemsU9ChangeExcluded(eq(order.getId()), any(), eq(reason), isNull(), any());
+        verify(fixture.itemMapper).restoreItemsLinkedDiscarded(eq(order.getId()), any(), eq(reason), isNull(), any());
+        verify(fixture.ticketMapper).restoreLinkedDiscarded(any(), eq(SalesOrderLinkedDiscardService.LINKED_DISCARD_SOURCE), eq(reason), isNull(), any());
+        verify(fixture.allocationMapper).restoreLinkedDiscarded(any(), eq(SalesOrderLinkedDiscardService.LINKED_DISCARD_SOURCE), eq(reason), isNull(), any());
+        ArgumentCaptor<Object> auditAfter = ArgumentCaptor.forClass(Object.class);
+        verify(fixture.auditService).record(eq("SALES_ORDER_LINKED_RESTORE"), eq("sales_order_header"), eq(order.getId()),
+                any(), auditAfter.capture(), eq("MARKET"), eq("SUCCESS"), any(), isNull());
+        assertThat(((Map<?, ?>) auditAfter.getValue()).get("reason")).isEqualTo(reason);
+    }
+
+    @Test
+    void validatesAndNormalizesOrderLevelReasonBeforeAnyDatabaseWrite() {
+        SalesOrderHeader order = order(102L, "已生成提单", "已同步");
+        Fixture fixture = fixture(order, List.of(), List.of(), List.of());
+
+        assertThatThrownBy(() -> fixture.service.discardOrder(order.getId(), reason("   ")))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("原因不能为空");
+        assertThatThrownBy(() -> fixture.service.restoreOrder(order.getId(), reason("x".repeat(501))))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("原因长度不能超过 500 个字符");
+
+        verifyNoInteractions(fixture.headerMapper, fixture.itemMapper, fixture.ticketMapper,
+                fixture.allocationMapper, fixture.auditService);
     }
 
     private Fixture fixture(
@@ -94,6 +129,7 @@ class SalesOrderLinkedDiscardBatchServiceTest {
         WmsReservationBatchMapper wmsReservationBatchMapper = mock(WmsReservationBatchMapper.class);
         SalesOrderManageService salesOrderManageService = mock(SalesOrderManageService.class);
         AuditService auditService = mock(AuditService.class);
+        SalesOrderLinkedChangeNoticeService linkedChangeNoticeService = mock(SalesOrderLinkedChangeNoticeService.class);
 
         when(headerMapper.selectByIdForUpdate(order.getId())).thenReturn(order);
         when(itemMapper.selectBySalesOrderIdForUpdate(order.getId())).thenReturn(items);
@@ -120,8 +156,9 @@ class SalesOrderLinkedDiscardBatchServiceTest {
         ReflectionTestUtils.setField(service, "wmsReservationBatchMapper", wmsReservationBatchMapper);
         ReflectionTestUtils.setField(service, "salesOrderManageService", salesOrderManageService);
         ReflectionTestUtils.setField(service, "auditService", auditService);
+        ReflectionTestUtils.setField(service, "linkedChangeNoticeService", linkedChangeNoticeService);
         return new Fixture(service, headerMapper, itemMapper, ticketMapper, allocationMapper,
-                wmsReservationTicketMapper, wmsReservationBatchMapper, auditService);
+                wmsReservationTicketMapper, wmsReservationBatchMapper, auditService, linkedChangeNoticeService);
     }
 
     private SalesOrderHeader order(Long id, String status, String u9Status) {
@@ -194,6 +231,7 @@ class SalesOrderLinkedDiscardBatchServiceTest {
             OrderDeliveryTicketAllocationMapper allocationMapper,
             WmsReservationTicketMapper wmsReservationTicketMapper,
             WmsReservationBatchMapper wmsReservationBatchMapper,
-            AuditService auditService) {
+            AuditService auditService,
+            SalesOrderLinkedChangeNoticeService linkedChangeNoticeService) {
     }
 }

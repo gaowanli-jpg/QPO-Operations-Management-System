@@ -56,6 +56,8 @@ public class SystemTaskService {
     private SalesOrderWmsAllocationService salesOrderWmsAllocationService;
     @Autowired(required = false)
     private SystemTaskGuardService taskGuardService;
+    @Autowired(required = false)
+    private SalesOrderChangeNoticeService salesOrderChangeNoticeService;
     @Autowired
     @Qualifier("systemTaskExecutor")
     private ThreadPoolTaskExecutor taskExecutor;
@@ -241,6 +243,55 @@ public class SystemTaskService {
         taskExecutor.execute(() -> runTask(task.getId(),
                 () -> lockedItemStockPickingOrderService.dispatchBatch(taskAllocationIds, task.getId())));
         return taskMapper.selectById(task.getId());
+    }
+
+    public SystemTask submitSalesOrderChangeNoticeTask(List<String> noticeIds) {
+        if (salesOrderChangeNoticeService == null) {
+            throw new RuntimeException("销售变更通知服务不可用");
+        }
+        List<String> normalizedNoticeIds = noticeIds == null ? List.of() : noticeIds.stream()
+                .filter(java.util.Objects::nonNull)
+                .map(String::trim)
+                .filter(value -> !value.isEmpty())
+                .distinct()
+                .toList();
+        if (normalizedNoticeIds.isEmpty()) {
+            throw new RuntimeException("请选择需要发送的销售变更通知");
+        }
+        if (normalizedNoticeIds.size() > 1000) {
+            throw new RuntimeException("一次最多发送 1000 条销售变更通知");
+        }
+        List<String> claimedNoticeIds = salesOrderChangeNoticeService.claimManual(normalizedNoticeIds);
+        return submitSalesOrderChangeNoticeTaskClaimed(claimedNoticeIds);
+    }
+
+    public SystemTask submitSalesOrderChangeNoticeTaskClaimed(List<String> claimedNoticeIds) {
+        if (salesOrderChangeNoticeService == null) {
+            throw new RuntimeException("销售变更通知服务不可用");
+        }
+        List<String> normalizedNoticeIds = claimedNoticeIds == null ? List.of() : claimedNoticeIds.stream()
+                .filter(java.util.Objects::nonNull)
+                .map(String::trim)
+                .filter(value -> !value.isEmpty())
+                .distinct()
+                .toList();
+        if (normalizedNoticeIds.isEmpty()) {
+            throw new RuntimeException("没有已认领的销售变更通知");
+        }
+        Map<String, Object> request = new LinkedHashMap<>();
+        request.put("noticeCount", normalizedNoticeIds.size());
+        request.put("noticeIds", normalizedNoticeIds);
+        try {
+            SystemTask task = createTask("MES_SALES_ORDER_CHANGE_NOTICE", request);
+            recordTaskSubmitAudit("SALES_ORDER_CHANGE_NOTICE_SEND_SUBMIT", "CHANGE", task,
+                    Map.of("noticeCount", normalizedNoticeIds.size()));
+            taskExecutor.execute(() -> runTask(task.getId(),
+                    () -> salesOrderChangeNoticeService.sendClaimed(normalizedNoticeIds, task.getId())));
+            return taskMapper.selectById(task.getId());
+        } catch (RuntimeException error) {
+            salesOrderChangeNoticeService.markSubmissionFailed(normalizedNoticeIds, error.getMessage());
+            throw error;
+        }
     }
 
     private String normalizeQuoteExportType(String exportType) {

@@ -10,12 +10,12 @@ const router = readFileSync(resolve(currentDir, 'router', 'index.js'), 'utf8')
 const app = readFileSync(resolve(currentDir, 'App.vue'), 'utf8')
 
 describe('linked change notice workbench', () => {
-  test('is the only active module in the change group', () => {
+  test('is registered alongside the sales change notice module', () => {
     expect(router).toContain("const LinkedChangeManage = () => import('../components/LinkedChangeManage.vue')")
     expect(router).toContain("path: '/linked-changes'")
     expect(router).not.toContain("path: '/sales-order-change'")
     expect(app).toContain("'/linked-changes': { title: '关联变更', permission: 'change:linked-change:view'")
-    expect(app).toContain("paths: ['/linked-changes']")
+    expect(app).toContain("paths: ['/linked-changes', '/sales-changes']")
     expect(app).not.toContain("'/sales-order-change'")
   })
 

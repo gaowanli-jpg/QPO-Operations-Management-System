@@ -41,6 +41,8 @@ public class SalesOrderU9ItemEditService {
     private SalesOrderU9SyncService previewService;
     @Autowired(required = false)
     private AuditService auditService;
+    @Autowired(required = false)
+    private SalesOrderChangeNoticeService salesOrderChangeNoticeService;
 
     @Transactional
     public SalesOrderU9ItemUpdateResp saveItems(Long salesOrderId, SalesOrderU9ItemUpdateReq req) {
@@ -60,6 +62,8 @@ public class SalesOrderU9ItemEditService {
         LocalDateTime now = LocalDateTime.now();
         int updatedCount = 0;
         Set<String> changedFields = new LinkedHashSet<>();
+        Map<Long, Set<String>> changedFieldsByItem = new LinkedHashMap<>();
+        List<SalesOrderItem> changedItems = new ArrayList<>();
         for (SalesOrderU9ItemUpdateLineReq line : lines) {
             SalesOrderItem item = lockItem(header, line);
             Set<String> rowChangedFields = applyLine(item, line);
@@ -69,7 +73,13 @@ public class SalesOrderU9ItemEditService {
             item.setUpdatedAt(now);
             persistItem(header, item, now);
             changedFields.addAll(rowChangedFields);
+            changedFieldsByItem.put(item.getId(), rowChangedFields);
+            changedItems.add(item);
             updatedCount++;
+        }
+
+        if (salesOrderChangeNoticeService != null && !changedFieldsByItem.isEmpty()) {
+            salesOrderChangeNoticeService.captureModify(header, changedItems, changedFieldsByItem);
         }
 
         SalesOrderU9ItemUpdateResp resp = new SalesOrderU9ItemUpdateResp();

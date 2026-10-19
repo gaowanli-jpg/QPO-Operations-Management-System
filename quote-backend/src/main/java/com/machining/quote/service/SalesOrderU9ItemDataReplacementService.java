@@ -63,6 +63,8 @@ public class SalesOrderU9ItemDataReplacementService {
     private SalesOrderU9SyncService previewService;
     @Autowired(required = false)
     private AuditService auditService;
+    @Autowired(required = false)
+    private SalesOrderChangeNoticeService salesOrderChangeNoticeService;
 
     public SalesOrderU9ItemDataReplacementPreviewDTO preview(Long salesOrderId, InputStream excelInput) {
         if (salesOrderId == null) {
@@ -106,6 +108,12 @@ public class SalesOrderU9ItemDataReplacementService {
         }
 
         ApplyResult applied = applyConfirmation(header, lockedItems, currentPreview);
+        if (salesOrderChangeNoticeService != null && !applied.changedFieldsByItem().isEmpty()) {
+            List<SalesOrderItem> changedItems = lockedItems.stream()
+                    .filter(item -> applied.changedFieldsByItem().containsKey(item.getId()))
+                    .toList();
+            salesOrderChangeNoticeService.captureModify(header, changedItems, applied.changedFieldsByItem());
+        }
         SalesOrderU9ItemDataReplacementConfirmDTO result = new SalesOrderU9ItemDataReplacementConfirmDTO();
         result.setSuccess(true);
         result.setMessage("表格数据替换完成，已更新 " + applied.updatedCount() + " 行零件数据。");
@@ -320,6 +328,7 @@ public class SalesOrderU9ItemDataReplacementService {
                         (left, right) -> left,
                         LinkedHashMap::new));
         Set<String> changedFields = new LinkedHashSet<>();
+        Map<Long, Set<String>> changedFieldsByItem = new LinkedHashMap<>();
         int updatedCount = 0;
         LocalDateTime now = LocalDateTime.now();
         for (SalesOrderU9ItemDataReplacementRowDTO row : preview.getRows()) {
@@ -330,16 +339,19 @@ public class SalesOrderU9ItemDataReplacementService {
             if (item == null) {
                 throw new PreviewFingerprintConflictException(FINGERPRINT_CONFLICT_MESSAGE);
             }
+            Set<String> rowChangedFields = new LinkedHashSet<>();
             for (SalesOrderU9ItemDataReplacementChangeDTO change : row.getChanges()) {
                 applyChange(item, change);
                 changedFields.add(change.getField());
+                rowChangedFields.add(change.getField());
             }
             recalculateDerivedFields(item);
             item.setUpdatedAt(now);
             persistItem(header, item, now);
+            changedFieldsByItem.put(item.getId(), rowChangedFields);
             updatedCount++;
         }
-        return new ApplyResult(updatedCount, changedFields);
+        return new ApplyResult(updatedCount, changedFields, changedFieldsByItem);
     }
 
     private void applyChange(SalesOrderItem item, SalesOrderU9ItemDataReplacementChangeDTO change) {
@@ -607,6 +619,9 @@ public class SalesOrderU9ItemDataReplacementService {
     private record ItemKey(String partNo, String version) {
     }
 
-    private record ApplyResult(int updatedCount, Set<String> changedFields) {
+    private record ApplyResult(
+            int updatedCount,
+            Set<String> changedFields,
+            Map<Long, Set<String>> changedFieldsByItem) {
     }
 }

@@ -18,6 +18,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.http.converter.HttpMessageConverter;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.HttpStatusCodeException;
@@ -100,20 +101,25 @@ public class DataCenterIntegrationClient {
             throw e;
         } catch (HttpStatusCodeException e) {
             String message = "Data center call failed status=" + e.getStatusCode().value();
+            DataCenterCallException.FailureCertainty certainty = isSalesChangeNotice(endpointCode)
+                    && e.getStatusCode().is5xxServerError()
+                    ? DataCenterCallException.FailureCertainty.RESULT_UNKNOWN
+                    : DataCenterCallException.FailureCertainty.DEFINITE_FAILURE;
             log.warn(
-                    "Data center call failed endpointCode={} targetSystemCode={} host={} path={} status={}",
+                    "Data center call failed endpointCode={} targetSystemCode={} host={} path={} status={} certainty={}",
                     endpointCode(endpoint, normalizedEndpointCode),
                     targetSystemCode(endpoint),
                     host(config == null ? null : config.getBaseUrl()),
                     path(endpoint),
-                    e.getStatusCode().value()
+                    e.getStatusCode().value(),
+                    certainty
             );
             throw failure(
                     normalizedEndpointCode,
-                    DataCenterCallException.FailureCertainty.DEFINITE_FAILURE,
+                    certainty,
                     e.getStatusCode().value(),
                     message,
-                    e
+                    isSalesChangeNotice(endpointCode) ? null : e
             );
         } catch (ResourceAccessException e) {
             DataCenterCallException.FailureCertainty certainty = isResultUnknownTransport(e)
@@ -129,21 +135,31 @@ public class DataCenterIntegrationClient {
             );
             throw failure(normalizedEndpointCode, certainty, null, "Data center call failed message=network error", e);
         } catch (RuntimeException e) {
-            String message = sanitize(e.getMessage(), token, config);
+            boolean salesChangeNotice = isSalesChangeNotice(endpointCode);
+            String message = salesChangeNotice
+                    ? hasCause(e, HttpMessageNotReadableException.class)
+                    ? "sales change notice response could not be parsed"
+                    : "sales change notice integration call failed"
+                    : sanitize(e.getMessage(), token, config);
+            DataCenterCallException.FailureCertainty certainty = salesChangeNotice
+                    && hasCause(e, HttpMessageNotReadableException.class)
+                    ? DataCenterCallException.FailureCertainty.RESULT_UNKNOWN
+                    : DataCenterCallException.FailureCertainty.DEFINITE_FAILURE;
             log.warn(
-                    "Data center call failed endpointCode={} targetSystemCode={} host={} path={} message={}",
+                    "Data center call failed endpointCode={} targetSystemCode={} host={} path={} certainty={} message={}",
                     endpointCode(endpoint, normalizedEndpointCode),
                     targetSystemCode(endpoint),
                     host(config == null ? null : config.getBaseUrl()),
                     path(endpoint),
+                    certainty,
                     message
             );
             throw failure(
                     normalizedEndpointCode,
-                    DataCenterCallException.FailureCertainty.DEFINITE_FAILURE,
+                    certainty,
                     null,
                     "Data center call failed message=" + message,
-                    e
+                    salesChangeNotice ? null : e
             );
         }
     }
@@ -206,8 +222,21 @@ public class DataCenterIntegrationClient {
                 || DataCenterEndpointRegistry.WMS_INVENTORY_ALLOCATE.equals(code)
                 || DataCenterEndpointRegistry.MES_PRODUCTION_DISPATCH.equals(code)
                 || DataCenterEndpointRegistry.MES_STOCK_PICKING_ORDER_CREATE.equals(code)
+                || DataCenterEndpointRegistry.MES_SALES_ORDER_CHANGE_NOTICE.equals(code)
                 || DataCenterEndpointRegistry.MES_PROCESS_TYPE_LIST.equals(code)
                 || DataCenterEndpointRegistry.MES_MATERIAL_PAGE.equals(code);
+    }
+
+    private boolean isSalesChangeNotice(String endpointCode) {
+        return DataCenterEndpointRegistry.MES_SALES_ORDER_CHANGE_NOTICE.equalsIgnoreCase(
+                endpointCode == null ? "" : endpointCode.trim());
+    }
+
+    private boolean hasCause(Throwable error, Class<? extends Throwable> type) {
+        for (Throwable current = error; current != null; current = current.getCause()) {
+            if (type.isInstance(current)) return true;
+        }
+        return false;
     }
 
     private DataCenterCallException failure(String endpointCode,

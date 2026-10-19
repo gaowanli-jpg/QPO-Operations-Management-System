@@ -69,6 +69,8 @@ public class SalesOrderLinkedDiscardService {
     private AuditService auditService;
     @Autowired(required = false)
     private SalesOrderLinkedChangeNoticeService linkedChangeNoticeService;
+    @Autowired(required = false)
+    private SalesOrderChangeNoticeService salesOrderChangeNoticeService;
 
     @Transactional
     public SalesOrderLinkedDiscardResult discard(Long salesOrderId, Long itemId, OrderStatusChangeReq req) {
@@ -129,6 +131,10 @@ public class SalesOrderLinkedDiscardService {
                     wmsRelations.reservationTicketsByItem.getOrDefault(item.getId(), List.of()),
                     wmsRelations.batchesById, "ITEM", reason, now, operatorId);
         }
+        if (salesOrderChangeNoticeService != null) {
+            salesOrderChangeNoticeService.captureLinked(order, item, allocations,
+                    SalesOrderChangeNoticeService.DISCARD, reason);
+        }
         for (OrderDeliveryTicket ticket : ticketTargets) {
             ticket.setDiscarded(true);
             ticket.setDiscardedAt(now);
@@ -180,6 +186,10 @@ public class SalesOrderLinkedDiscardService {
         assertNoActiveWmsReservations(wmsRelations, tickets);
         LocalDateTime now = LocalDateTime.now();
         Long operatorId = currentUserId();
+        if (salesOrderChangeNoticeService != null) {
+            salesOrderChangeNoticeService.captureLinked(order, item, allocations,
+                    SalesOrderChangeNoticeService.RESTORE, reason);
+        }
         int restoredTickets = 0;
         List<OrderDeliveryTicketAllocation> restoredAllocationTargets = new ArrayList<>();
         int skippedCompleted = 0;
@@ -280,6 +290,10 @@ public class SalesOrderLinkedDiscardService {
                     relations.wmsRelations.reservationTicketsByItem, relations.wmsRelations.batchesById,
                     reason, now, operatorId);
         }
+        if (salesOrderChangeNoticeService != null) {
+            salesOrderChangeNoticeService.captureLinked(order, targetItems,
+                    allocationRowsByItem(relations), SalesOrderChangeNoticeService.DISCARD, reason);
+        }
         updateLinkedDiscardTargets(targets, reason, operatorId, now);
 
         List<Long> targetItemIds = targetItems.stream().map(SalesOrderItem::getId).toList();
@@ -354,6 +368,10 @@ public class SalesOrderLinkedDiscardService {
 
         LocalDateTime now = LocalDateTime.now();
         Long operatorId = currentUserId();
+        if (salesOrderChangeNoticeService != null) {
+            salesOrderChangeNoticeService.captureLinked(order, targetItems,
+                    allocationRowsByItem(relations), SalesOrderChangeNoticeService.RESTORE, reason);
+        }
         updateLinkedRestoreTargets(targets, reason, operatorId, now);
 
         List<Long> linkedU9ItemIds = targetItems.stream()

@@ -22,6 +22,26 @@ import java.time.LocalDateTime;
 public interface OrderDeliveryTicketAllocationMapper extends BaseMapper<OrderDeliveryTicketAllocation> {
     @Select("""
             <script>
+            SELECT *
+            FROM order_delivery_ticket_allocation
+            WHERE source_type = 'SALES_ORDER'
+              AND source_order_id IN
+              <foreach collection="salesOrderIds" item="salesOrderId" open="(" separator="," close=")">
+                  #{salesOrderId}
+              </foreach>
+              AND source_item_id IN
+              <foreach collection="salesOrderItemIds" item="salesOrderItemId" open="(" separator="," close=")">
+                  #{salesOrderItemId}
+              </foreach>
+            ORDER BY id ASC
+            </script>
+            """)
+    List<OrderDeliveryTicketAllocation> selectBySalesOrderItemIds(
+            @Param("salesOrderIds") List<Long> salesOrderIds,
+            @Param("salesOrderItemIds") List<Long> salesOrderItemIds);
+
+    @Select("""
+            <script>
             SELECT * FROM order_delivery_ticket_allocation
             WHERE id IN
             <foreach collection="allocationIds" item="allocationId" open="(" separator="," close=")">

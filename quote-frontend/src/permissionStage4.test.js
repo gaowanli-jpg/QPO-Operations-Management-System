@@ -30,6 +30,7 @@ const protectedRoutePermissions = {
   '/production-items': 'market:production-item:view',
   '/locked-items': 'market:locked-item:view',
   '/linked-changes': 'change:linked-change:view',
+  '/sales-changes': 'change:sales-change:view',
   '/users': 'system:user:view',
   '/roles': 'system:role:view',
   '/organization': 'system:org:view',

@@ -77,6 +77,8 @@ public class SalesOrderMaintenanceService {
     private AuditService auditService;
     @Autowired
     private AllocationSplitService allocationSplitService;
+    @Autowired(required = false)
+    private SalesOrderChangeNoticeService salesOrderChangeNoticeService;
 
     @Transactional
     public SalesOrderMaintenanceUpdateResp saveOrder(Long salesOrderId, SalesOrderMaintenanceOrderUpdateReq req) {
@@ -97,11 +99,15 @@ public class SalesOrderMaintenanceService {
         Map<String, Object> before = orderSnapshot(header);
         Set<String> changedFields = applyOrderFields(header, req);
         List<SalesOrderItem> items = listItems(salesOrderId);
-        int itemDefaultFillCount = propagateOrderDefaults(header, req, items);
+        Map<Long, Set<String>> changedFieldsByItem = new LinkedHashMap<>();
+        int itemDefaultFillCount = propagateOrderDefaults(header, req, items, changedFieldsByItem);
         LocalDateTime now = LocalDateTime.now();
         if (!changedFields.isEmpty()) {
             header.setUpdatedAt(now);
             persistHeader(header, now);
+        }
+        if (salesOrderChangeNoticeService != null && !changedFieldsByItem.isEmpty()) {
+            salesOrderChangeNoticeService.captureModify(header, items, changedFieldsByItem);
         }
         Map<String, Object> after = orderSnapshot(header);
         after.put("itemDefaultFillCount", itemDefaultFillCount);
@@ -119,6 +125,8 @@ public class SalesOrderMaintenanceService {
 
         int updatedCount = 0;
         Set<String> changedFields = new LinkedHashSet<>();
+        Map<Long, Set<String>> changedFieldsByItem = new LinkedHashMap<>();
+        List<SalesOrderItem> changedItems = new ArrayList<>();
         List<Map<String, Object>> allocationQtyChanges = new ArrayList<>();
         LocalDateTime now = LocalDateTime.now();
         for (SalesOrderItemUpdateLineReq line : lines) {
@@ -129,6 +137,8 @@ public class SalesOrderMaintenanceService {
                 continue;
             }
             changedFields.addAll(rowChanged);
+            changedFieldsByItem.put(item.getId(), rowChanged);
+            changedItems.add(item);
             updatedCount++;
             if (rowChanged.contains(SalesOrderItemUpdateLineReq.FIELD_QTY)) {
                 SalesOrderAllocationLinkService.AllocationQuantitySyncResult syncResult =
@@ -143,6 +153,9 @@ public class SalesOrderMaintenanceService {
                     allocationQtyChanges.add(change);
                 }
             }
+        }
+        if (salesOrderChangeNoticeService != null && !changedFieldsByItem.isEmpty()) {
+            salesOrderChangeNoticeService.captureModify(header, changedItems, changedFieldsByItem);
         }
         auditSuccess(ACTION_ITEM_UPDATE, header, null, itemAuditSummary(header, updatedCount, changedFields), changedFields,
                 System.currentTimeMillis() - startedAt);
@@ -236,6 +249,8 @@ public class SalesOrderMaintenanceService {
 
         int updatedCount = 0;
         Set<String> changedFields = new LinkedHashSet<>();
+        Map<Long, Set<String>> changedFieldsByItem = new LinkedHashMap<>();
+        List<SalesOrderItem> changedItems = new ArrayList<>();
         LocalDateTime now = LocalDateTime.now();
         for (SalesOrderItem listed : items) {
             SalesOrderItem item = lockItem(header, listed.getId());
@@ -247,7 +262,12 @@ public class SalesOrderMaintenanceService {
                 continue;
             }
             changedFields.addAll(rowChanged);
+            changedFieldsByItem.put(item.getId(), rowChanged);
+            changedItems.add(item);
             updatedCount++;
+        }
+        if (salesOrderChangeNoticeService != null && !changedFieldsByItem.isEmpty()) {
+            salesOrderChangeNoticeService.captureModify(header, changedItems, changedFieldsByItem);
         }
         auditSuccess(ACTION_ITEM_UPDATE, header, null, itemAuditSummary(header, updatedCount, changedFields), changedFields,
                 System.currentTimeMillis() - startedAt);
@@ -474,43 +494,58 @@ public class SalesOrderMaintenanceService {
     private int propagateOrderDefaults(
             SalesOrderHeader header,
             SalesOrderMaintenanceOrderUpdateReq req,
-            List<SalesOrderItem> items) {
+            List<SalesOrderItem> items,
+            Map<Long, Set<String>> changedFieldsByItem) {
         int changedRows = 0;
         LocalDateTime now = LocalDateTime.now();
         for (SalesOrderItem item : items) {
             if (item == null || item.getId() == null) {
                 continue;
             }
-            boolean changed = false;
+            Set<String> rowChanged = new LinkedHashSet<>();
             if (req.hasField(SalesOrderMaintenanceOrderUpdateReq.FIELD_SALES_ORDER_DATE)
                     && !Objects.equals(item.getSalesOrderDate(), header.getSalesOrderDate())) {
                 item.setSalesOrderDate(header.getSalesOrderDate());
-                changed = true;
+                rowChanged.add(SalesOrderMaintenanceOrderUpdateReq.FIELD_SALES_ORDER_DATE);
             }
-            changed |= fillBlank(item.getCustomerOrderNo(), header.getCustomerOrderNo(),
-                    req.hasField(SalesOrderMaintenanceOrderUpdateReq.FIELD_CUSTOMER_ORDER_NO), item::setCustomerOrderNo);
-            changed |= fillBlank(item.getCustomerProjectNo(), header.getCustomerProjectNo(),
-                    req.hasField(SalesOrderMaintenanceOrderUpdateReq.FIELD_CUSTOMER_PROJECT_NO), item::setCustomerProjectNo);
-            changed |= fillBlank(item.getOrderType(), header.getOrderType(),
-                    req.hasField(SalesOrderMaintenanceOrderUpdateReq.FIELD_ORDER_TYPE), item::setOrderType);
-            changed |= fillBlank(item.getInternalProjectNo(), header.getInternalProjectNo(),
-                    req.hasField(SalesOrderMaintenanceOrderUpdateReq.FIELD_INTERNAL_PROJECT_NO), item::setInternalProjectNo);
-            if (changed) {
+            fillBlank(item.getCustomerOrderNo(), header.getCustomerOrderNo(),
+                    req.hasField(SalesOrderMaintenanceOrderUpdateReq.FIELD_CUSTOMER_ORDER_NO),
+                    item::setCustomerOrderNo, rowChanged,
+                    SalesOrderMaintenanceOrderUpdateReq.FIELD_CUSTOMER_ORDER_NO);
+            fillBlank(item.getCustomerProjectNo(), header.getCustomerProjectNo(),
+                    req.hasField(SalesOrderMaintenanceOrderUpdateReq.FIELD_CUSTOMER_PROJECT_NO),
+                    item::setCustomerProjectNo, rowChanged,
+                    SalesOrderMaintenanceOrderUpdateReq.FIELD_CUSTOMER_PROJECT_NO);
+            fillBlank(item.getCustomerOrderTitle(), header.getCustomerOrderTitle(),
+                    req.hasField(SalesOrderMaintenanceOrderUpdateReq.FIELD_CUSTOMER_ORDER_TITLE),
+                    item::setCustomerOrderTitle, rowChanged,
+                    SalesOrderMaintenanceOrderUpdateReq.FIELD_CUSTOMER_ORDER_TITLE);
+            fillBlank(item.getOrderType(), header.getOrderType(),
+                    req.hasField(SalesOrderMaintenanceOrderUpdateReq.FIELD_ORDER_TYPE),
+                    item::setOrderType, rowChanged,
+                    SalesOrderMaintenanceOrderUpdateReq.FIELD_ORDER_TYPE);
+            fillBlank(item.getInternalProjectNo(), header.getInternalProjectNo(),
+                    req.hasField(SalesOrderMaintenanceOrderUpdateReq.FIELD_INTERNAL_PROJECT_NO),
+                    item::setInternalProjectNo, rowChanged,
+                    SalesOrderMaintenanceOrderUpdateReq.FIELD_INTERNAL_PROJECT_NO);
+            if (!rowChanged.isEmpty()) {
                 item.setUpdatedAt(now);
                 persistOrderDefaultItem(header, item, now);
+                changedFieldsByItem.put(item.getId(), rowChanged);
                 changedRows++;
             }
         }
         return changedRows;
     }
 
-    private boolean fillBlank(String current, String candidate, boolean fieldProvided, Consumer<String> setter) {
+    private void fillBlank(String current, String candidate, boolean fieldProvided, Consumer<String> setter,
+                           Set<String> changedFields, String field) {
         String value = trimToNull(candidate);
         if (!fieldProvided || !isBlank(current) || value == null) {
-            return false;
+            return;
         }
         setter.accept(value);
-        return true;
+        changedFields.add(field);
     }
 
     private SalesOrderItem lockItem(SalesOrderHeader header, Long itemId) {
@@ -788,6 +823,11 @@ public class SalesOrderMaintenanceService {
                 .set("sales_order_date", item.getSalesOrderDate())
                 .set("customer_order_no", item.getCustomerOrderNo())
                 .set("customer_project_no", item.getCustomerProjectNo())
+                .set("customer_order_title", item.getCustomerOrderTitle())
+                .set("manufacturing_process_type", item.getManufacturingProcessType())
+                .set("reserved_field_1", item.getReservedField1())
+                .set("reserved_field_2", item.getReservedField2())
+                .set("reserved_field_3", item.getReservedField3())
                 .set("order_type", item.getOrderType())
                 .set("internal_project_no", item.getInternalProjectNo())
                 .set("updated_at", updatedAt);

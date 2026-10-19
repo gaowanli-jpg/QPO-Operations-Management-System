@@ -13,7 +13,8 @@ const CUSTOMER_ENDPOINTS = {
   'delivered-item': '/api/order-delivery/tickets/customers',
   'locked-item': '/api/order-delivery/locked-items/customers',
   'production-item': '/api/order-delivery/production-items/customers',
-  'linked-change': '/api/change/linked-changes/customers'
+  'linked-change': '/api/change/linked-changes/customers',
+  'sales-change': '/api/change/sales-order-changes/customers'
 }
 
 export const listCustomers = (scope = 'market-order', params = undefined) => {

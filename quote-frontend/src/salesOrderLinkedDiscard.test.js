@@ -37,4 +37,23 @@ describe('sales order linked discard controls', () => {
     expect(api).toContain('restoreSalesOrderItemLinked')
     expect(api).toContain('/linked-restore')
   })
+
+  test('requires a normalized reason for order-level linked discard and restore', () => {
+    const component = componentSource()
+    const handler = component.slice(
+      component.indexOf('const handleLinkedStatusAction'),
+      component.indexOf('const submitSupplementDrawings')
+    )
+
+    expect(handler).toContain('ElMessageBox.prompt')
+    expect(handler).toContain("inputPlaceholder: '请输入关联恢复原因'")
+    expect(handler).toContain("inputPlaceholder: '请输入关联废弃原因'")
+    expect(handler).toContain('inputValidator')
+    expect(handler).toContain("if (!normalized) return '原因不能为空'")
+    expect(handler).toContain("if (normalized.length > 500) return '原因长度不能超过 500 个字符'")
+    expect(handler).toContain("reason = String(result.value ?? '').trim()")
+    expect(handler).toContain('handler(row.id, { reason })')
+    expect(handler).not.toContain("reason: '销售订单：整单关联恢复'")
+    expect(handler).not.toContain("reason: '销售订单：整单关联废弃'")
+  })
 })

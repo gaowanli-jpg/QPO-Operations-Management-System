@@ -187,6 +187,10 @@ public class PermissionService {
     }
 
     private static final List<SystemPermission> FALLBACK_CATALOG = List.of(
+            permission(233L, "MENU", "change:sales-change:view", "Sales change", "/sales-changes", "SalesOrderChangeNoticeManage", true, 702),
+            permission(234L, "API", "change:sales-change:customer-select", "Sales change customer selection", null, null, false, 703, 233L),
+            permission(235L, "BUTTON", "change:sales-change:send", "Send sales change notices", null, null, false, 704, 233L),
+            permission(236L, "BUTTON", "change:sales-change:mode-update", "Update sales change mode", null, null, false, 705, 233L),
             permission(1L, "MENU", "market:rfq:view", "新单导入", "/market", "MarketDashboard", true, 110),
             permission(2L, "BUTTON", "market:rfq:import", "导入 RFQ", null, null, false, 111, 1L),
             permission(101L, "BUTTON", "market:rfq:upload-drawing", "上传图纸", null, null, false, 114, 1L),
@@ -321,6 +325,10 @@ public class PermissionService {
     );
 
     private static final Map<String, Set<String>> FALLBACK_ROLE_PERMISSIONS = Map.ofEntries(
+            Map.entry("change:sales-change:view", Set.of("SUPER_ADMIN", "MARKET_USER", "MARKET_MANAGER", "READONLY")),
+            Map.entry("change:sales-change:customer-select", Set.of("SUPER_ADMIN", "MARKET_USER", "MARKET_MANAGER", "READONLY")),
+            Map.entry("change:sales-change:send", Set.of("SUPER_ADMIN", "MARKET_USER", "MARKET_MANAGER")),
+            Map.entry("change:sales-change:mode-update", Set.of("SUPER_ADMIN", "MARKET_USER", "MARKET_MANAGER")),
             Map.entry("market:rfq:view", Set.of("MARKET_USER", "MARKET_MANAGER", "READONLY")),
             Map.entry("market:rfq:import", Set.of("MARKET_USER", "MARKET_MANAGER")),
             Map.entry("market:rfq:upload-drawing", Set.of("MARKET_USER", "MARKET_MANAGER")),

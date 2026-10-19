@@ -49,7 +49,7 @@ class SalesOrderLinkedChangeNoticeMigrationTest {
                     .mapToInt(matcher -> Integer.parseInt(matcher.group(1)))
                     .max().orElse(0);
         }
-        assertThat(maxVersion).isEqualTo(63);
+        assertThat(maxVersion).isEqualTo(64);
 
         Path migration = MIGRATION_DIR.resolve("V56__sales_order_linked_change_notice_filter_fields.sql");
         assertThat(migration).exists();
@@ -117,5 +117,29 @@ class SalesOrderLinkedChangeNoticeMigrationTest {
                 .contains("change:sales-order:view", "change:sales-order:customer-select",
                         "change:sales-order:order-select", "change:sales-order:update")
                 .doesNotContain("DROP TABLE", "DELETE FROM sales_order_change_record");
+    }
+
+    @Test
+    void version64CreatesNoticePoolAndRemovesRetiredRecordTables() throws Exception {
+        Path migration = MIGRATION_DIR.resolve("V64__sales_order_change_notice_pool.sql");
+        assertThat(migration).exists();
+        String sql = Files.readString(migration, StandardCharsets.UTF_8);
+        assertThat(sql)
+                .contains("DROP TABLE IF EXISTS sales_order_change_record_item")
+                .contains("DROP TABLE IF EXISTS sales_order_change_record")
+                .contains("CREATE TABLE sales_order_change_notice")
+                .contains("notice_id")
+                .contains("target_external_id")
+                .contains("source_biz_id")
+                .contains("payload_snapshot_json")
+                .contains("uk_sales_order_change_notice_notice_id")
+                .contains("uk_sales_order_change_notice_pending_modify")
+                .contains("CREATE TABLE sales_order_change_dispatch_setting")
+                .contains("VALUES (1, 'MANUAL', 0)")
+                .contains("MES_SALES_ORDER_CHANGE_NOTICE")
+                .contains("change:sales-change:view")
+                .contains("change:sales-change:send")
+                .contains("change:sales-change:mode-update")
+                .doesNotContain("V1__qpo_baseline_schema.sql", "V2__qpo_baseline_seed_data.sql");
     }
 }

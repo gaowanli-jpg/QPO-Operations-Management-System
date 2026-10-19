@@ -131,6 +131,7 @@ class PermissionCatalogCharacterizationTest {
                         "/engineering",
                         "/material-process",
                         "/linked-changes",
+                        "/sales-changes",
                         "/users",
                         "/roles",
                         "/organization",
