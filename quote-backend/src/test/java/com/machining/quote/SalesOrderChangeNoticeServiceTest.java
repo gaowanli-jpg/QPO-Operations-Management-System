@@ -30,6 +30,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -245,6 +246,73 @@ class SalesOrderChangeNoticeServiceTest {
     }
 
     @Test
+    void itemRestoreCreatesNoticeFromDiscardHistoryForCompletedAllocation() throws Exception {
+        SalesOrderHeader order = salesOrder(7L);
+        SalesOrderItem item = salesOrderItem(11L, 7L);
+        OrderDeliveryTicketAllocation completedProduction = allocation(101, "PRODUCTION_REQUIRED", "SUCCESS");
+        SalesOrderChangeNotice discard = linkedNotice(20L, 7L, 11L, 101L,
+                SalesOrderChangeNoticeService.DISCARD, "PRODUCTION", "MES-WO-101", "BATCH-101");
+        when(noticeMapper.selectLinkedLifecycleEvents(7L, List.of(11L), List.of(101L)))
+                .thenReturn(List.of(discard));
+
+        int captured = service.captureLinked(order, item, List.of(completedProduction),
+                SalesOrderChangeNoticeService.RESTORE, "恢复已完成工单");
+
+        assertThat(captured).isEqualTo(1);
+        ArgumentCaptor<SalesOrderChangeNotice> created = ArgumentCaptor.forClass(SalesOrderChangeNotice.class);
+        verify(noticeMapper).insert(created.capture());
+        assertThat(created.getValue().getChangeType()).isEqualTo(SalesOrderChangeNoticeService.RESTORE);
+        assertThat(created.getValue().getSalesOrderItemId()).isEqualTo(item.getId());
+        assertThat(created.getValue().getAllocationId()).isEqualTo(101L);
+        assertThat(created.getValue().getTargetType()).isEqualTo("PRODUCTION");
+        assertThat(created.getValue().getTargetKey()).isEqualTo("MES-WO-101");
+        assertThat(created.getValue().getTargetExternalId()).isEqualTo("MES-WO-101");
+        assertThat(created.getValue().getSourceBizId()).isEqualTo("BATCH-101");
+        Map<String, Object> snapshot = new ObjectMapper().readValue(created.getValue().getPayloadSnapshotJson(), Map.class);
+        assertThat(snapshot).containsEntry("changeType", SalesOrderChangeNoticeService.RESTORE)
+                .containsEntry("targetExternalId", "MES-WO-101");
+        verify(targetResolver, never()).resolveAllocations(anyList());
+    }
+
+    @Test
+    void orderRestoreUsesOnlyTargetsWhoseLatestLinkedEventIsDiscard() {
+        SalesOrderHeader order = salesOrder(7L);
+        SalesOrderItem firstItem = salesOrderItem(11L, 7L);
+        SalesOrderItem secondItem = salesOrderItem(12L, 7L);
+        OrderDeliveryTicketAllocation completedProduction = allocation(101, "PRODUCTION_REQUIRED", "SUCCESS");
+        OrderDeliveryTicketAllocation completedStock = allocation(102, "IN_STOCK_LOCK", "SUCCESS");
+        OrderDeliveryTicketAllocation alreadyRestored = allocation(201, "PRODUCTION_REQUIRED", "SUCCESS");
+        OrderDeliveryTicketAllocation withoutDiscardHistory = allocation(202, "IN_PRODUCTION_LOCK", "SUCCESS");
+        Map<Long, List<OrderDeliveryTicketAllocation>> allocationsByItem = Map.of(
+                firstItem.getId(), List.of(completedProduction, completedStock),
+                secondItem.getId(), List.of(alreadyRestored, withoutDiscardHistory));
+        when(noticeMapper.selectLinkedLifecycleEvents(7L, List.of(11L, 12L), List.of(101L, 102L, 201L, 202L)))
+                .thenReturn(List.of(
+                linkedNotice(20L, 7L, 11L, 101L, SalesOrderChangeNoticeService.DISCARD,
+                        "PRODUCTION", "MES-WO-101", "BATCH-101"),
+                linkedNotice(21L, 7L, 11L, 102L, SalesOrderChangeNoticeService.DISCARD,
+                        "STOCK_PICKING", "STOCK-WO-102", "STOCK-BATCH-102"),
+                linkedNotice(22L, 7L, 12L, 201L, SalesOrderChangeNoticeService.DISCARD,
+                        "PRODUCTION", "MES-WO-201", "BATCH-201"),
+                linkedNotice(23L, 7L, 12L, 201L, SalesOrderChangeNoticeService.RESTORE,
+                        "PRODUCTION", "MES-WO-201", "BATCH-201")));
+
+        int captured = service.captureLinked(order, List.of(firstItem, secondItem), allocationsByItem,
+                SalesOrderChangeNoticeService.RESTORE, "整单关联恢复");
+
+        assertThat(captured).isEqualTo(2);
+        ArgumentCaptor<SalesOrderChangeNotice> created = ArgumentCaptor.forClass(SalesOrderChangeNotice.class);
+        verify(noticeMapper, times(2)).insert(created.capture());
+        assertThat(created.getAllValues()).extracting(SalesOrderChangeNotice::getTargetKey)
+                .containsExactlyInAnyOrder("MES-WO-101", "STOCK-WO-102");
+        assertThat(created.getAllValues()).extracting(SalesOrderChangeNotice::getSalesOrderItemId)
+                .containsOnly(11L);
+        assertThat(created.getAllValues()).allSatisfy(row ->
+                assertThat(row.getChangeType()).isEqualTo(SalesOrderChangeNoticeService.RESTORE));
+        verify(targetResolver, never()).resolveAllocations(anyList());
+    }
+
+    @Test
     void successfulTopLevelResponseWithoutItemReceiptsIsResultUnknown() {
         SalesOrderChangeNotice row = sendingNotice("NOTICE-UNKNOWN");
         when(noticeMapper.selectList(any(Wrapper.class))).thenReturn(List.of(row));
@@ -300,6 +368,49 @@ class SalesOrderChangeNoticeServiceTest {
         SalesOrderChangeNotice notice = notice(noticeId, "SENDING");
         notice.setPayloadSnapshotJson("{}");
         notice.setChangedFieldsJson("[]");
+        return notice;
+    }
+
+    private SalesOrderHeader salesOrder(Long id) {
+        SalesOrderHeader order = new SalesOrderHeader();
+        order.setId(id);
+        order.setSalesOrderNo("SO-" + id);
+        return order;
+    }
+
+    private SalesOrderItem salesOrderItem(Long id, Long orderId) {
+        SalesOrderItem item = new SalesOrderItem();
+        item.setId(id);
+        item.setSalesOrderId(orderId);
+        item.setLineNo(id.intValue());
+        item.setPartNo("PART-" + id);
+        item.setVersion("A");
+        return item;
+    }
+
+    private OrderDeliveryTicketAllocation allocation(Integer id, String type, String status) {
+        OrderDeliveryTicketAllocation allocation = new OrderDeliveryTicketAllocation();
+        allocation.setId(id);
+        allocation.setAllocationType(type);
+        allocation.setMesProductionStatus(status);
+        allocation.setStockPickingStatus(status);
+        allocation.setDiscarded(false);
+        return allocation;
+    }
+
+    private SalesOrderChangeNotice linkedNotice(Long id, Long orderId, Long itemId, Long allocationId,
+                                                String changeType, String targetType, String targetKey,
+                                                String sourceBizId) {
+        SalesOrderChangeNotice notice = notice("NOTICE-" + id, "PENDING");
+        notice.setId(id);
+        notice.setSalesOrderId(orderId);
+        notice.setSalesOrderItemId(itemId);
+        notice.setAllocationId(allocationId);
+        notice.setChangeType(changeType);
+        notice.setTargetType(targetType);
+        notice.setTargetKey(targetKey);
+        notice.setTargetExternalId(targetKey);
+        notice.setSourceBizId(sourceBizId);
         return notice;
     }
 }

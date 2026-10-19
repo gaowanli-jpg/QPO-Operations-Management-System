@@ -14,6 +14,7 @@ import com.machining.quote.mapper.SalesOrderItemMapper;
 import com.machining.quote.mapper.WmsReservationBatchMapper;
 import com.machining.quote.mapper.WmsReservationTicketMapper;
 import com.machining.quote.service.AuditService;
+import com.machining.quote.service.SalesOrderChangeNoticeService;
 import com.machining.quote.service.SalesOrderLinkedChangeNoticeService;
 import com.machining.quote.service.SalesOrderLinkedDiscardService;
 import com.machining.quote.service.SalesOrderManageService;
@@ -94,6 +95,8 @@ class SalesOrderLinkedDiscardBatchServiceTest {
         verify(fixture.itemMapper).restoreItemsLinkedDiscarded(eq(order.getId()), any(), eq(reason), isNull(), any());
         verify(fixture.ticketMapper).restoreLinkedDiscarded(any(), eq(SalesOrderLinkedDiscardService.LINKED_DISCARD_SOURCE), eq(reason), isNull(), any());
         verify(fixture.allocationMapper).restoreLinkedDiscarded(any(), eq(SalesOrderLinkedDiscardService.LINKED_DISCARD_SOURCE), eq(reason), isNull(), any());
+        verify(fixture.salesOrderChangeNoticeService).captureLinked(
+                eq(order), eq(List.of(item)), anyMap(), eq(SalesOrderChangeNoticeService.RESTORE), eq(reason));
         ArgumentCaptor<Object> auditAfter = ArgumentCaptor.forClass(Object.class);
         verify(fixture.auditService).record(eq("SALES_ORDER_LINKED_RESTORE"), eq("sales_order_header"), eq(order.getId()),
                 any(), auditAfter.capture(), eq("MARKET"), eq("SUCCESS"), any(), isNull());
@@ -130,6 +133,7 @@ class SalesOrderLinkedDiscardBatchServiceTest {
         SalesOrderManageService salesOrderManageService = mock(SalesOrderManageService.class);
         AuditService auditService = mock(AuditService.class);
         SalesOrderLinkedChangeNoticeService linkedChangeNoticeService = mock(SalesOrderLinkedChangeNoticeService.class);
+        SalesOrderChangeNoticeService salesOrderChangeNoticeService = mock(SalesOrderChangeNoticeService.class);
 
         when(headerMapper.selectByIdForUpdate(order.getId())).thenReturn(order);
         when(itemMapper.selectBySalesOrderIdForUpdate(order.getId())).thenReturn(items);
@@ -157,8 +161,10 @@ class SalesOrderLinkedDiscardBatchServiceTest {
         ReflectionTestUtils.setField(service, "salesOrderManageService", salesOrderManageService);
         ReflectionTestUtils.setField(service, "auditService", auditService);
         ReflectionTestUtils.setField(service, "linkedChangeNoticeService", linkedChangeNoticeService);
+        ReflectionTestUtils.setField(service, "salesOrderChangeNoticeService", salesOrderChangeNoticeService);
         return new Fixture(service, headerMapper, itemMapper, ticketMapper, allocationMapper,
-                wmsReservationTicketMapper, wmsReservationBatchMapper, auditService, linkedChangeNoticeService);
+                wmsReservationTicketMapper, wmsReservationBatchMapper, auditService, linkedChangeNoticeService,
+                salesOrderChangeNoticeService);
     }
 
     private SalesOrderHeader order(Long id, String status, String u9Status) {
@@ -232,6 +238,7 @@ class SalesOrderLinkedDiscardBatchServiceTest {
             WmsReservationTicketMapper wmsReservationTicketMapper,
             WmsReservationBatchMapper wmsReservationBatchMapper,
             AuditService auditService,
-            SalesOrderLinkedChangeNoticeService linkedChangeNoticeService) {
+            SalesOrderLinkedChangeNoticeService linkedChangeNoticeService,
+            SalesOrderChangeNoticeService salesOrderChangeNoticeService) {
     }
 }

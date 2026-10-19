@@ -15,6 +15,27 @@ public interface SalesOrderChangeNoticeMapper extends BaseMapper<SalesOrderChang
     SalesOrderChangeNotice selectByNoticeId(@Param("noticeId") String noticeId);
 
     @Select("""
+            <script>
+            SELECT * FROM sales_order_change_notice
+            WHERE sales_order_id = #{salesOrderId}
+              AND sales_order_item_id IN
+              <foreach collection="salesOrderItemIds" item="itemId" open="(" separator="," close=")">
+                  #{itemId}
+              </foreach>
+              AND allocation_id IN
+              <foreach collection="allocationIds" item="allocationId" open="(" separator="," close=")">
+                  #{allocationId}
+              </foreach>
+              AND change_type IN ('DISCARD', 'RESTORE')
+            ORDER BY created_at ASC, id ASC
+            </script>
+            """)
+    List<SalesOrderChangeNotice> selectLinkedLifecycleEvents(
+            @Param("salesOrderId") Long salesOrderId,
+            @Param("salesOrderItemIds") List<Long> salesOrderItemIds,
+            @Param("allocationIds") List<Long> allocationIds);
+
+    @Select("""
             SELECT * FROM sales_order_change_notice
             WHERE status = 'PENDING'
               AND is_hidden = FALSE

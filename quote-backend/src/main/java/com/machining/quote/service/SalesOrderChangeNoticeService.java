@@ -116,12 +116,19 @@ public class SalesOrderChangeNoticeService {
             throw new IllegalArgumentException("销售变更关联事件类型不正确");
         }
         String normalizedReason = normalizeReason(reason);
+        if (RESTORE.equals(changeType)) {
+            Map<Long, List<OrderDeliveryTicketAllocation>> allocationsByItem = Map.of(item.getId(), allocations);
+            List<LinkedNoticeTarget> targets = latestLinkedDiscardTargets(order, List.of(item), allocationsByItem);
+            String eventKey = UUID.randomUUID().toString();
+            for (LinkedNoticeTarget linkedTarget : targets) {
+                upsert(order, item, linkedTarget.target(), RESTORE, normalizedReason, Set.of(), eventKey);
+            }
+            return targets.size();
+        }
         List<OrderDeliveryTicketAllocation> candidates = allocations.stream()
                 .filter(Objects::nonNull)
                 .filter(row -> row.getId() != null)
-                .filter(row -> DISCARD.equals(changeType)
-                        ? !Boolean.TRUE.equals(row.getDiscarded())
-                        : isLinkedDiscarded(row, item))
+                .filter(row -> !Boolean.TRUE.equals(row.getDiscarded()))
                 .filter(row -> "PRODUCTION_REQUIRED".equalsIgnoreCase(text(row.getAllocationType()))
                         || Set.of("IN_STOCK_LOCK", "IN_PRODUCTION_LOCK")
                         .contains(text(row.getAllocationType()).toUpperCase()))
@@ -144,6 +151,21 @@ public class SalesOrderChangeNoticeService {
             throw new IllegalArgumentException("销售变更关联事件类型不正确");
         }
         String normalizedReason = normalizeReason(reason);
+        if (RESTORE.equals(changeType)) {
+            List<LinkedNoticeTarget> targets = latestLinkedDiscardTargets(order, items, allocationsByItem);
+            Map<Long, SalesOrderItem> itemsById = new LinkedHashMap<>();
+            for (SalesOrderItem item : items) {
+                if (item != null && item.getId() != null) itemsById.put(item.getId(), item);
+            }
+            String eventKey = UUID.randomUUID().toString();
+            for (LinkedNoticeTarget linkedTarget : targets) {
+                SalesOrderItem item = itemsById.get(linkedTarget.salesOrderItemId());
+                if (item != null) {
+                    upsert(order, item, linkedTarget.target(), RESTORE, normalizedReason, Set.of(), eventKey);
+                }
+            }
+            return targets.size();
+        }
         Map<Long, SalesOrderItem> itemsById = new LinkedHashMap<>();
         Map<Integer, Long> itemIdByAllocationId = new LinkedHashMap<>();
         List<OrderDeliveryTicketAllocation> candidates = new ArrayList<>();
@@ -154,9 +176,7 @@ public class SalesOrderChangeNoticeService {
                     ? List.of() : allocationsByItem.getOrDefault(item.getId(), List.of());
             for (OrderDeliveryTicketAllocation allocation : allocations) {
                 if (allocation == null || allocation.getId() == null) continue;
-                boolean eligibleEvent = DISCARD.equals(changeType)
-                        ? !Boolean.TRUE.equals(allocation.getDiscarded())
-                        : isLinkedDiscarded(allocation, item);
+                boolean eligibleEvent = !Boolean.TRUE.equals(allocation.getDiscarded());
                 boolean supportedType = "PRODUCTION_REQUIRED".equalsIgnoreCase(text(allocation.getAllocationType()))
                         || Set.of("IN_STOCK_LOCK", "IN_PRODUCTION_LOCK")
                         .contains(text(allocation.getAllocationType()).toUpperCase());
@@ -180,11 +200,71 @@ public class SalesOrderChangeNoticeService {
         return targetResolver.resolveAllocations(allocations);
     }
 
-    private boolean isLinkedDiscarded(OrderDeliveryTicketAllocation row, SalesOrderItem item) {
-        return Boolean.TRUE.equals(row.getDiscarded())
-                && "SALES_ORDER_ITEM_LINKED".equals(row.getDiscardSource())
-                && Objects.equals(item.getId(), row.getDiscardSourceSalesOrderItemId());
+    private List<LinkedNoticeTarget> latestLinkedDiscardTargets(
+            SalesOrderHeader order,
+            List<SalesOrderItem> items,
+            Map<Long, List<OrderDeliveryTicketAllocation>> allocationsByItem) {
+        Map<Long, SalesOrderItem> itemsById = new LinkedHashMap<>();
+        Map<Long, OrderDeliveryTicketAllocation> allocationsById = new LinkedHashMap<>();
+        Map<Long, Set<Long>> allocationIdsByItem = new LinkedHashMap<>();
+        for (SalesOrderItem item : items) {
+            if (item == null || item.getId() == null || !Objects.equals(order.getId(), item.getSalesOrderId())) continue;
+            itemsById.put(item.getId(), item);
+            List<OrderDeliveryTicketAllocation> allocations = allocationsByItem == null
+                    ? List.of() : allocationsByItem.getOrDefault(item.getId(), List.of());
+            for (OrderDeliveryTicketAllocation allocation : allocations) {
+                if (allocation != null && allocation.getId() != null && isSupportedAllocation(allocation)) {
+                    allocationsById.put(allocation.getId().longValue(), allocation);
+                    allocationIdsByItem.computeIfAbsent(item.getId(), ignored -> new LinkedHashSet<>())
+                            .add(allocation.getId().longValue());
+                }
+            }
+        }
+        if (itemsById.isEmpty() || allocationsById.isEmpty()) return List.of();
+
+        List<SalesOrderChangeNotice> events = noticeMapper.selectLinkedLifecycleEvents(
+                order.getId(), List.copyOf(itemsById.keySet()), List.copyOf(allocationsById.keySet()));
+        Map<LinkedNoticeKey, SalesOrderChangeNotice> latestByTarget = new LinkedHashMap<>();
+        for (SalesOrderChangeNotice event : events == null ? List.<SalesOrderChangeNotice>of() : events) {
+            if (event == null || event.getSalesOrderItemId() == null || event.getAllocationId() == null
+                    || !itemsById.containsKey(event.getSalesOrderItemId())
+                    || !allocationIdsByItem.getOrDefault(event.getSalesOrderItemId(), Set.of())
+                    .contains(event.getAllocationId())
+                    || (!DISCARD.equals(event.getChangeType()) && !RESTORE.equals(event.getChangeType()))
+                    || !hasText(event.getTargetType()) || !hasText(event.getTargetKey())) {
+                continue;
+            }
+            LinkedNoticeKey key = new LinkedNoticeKey(event.getSalesOrderItemId(), event.getAllocationId(),
+                    event.getTargetType(), event.getTargetKey());
+            latestByTarget.put(key, event);
+        }
+
+        List<LinkedNoticeTarget> targets = new ArrayList<>();
+        for (Map.Entry<LinkedNoticeKey, SalesOrderChangeNotice> entry : latestByTarget.entrySet()) {
+            SalesOrderChangeNotice latest = entry.getValue();
+            if (!DISCARD.equals(latest.getChangeType())) continue;
+            LinkedNoticeKey key = entry.getKey();
+            OrderDeliveryTicketAllocation allocation = allocationsById.get(key.allocationId());
+            SalesOrderChangeNoticeTargetResolver.Target target = new SalesOrderChangeNoticeTargetResolver.Target(
+                    allocation,
+                    latest.getTargetType(),
+                    latest.getTargetKey(),
+                    latest.getTargetExternalId(),
+                    latest.getSourceBizId());
+            targets.add(new LinkedNoticeTarget(key.salesOrderItemId(), target));
+        }
+        return targets;
     }
+
+    private boolean isSupportedAllocation(OrderDeliveryTicketAllocation allocation) {
+        return "PRODUCTION_REQUIRED".equalsIgnoreCase(text(allocation.getAllocationType()))
+                || Set.of("IN_STOCK_LOCK", "IN_PRODUCTION_LOCK")
+                .contains(text(allocation.getAllocationType()).toUpperCase());
+    }
+
+    private record LinkedNoticeKey(Long salesOrderItemId, Long allocationId, String targetType, String targetKey) { }
+
+    private record LinkedNoticeTarget(Long salesOrderItemId, SalesOrderChangeNoticeTargetResolver.Target target) { }
 
     private String text(String value) {
         return value == null ? "" : value.trim();

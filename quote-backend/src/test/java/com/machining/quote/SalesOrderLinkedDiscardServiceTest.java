@@ -16,6 +16,7 @@ import com.machining.quote.mapper.SalesOrderItemMapper;
 import com.machining.quote.mapper.WmsReservationBatchMapper;
 import com.machining.quote.mapper.WmsReservationTicketMapper;
 import com.machining.quote.service.AuditService;
+import com.machining.quote.service.SalesOrderChangeNoticeService;
 import com.machining.quote.service.SalesOrderLinkedDiscardService;
 import com.machining.quote.service.SalesOrderManageService;
 import org.junit.jupiter.api.Test;
@@ -106,6 +107,9 @@ class SalesOrderLinkedDiscardServiceTest {
         assertThat(manualAllocation.getDiscarded()).isTrue();
         assertThat(linkedCompleted.getDiscarded()).isTrue();
         assertThat(linkedCompletedAllocation.getDiscarded()).isTrue();
+        verify(fixture.salesOrderChangeNoticeService).captureLinked(
+                order, item, List.of(linkedActiveAllocation, linkedCompletedAllocation, manualAllocation),
+                SalesOrderChangeNoticeService.RESTORE, "恢复工作池");
         verify(fixture.salesOrderManageService).restoreItemForU9Change(eq(101L), eq(201L), any(OrderStatusChangeReq.class));
         verify(fixture.auditService).record(eq("SALES_ORDER_ITEM_LINKED_RESTORE"), eq("sales_order_item"), eq(201L),
                 isNull(), any(), eq("MARKET"), eq("SUCCESS"), any(), isNull());
@@ -276,6 +280,7 @@ class SalesOrderLinkedDiscardServiceTest {
         WmsReservationBatchMapper wmsReservationBatchMapper = mock(WmsReservationBatchMapper.class);
         SalesOrderManageService salesOrderManageService = mock(SalesOrderManageService.class);
         AuditService auditService = mock(AuditService.class);
+        SalesOrderChangeNoticeService salesOrderChangeNoticeService = mock(SalesOrderChangeNoticeService.class);
 
         when(headerMapper.selectByIdForUpdate(order.getId())).thenReturn(order);
         when(itemMapper.selectByIdForUpdate(item.getId())).thenReturn(item);
@@ -300,8 +305,10 @@ class SalesOrderLinkedDiscardServiceTest {
         ReflectionTestUtils.setField(service, "wmsReservationBatchMapper", wmsReservationBatchMapper);
         ReflectionTestUtils.setField(service, "salesOrderManageService", salesOrderManageService);
         ReflectionTestUtils.setField(service, "auditService", auditService);
+        ReflectionTestUtils.setField(service, "salesOrderChangeNoticeService", salesOrderChangeNoticeService);
         return new Fixture(service, headerMapper, itemMapper, ticketMapper, allocationMapper,
-                wmsReservationTicketMapper, wmsReservationBatchMapper, salesOrderManageService, auditService);
+                wmsReservationTicketMapper, wmsReservationBatchMapper, salesOrderManageService, auditService,
+                salesOrderChangeNoticeService);
     }
 
     private OrderStatusChangeReq reason(String value) {
@@ -372,6 +379,7 @@ class SalesOrderLinkedDiscardServiceTest {
             WmsReservationTicketMapper wmsReservationTicketMapper,
             WmsReservationBatchMapper wmsReservationBatchMapper,
             SalesOrderManageService salesOrderManageService,
-            AuditService auditService) {
+            AuditService auditService,
+            SalesOrderChangeNoticeService salesOrderChangeNoticeService) {
     }
 }
