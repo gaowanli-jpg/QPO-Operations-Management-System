@@ -8,10 +8,11 @@ describe('sales change notice selection policy', () => {
     expect(canSelectSalesChangeNotice({ status: 'RESULT_UNKNOWN' }, 'MANUAL')).toBe(true)
   })
 
-  it('only allows failed and unknown notices for manual retry in automatic mode', () => {
-    expect(canSelectSalesChangeNotice({ status: 'PENDING' }, 'AUTO')).toBe(false)
-    expect(canSelectSalesChangeNotice({ status: 'FAILED' }, 'AUTO')).toBe(true)
-    expect(canSelectSalesChangeNotice({ status: 'RESULT_UNKNOWN' }, 'AUTO')).toBe(true)
+  it('allows old pending backlog and retryable notices in automatic mode', () => {
+    expect(canSelectSalesChangeNotice({ status: 'PENDING', autoDispatchEpoch: 2 }, 'AUTO', 3)).toBe(true)
+    expect(canSelectSalesChangeNotice({ status: 'PENDING', autoDispatchEpoch: 3 }, 'AUTO', 3)).toBe(false)
+    expect(canSelectSalesChangeNotice({ status: 'FAILED' }, 'AUTO', 3)).toBe(true)
+    expect(canSelectSalesChangeNotice({ status: 'RESULT_UNKNOWN' }, 'AUTO', 3)).toBe(true)
   })
 
   it('does not allow sending or already sent notices', () => {

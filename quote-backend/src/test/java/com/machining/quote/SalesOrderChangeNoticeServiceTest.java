@@ -53,25 +53,32 @@ class SalesOrderChangeNoticeServiceTest {
     }
 
     @Test
-    void automaticModeManualRetryClaimsOnlyFailedAndUnknownNotices() {
+    void automaticModeAllowsManualSendingOfOldBacklogAndRetryableNotices() {
         SalesOrderChangeDispatchSetting setting = setting("AUTO", 3L);
         when(settingMapper.selectSingletonForUpdate()).thenReturn(setting);
+        SalesOrderChangeNotice backlog = notice("PENDING-BACKLOG", "PENDING");
+        backlog.setAutoDispatchEpoch(2L);
+        SalesOrderChangeNotice currentEpoch = notice("PENDING-AUTO", "PENDING");
+        currentEpoch.setAutoDispatchEpoch(3L);
         when(noticeMapper.selectList(any(Wrapper.class))).thenReturn(List.of(
-                notice("PENDING-1", "PENDING"),
+                backlog,
+                currentEpoch,
                 notice("FAILED-1", "FAILED"),
                 notice("UNKNOWN-1", "RESULT_UNKNOWN")));
-        when(noticeMapper.claimManual(anyList())).thenReturn(2);
+        when(noticeMapper.claimManual(anyList())).thenReturn(3);
 
-        List<String> claimed = service.claimManual(List.of("PENDING-1", "FAILED-1", "UNKNOWN-1"));
+        List<String> claimed = service.claimManual(List.of("PENDING-BACKLOG", "PENDING-AUTO", "FAILED-1", "UNKNOWN-1"));
 
-        assertThat(claimed).containsExactly("FAILED-1", "UNKNOWN-1");
+        assertThat(claimed).containsExactly("PENDING-BACKLOG", "FAILED-1", "UNKNOWN-1");
         verify(noticeMapper).claimManual(claimed);
     }
 
     @Test
-    void automaticModeDoesNotAllowManuallyClaimingPendingNotices() {
+    void automaticModeDoesNotAllowManuallyClaimingCurrentEpochPendingNotices() {
         when(settingMapper.selectSingletonForUpdate()).thenReturn(setting("AUTO", 3L));
-        when(noticeMapper.selectList(any(Wrapper.class))).thenReturn(List.of(notice("PENDING-1", "PENDING")));
+        SalesOrderChangeNotice currentEpoch = notice("PENDING-1", "PENDING");
+        currentEpoch.setAutoDispatchEpoch(3L);
+        when(noticeMapper.selectList(any(Wrapper.class))).thenReturn(List.of(currentEpoch));
 
         assertThatThrownBy(() -> service.claimManual(List.of("PENDING-1")))
                 .isInstanceOf(IllegalArgumentException.class);

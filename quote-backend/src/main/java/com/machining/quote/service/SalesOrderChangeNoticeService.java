@@ -338,16 +338,16 @@ public class SalesOrderChangeNoticeService {
         List<String> ids = normalizeIds(requestedIds);
         SalesOrderChangeDispatchSetting setting = settingMapper.selectSingletonForUpdate();
         boolean automaticMode = setting != null && AUTO.equals(setting.getDispatchMode());
-        List<String> eligibleStatuses = automaticMode
-                ? List.of(FAILED, RESULT_UNKNOWN)
-                : List.of(PENDING, FAILED, RESULT_UNKNOWN);
+        long currentAutoEpoch = setting == null ? 0L : safeEpoch(setting.getAutoDispatchEpoch());
         QueryWrapper<SalesOrderChangeNotice> query = new QueryWrapper<>();
-        query.in("notice_id", ids).in("status", eligibleStatuses);
+        query.in("notice_id", ids).in("status", List.of(PENDING, FAILED, RESULT_UNKNOWN));
         applyScope(query);
         query.last("FOR UPDATE");
         List<SalesOrderChangeNotice> rows = noticeMapper.selectList(query);
         List<String> eligible = rows.stream()
-                .filter(row -> !automaticMode || !PENDING.equals(row.getStatus()))
+                .filter(row -> !automaticMode
+                        || !PENDING.equals(row.getStatus())
+                        || safeEpoch(row.getAutoDispatchEpoch()) < currentAutoEpoch)
                 .map(SalesOrderChangeNotice::getNoticeId)
                 .filter(Objects::nonNull)
                 .toList();
@@ -581,7 +581,8 @@ public class SalesOrderChangeNoticeService {
             dto.setTargetType(row.getTargetType()); dto.setTargetKey(row.getTargetKey()); dto.setTargetExternalId(row.getTargetExternalId());
             dto.setSourceBizId(row.getSourceBizId()); dto.setChangeType(row.getChangeType()); dto.setReason(row.getReason());
             dto.setChangedFields(new ArrayList<>(readStringList(row.getChangedFieldsJson()))); dto.setSnapshot(parseSnapshot(row.getPayloadSnapshotJson()));
-            dto.setStatus(row.getStatus()); dto.setAttemptCount(row.getAttemptCount()); dto.setLastAttemptAt(row.getLastAttemptAt()); dto.setSentAt(row.getSentAt()); dto.setLastError(row.getLastError()); dto.setCreatedByName(row.getCreatedByName()); dto.setCreatedAt(row.getCreatedAt());
+            dto.setStatus(row.getStatus()); dto.setAutoDispatchEpoch(safeEpoch(row.getAutoDispatchEpoch()));
+            dto.setAttemptCount(row.getAttemptCount()); dto.setLastAttemptAt(row.getLastAttemptAt()); dto.setSentAt(row.getSentAt()); dto.setLastError(row.getLastError()); dto.setCreatedByName(row.getCreatedByName()); dto.setCreatedAt(row.getCreatedAt());
             result.add(dto);
         }
         return result;

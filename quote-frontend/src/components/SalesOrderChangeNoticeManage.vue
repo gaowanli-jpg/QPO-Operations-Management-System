@@ -156,7 +156,7 @@ const search = () => { pagination.page = 1; loadRows() }
 const resetFilters = () => { Object.assign(filters, { customerId: undefined, customerCode: '', customerName: '', salesOrderNo: '', lineNo: '', changeType: '', targetType: '', status: '' }); dateRange.value = []; search() }
 const handleCustomerSelected = customer => { filters.customerId = customer?.id || undefined; filters.customerCode = customer?.customerCode || ''; filters.customerName = customer?.customerName || customer?.customerShortName || filters.customerCode; search() }
 const clearCustomer = () => { filters.customerId = undefined; filters.customerCode = ''; filters.customerName = ''; search() }
-const isSelectable = row => canSelectSalesChangeNotice(row, dispatchSetting.dispatchMode)
+const isSelectable = row => canSelectSalesChangeNotice(row, dispatchSetting.dispatchMode, dispatchSetting.autoDispatchEpoch)
 const sendableRows = computed(() => selectedRows.value.filter(isSelectable))
 const sendSelected = async () => {
   const ids = sendableRows.value.map(row => row.noticeId)
@@ -175,7 +175,7 @@ const sendSelected = async () => {
 const toggleMode = async () => {
   const nextMode = dispatchSetting.dispatchMode === 'AUTO' ? 'MANUAL' : 'AUTO'
   try {
-    await ElMessageBox.confirm(nextMode === 'AUTO' ? '切换后只自动发送切换之后新产生的通知，已有积压不会自动发送。继续吗？' : '切换为手动发送后，新通知需要人工批量发送。继续吗？', '发送模式确认', { type: 'warning' })
+    await ElMessageBox.confirm(nextMode === 'AUTO' ? '切换后只自动发送切换之后新产生的通知；已有待发送积压不会自动发送，但仍可在列表中手动勾选发送。继续吗？' : '切换为手动发送后，新通知需要人工批量发送。继续吗？', '发送模式确认', { type: 'warning' })
     Object.assign(dispatchSetting, await updateSalesOrderChangeDispatchMode(nextMode))
     selectedRows.value = []
     await loadRows()

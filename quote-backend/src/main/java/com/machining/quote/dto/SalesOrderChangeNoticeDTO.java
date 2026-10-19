@@ -27,6 +27,7 @@ public class SalesOrderChangeNoticeDTO {
     private List<String> changedFields;
     private Map<String, Object> snapshot;
     private String status;
+    private Long autoDispatchEpoch;
     private Integer attemptCount;
     private LocalDateTime lastAttemptAt;
     private LocalDateTime sentAt;
