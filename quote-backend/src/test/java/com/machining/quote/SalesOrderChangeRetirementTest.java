@@ -17,7 +17,7 @@ class SalesOrderChangeRetirementTest {
         assertThat(BACKEND_SOURCE.resolve(Path.of("controller", "SalesOrderChangeController.java"))).doesNotExist();
         assertThat(BACKEND_SOURCE.resolve(Path.of("service", "SalesOrderChangeService.java"))).doesNotExist();
         assertThat(FRONTEND_SOURCE.resolve(Path.of("components", "SalesOrderChangeManage.vue"))).doesNotExist();
-        assertThat(FRONTEND_SOURCE.resolve(Path.of("services", "salesOrderChangeApi.js"))).doesNotExist();
+        assertThat(FRONTEND_SOURCE.resolve(Path.of("services", "salesOrderChangeApi.js"))).exists();
     }
 
     @Test
@@ -25,10 +25,12 @@ class SalesOrderChangeRetirementTest {
         String permissionService = read(BACKEND_SOURCE.resolve(Path.of("service", "PermissionService.java")));
         String router = read(FRONTEND_SOURCE.resolve(Path.of("router", "index.js")));
         String app = read(FRONTEND_SOURCE.resolve(Path.of("App.vue")));
+        String salesChangeApi = read(FRONTEND_SOURCE.resolve(Path.of("services", "salesOrderChangeApi.js")));
 
         assertThat(permissionService).doesNotContain("change:sales-order:");
-        assertThat(router).doesNotContain("/sales-order-change", "SalesOrderChange");
-        assertThat(app).doesNotContain("/sales-order-change", "SalesOrderChange");
+        assertThat(router).doesNotContain("path: '/sales-order-change'", "component: SalesOrderChangeManage");
+        assertThat(app).doesNotContain("SalesOrderChangeManage");
+        assertThat(salesChangeApi).contains("/api/change/sales-order-changes");
     }
 
     private String read(Path path) throws Exception {
