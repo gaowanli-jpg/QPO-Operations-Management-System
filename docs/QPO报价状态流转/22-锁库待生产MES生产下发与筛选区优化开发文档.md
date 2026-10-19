@@ -237,7 +237,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS uk_delivery_allocation_mes_production_request
 | `ticket_qty` | 原始提单数量快照。 |
 | `mes_production_status` | MES 生产下发状态：`PENDING`、`PROCESSING`、`SUCCESS`、`FAILED`。 |
 | `mes_production_request_id` | QPO 生成的本次生产下发唯一请求 ID。 |
-| `mes_production_external_id` | MES 返回的生产任务号、工单号或流水号。 |
+| `mes_production_external_id` | MES 响应明细 `data.items[].id` 的生产工单唯一 ID；不使用 `planNo`。 |
 | `mes_production_synced_at` | 下发成功或失败的最终写回时间。 |
 | `mes_production_message` | 下发状态摘要，不保存完整请求体、token 或大 JSON。 |
 

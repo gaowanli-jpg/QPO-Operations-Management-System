@@ -1,16 +1,17 @@
 package com.machining.quote.dto.mes;
 
 import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import lombok.Data;
 
 import java.util.List;
 
 @Data
+@JsonIgnoreProperties(value = "externalId")
 public class MesProductionDispatchResp {
     private Object code;
     private Boolean success;
     private String requestId;
-    private String externalId;
     @JsonAlias("msg")
     private String message;
     private DataEnvelope data;
@@ -28,10 +29,7 @@ public class MesProductionDispatchResp {
 
     public String getExternalId() {
         Item item = firstItem();
-        if (item == null) {
-            return externalId;
-        }
-        return firstNonBlank(externalId, item.getPlanNo(), item.getId() == null ? null : String.valueOf(item.getId()));
+        return item == null || item.getId() == null ? null : trimToNull(String.valueOf(item.getId()));
     }
 
     private Item firstItem() {
@@ -60,6 +58,10 @@ public class MesProductionDispatchResp {
         return null;
     }
 
+    private String trimToNull(String value) {
+        return value == null || value.trim().isEmpty() ? null : value.trim();
+    }
+
     @Data
     public static class DataEnvelope {
         private String bizId;
@@ -68,7 +70,7 @@ public class MesProductionDispatchResp {
 
     @Data
     public static class Item {
-        private Long id;
+        private Object id;
         private String planNo;
         private String saleOrderNo;
         private String saleOrderItemNo;

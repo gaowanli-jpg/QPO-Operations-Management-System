@@ -119,7 +119,11 @@ class DataCenterClientFallbackTest {
         DataCenterIntegrationClient dataCenterClient = mock(DataCenterIntegrationClient.class);
         MesProductionDispatchResp expected = new MesProductionDispatchResp();
         expected.setSuccess(true);
-        expected.setExternalId("MES-PROD-DC");
+        MesProductionDispatchResp.Item responseItem = new MesProductionDispatchResp.Item();
+        responseItem.setId("MES-PROD-DC");
+        MesProductionDispatchResp.DataEnvelope data = new MesProductionDispatchResp.DataEnvelope();
+        data.setItems(List.of(responseItem));
+        expected.setData(data);
         when(dataCenterClient.call(eq(DataCenterEndpointRegistry.MES_PRODUCTION_DISPATCH), any(), eq(MesProductionDispatchResp.class)))
                 .thenReturn(expected);
         MesProductionDispatchClient client = new MesProductionDispatchClient();

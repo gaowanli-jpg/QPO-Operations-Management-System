@@ -689,14 +689,8 @@ public class LockedItemStockPickingOrderService {
     }
 
     private String externalId(MesProductionOrderCreateResp.Item responseItem) {
-        if (responseItem == null) {
-            return null;
-        }
-        String productOrder = trimToNull(responseItem.getProductOrder());
-        if (productOrder != null) {
-            return productOrder;
-        }
-        return responseItem.getId() == null ? null : String.valueOf(responseItem.getId());
+        return responseItem == null || responseItem.getId() == null
+                ? null : trimToNull(String.valueOf(responseItem.getId()));
     }
 
     private String newStockPickingBizId() {

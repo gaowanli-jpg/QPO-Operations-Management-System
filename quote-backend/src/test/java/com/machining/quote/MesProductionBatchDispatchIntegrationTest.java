@@ -74,7 +74,7 @@ class MesProductionBatchDispatchIntegrationTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    void dispatchesSameSalesOrderGroupInOneRealDemandBatchAndWritesPlanNumbers() {
+    void dispatchesSameSalesOrderGroupInOneRealDemandBatchAndWritesMesRecordIds() {
         Fixture fixture = fixture();
         OrderDeliveryTicketAllocation first = allocation(1, 101, "MAT-001", 4, 9001L);
         OrderDeliveryTicketAllocation second = allocation(2, 102, "MAT-002", 6, 9002L);
@@ -99,7 +99,7 @@ class MesProductionBatchDispatchIntegrationTest {
         assertThat(rows).hasSize(2);
         assertThat(rows.get(0).get("result")).asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.MAP)
                 .containsEntry("bizId", "QPO-DEM-BATCH-1")
-                .containsEntry("externalId", "PLAN-1");
+                .containsEntry("externalId", "MES-ID-PLAN-1");
         ArgumentCaptor<MesProductionDispatchReq> requestCaptor = ArgumentCaptor.forClass(MesProductionDispatchReq.class);
         verify(fixture.client).dispatch(requestCaptor.capture());
         MesProductionDispatchReq request = requestCaptor.getValue();
@@ -145,13 +145,13 @@ class MesProductionBatchDispatchIntegrationTest {
                     assertThat(update.getId()).isEqualTo(1);
                     assertThat(update.getMesProductionStatus()).isEqualTo("SUCCESS");
                     assertThat(update.getMesProductionRequestId()).isEqualTo("QPO-DEML-1");
-                    assertThat(update.getMesProductionExternalId()).isEqualTo("PLAN-1");
+                    assertThat(update.getMesProductionExternalId()).isEqualTo("MES-ID-PLAN-1");
                 })
                 .anySatisfy(update -> {
                     assertThat(update.getId()).isEqualTo(2);
                     assertThat(update.getMesProductionStatus()).isEqualTo("SUCCESS");
                     assertThat(update.getMesProductionRequestId()).isEqualTo("QPO-DEML-2");
-                    assertThat(update.getMesProductionExternalId()).isEqualTo("PLAN-2");
+                    assertThat(update.getMesProductionExternalId()).isEqualTo("MES-ID-PLAN-2");
                 });
     }
 
@@ -352,11 +352,11 @@ class MesProductionBatchDispatchIntegrationTest {
         assertThat(allocationCaptor.getAllValues())
                 .anySatisfy(update -> {
                     assertThat(update.getId()).isEqualTo(11);
-                    assertThat(update.getMesProductionExternalId()).isEqualTo("PLAN-LINE-10");
+                    assertThat(update.getMesProductionExternalId()).isEqualTo("MES-ID-PLAN-LINE-10");
                 })
                 .anySatisfy(update -> {
                     assertThat(update.getId()).isEqualTo(12);
-                    assertThat(update.getMesProductionExternalId()).isEqualTo("PLAN-LINE-20");
+                    assertThat(update.getMesProductionExternalId()).isEqualTo("MES-ID-PLAN-LINE-20");
                 });
     }
 
@@ -432,6 +432,29 @@ class MesProductionBatchDispatchIntegrationTest {
         assertThat(allocationCaptor.getValue().getMesProductionStatus()).isEqualTo("RESULT_UNKNOWN");
         assertThat(allocationCaptor.getValue().getMesProductionExternalId()).isNull();
         assertThat(allocationCaptor.getValue().getMesProductionMessage()).contains("saleOrderNo/saleOrderItemNo");
+    }
+
+    @Test
+    void planNumberWithoutMesRecordIdCannotBecomeTheExternalWorkOrderId() {
+        Fixture fixture = fixture();
+        OrderDeliveryTicketAllocation allocation = allocation(16, 116, "MAT-ID-REQUIRED", 5, 9916L);
+        allocation.setSourceOrderId(3916L);
+        when(fixture.allocationMapper.selectById(16)).thenReturn(allocation);
+        when(fixture.salesItemMapper.selectByIdForUpdate(9916L)).thenReturn(salesItem(9916L, 160, 3916L, null, 16L, "MAT-ID-REQUIRED", 5));
+        when(fixture.headerMapper.selectById(3916L)).thenReturn(header(3916L, "SO-DOC-ID-REQUIRED"));
+        mockReserve(fixture, "QPO-DEM-ID-REQUIRED", List.of(line(16, "QPO-DEML-ID-REQUIRED", "MAT-ID-REQUIRED")));
+        MesProductionDispatchResp.Item responseItem = item("SO-DOC-ID-REQUIRED", "160", "MAT-ID-REQUIRED", "PLAN-WITHOUT-ID");
+        responseItem.setId(null);
+        when(fixture.client.dispatch(any())).thenReturn(success("QPO-DEM-ID-REQUIRED", responseItem));
+
+        Map<String, Object> result = fixture.service.dispatchBatch(List.of(16), 9916L);
+
+        assertThat(result).containsEntry("unknownCount", 1).containsEntry("successCount", 0);
+        ArgumentCaptor<OrderDeliveryTicketAllocation> allocationCaptor = ArgumentCaptor.forClass(OrderDeliveryTicketAllocation.class);
+        verify(fixture.allocationMapper).updateById(allocationCaptor.capture());
+        assertThat(allocationCaptor.getValue().getMesProductionStatus()).isEqualTo("RESULT_UNKNOWN");
+        assertThat(allocationCaptor.getValue().getMesProductionExternalId()).isNull();
+        assertThat(allocationCaptor.getValue().getMesProductionMessage()).contains("missing MES work order id");
     }
 
     private Fixture fixture() {
@@ -578,6 +601,7 @@ class MesProductionBatchDispatchIntegrationTest {
 
     private MesProductionDispatchResp.Item productOnlyItem(String productCode, String planNo) {
         MesProductionDispatchResp.Item item = new MesProductionDispatchResp.Item();
+        item.setId("MES-ID-" + planNo);
         item.setProductCode(productCode);
         item.setPlanNo(planNo);
         item.setStatus(0);

@@ -42,7 +42,7 @@ class LockedItemMesProductionClientTest {
                     {
                       "success": true,
                       "requestId": "REQ-1",
-                      "externalId": "MES-PROD-1",
+                      "data": {"items": [{"id": "MES-PROD-1", "planNo": "PLAN-1"}]},
                       "message": "accepted"
                     }
                     """);
@@ -100,7 +100,7 @@ class LockedItemMesProductionClientTest {
         CapturedRequest captured = new CapturedRequest();
         HttpServer server = server(exchange -> {
             captured.capture(exchange);
-            respond(exchange, 200, "{\"success\":true,\"externalId\":\"MES-PROD-2\"}");
+            respond(exchange, 200, "{\"success\":true,\"data\":{\"items\":[{\"id\":\"MES-PROD-2\",\"planNo\":\"PLAN-2\"}]}}");
         });
         try {
             MesProductionDispatchResp response = client(baseUrl(server), "  token-abc  ", "/api/mes/production/submit", 1000)
@@ -119,7 +119,7 @@ class LockedItemMesProductionClientTest {
         CapturedRequest captured = new CapturedRequest();
         HttpServer server = server(exchange -> {
             captured.capture(exchange);
-            respond(exchange, 200, "{\"success\":true,\"externalId\":\"MES-PROD-DB\"}");
+            respond(exchange, 200, "{\"success\":true,\"data\":{\"items\":[{\"id\":\"MES-PROD-DB\",\"planNo\":\"PLAN-DB\"}]}}");
         });
         try {
             MesProductionDispatchClient client = client("http://legacy-mes.invalid", "legacy-token", "/legacy", 1000);

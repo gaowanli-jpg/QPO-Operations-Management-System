@@ -93,7 +93,7 @@ class LockedItemStockPickingOrderServiceTest {
         assertThat(successUpdate.getId()).isEqualTo(1);
         assertThat(successUpdate.getStockPickingStatus()).isEqualTo("SUCCESS");
         assertThat(successUpdate.getStockPickingBizId()).isEqualTo(request.getBizId());
-        assertThat(successUpdate.getStockPickingExternalId()).isEqualTo("MO-0001");
+        assertThat(successUpdate.getStockPickingExternalId()).isEqualTo("MES-ID-1");
         verify(auditService).record(
                 eq("LOCKED_ITEM_STOCK_PICKING_SUCCESS"),
                 eq("order_delivery_ticket_allocation"),

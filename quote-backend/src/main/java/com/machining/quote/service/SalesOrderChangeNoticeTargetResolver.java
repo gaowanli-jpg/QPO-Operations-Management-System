@@ -136,11 +136,14 @@ public class SalesOrderChangeNoticeTargetResolver {
         Map<Long, MesIntegrationBatch> batches = loadBatches(batchItems.values());
         List<Target> targets = new ArrayList<>();
         for (OrderDeliveryTicketAllocation row : production) {
-            String externalId = trimToNull(row.getMesProductionExternalId());
             MesProductionBatchItem batchItem = batchItems.get(row.getId());
-            String sourceBizId = batchItem == null ? trimToNull(row.getMesProductionRequestId())
-                    : firstNonBlank(batches.get(batchItem.getBatchId()) == null ? null
-                    : batches.get(batchItem.getBatchId()).getBizId(), row.getMesProductionRequestId());
+            String externalId = firstNonBlank(
+                    batchItem == null ? null : batchItem.getMesRecordId(),
+                    row.getMesProductionExternalId());
+            MesIntegrationBatch batch = batchItem == null || batchItem.getBatchId() == null
+                    ? null : batches.get(batchItem.getBatchId());
+            String sourceBizId = batch == null ? trimToNull(row.getMesProductionRequestId())
+                    : firstNonBlank(batch.getBizId(), row.getMesProductionRequestId());
             targets.add(target(row, "PRODUCTION", externalId, sourceBizId));
         }
         for (OrderDeliveryTicketAllocation row : stock) {

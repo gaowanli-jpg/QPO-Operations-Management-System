@@ -668,7 +668,7 @@ public class MesProductionDispatchService {
             }
             String externalId = responseExternalId(responseItem);
             if (isBlank(externalId)) {
-                String message = "MES production response missing planNo for " + matchLabel;
+                String message = "MES production response missing MES work order id for " + matchLabel;
                 markResultUnknown(plan.allocation(), requestId, message);
                 updateProductionBatchItem(batchItem, STATUS_RESULT_UNKNOWN, responseItem, message);
                 rowsByAllocationId.put(plan.allocation().getId(), row(plan.allocation().getId(), STATUS_RESULT_UNKNOWN, message,
@@ -795,10 +795,7 @@ public class MesProductionDispatchService {
     }
 
     private String responseExternalId(MesProductionDispatchResp.Item item) {
-        if (item == null) {
-            return null;
-        }
-        return firstNonBlank(item.getPlanNo(), item.getId() == null ? null : String.valueOf(item.getId()));
+        return item == null || item.getId() == null ? null : trimToNull(String.valueOf(item.getId()));
     }
 
     private Object responseCode(MesProductionDispatchResp response) {

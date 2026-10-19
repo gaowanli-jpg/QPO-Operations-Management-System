@@ -638,7 +638,7 @@ MES 当前响应只返回 `productCode`，不足以在同一批次存在相同�
 成功后：
 
 - `mes_production_status = SUCCESS`。
-- `mes_production_external_id = planNo`，若为空则使用 `id` 字符串。
+- `mes_production_external_id` 只保存响应明细 `items[].id` 的字符串值；`planNo` 只用于展示和对账，不作为工单定位键。
 - 保存 MES 数字状态的安全摘要。
 
 ## 6. 数据库设计
@@ -1216,7 +1216,7 @@ MES batch reconcile completed batchId={} matchedCount={} pendingCount={} failedC
 - `PENDING_CREATE` 进入等待结果。
 - `data.bizId` 不匹配时进入结果未知。
 - 返回缺行、多行、未知行不按数组位置误写。
-- 生产返回 planNo 正确写回。
+- 生产返回 MES `id` 正确写回；`planNo` 不参与工单定位字段。
 
 物料回调断言：
 
@@ -1470,7 +1470,7 @@ docker compose --env-file erp.env ps
 19. `demandQty = makeQty` 且 `buyQty = stockQty = 0`。
 20. BOM 有完整原材料快照时使用工程材料编码和毛重；缺失时允许为空。
 21. 工艺路线字段名和工时正确，不包含价格。
-22. MES 返回 planNo 后 QPO allocation 立即显示成功。
+22. MES 返回响应明细 `id` 后 QPO allocation 保存该 ID 并显示成功；`planNo` 不作为工单唯一 ID。
 23. 同一成功 bizId 不重复创建 MES demand。
 24. 并发选择同一 ticket/allocation 时只有一个活动批次成功预约。
 25. U9、WMS、待产、锁库、销售订单和 RFQ 后续页面不回退。

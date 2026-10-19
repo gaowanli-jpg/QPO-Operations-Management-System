@@ -234,7 +234,12 @@ abstract class LockedItemMesProductionDispatchTestSupport {
     protected MesProductionDispatchResp success(String externalId, String message) {
         MesProductionDispatchResp resp = new MesProductionDispatchResp();
         resp.setSuccess(true);
-        resp.setExternalId(externalId);
+        MesProductionDispatchResp.Item item = new MesProductionDispatchResp.Item();
+        item.setId(externalId);
+        item.setStatus(0);
+        MesProductionDispatchResp.DataEnvelope data = new MesProductionDispatchResp.DataEnvelope();
+        data.setItems(List.of(item));
+        resp.setData(data);
         resp.setMessage(message);
         return resp;
     }

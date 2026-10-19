@@ -146,7 +146,16 @@ class MesRealContractTest {
                 """, MesProductionDispatchResp.class);
         assertThat(production.getSuccess()).isTrue();
         assertThat(production.getRequestId()).isEqualTo("DEM-BIZ");
-        assertThat(production.getExternalId()).isEqualTo("PLAN001");
+        assertThat(production.getExternalId()).isEqualTo("1001");
+
+        MesProductionDispatchResp planNumberOnly = objectMapper.readValue(
+                "{\"success\":true,\"externalId\":\"PLAN-ONLY\"}", MesProductionDispatchResp.class);
+        assertThat(planNumberOnly.getExternalId()).isNull();
+
+        MesProductionDispatchResp nestedPlanNumberOnly = objectMapper.readValue("""
+                {"success":true,"data":{"items":[{"planNo":"PLAN-ONLY"}]}}
+                """, MesProductionDispatchResp.class);
+        assertThat(nestedPlanNumberOnly.getExternalId()).isNull();
     }
 
     @Test
