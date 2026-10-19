@@ -7,6 +7,7 @@ import com.machining.quote.entity.SalesOrderChangeDispatchSetting;
 import com.machining.quote.entity.SalesOrderChangeNotice;
 import com.machining.quote.entity.SalesOrderHeader;
 import com.machining.quote.entity.SalesOrderItem;
+import com.machining.quote.dto.SalesOrderChangeNoticeQueryReq;
 import com.machining.quote.mapper.OrderDeliveryTicketAllocationMapper;
 import com.machining.quote.mapper.SalesOrderChangeDispatchSettingMapper;
 import com.machining.quote.mapper.SalesOrderChangeNoticeMapper;
@@ -87,6 +88,111 @@ class SalesOrderChangeNoticeServiceTest {
     }
 
     @Test
+    void hiddenNoticesAreExcludedFromManualAndAutomaticClaims() {
+        when(settingMapper.selectSingletonForUpdate()).thenReturn(setting("MANUAL", 4L));
+        SalesOrderChangeNotice hidden = notice("HIDDEN-MANUAL", "FAILED");
+        hidden.setIsHidden(true);
+        SalesOrderChangeNotice visible = notice("VISIBLE-MANUAL", "FAILED");
+        visible.setIsHidden(false);
+        when(noticeMapper.selectList(any(Wrapper.class))).thenReturn(List.of(hidden, visible));
+        when(noticeMapper.claimManual(anyList())).thenReturn(1);
+
+        assertThat(service.claimManual(List.of("HIDDEN-MANUAL", "VISIBLE-MANUAL")))
+                .containsExactly("VISIBLE-MANUAL");
+        verify(noticeMapper).claimManual(List.of("VISIBLE-MANUAL"));
+
+        when(settingMapper.selectSingletonForShare()).thenReturn(setting("AUTO", 5L));
+        SalesOrderChangeNotice hiddenAuto = notice("HIDDEN-AUTO", "PENDING");
+        hiddenAuto.setIsHidden(true);
+        hiddenAuto.setAutoDispatchEpoch(5L);
+        when(noticeMapper.selectAutoPendingForUpdate(5L, 100)).thenReturn(List.of(hiddenAuto));
+        assertThat(service.claimAutoPending()).isEmpty();
+        verify(noticeMapper, never()).claimAuto(anyList(), any());
+    }
+
+    @Test
+    void hideRequiresReasonAndRejectsAnEntireBatchWhenAnyNoticeIsIneligible() {
+        assertThatThrownBy(() -> service.hide(List.of("NOTICE-1"), "  "))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.hide(List.of("NOTICE-1"), "x".repeat(501)))
+                .isInstanceOf(IllegalArgumentException.class);
+        verify(noticeMapper, never()).selectList(any(Wrapper.class));
+
+        SalesOrderChangeNotice pending = notice("NOTICE-1", "PENDING");
+        pending.setIsHidden(false);
+        SalesOrderChangeNotice sending = notice("NOTICE-2", "SENDING");
+        sending.setIsHidden(false);
+        when(noticeMapper.selectList(any(Wrapper.class))).thenReturn(List.of(pending, sending));
+
+        assertThatThrownBy(() -> service.hide(List.of("NOTICE-1", "NOTICE-2"), "无效通知"))
+                .isInstanceOf(IllegalArgumentException.class);
+
+        verify(noticeMapper, never()).updateById(any(SalesOrderChangeNotice.class));
+    }
+
+    @Test
+    void hideTrimsReasonAndPersistsVisibilityMetadataAtomically() {
+        SalesOrderChangeNotice pending = notice("NOTICE-1", "PENDING");
+        pending.setId(11L);
+        pending.setSalesOrderId(21L);
+        pending.setSalesOrderItemId(31L);
+        pending.setAllocationId(41L);
+        pending.setIsHidden(false);
+        when(noticeMapper.selectList(any(Wrapper.class))).thenReturn(List.of(pending));
+        when(noticeMapper.updateById(pending)).thenReturn(1);
+
+        int affected = service.hide(List.of("NOTICE-1"), "  无需下发  ");
+
+        assertThat(affected).isEqualTo(1);
+        assertThat(pending.getIsHidden()).isTrue();
+        assertThat(pending.getHiddenReason()).isEqualTo("无需下发");
+        assertThat(pending.getHiddenAt()).isNotNull();
+        verify(noticeMapper).updateById(pending);
+    }
+
+    @Test
+    void restoreMakesHiddenBacklogVisibleWithoutChangingNoticeStatusOrIdentity() {
+        SalesOrderChangeDispatchSetting setting = setting("AUTO", 9L);
+        when(settingMapper.selectSingletonForShare()).thenReturn(setting);
+        SalesOrderChangeNotice pending = notice("NOTICE-HIDDEN", "PENDING");
+        pending.setId(12L);
+        pending.setIsHidden(true);
+        pending.setHiddenReason("old backlog");
+        pending.setAutoDispatchEpoch(9L);
+        when(noticeMapper.selectList(any(Wrapper.class))).thenReturn(List.of(pending));
+        when(noticeMapper.updateById(pending)).thenReturn(1);
+
+        int affected = service.restore(List.of("NOTICE-HIDDEN"), "");
+
+        assertThat(affected).isEqualTo(1);
+        assertThat(pending.getNoticeId()).isEqualTo("NOTICE-HIDDEN");
+        assertThat(pending.getStatus()).isEqualTo("PENDING");
+        assertThat(pending.getIsHidden()).isFalse();
+        assertThat(pending.getAutoDispatchEpoch()).isZero();
+        assertThat(pending.getRestoredAt()).isNotNull();
+    }
+
+    @Test
+    void visibilityViewsKeepTheirDatabaseBoundaries() {
+        for (String view : List.of("ACTIVE", "HIDDEN", "SENT")) {
+            SalesOrderChangeNoticeQueryReq req = new SalesOrderChangeNoticeQueryReq();
+            req.setView(view);
+            when(noticeMapper.selectCount(any(Wrapper.class))).thenReturn(0L);
+            org.mockito.Mockito.clearInvocations(noticeMapper);
+
+            service.page(req);
+
+            ArgumentCaptor<Wrapper<SalesOrderChangeNotice>> query = ArgumentCaptor.forClass(Wrapper.class);
+            verify(noticeMapper, org.mockito.Mockito.atLeastOnce()).selectCount(query.capture());
+            String segment = query.getValue().getCustomSqlSegment();
+            assertThat(segment).contains("is_hidden");
+            if ("ACTIVE".equals(view)) assertThat(segment).contains("status");
+            if ("HIDDEN".equals(view)) assertThat(segment).doesNotContain("status");
+            if ("SENT".equals(view)) assertThat(segment).contains("status");
+        }
+    }
+
+    @Test
     void priceOnlyModificationDoesNotResolveTargetsOrCreateNotices() {
         SalesOrderHeader order = new SalesOrderHeader();
         order.setId(7L);
@@ -116,6 +222,8 @@ class SalesOrderChangeNoticeServiceTest {
         SalesOrderChangeNoticeTargetResolver.Target target = new SalesOrderChangeNoticeTargetResolver.Target(
                 allocation, "PRODUCTION", "MES-PLAN-1", "MES-PLAN-1", "BATCH-1");
         SalesOrderChangeNotice existing = notice("NOTICE-1", "PENDING");
+        existing.setIsHidden(true);
+        existing.setHiddenReason("previous reason");
         existing.setChangedFieldsJson("[\"remark\"]");
         when(settingMapper.selectSingletonForShare()).thenReturn(setting("AUTO", 8L));
         when(targetResolver.resolve(List.of(item))).thenReturn(Map.of(item.getId(), List.of(target)));
@@ -125,6 +233,8 @@ class SalesOrderChangeNoticeServiceTest {
         int captured = service.captureModify(order, List.of(item), Map.of(item.getId(), Set.of("qty")));
 
         assertThat(captured).isEqualTo(1);
+        assertThat(existing.getIsHidden()).isFalse();
+        assertThat(existing.getHiddenReason()).isEqualTo("previous reason");
         assertThat(existing.getAutoDispatchEpoch()).isEqualTo(8L);
         assertThat(existing.getChangedFieldsJson()).contains("remark", "qty");
         Map<String, Object> snapshot = new ObjectMapper().readValue(existing.getPayloadSnapshotJson(), Map.class);

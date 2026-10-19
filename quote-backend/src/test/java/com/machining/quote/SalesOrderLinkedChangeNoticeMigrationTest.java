@@ -49,7 +49,7 @@ class SalesOrderLinkedChangeNoticeMigrationTest {
                     .mapToInt(matcher -> Integer.parseInt(matcher.group(1)))
                     .max().orElse(0);
         }
-        assertThat(maxVersion).isEqualTo(64);
+        assertThat(maxVersion).isEqualTo(65);
 
         Path migration = MIGRATION_DIR.resolve("V56__sales_order_linked_change_notice_filter_fields.sql");
         assertThat(migration).exists();
@@ -141,5 +141,37 @@ class SalesOrderLinkedChangeNoticeMigrationTest {
                 .contains("change:sales-change:send")
                 .contains("change:sales-change:mode-update")
                 .doesNotContain("V1__qpo_baseline_schema.sql", "V2__qpo_baseline_seed_data.sql");
+    }
+
+    @Test
+    void version65AddsNoticeVisibilityAndPermissionsWithoutEditingHistory() throws Exception {
+        Path migration = MIGRATION_DIR.resolve("V65__sales_change_notice_visibility.sql");
+        assertThat(migration).exists();
+        String sql = Files.readString(migration, StandardCharsets.UTF_8);
+
+        assertThat(sql)
+                .contains("ALTER TABLE sales_order_change_notice")
+                .contains("is_hidden BOOLEAN NOT NULL DEFAULT FALSE")
+                .contains("hidden_reason VARCHAR(500)")
+                .contains("hidden_at TIMESTAMP")
+                .contains("hidden_by BIGINT")
+                .contains("hidden_by_name VARCHAR(100)")
+                .contains("restored_at TIMESTAMP")
+                .contains("restored_by BIGINT")
+                .contains("(237, 233, 'BUTTON', 'change:sales-change:hide'")
+                .contains("(238, 233, 'BUTTON', 'change:sales-change:restore'")
+                .contains("ON CONFLICT (id) DO UPDATE")
+                .contains("ON CONFLICT (role_id, permission_id) DO NOTHING")
+                .contains("'SUPER_ADMIN', 'MARKET_USER', 'MARKET_MANAGER'")
+                .contains("RAISE EXCEPTION", "id IN (237, 238)", "permission_code IN ('change:sales-change:hide', 'change:sales-change:restore')")
+                .contains("system_permission_id_seq")
+                .contains(", 238), TRUE)")
+                .doesNotContain("READONLY")
+                .doesNotContain("V1__qpo_baseline_schema.sql", "V2__qpo_baseline_seed_data.sql");
+
+        assertThat(Files.readString(MIGRATION_DIR.resolve("V1__qpo_baseline_schema.sql"), StandardCharsets.UTF_8))
+                .doesNotContain("is_hidden");
+        assertThat(Files.readString(MIGRATION_DIR.resolve("V2__qpo_baseline_seed_data.sql"), StandardCharsets.UTF_8))
+                .doesNotContain("change:sales-change:hide", "change:sales-change:restore");
     }
 }

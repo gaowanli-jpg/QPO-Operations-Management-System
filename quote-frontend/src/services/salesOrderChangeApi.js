@@ -14,3 +14,11 @@ export const sendSalesOrderChangeNotices = (noticeIds = []) => request(`${BASE}/
   method: 'POST',
   data: { noticeIds }
 })
+export const hideSalesOrderChangeNotices = (noticeIds = [], reason) => request(`${BASE}/batch-hide`, {
+  method: 'POST',
+  data: { noticeIds, reason }
+})
+export const restoreSalesOrderChangeNotices = (noticeIds = [], reason = '') => request(`${BASE}/batch-restore`, {
+  method: 'POST',
+  data: { noticeIds, reason }
+})

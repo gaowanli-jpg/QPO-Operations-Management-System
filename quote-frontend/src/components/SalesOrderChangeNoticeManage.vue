@@ -13,6 +13,12 @@
           自动生效：{{ formatDateTime(dispatchSetting.autoEnabledAt) }}
         </span>
         <el-button :icon="Refresh" :loading="loading" @click="loadRows">刷新</el-button>
+        <el-button v-if="view === 'ACTIVE'" v-permission="HIDE_PERMISSION" plain type="warning" :disabled="!hideableRows.length" :loading="hiding" @click="hideSelected">
+          批量隐藏{{ hideableRows.length ? `（${hideableRows.length}）` : '' }}
+        </el-button>
+        <el-button v-if="view === 'HIDDEN'" v-permission="RESTORE_PERMISSION" plain type="success" :disabled="!restorableRows.length" :loading="restoring" @click="restoreSelected">
+          批量恢复{{ restorableRows.length ? `（${restorableRows.length}）` : '' }}
+        </el-button>
         <el-button v-permission="SEND_PERMISSION" type="primary" :icon="Promotion" :disabled="!sendableRows.length" :loading="sending" @click="sendSelected">
           批量发送{{ sendableRows.length ? `（${sendableRows.length}）` : '' }}
         </el-button>
@@ -21,6 +27,15 @@
         </el-button>
       </div>
     </header>
+
+    <div class="sales-change-view-switch">
+      <el-radio-group v-model="view" aria-label="销售变更通知视图" @change="switchView">
+        <el-radio-button label="ACTIVE">有效通知</el-radio-button>
+        <el-radio-button label="HIDDEN">已隐藏</el-radio-button>
+        <el-radio-button label="SENT">已发送</el-radio-button>
+      </el-radio-group>
+      <span class="sales-change-view-hint" v-if="view === 'HIDDEN'">恢复只重新显示；已有积压需手动发送。</span>
+    </div>
 
     <section class="erp-toolbar sales-change-filter-toolbar">
       <CustomerAutocomplete
@@ -72,6 +87,9 @@
         </el-table-column>
         <el-table-column prop="targetExternalId" label="下游工单号" min-width="150" show-overflow-tooltip />
         <el-table-column prop="reason" label="变更理由" min-width="170" show-overflow-tooltip />
+        <el-table-column v-if="view === 'HIDDEN'" prop="hiddenReason" label="隐藏理由" min-width="170" show-overflow-tooltip />
+        <el-table-column v-if="view === 'HIDDEN'" label="隐藏时间" width="168"><template #default="{ row }">{{ formatDateTime(row.hiddenAt) }}</template></el-table-column>
+        <el-table-column v-if="view === 'HIDDEN'" prop="hiddenByName" label="隐藏操作人" width="120" show-overflow-tooltip />
         <el-table-column label="发送状态" width="104" align="center">
           <template #default="{ row }"><el-tag size="small" :type="statusTag(row.status)">{{ statusLabel(row.status) }}</el-tag></template>
         </el-table-column>
@@ -101,6 +119,11 @@
           <el-descriptions-item label="Allocation">{{ detail.allocationId ?? '-' }}</el-descriptions-item>
           <el-descriptions-item label="变更类型">{{ changeTypeLabel(detail.changeType) }}</el-descriptions-item>
           <el-descriptions-item label="变更理由" :span="2">{{ detail.reason || '-' }}</el-descriptions-item>
+          <el-descriptions-item v-if="detail.hidden" label="隐藏理由" :span="2">{{ detail.hiddenReason || '-' }}</el-descriptions-item>
+          <el-descriptions-item v-if="detail.hiddenAt" label="隐藏时间">{{ formatDateTime(detail.hiddenAt) }}</el-descriptions-item>
+          <el-descriptions-item v-if="detail.hiddenByName" label="隐藏操作人">{{ detail.hiddenByName }}</el-descriptions-item>
+          <el-descriptions-item v-if="detail.restoredAt" label="最近恢复时间">{{ formatDateTime(detail.restoredAt) }}</el-descriptions-item>
+          <el-descriptions-item v-if="detail.restoredBy" label="恢复操作人 ID">{{ detail.restoredBy }}</el-descriptions-item>
           <el-descriptions-item label="最后错误" :span="2">{{ detail.lastError || '-' }}</el-descriptions-item>
         </el-descriptions>
         <h2 class="detail-heading">变更字段</h2>
@@ -120,24 +143,29 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Promotion, Refresh, Search } from '@element-plus/icons-vue'
 import CustomerAutocomplete from './CustomerAutocomplete.vue'
 import CustomerPickerDialog from './CustomerPickerDialog.vue'
-import { getSalesOrderChangeDispatchSetting, getSalesOrderChangeNotice, listSalesOrderChangeNotices, sendSalesOrderChangeNotices, updateSalesOrderChangeDispatchMode } from '../services/salesOrderChangeApi'
-import { canSelectSalesChangeNotice } from '../services/salesOrderChangePolicy'
+import { getSalesOrderChangeDispatchSetting, getSalesOrderChangeNotice, hideSalesOrderChangeNotices, listSalesOrderChangeNotices, restoreSalesOrderChangeNotices, sendSalesOrderChangeNotices, updateSalesOrderChangeDispatchMode } from '../services/salesOrderChangeApi'
+import { canHideSalesChangeNotice, canRestoreSalesChangeNotice, canSelectSalesChangeNotice } from '../services/salesOrderChangePolicy'
 
 const SEND_PERMISSION = 'change:sales-change:send'
 const MODE_PERMISSION = 'change:sales-change:mode-update'
+const HIDE_PERMISSION = 'change:sales-change:hide'
+const RESTORE_PERMISSION = 'change:sales-change:restore'
 const loading = ref(false)
 const sending = ref(false)
+const hiding = ref(false)
+const restoring = ref(false)
 const rows = ref([])
 const selectedRows = ref([])
 const detail = ref(null)
 const detailVisible = ref(false)
 const customerPickerVisible = ref(false)
 const dateRange = ref([])
+const view = ref('ACTIVE')
 const dispatchSetting = reactive({ dispatchMode: 'MANUAL', autoDispatchEpoch: 0, autoEnabledAt: null })
 const filters = reactive({ customerId: undefined, customerCode: '', customerName: '', salesOrderNo: '', lineNo: '', changeType: '', targetType: '', status: '' })
 const pagination = reactive({ page: 1, pageSize: 20, total: 0 })
 
-const queryParams = () => ({ customerId: filters.customerId, salesOrderNo: filters.salesOrderNo.trim() || undefined, lineNo: filters.lineNo ? Number(filters.lineNo) : undefined, changeType: filters.changeType || undefined, targetType: filters.targetType || undefined, status: filters.status || undefined, dateFrom: dateRange.value?.[0] || undefined, dateTo: dateRange.value?.[1] || undefined, page: pagination.page, pageSize: pagination.pageSize })
+const queryParams = () => ({ customerId: filters.customerId, salesOrderNo: filters.salesOrderNo.trim() || undefined, lineNo: filters.lineNo ? Number(filters.lineNo) : undefined, changeType: filters.changeType || undefined, targetType: filters.targetType || undefined, status: filters.status || undefined, dateFrom: dateRange.value?.[0] || undefined, dateTo: dateRange.value?.[1] || undefined, view: view.value, page: pagination.page, pageSize: pagination.pageSize })
 const loadRows = async () => {
   if (loading.value) return
   loading.value = true
@@ -153,11 +181,18 @@ const loadSetting = async () => {
   try { Object.assign(dispatchSetting, await getSalesOrderChangeDispatchSetting()) } catch (error) { ElMessage.error(error?.message || '发送模式加载失败') }
 }
 const search = () => { pagination.page = 1; loadRows() }
+const switchView = () => { selectedRows.value = []; pagination.page = 1; loadRows() }
 const resetFilters = () => { Object.assign(filters, { customerId: undefined, customerCode: '', customerName: '', salesOrderNo: '', lineNo: '', changeType: '', targetType: '', status: '' }); dateRange.value = []; search() }
 const handleCustomerSelected = customer => { filters.customerId = customer?.id || undefined; filters.customerCode = customer?.customerCode || ''; filters.customerName = customer?.customerName || customer?.customerShortName || filters.customerCode; search() }
 const clearCustomer = () => { filters.customerId = undefined; filters.customerCode = ''; filters.customerName = ''; search() }
-const isSelectable = row => canSelectSalesChangeNotice(row, dispatchSetting.dispatchMode, dispatchSetting.autoDispatchEpoch)
-const sendableRows = computed(() => selectedRows.value.filter(isSelectable))
+const isSelectable = row => {
+  if (view.value === 'HIDDEN') return canRestoreSalesChangeNotice(row)
+  if (view.value === 'SENT') return false
+  return canHideSalesChangeNotice(row) || canSelectSalesChangeNotice(row, dispatchSetting.dispatchMode, dispatchSetting.autoDispatchEpoch)
+}
+const sendableRows = computed(() => view.value === 'ACTIVE' ? selectedRows.value.filter(row => canSelectSalesChangeNotice(row, dispatchSetting.dispatchMode, dispatchSetting.autoDispatchEpoch)) : [])
+const hideableRows = computed(() => view.value === 'ACTIVE' ? selectedRows.value.filter(canHideSalesChangeNotice) : [])
+const restorableRows = computed(() => view.value === 'HIDDEN' ? selectedRows.value.filter(canRestoreSalesChangeNotice) : [])
 const sendSelected = async () => {
   const ids = sendableRows.value.map(row => row.noticeId)
   if (!ids.length || sending.value) return
@@ -171,6 +206,45 @@ const sendSelected = async () => {
   } catch (error) {
     if (error !== 'cancel' && error !== 'close') ElMessage.error(error?.message || '销售变更发送失败')
   } finally { sending.value = false }
+}
+const hideSelected = async () => {
+  const ids = hideableRows.value.map(row => row.noticeId)
+  if (!ids.length || hiding.value) return
+  try {
+    const { value } = await ElMessageBox.prompt(`将隐藏选中的 ${ids.length} 条通知，不会修改销售订单或下游工单。请输入隐藏理由。`, '批量隐藏销售变更通知', {
+      inputType: 'textarea',
+      inputAttrs: { maxlength: 500, rows: 3 },
+      inputValidator: value => {
+        const length = String(value || '').trim().length
+        return length > 0 && length <= 500
+      },
+      inputErrorMessage: '请输入 1 至 500 个字符的理由',
+      confirmButtonText: '隐藏通知',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+    hiding.value = true
+    await hideSalesOrderChangeNotices(ids, value.trim())
+    ElMessage.success(`已隐藏 ${ids.length} 条通知`)
+    selectedRows.value = []
+    await loadRows()
+  } catch (error) {
+    if (error !== 'cancel' && error !== 'close') ElMessage.error(error?.message || '隐藏销售变更通知失败')
+  } finally { hiding.value = false }
+}
+const restoreSelected = async () => {
+  const ids = restorableRows.value.map(row => row.noticeId)
+  if (!ids.length || restoring.value) return
+  try {
+    await ElMessageBox.confirm(`确认恢复选中的 ${ids.length} 条通知？恢复只重新显示，不会自动发送。`, '批量恢复销售变更通知', { type: 'warning', confirmButtonText: '恢复通知', cancelButtonText: '取消' })
+    restoring.value = true
+    await restoreSalesOrderChangeNotices(ids)
+    ElMessage.success(`已恢复 ${ids.length} 条通知；需要发送时请手动提交`)
+    selectedRows.value = []
+    await loadRows()
+  } catch (error) {
+    if (error !== 'cancel' && error !== 'close') ElMessage.error(error?.message || '恢复销售变更通知失败')
+  } finally { restoring.value = false }
 }
 const toggleMode = async () => {
   const nextMode = dispatchSetting.dispatchMode === 'AUTO' ? 'MANUAL' : 'AUTO'
@@ -198,6 +272,8 @@ onMounted(async () => { await Promise.all([loadSetting(), loadRows()]) })
 
 <style scoped>
 .sales-change-page { gap: var(--erp-space-4); }
+.sales-change-view-switch { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+.sales-change-view-hint { color: var(--el-text-color-secondary); font-size: 12px; }
 .sales-change-mode-time { color: var(--el-text-color-secondary); font-size: 12px; }
 .sales-change-filter-toolbar { align-items: center; flex-wrap: wrap; gap: 8px; padding: 12px; }
 .filter-input { width: 160px; }

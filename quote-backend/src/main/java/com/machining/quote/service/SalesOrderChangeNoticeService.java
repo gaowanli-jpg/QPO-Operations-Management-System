@@ -52,6 +52,8 @@ public class SalesOrderChangeNoticeService {
     private static final String AUTO = "AUTO";
     private static final String ACTION_CREATE = "SALES_ORDER_CHANGE_NOTICE_CREATE";
     private static final String ACTION_MERGE = "SALES_ORDER_CHANGE_NOTICE_MERGE";
+    private static final String ACTION_HIDE = "SALES_ORDER_CHANGE_NOTICE_HIDE";
+    private static final String ACTION_RESTORE = "SALES_ORDER_CHANGE_NOTICE_RESTORE";
 
     @Autowired
     private SalesOrderChangeNoticeMapper noticeMapper;
@@ -213,6 +215,11 @@ public class SalesOrderChangeNoticeService {
                 existing.setPayloadSnapshotJson(payloadFactory.snapshotJson(order, item, target, MODIFY, null, mergedFields));
                 existing.setSourceEventKey(eventKey);
                 existing.setAutoDispatchEpoch(autoDispatchEpoch);
+                if (Boolean.TRUE.equals(existing.getIsHidden())) {
+                    existing.setIsHidden(false);
+                    existing.setRestoredAt(now);
+                    existing.setRestoredBy(currentUserId());
+                }
                 existing.setUpdatedAt(now);
                 noticeMapper.updateById(existing);
                 audit(ACTION_MERGE, existing, Map.of("mergedFields", mergedFields));
@@ -249,6 +256,88 @@ public class SalesOrderChangeNoticeService {
         String normalized = reason.trim();
         if (normalized.length() > 500) throw new IllegalArgumentException("关联变更理由不能超过 500 个字符");
         return normalized;
+    }
+
+    @Transactional
+    public int hide(List<String> requestedIds, String reason) {
+        String normalizedReason = normalizeVisibilityReason(reason, true);
+        List<SalesOrderChangeNotice> rows = lockVisibleRows(requestedIds);
+        if (rows.stream().anyMatch(row -> Boolean.TRUE.equals(row.getIsHidden()) || !isHideableStatus(row.getStatus()))) {
+            throw new IllegalArgumentException("只能隐藏未发送、失败或结果未知的可见通知");
+        }
+        LocalDateTime now = LocalDateTime.now();
+        AuthContext.SessionUser user = AuthContext.get();
+        Long operatorId = currentUserId();
+        String operatorName = user == null ? null : user.displayName();
+        for (SalesOrderChangeNotice row : rows) {
+            row.setIsHidden(true);
+            row.setHiddenReason(normalizedReason);
+            row.setHiddenAt(now);
+            row.setHiddenBy(operatorId);
+            row.setHiddenByName(operatorName);
+            row.setUpdatedAt(now);
+            if (noticeMapper.updateById(row) != 1) throw new IllegalStateException("销售变更通知状态已变化，请刷新后重试");
+        }
+        auditVisibilityBatch(ACTION_HIDE, rows, normalizedReason);
+        return rows.size();
+    }
+
+    @Transactional
+    public int restore(List<String> requestedIds, String reason) {
+        String normalizedReason = normalizeVisibilityReason(reason, false);
+        List<SalesOrderChangeNotice> rows = lockVisibleRows(requestedIds);
+        if (rows.stream().anyMatch(row -> !Boolean.TRUE.equals(row.getIsHidden()) || !isHideableStatus(row.getStatus()))) {
+            throw new IllegalArgumentException("只能恢复已隐藏且未发送、失败或结果未知的通知");
+        }
+        LocalDateTime now = LocalDateTime.now();
+        Long operatorId = currentUserId();
+        for (SalesOrderChangeNotice row : rows) {
+            row.setIsHidden(false);
+            row.setRestoredAt(now);
+            row.setRestoredBy(operatorId);
+            row.setUpdatedAt(now);
+            if (PENDING.equals(row.getStatus())) row.setAutoDispatchEpoch(0L);
+            if (noticeMapper.updateById(row) != 1) throw new IllegalStateException("销售变更通知状态已变化，请刷新后重试");
+        }
+        auditVisibilityBatch(ACTION_RESTORE, rows, normalizedReason);
+        return rows.size();
+    }
+
+    private List<SalesOrderChangeNotice> lockVisibleRows(List<String> requestedIds) {
+        List<String> ids = normalizeIds(requestedIds);
+        QueryWrapper<SalesOrderChangeNotice> query = new QueryWrapper<>();
+        query.in("notice_id", ids);
+        applyScope(query);
+        query.orderByAsc("id").last("FOR UPDATE");
+        List<SalesOrderChangeNotice> rows = noticeMapper.selectList(query);
+        if (rows == null || rows.size() != ids.size()) {
+            throw new IllegalArgumentException("部分销售变更通知不存在或无权操作");
+        }
+        return rows;
+    }
+
+    private String normalizeVisibilityReason(String reason, boolean required) {
+        String normalized = reason == null ? "" : reason.trim();
+        if (required && normalized.isEmpty()) throw new IllegalArgumentException("隐藏理由不能为空");
+        if (normalized.length() > 500) throw new IllegalArgumentException("理由不能超过 500 个字符");
+        return normalized.isEmpty() ? null : normalized;
+    }
+
+    private boolean isHideableStatus(String status) {
+        return Set.of(PENDING, FAILED, RESULT_UNKNOWN).contains(status);
+    }
+
+    private void auditVisibilityBatch(String action, List<SalesOrderChangeNotice> rows, String reason) {
+        if (auditService == null) return;
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("noticeIds", rows.stream().map(SalesOrderChangeNotice::getNoticeId).toList());
+        summary.put("noticeCount", rows.size());
+        summary.put("salesOrderIds", rows.stream().map(SalesOrderChangeNotice::getSalesOrderId).filter(Objects::nonNull).distinct().toList());
+        summary.put("salesOrderItemIds", rows.stream().map(SalesOrderChangeNotice::getSalesOrderItemId).filter(Objects::nonNull).distinct().toList());
+        summary.put("allocationIds", rows.stream().map(SalesOrderChangeNotice::getAllocationId).filter(Objects::nonNull).distinct().toList());
+        if (reason != null) summary.put("reason", safeError(reason));
+        auditService.record(action, "sales_order_change_notice", null, null, summary,
+                "CHANGE", "SUCCESS", AuditService.labelForAction(action), null);
     }
 
     private Set<String> readStringList(String value) {
@@ -340,7 +429,7 @@ public class SalesOrderChangeNoticeService {
         boolean automaticMode = setting != null && AUTO.equals(setting.getDispatchMode());
         long currentAutoEpoch = setting == null ? 0L : safeEpoch(setting.getAutoDispatchEpoch());
         QueryWrapper<SalesOrderChangeNotice> query = new QueryWrapper<>();
-        query.in("notice_id", ids).in("status", List.of(PENDING, FAILED, RESULT_UNKNOWN));
+        query.in("notice_id", ids).eq("is_hidden", false).in("status", List.of(PENDING, FAILED, RESULT_UNKNOWN));
         applyScope(query);
         query.last("FOR UPDATE");
         List<SalesOrderChangeNotice> rows = noticeMapper.selectList(query);
@@ -348,11 +437,13 @@ public class SalesOrderChangeNoticeService {
                 .filter(row -> !automaticMode
                         || !PENDING.equals(row.getStatus())
                         || safeEpoch(row.getAutoDispatchEpoch()) < currentAutoEpoch)
+                .filter(row -> !Boolean.TRUE.equals(row.getIsHidden()))
                 .map(SalesOrderChangeNotice::getNoticeId)
                 .filter(Objects::nonNull)
                 .toList();
         if (eligible.isEmpty()) throw new IllegalArgumentException("没有可发送的销售变更通知");
-        noticeMapper.claimManual(eligible);
+        int updated = noticeMapper.claimManual(eligible);
+        if (updated != eligible.size()) throw new IllegalStateException("部分销售变更通知已变化，请刷新后重试");
         return eligible;
     }
 
@@ -378,8 +469,11 @@ public class SalesOrderChangeNoticeService {
         if (setting == null || !AUTO.equals(setting.getDispatchMode())) return List.of();
         List<SalesOrderChangeNotice> rows = noticeMapper.selectAutoPendingForUpdate(safeEpoch(setting.getAutoDispatchEpoch()), 100);
         if (rows == null || rows.isEmpty()) return List.of();
+        rows = rows.stream().filter(row -> !Boolean.TRUE.equals(row.getIsHidden())).toList();
+        if (rows.isEmpty()) return List.of();
         List<Long> ids = rows.stream().map(SalesOrderChangeNotice::getId).toList();
-        noticeMapper.claimAuto(ids, safeEpoch(setting.getAutoDispatchEpoch()));
+        int updated = noticeMapper.claimAuto(ids, safeEpoch(setting.getAutoDispatchEpoch()));
+        if (updated != ids.size()) throw new IllegalStateException("自动发送通知状态已变化，请稍后重试");
         return rows.stream().map(SalesOrderChangeNotice::getNoticeId).toList();
     }
 
@@ -543,6 +637,13 @@ public class SalesOrderChangeNoticeService {
 
     private QueryWrapper<SalesOrderChangeNotice> noticeQuery(SalesOrderChangeNoticeQueryReq req) {
         QueryWrapper<SalesOrderChangeNotice> query = new QueryWrapper<>();
+        String view = hasText(req.getView()) ? req.getView().trim().toUpperCase() : "ACTIVE";
+        switch (view) {
+            case "ACTIVE" -> query.eq("is_hidden", false).ne("status", SENT);
+            case "HIDDEN" -> query.eq("is_hidden", true);
+            case "SENT" -> query.eq("is_hidden", false).eq("status", SENT);
+            default -> throw new IllegalArgumentException("销售变更视图只能是 ACTIVE、HIDDEN 或 SENT");
+        }
         if (req.getCustomerId() != null) query.apply("sales_order_id IN (SELECT id FROM sales_order_header WHERE customer_id = {0})", req.getCustomerId());
         if (hasText(req.getSalesOrderNo())) query.apply("sales_order_id IN (SELECT id FROM sales_order_header WHERE sales_order_no ILIKE {0} OR document_no ILIKE {0})", "%" + req.getSalesOrderNo().trim() + "%");
         if (req.getLineNo() != null) query.apply("sales_order_item_id IN (SELECT id FROM sales_order_item WHERE line_no = {0})", req.getLineNo());
@@ -583,6 +684,7 @@ public class SalesOrderChangeNoticeService {
             dto.setChangedFields(new ArrayList<>(readStringList(row.getChangedFieldsJson()))); dto.setSnapshot(parseSnapshot(row.getPayloadSnapshotJson()));
             dto.setStatus(row.getStatus()); dto.setAutoDispatchEpoch(safeEpoch(row.getAutoDispatchEpoch()));
             dto.setAttemptCount(row.getAttemptCount()); dto.setLastAttemptAt(row.getLastAttemptAt()); dto.setSentAt(row.getSentAt()); dto.setLastError(row.getLastError()); dto.setCreatedByName(row.getCreatedByName()); dto.setCreatedAt(row.getCreatedAt());
+             dto.setHidden(Boolean.TRUE.equals(row.getIsHidden())); dto.setHiddenReason(row.getHiddenReason()); dto.setHiddenAt(row.getHiddenAt()); dto.setHiddenByName(row.getHiddenByName()); dto.setRestoredAt(row.getRestoredAt()); dto.setRestoredBy(row.getRestoredBy());
             result.add(dto);
         }
         return result;

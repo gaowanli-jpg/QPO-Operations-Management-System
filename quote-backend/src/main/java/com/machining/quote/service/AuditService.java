@@ -266,6 +266,8 @@ public class AuditService {
             case "SALES_ORDER_CHANGE_NOTICE_SEND_SUCCESS" -> "销售变更通知已受理";
             case "SALES_ORDER_CHANGE_NOTICE_SEND_FAILED" -> "销售变更通知发送失败";
             case "SALES_ORDER_CHANGE_NOTICE_RESULT_UNKNOWN" -> "销售变更通知结果未知";
+            case "SALES_ORDER_CHANGE_NOTICE_HIDE" -> "隐藏销售变更通知";
+            case "SALES_ORDER_CHANGE_NOTICE_RESTORE" -> "恢复销售变更通知";
             case "SALES_ORDER_CHANGE_MODE_UPDATE" -> "修改销售变更发送模式";
             case "AUTH_LOGIN_SUCCESS" -> "登录成功";
             case "AUTH_LOGIN_FAILED" -> "登录失败";

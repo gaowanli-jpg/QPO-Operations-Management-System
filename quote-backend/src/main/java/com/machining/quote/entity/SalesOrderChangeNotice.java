@@ -35,4 +35,11 @@ public class SalesOrderChangeNotice {
     private String createdByName;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private Boolean isHidden;
+    private String hiddenReason;
+    private LocalDateTime hiddenAt;
+    private Long hiddenBy;
+    private String hiddenByName;
+    private LocalDateTime restoredAt;
+    private Long restoredBy;
 }

@@ -14,6 +14,7 @@ public class SalesOrderChangeNoticeQueryReq {
     private String status;
     private LocalDate dateFrom;
     private LocalDate dateTo;
+    private String view;
     private Integer page;
     private Integer pageSize;
 }

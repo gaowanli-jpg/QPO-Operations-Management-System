@@ -131,6 +131,8 @@ class AuditServiceTests {
         assertThat(AuditService.labelForAction("ORDER_DISCARD")).contains("废弃");
         assertThat(AuditService.labelForAction("ORDER_RESTORE")).contains("恢复");
         assertThat(AuditService.labelForAction("QUOTE_TEMPLATE_CONFIG_UPDATE")).contains("模板配置");
+        assertThat(AuditService.labelForAction("SALES_ORDER_CHANGE_NOTICE_HIDE")).contains("隐藏");
+        assertThat(AuditService.labelForAction("SALES_ORDER_CHANGE_NOTICE_RESTORE")).contains("恢复");
     }
 
     @Test

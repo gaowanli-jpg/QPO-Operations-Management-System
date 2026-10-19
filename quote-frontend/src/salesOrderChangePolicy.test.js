@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { canSelectSalesChangeNotice } from './services/salesOrderChangePolicy'
+import { canHideSalesChangeNotice, canRestoreSalesChangeNotice, canSelectSalesChangeNotice } from './services/salesOrderChangePolicy'
 
 describe('sales change notice selection policy', () => {
   it('allows all retryable states in manual mode', () => {
@@ -18,5 +18,19 @@ describe('sales change notice selection policy', () => {
   it('does not allow sending or already sent notices', () => {
     expect(canSelectSalesChangeNotice({ status: 'SENDING' }, 'MANUAL')).toBe(false)
     expect(canSelectSalesChangeNotice({ status: 'SENT' }, 'AUTO')).toBe(false)
+  })
+
+  it('hides and restores only visible, retryable notices', () => {
+    expect(canHideSalesChangeNotice({ status: 'PENDING', hidden: false })).toBe(true)
+    expect(canHideSalesChangeNotice({ status: 'SENDING', hidden: false })).toBe(false)
+    expect(canHideSalesChangeNotice({ status: 'SENT', hidden: false })).toBe(false)
+    expect(canHideSalesChangeNotice({ status: 'FAILED', hidden: true })).toBe(false)
+    expect(canRestoreSalesChangeNotice({ status: 'FAILED', hidden: true })).toBe(true)
+    expect(canRestoreSalesChangeNotice({ status: 'SENT', hidden: true })).toBe(false)
+  })
+
+  it('never allows hidden notices to be sent', () => {
+    expect(canSelectSalesChangeNotice({ status: 'FAILED', hidden: true }, 'MANUAL')).toBe(false)
+    expect(canSelectSalesChangeNotice({ status: 'PENDING', hidden: true, autoDispatchEpoch: 0 }, 'AUTO', 3)).toBe(false)
   })
 })

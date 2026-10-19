@@ -34,4 +34,10 @@ public class SalesOrderChangeNoticeDTO {
     private String lastError;
     private String createdByName;
     private LocalDateTime createdAt;
+    private Boolean hidden;
+    private String hiddenReason;
+    private LocalDateTime hiddenAt;
+    private String hiddenByName;
+    private LocalDateTime restoredAt;
+    private Long restoredBy;
 }

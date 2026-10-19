@@ -17,6 +17,7 @@ public interface SalesOrderChangeNoticeMapper extends BaseMapper<SalesOrderChang
     @Select("""
             SELECT * FROM sales_order_change_notice
             WHERE status = 'PENDING'
+              AND is_hidden = FALSE
               AND auto_dispatch_epoch = #{epoch}
             ORDER BY created_at ASC, id ASC
             LIMIT #{limit}
@@ -47,6 +48,7 @@ public interface SalesOrderChangeNoticeMapper extends BaseMapper<SalesOrderChang
                 #{noticeId}
             </foreach>
               AND status IN ('PENDING', 'FAILED', 'RESULT_UNKNOWN')
+              AND is_hidden = FALSE
             </script>
             """)
     int claimManual(@Param("noticeIds") List<String> noticeIds);
@@ -61,6 +63,7 @@ public interface SalesOrderChangeNoticeMapper extends BaseMapper<SalesOrderChang
                 #{id}
             </foreach>
               AND status = 'PENDING'
+              AND is_hidden = FALSE
               AND auto_dispatch_epoch = #{epoch}
             </script>
             """)

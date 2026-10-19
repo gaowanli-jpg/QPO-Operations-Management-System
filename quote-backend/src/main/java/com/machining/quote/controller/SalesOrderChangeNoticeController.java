@@ -8,6 +8,7 @@ import com.machining.quote.dto.SalesOrderChangeDispatchSettingDTO;
 import com.machining.quote.dto.SalesOrderChangeNoticeDTO;
 import com.machining.quote.dto.SalesOrderChangeNoticeQueryReq;
 import com.machining.quote.dto.SalesOrderChangeNoticeSendReq;
+import com.machining.quote.dto.SalesOrderChangeNoticeVisibilityReq;
 import com.machining.quote.entity.SystemTask;
 import com.machining.quote.service.CustomerMasterService;
 import com.machining.quote.service.SalesOrderChangeNoticeService;
@@ -21,6 +22,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/change/sales-order-changes")
@@ -61,6 +64,18 @@ public class SalesOrderChangeNoticeController {
     @RequirePermission("change:sales-change:send")
     public SystemTask batchSend(@RequestBody(required = false) SalesOrderChangeNoticeSendReq req) {
         return systemTaskService.submitSalesOrderChangeNoticeTask(req == null ? null : req.getNoticeIds());
+    }
+
+    @PostMapping("/batch-hide")
+    @RequirePermission("change:sales-change:hide")
+    public Map<String, Object> batchHide(@RequestBody(required = false) SalesOrderChangeNoticeVisibilityReq req) {
+        return Map.of("affectedCount", noticeService.hide(req == null ? null : req.getNoticeIds(), req == null ? null : req.getReason()));
+    }
+
+    @PostMapping("/batch-restore")
+    @RequirePermission("change:sales-change:restore")
+    public Map<String, Object> batchRestore(@RequestBody(required = false) SalesOrderChangeNoticeVisibilityReq req) {
+        return Map.of("affectedCount", noticeService.restore(req == null ? null : req.getNoticeIds(), req == null ? null : req.getReason()));
     }
 
     @GetMapping("/settings")
