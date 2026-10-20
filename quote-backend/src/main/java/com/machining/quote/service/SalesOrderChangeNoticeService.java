@@ -568,7 +568,7 @@ public class SalesOrderChangeNoticeService {
                 + UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase();
         Map<String, Object> request;
         List<SalesOrderChangeNotice> dispatchRows = new ArrayList<>();
-        List<SalesOrderChangeNotice> localOnlyRows = new ArrayList<>();
+        List<SalesOrderChangeNotice> nonDispatchableRows = new ArrayList<>();
         try {
             request = new LinkedHashMap<>();
             request.put("bizId", bizId);
@@ -577,7 +577,7 @@ public class SalesOrderChangeNoticeService {
                 Set<String> changedFields = payloadFactory.downstreamFields(
                         new LinkedHashSet<>(readStringList(row.getChangedFieldsJson())));
                 if (MODIFY.equals(row.getChangeType()) && changedFields.isEmpty()) {
-                    localOnlyRows.add(row);
+                    nonDispatchableRows.add(row);
                     continue;
                 }
                 Map<String, Object> item = payloadFactory.downstreamPayload(
@@ -598,8 +598,8 @@ public class SalesOrderChangeNoticeService {
             updateClaimed(rows, FAILED, "Unable to build sales change notice payload");
             return sendSummary(rows, taskId, bizId, 0L);
         }
-        if (!localOnlyRows.isEmpty()) {
-            updateClaimed(localOnlyRows, FAILED, "该销售变更仅包含 QPO 本地字段，未下发");
+        if (!nonDispatchableRows.isEmpty()) {
+            updateClaimed(nonDispatchableRows, FAILED, "该销售变更仅包含不可下发字段，未下发");
         }
         if (dispatchRows.isEmpty()) return sendSummary(rows, taskId, bizId, 0L);
         long startedAt = System.currentTimeMillis();

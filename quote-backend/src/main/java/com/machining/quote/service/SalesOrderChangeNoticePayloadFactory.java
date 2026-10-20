@@ -25,6 +25,17 @@ public class SalesOrderChangeNoticePayloadFactory {
             "customerDeliveryDate",
             "salesOrderDate",
             "documentTypeCode");
+    private static final Set<String> SNAPSHOT_FIELDS_NOT_SENT_TO_MES = Set.of(
+            "processRoute",
+            "materialData",
+            "materialGrossWeight",
+            "partNetWeight",
+            "materialShape",
+            "engineeringMaterialCategory",
+            "engineeringMaterialTypeName",
+            "engineeringMaterialTypeCode",
+            "engineeringMaterialName",
+            "engineeringMaterialCode");
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -108,6 +119,7 @@ public class SalesOrderChangeNoticePayloadFactory {
                 .filter(field -> !"taxIncludedUnitPrice".equals(field))
                 .filter(field -> !field.toLowerCase().contains("price"))
                 .filter(field -> !LOCAL_ONLY_FIELDS.contains(field))
+                .filter(field -> !SNAPSHOT_FIELDS_NOT_SENT_TO_MES.contains(field))
                 .collect(Collectors.toCollection(LinkedHashSet::new));
     }
 
@@ -115,17 +127,20 @@ public class SalesOrderChangeNoticePayloadFactory {
             Map<String, Object> snapshot, String changeType, Set<String> changedFields) {
         Map<String, Object> payload = snapshot == null
                 ? new LinkedHashMap<>() : new LinkedHashMap<>(snapshot);
-        if (SalesOrderChangeNoticeService.MODIFY.equals(changeType)) {
-            for (String field : LOCAL_ONLY_FIELDS) payload.remove(field);
-            Object rawItem = payload.get("item");
-            if (rawItem instanceof Map<?, ?> item) {
-                Map<String, Object> downstreamItem = new LinkedHashMap<>();
-                item.forEach((key, value) -> {
-                    String field = String.valueOf(key);
-                    if (!LOCAL_ONLY_FIELDS.contains(field)) downstreamItem.put(field, value);
-                });
-                payload.put("item", downstreamItem);
-            }
+        boolean modify = SalesOrderChangeNoticeService.MODIFY.equals(changeType);
+        Set<String> excludedFields = new LinkedHashSet<>(SNAPSHOT_FIELDS_NOT_SENT_TO_MES);
+        if (modify) excludedFields.addAll(LOCAL_ONLY_FIELDS);
+        for (String field : excludedFields) payload.remove(field);
+        Object rawItem = payload.get("item");
+        if (rawItem instanceof Map<?, ?> item) {
+            Map<String, Object> downstreamItem = new LinkedHashMap<>();
+            item.forEach((key, value) -> {
+                String field = String.valueOf(key);
+                if (!excludedFields.contains(field)) downstreamItem.put(field, value);
+            });
+            payload.put("item", downstreamItem);
+        }
+        if (modify) {
             payload.put("changedFields", new ArrayList<>(downstreamFields(changedFields)));
         }
         return payload;

@@ -20,6 +20,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -223,19 +224,21 @@ class SalesOrderChangeNoticeServiceTest {
     }
 
     @Test
-    void mixedModificationOmitsLocalOnlyFieldsFromMesPayload() throws Exception {
+    void mixedModificationOmitsLocalAndSnapshotOnlyFieldsFromMesPayload() throws Exception {
         SalesOrderChangeNotice row = sendingNotice("NOTICE-MIXED");
         row.setChangeType(SalesOrderChangeNoticeService.MODIFY);
-        row.setChangedFieldsJson("[\"qty\",\"customerOrderTitle\",\"customerDeliveryDate\",\"salesOrderDate\",\"documentTypeCode\"]");
-        row.setPayloadSnapshotJson(new ObjectMapper().writeValueAsString(Map.of(
-                "changeType", SalesOrderChangeNoticeService.MODIFY,
-                "changedFields", List.of("qty", "customerOrderTitle", "customerDeliveryDate", "salesOrderDate", "documentTypeCode"),
-                "documentTypeCode", "SO06",
-                "item", Map.of(
-                        "qty", 3,
-                        "customerOrderTitle", "Local title",
-                        "customerDeliveryDate", "2026-11-01",
-                        "salesOrderDate", "2026-10-01"))));
+        List<String> changedFields = List.of(
+                "qty", "customerOrderTitle", "customerDeliveryDate", "salesOrderDate", "documentTypeCode",
+                "processRoute", "materialData", "materialGrossWeight", "partNetWeight", "materialShape",
+                "engineeringMaterialCategory", "engineeringMaterialTypeName", "engineeringMaterialTypeCode",
+                "engineeringMaterialName", "engineeringMaterialCode");
+        row.setChangedFieldsJson(new ObjectMapper().writeValueAsString(changedFields));
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+        snapshot.put("changeType", SalesOrderChangeNoticeService.MODIFY);
+        snapshot.put("changedFields", changedFields);
+        snapshot.put("documentTypeCode", "SO06");
+        snapshot.put("item", itemSnapshotWithExcludedFields());
+        row.setPayloadSnapshotJson(new ObjectMapper().writeValueAsString(snapshot));
         when(noticeMapper.selectList(any(Wrapper.class))).thenReturn(List.of(row));
         DataCenterIntegrationClient client = mock(DataCenterIntegrationClient.class);
         ReflectionTestUtils.setField(service, "dataCenterIntegrationClient", client);
@@ -253,9 +256,44 @@ class SalesOrderChangeNoticeServiceTest {
         Map<?, ?> sentItem = (Map<?, ?>) sentNotice.get("item");
         assertThat(sentItem.get("qty")).isEqualTo(3);
         assertThat(sentItem.keySet().stream().map(String::valueOf).toList()).doesNotContain(
-                "customerOrderTitle", "customerDeliveryDate", "salesOrderDate", "documentTypeCode");
+                "customerOrderTitle", "customerDeliveryDate", "salesOrderDate", "documentTypeCode",
+                "processRoute", "materialData", "materialGrossWeight", "partNetWeight", "materialShape",
+                "engineeringMaterialCategory", "engineeringMaterialTypeName", "engineeringMaterialTypeCode",
+                "engineeringMaterialName", "engineeringMaterialCode");
         assertThat(sentNotice.keySet().stream().map(String::valueOf).toList())
                 .doesNotContain("documentTypeCode");
+        assertThat(row.getPayloadSnapshotJson()).contains(
+                "\"processRoute\"", "\"materialData\"", "\"engineeringMaterialCode\"");
+    }
+
+    @Test
+    void discardNoticeOmitsSnapshotOnlyFieldsFromMesPayload() throws Exception {
+        SalesOrderChangeNotice row = sendingNotice("NOTICE-DISCARD-SNAPSHOT");
+        row.setChangeType(SalesOrderChangeNoticeService.DISCARD);
+        row.setPayloadSnapshotJson(new ObjectMapper().writeValueAsString(Map.of(
+                "changeType", SalesOrderChangeNoticeService.DISCARD,
+                "changedFields", List.of(),
+                "item", itemSnapshotWithExcludedFields())));
+        when(noticeMapper.selectList(any(Wrapper.class))).thenReturn(List.of(row));
+        DataCenterIntegrationClient client = mock(DataCenterIntegrationClient.class);
+        ReflectionTestUtils.setField(service, "dataCenterIntegrationClient", client);
+        when(client.call(any(String.class), any(), any())).thenReturn(Map.of(
+                "code", "0",
+                "data", Map.of("items", List.of(Map.of(
+                        "noticeId", row.getNoticeId(), "status", "ACCEPTED")))));
+
+        service.sendClaimed(List.of(row.getNoticeId()), 13L);
+
+        ArgumentCaptor<Map> request = ArgumentCaptor.forClass(Map.class);
+        verify(client).call(any(String.class), request.capture(), any());
+        Map<?, ?> sentNotice = (Map<?, ?>) ((List<?>) request.getValue().get("items")).get(0);
+        Map<?, ?> sentItem = (Map<?, ?>) sentNotice.get("item");
+        assertThat(sentItem.keySet().stream().map(String::valueOf).toList()).doesNotContain(
+                "processRoute", "materialData", "materialGrossWeight", "partNetWeight", "materialShape",
+                "engineeringMaterialCategory", "engineeringMaterialTypeName", "engineeringMaterialTypeCode",
+                "engineeringMaterialName", "engineeringMaterialCode");
+        assertThat(sentItem.get("customerOrderTitle")).isEqualTo("Local title");
+        assertThat(row.getPayloadSnapshotJson()).contains("\"processRoute\"");
     }
 
     @Test
@@ -277,7 +315,7 @@ class SalesOrderChangeNoticeServiceTest {
         Map<String, Object> result = service.sendClaimed(List.of(row.getNoticeId()), 12L);
 
         assertThat(row.getStatus()).isEqualTo(SalesOrderChangeNoticeService.FAILED);
-        assertThat(row.getLastError()).contains("仅包含 QPO 本地字段");
+        assertThat(row.getLastError()).contains("仅包含不可下发字段");
         assertThat(result).containsEntry("failedCount", 1).containsEntry("sentCount", 0);
         verify(client, never()).call(any(String.class), any(), any());
     }
@@ -419,6 +457,25 @@ class SalesOrderChangeNoticeServiceTest {
         SalesOrderChangeNoticePayloadFactory factory = new SalesOrderChangeNoticePayloadFactory();
         ReflectionTestUtils.setField(factory, "objectMapper", new ObjectMapper());
         return factory;
+    }
+
+    private Map<String, Object> itemSnapshotWithExcludedFields() {
+        Map<String, Object> item = new LinkedHashMap<>();
+        item.put("qty", 3);
+        item.put("customerOrderTitle", "Local title");
+        item.put("customerDeliveryDate", "2026-11-01");
+        item.put("salesOrderDate", "2026-10-01");
+        item.put("engineeringMaterialCode", "MAT-001");
+        item.put("engineeringMaterialName", "45#");
+        item.put("engineeringMaterialTypeCode", "BAR");
+        item.put("engineeringMaterialTypeName", "棒材");
+        item.put("engineeringMaterialCategory", "STEEL");
+        item.put("materialShape", "ROUND");
+        item.put("processRoute", List.of(Map.of("processName", "TURNING")));
+        item.put("materialData", Map.of("materialName", "45#"));
+        item.put("materialGrossWeight", 1.2);
+        item.put("partNetWeight", 0.9);
+        return item;
     }
 
     private SalesOrderChangeDispatchSetting setting(String mode, Long epoch) {
