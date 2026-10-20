@@ -208,6 +208,81 @@ class SalesOrderChangeNoticeServiceTest {
     }
 
     @Test
+    void localOnlyOrderFieldsDoNotResolveTargetsOrCreateNotices() {
+        SalesOrderHeader order = new SalesOrderHeader();
+        order.setId(7L);
+        SalesOrderItem item = new SalesOrderItem();
+        item.setId(11L);
+
+        int captured = service.captureModify(order, List.of(item), Map.of(item.getId(), Set.of(
+                "customerOrderTitle", "customerDeliveryDate", "salesOrderDate", "documentTypeCode")));
+
+        assertThat(captured).isZero();
+        verify(targetResolver, never()).resolve(anyList());
+        verify(noticeMapper, never()).insert(any(SalesOrderChangeNotice.class));
+    }
+
+    @Test
+    void mixedModificationOmitsLocalOnlyFieldsFromMesPayload() throws Exception {
+        SalesOrderChangeNotice row = sendingNotice("NOTICE-MIXED");
+        row.setChangeType(SalesOrderChangeNoticeService.MODIFY);
+        row.setChangedFieldsJson("[\"qty\",\"customerOrderTitle\",\"customerDeliveryDate\",\"salesOrderDate\",\"documentTypeCode\"]");
+        row.setPayloadSnapshotJson(new ObjectMapper().writeValueAsString(Map.of(
+                "changeType", SalesOrderChangeNoticeService.MODIFY,
+                "changedFields", List.of("qty", "customerOrderTitle", "customerDeliveryDate", "salesOrderDate", "documentTypeCode"),
+                "documentTypeCode", "SO06",
+                "item", Map.of(
+                        "qty", 3,
+                        "customerOrderTitle", "Local title",
+                        "customerDeliveryDate", "2026-11-01",
+                        "salesOrderDate", "2026-10-01"))));
+        when(noticeMapper.selectList(any(Wrapper.class))).thenReturn(List.of(row));
+        DataCenterIntegrationClient client = mock(DataCenterIntegrationClient.class);
+        ReflectionTestUtils.setField(service, "dataCenterIntegrationClient", client);
+        when(client.call(any(String.class), any(), any())).thenReturn(Map.of(
+                "code", "0",
+                "data", Map.of("items", List.of(Map.of(
+                        "noticeId", row.getNoticeId(), "status", "ACCEPTED")))));
+
+        service.sendClaimed(List.of(row.getNoticeId()), 11L);
+
+        ArgumentCaptor<Map> request = ArgumentCaptor.forClass(Map.class);
+        verify(client).call(any(String.class), request.capture(), any());
+        Map<?, ?> sentNotice = (Map<?, ?>) ((List<?>) request.getValue().get("items")).get(0);
+        assertThat(sentNotice.get("changedFields")).asList().containsExactly("qty");
+        Map<?, ?> sentItem = (Map<?, ?>) sentNotice.get("item");
+        assertThat(sentItem.get("qty")).isEqualTo(3);
+        assertThat(sentItem.keySet().stream().map(String::valueOf).toList()).doesNotContain(
+                "customerOrderTitle", "customerDeliveryDate", "salesOrderDate", "documentTypeCode");
+        assertThat(sentNotice.keySet().stream().map(String::valueOf).toList())
+                .doesNotContain("documentTypeCode");
+    }
+
+    @Test
+    void legacyLocalOnlyModificationIsNotSentAsAnEmptyChange() throws Exception {
+        SalesOrderChangeNotice row = sendingNotice("NOTICE-LOCAL-ONLY");
+        row.setChangeType(SalesOrderChangeNoticeService.MODIFY);
+        row.setChangedFieldsJson("[\"customerOrderTitle\",\"customerDeliveryDate\",\"salesOrderDate\"]");
+        row.setPayloadSnapshotJson(new ObjectMapper().writeValueAsString(Map.of(
+                "changeType", SalesOrderChangeNoticeService.MODIFY,
+                "changedFields", List.of("customerOrderTitle", "customerDeliveryDate", "salesOrderDate"),
+                "item", Map.of(
+                        "customerOrderTitle", "Local title",
+                        "customerDeliveryDate", "2026-11-01",
+                        "salesOrderDate", "2026-10-01"))));
+        when(noticeMapper.selectList(any(Wrapper.class))).thenReturn(List.of(row));
+        DataCenterIntegrationClient client = mock(DataCenterIntegrationClient.class);
+        ReflectionTestUtils.setField(service, "dataCenterIntegrationClient", client);
+
+        Map<String, Object> result = service.sendClaimed(List.of(row.getNoticeId()), 12L);
+
+        assertThat(row.getStatus()).isEqualTo(SalesOrderChangeNoticeService.FAILED);
+        assertThat(row.getLastError()).contains("仅包含 QPO 本地字段");
+        assertThat(result).containsEntry("failedCount", 1).containsEntry("sentCount", 0);
+        verify(client, never()).call(any(String.class), any(), any());
+    }
+
+    @Test
     void modifyingAnExistingPendingNoticeMovesItIntoTheCurrentAutomaticEpoch() throws Exception {
         SalesOrderHeader order = new SalesOrderHeader();
         order.setId(7L);

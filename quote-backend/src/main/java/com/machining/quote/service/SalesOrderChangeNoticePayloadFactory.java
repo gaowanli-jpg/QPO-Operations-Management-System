@@ -16,9 +16,16 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.LinkedHashSet;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Component
 public class SalesOrderChangeNoticePayloadFactory {
+    private static final Set<String> LOCAL_ONLY_FIELDS = Set.of(
+            "customerOrderTitle",
+            "customerDeliveryDate",
+            "salesOrderDate",
+            "documentTypeCode");
+
     @Autowired
     private ObjectMapper objectMapper;
 
@@ -90,16 +97,38 @@ public class SalesOrderChangeNoticePayloadFactory {
                 changed.add(entry.getKey());
             }
         }
-        return nonPriceFields(changed);
+        return downstreamFields(changed);
     }
 
-    public Set<String> nonPriceFields(Set<String> changedFields) {
+    public Set<String> downstreamFields(Set<String> changedFields) {
         if (changedFields == null) return Set.of();
         return changedFields.stream()
+                .filter(Objects::nonNull)
                 .filter(field -> !"untaxedUnitPrice".equals(field))
                 .filter(field -> !"taxIncludedUnitPrice".equals(field))
                 .filter(field -> !field.toLowerCase().contains("price"))
-                .collect(java.util.stream.Collectors.toCollection(java.util.LinkedHashSet::new));
+                .filter(field -> !LOCAL_ONLY_FIELDS.contains(field))
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+    }
+
+    public Map<String, Object> downstreamPayload(
+            Map<String, Object> snapshot, String changeType, Set<String> changedFields) {
+        Map<String, Object> payload = snapshot == null
+                ? new LinkedHashMap<>() : new LinkedHashMap<>(snapshot);
+        if (SalesOrderChangeNoticeService.MODIFY.equals(changeType)) {
+            for (String field : LOCAL_ONLY_FIELDS) payload.remove(field);
+            Object rawItem = payload.get("item");
+            if (rawItem instanceof Map<?, ?> item) {
+                Map<String, Object> downstreamItem = new LinkedHashMap<>();
+                item.forEach((key, value) -> {
+                    String field = String.valueOf(key);
+                    if (!LOCAL_ONLY_FIELDS.contains(field)) downstreamItem.put(field, value);
+                });
+                payload.put("item", downstreamItem);
+            }
+            payload.put("changedFields", new ArrayList<>(downstreamFields(changedFields)));
+        }
+        return payload;
     }
 
     private String firstNonBlank(String... values) {

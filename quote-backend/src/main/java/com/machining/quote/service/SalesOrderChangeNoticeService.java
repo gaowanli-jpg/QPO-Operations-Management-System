@@ -82,13 +82,13 @@ public class SalesOrderChangeNoticeService {
     public int captureModify(SalesOrderHeader order, List<SalesOrderItem> items,
                              Map<Long, Set<String>> changedFieldsByItem) {
         if (order == null || items == null || changedFieldsByItem == null) return 0;
-        Map<Long, Set<String>> nonPriceFieldsByItem = new LinkedHashMap<>();
+        Map<Long, Set<String>> downstreamFieldsByItem = new LinkedHashMap<>();
         List<SalesOrderItem> changedItems = new ArrayList<>();
         for (SalesOrderItem item : items) {
             if (item == null || item.getId() == null) continue;
-            Set<String> changed = payloadFactory.nonPriceFields(changedFieldsByItem.get(item.getId()));
+            Set<String> changed = payloadFactory.downstreamFields(changedFieldsByItem.get(item.getId()));
             if (changed.isEmpty()) continue;
-            nonPriceFieldsByItem.put(item.getId(), changed);
+            downstreamFieldsByItem.put(item.getId(), changed);
             changedItems.add(item);
         }
         if (changedItems.isEmpty()) return 0;
@@ -97,7 +97,7 @@ public class SalesOrderChangeNoticeService {
         Map<Long, List<SalesOrderChangeNoticeTargetResolver.Target>> targetsByItem =
                 targetResolver.resolve(changedItems);
         for (SalesOrderItem item : changedItems) {
-            Set<String> changed = nonPriceFieldsByItem.get(item.getId());
+            Set<String> changed = downstreamFieldsByItem.get(item.getId());
             for (SalesOrderChangeNoticeTargetResolver.Target target : targetsByItem
                     .getOrDefault(item.getId(), List.of())) {
                 upsert(order, item, target, MODIFY, null, changed, eventKey);
@@ -567,12 +567,21 @@ public class SalesOrderChangeNoticeService {
         String bizId = "QPO-SOC-" + LocalDateTime.now().toString().replaceAll("[^0-9]", "") + "-"
                 + UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase();
         Map<String, Object> request;
+        List<SalesOrderChangeNotice> dispatchRows = new ArrayList<>();
+        List<SalesOrderChangeNotice> localOnlyRows = new ArrayList<>();
         try {
             request = new LinkedHashMap<>();
             request.put("bizId", bizId);
             List<Map<String, Object>> items = new ArrayList<>();
             for (SalesOrderChangeNotice row : rows) {
-                Map<String, Object> item = parseSnapshot(row.getPayloadSnapshotJson());
+                Set<String> changedFields = payloadFactory.downstreamFields(
+                        new LinkedHashSet<>(readStringList(row.getChangedFieldsJson())));
+                if (MODIFY.equals(row.getChangeType()) && changedFields.isEmpty()) {
+                    localOnlyRows.add(row);
+                    continue;
+                }
+                Map<String, Object> item = payloadFactory.downstreamPayload(
+                        parseSnapshot(row.getPayloadSnapshotJson()), row.getChangeType(), changedFields);
                 item.put("noticeId", row.getNoticeId());
                 item.put("changeType", row.getChangeType());
                 item.put("targetType", row.getTargetType());
@@ -580,31 +589,36 @@ public class SalesOrderChangeNoticeService {
                 item.put("sourceBizId", row.getSourceBizId());
                 item.put("allocationId", row.getAllocationId());
                 item.put("reason", row.getReason());
-                item.put("changedFields", readStringList(row.getChangedFieldsJson()).stream().toList());
+                item.put("changedFields", new ArrayList<>(changedFields));
                 items.add(item);
+                dispatchRows.add(row);
             }
             request.put("items", items);
         } catch (RuntimeException e) {
             updateClaimed(rows, FAILED, "Unable to build sales change notice payload");
             return sendSummary(rows, taskId, bizId, 0L);
         }
+        if (!localOnlyRows.isEmpty()) {
+            updateClaimed(localOnlyRows, FAILED, "该销售变更仅包含 QPO 本地字段，未下发");
+        }
+        if (dispatchRows.isEmpty()) return sendSummary(rows, taskId, bizId, 0L);
         long startedAt = System.currentTimeMillis();
         Object raw;
         try {
             raw = dataCenterIntegrationClient.call(
                     DataCenterEndpointRegistry.MES_SALES_ORDER_CHANGE_NOTICE, request, Map.class);
         } catch (DataCenterCallException e) {
-            updateClaimed(rows, e.getCertainty() == DataCenterCallException.FailureCertainty.RESULT_UNKNOWN
+            updateClaimed(dispatchRows, e.getCertainty() == DataCenterCallException.FailureCertainty.RESULT_UNKNOWN
                     ? RESULT_UNKNOWN : FAILED, abbreviate(e.getMessage()));
             return sendSummary(rows, taskId, bizId, System.currentTimeMillis() - startedAt);
         } catch (RuntimeException e) {
-            updateClaimed(rows, FAILED, abbreviate(e.getMessage()));
+            updateClaimed(dispatchRows, FAILED, abbreviate(e.getMessage()));
             return sendSummary(rows, taskId, bizId, System.currentTimeMillis() - startedAt);
         }
         try {
-            applyResponse(rows, raw, bizId);
+            applyResponse(dispatchRows, raw, bizId);
         } catch (RuntimeException e) {
-            updateClaimed(rows, RESULT_UNKNOWN, "Unable to process sales change notice response");
+            updateClaimed(dispatchRows, RESULT_UNKNOWN, "Unable to process sales change notice response");
         }
         return sendSummary(rows, taskId, bizId, System.currentTimeMillis() - startedAt);
     }
