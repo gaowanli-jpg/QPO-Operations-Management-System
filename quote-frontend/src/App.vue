@@ -82,7 +82,7 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref } from 'vue'
+import { computed, provide, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { DataBoard, Document, Expand, Files, Fold, Search, Setting, Tools, User } from '@element-plus/icons-vue'
@@ -100,6 +100,7 @@ const activeMenu = computed(() => {
 const isLoginPage = computed(() => route.path === '/login')
 const isSidebarCollapsed = ref(false)
 const sidebarWidth = computed(() => isSidebarCollapsed.value ? '72px' : '200px')
+provide('isSidebarCollapsed', isSidebarCollapsed)
 
 
 const menuGroups = [

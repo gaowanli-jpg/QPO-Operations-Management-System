@@ -2,7 +2,7 @@
 
 ## Status
 
-Design approved by the user on 2026-10-20. The user selected approach B: the sales-order detail drawer follows the sidebar's right edge and fills the remaining viewport width. This document defines the design; implementation planning starts after the user reviews this document.
+Design approved by the user on 2026-10-20. The user selected approach B: the sales-order detail drawer follows the sidebar's right edge and fills the remaining viewport width. Implementation proceeds under this approved design.
 
 ## Context
 

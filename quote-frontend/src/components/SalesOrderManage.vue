@@ -133,7 +133,14 @@
       </div>
     </section>
 
-    <el-drawer v-model="detailVisible" title="销售订单详情" size="76%">
+    <el-drawer
+      v-model="detailVisible"
+      title="销售订单详情"
+      class="sales-order-detail-drawer"
+      :class="{ 'sales-order-detail-drawer--collapsed': isSidebarCollapsed }"
+      :style="{ left: 'var(--sales-order-detail-sidebar-width)', right: 'auto' }"
+      size="calc(100vw - var(--sales-order-detail-sidebar-width))"
+    >
       <div v-if="orderDetail" v-loading="detailLoading" class="detail-wrap">
         <el-descriptions :column="2" border class="detail-descriptions">
           <el-descriptions-item label="客户">{{ orderDetail.orderInfo?.customerName || selectedCustomer || '-' }}</el-descriptions-item>
@@ -1057,7 +1064,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, inject, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Close } from '@element-plus/icons-vue'
@@ -1101,6 +1108,7 @@ import { getTask } from '../services/taskApi'
 
 const { isPending, runAction } = usePendingAction()
 const route = useRoute()
+const isSidebarCollapsed = inject('isSidebarCollapsed', ref(false))
 
 const SALES_ORDER_STATUSES = ['已报价', '部分已提单', '已生成提单', '废弃']
 const SALES_ORDER_TYPES = ['备货订单', '正式订单']
@@ -2989,6 +2997,20 @@ onMounted(() => {
 
   .item-field-replacement-row {
     grid-template-columns: 1fr;
+  }
+}
+
+:global(.el-drawer.sales-order-detail-drawer) {
+  --sales-order-detail-sidebar-width: 200px;
+}
+
+:global(.el-drawer.sales-order-detail-drawer--collapsed) {
+  --sales-order-detail-sidebar-width: 72px;
+}
+
+@media (max-width: 760px) {
+  :global(.el-drawer.sales-order-detail-drawer) {
+    --sales-order-detail-sidebar-width: 72px;
   }
 }
 </style>

@@ -33,7 +33,7 @@
 - `App.vue` provides the existing `isSidebarCollapsed` ref with the injection key `'isSidebarCollapsed'`.
 - `SalesOrderManage.vue` injects that ref and applies `sales-order-detail-drawer--collapsed` while it is true.
 
-- [ ] **Step 1: Provide the existing sidebar state from the application shell**
+- [x] **Step 1: Provide the existing sidebar state from the application shell**
 
 In `quote-frontend/src/App.vue`, add `provide` to the Vue imports and provide the existing ref after its declaration:
 
@@ -46,7 +46,7 @@ Add the `provide` call immediately after the existing `isSidebarCollapsed` decla
 
 Keep `sidebarWidth` and the sidebar markup unchanged.
 
-- [ ] **Step 2: Set the drawer width and edge from its responsive CSS variable**
+- [x] **Step 2: Set the drawer width and edge from its responsive CSS variable**
 
 In `quote-frontend/src/components/SalesOrderManage.vue`, import `inject`, inject the shell state, and replace the drawer's fixed `76%` size:
 
@@ -66,17 +66,16 @@ const isSidebarCollapsed = inject('isSidebarCollapsed', ref(false))
   title="销售订单详情"
   class="sales-order-detail-drawer"
   :class="{ 'sales-order-detail-drawer--collapsed': isSidebarCollapsed }"
+  :style="{ left: 'var(--sales-order-detail-sidebar-width)', right: 'auto' }"
   size="calc(100vw - var(--sales-order-detail-sidebar-width))"
 >
 ```
 
-Add the following rules to the existing scoped style block. The class selector targets Element Plus's drawer element; the media rule appears after the collapsed selector so a narrow viewport always resolves to 72px.
+Add the following rules to the existing scoped style block. The class selector targets Element Plus's drawer element; the media rule appears after the collapsed selector so a narrow viewport always resolves to 72px. The inline left/right values override the drawer's default right anchoring while the CSS variable controls both its offset and width.
 
 ```css
 :global(.el-drawer.sales-order-detail-drawer) {
   --sales-order-detail-sidebar-width: 200px;
-  left: var(--sales-order-detail-sidebar-width);
-  right: auto;
 }
 
 :global(.el-drawer.sales-order-detail-drawer--collapsed) {
@@ -90,13 +89,13 @@ Add the following rules to the existing scoped style block. The class selector t
 }
 ```
 
-- [ ] **Step 3: Review the actual diff for scope and responsive behavior**
+- [x] **Step 3: Review the actual diff for scope and responsive behavior**
 
 Run: `git diff --check`
 
 Expected: no whitespace errors. Confirm the only implementation files changed are `App.vue` and `SalesOrderManage.vue`, and that drawer width resolves from `calc(100vw - var(--sales-order-detail-sidebar-width))`.
 
-- [ ] **Step 4: Run frontend tests and production build**
+- [x] **Step 4: Run frontend tests and production build**
 
 Run from `quote-frontend`:
 
@@ -111,7 +110,9 @@ Expected: Vitest exits successfully and Vite produces a successful production bu
 
 At a desktop viewport, open a sales-order detail and verify its left edge matches the sidebar right edge at 200px. Collapse the sidebar while the drawer is open and verify the left edge moves to 72px while the drawer still reaches the viewport's right edge. At a viewport width of 760px or less, verify the offset remains 72px in both sidebar states. Confirm drawer scrolling and closing still work and the page has no horizontal overflow.
 
-- [ ] **Step 6: Commit the implementation**
+The local sales-order route redirected to login during this execution, and no authenticated test session or credentials were available. Browser verification could not be completed without signing into the app.
+
+- [x] **Step 6: Commit the implementation**
 
 ```powershell
 git add -- quote-frontend/src/App.vue quote-frontend/src/components/SalesOrderManage.vue
