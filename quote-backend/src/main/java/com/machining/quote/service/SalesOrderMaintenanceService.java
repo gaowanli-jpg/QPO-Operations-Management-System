@@ -1,0 +1,1032 @@
+package com.machining.quote.service;
+
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
+import com.machining.quote.dto.SalesOrderItemUpdateLineReq;
+import com.machining.quote.dto.SalesOrderItemUpdateReq;
+import com.machining.quote.dto.SalesOrderItemFieldReplacementReq;
+import com.machining.quote.dto.SalesOrderMaintenanceOrderUpdateReq;
+import com.machining.quote.dto.SalesOrderMaintenanceUpdateResp;
+import com.machining.quote.dto.ManualAllocationSplitReq;
+import com.machining.quote.dto.ManualAllocationSplitResp;
+import com.machining.quote.entity.DictPricingMarkupFee;
+import com.machining.quote.entity.SalesOrderHeader;
+import com.machining.quote.entity.SalesOrderItem;
+import com.machining.quote.mapper.DictPricingMarkupFeeMapper;
+import com.machining.quote.mapper.OrderDeliveryTicketMapper;
+import com.machining.quote.mapper.SalesOrderHeaderMapper;
+import com.machining.quote.mapper.SalesOrderItemMapper;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.function.Consumer;
+
+@Service
+public class SalesOrderMaintenanceService {
+    static final String ACTION_ORDER_UPDATE = "SALES_ORDER_UPDATE";
+    static final String ACTION_ITEM_UPDATE = "SALES_ORDER_ITEM_UPDATE";
+    static final String TARGET_TYPE = "sales_order_header";
+    static final String STATUS_SYNCING = "同步中";
+    static final String STATUS_PENDING_CONFIRMATION = "结果待确认";
+
+    private static final Set<String> ORDER_TYPES = Set.of("预测订单", "备货订单", "正式订单");
+    private static final Set<String> ITEM_FIELD_REPLACEMENT_FIELDS = Set.of(
+            SalesOrderItemUpdateLineReq.FIELD_CUSTOMER_ORDER_TITLE,
+            SalesOrderItemUpdateLineReq.FIELD_CUSTOMER_ORDER_NO,
+            SalesOrderItemUpdateLineReq.FIELD_CUSTOMER_PROJECT_NO,
+            SalesOrderItemUpdateLineReq.FIELD_MANUFACTURING_PROCESS_TYPE,
+            SalesOrderItemUpdateLineReq.FIELD_RESERVED_FIELD_1,
+            SalesOrderItemUpdateLineReq.FIELD_RESERVED_FIELD_2,
+            SalesOrderItemUpdateLineReq.FIELD_RESERVED_FIELD_3,
+            SalesOrderItemUpdateLineReq.FIELD_INTERNAL_PROJECT_NO,
+            SalesOrderItemUpdateLineReq.FIELD_ORDER_TYPE);
+    private static final int TEXT_50 = 50;
+    private static final int TEXT_120 = 120;
+    private static final int TEXT_255 = 255;
+    private static final int TEXT_200 = 200;
+    private static final int TEXT_500 = 500;
+    private static final int UNIT_PRICE_SCALE = 4;
+    private static final int TOTAL_PRICE_SCALE = 2;
+    private static final BigDecimal ONE_HUNDRED = new BigDecimal("100");
+
+    @Autowired
+    private SalesOrderHeaderMapper headerMapper;
+    @Autowired
+    private SalesOrderItemMapper itemMapper;
+    @Autowired(required = false)
+    private DictPricingMarkupFeeMapper pricingMarkupFeeMapper;
+    @Autowired(required = false)
+    private OrderDeliveryTicketMapper ticketMapper;
+    @Autowired
+    private SalesOrderAllocationLinkService salesOrderAllocationLinkService;
+    @Autowired(required = false)
+    private DataScopeService dataScopeService;
+    @Autowired(required = false)
+    private AuditService auditService;
+    @Autowired
+    private AllocationSplitService allocationSplitService;
+    @Autowired(required = false)
+    private SalesOrderChangeNoticeService salesOrderChangeNoticeService;
+
+    @Transactional
+    public SalesOrderMaintenanceUpdateResp saveOrder(Long salesOrderId, SalesOrderMaintenanceOrderUpdateReq req) {
+        long startedAt = System.currentTimeMillis();
+        if (salesOrderId == null) {
+            throw new RuntimeException("销售订单 ID 不能为空");
+        }
+        if (req == null || !req.hasEditableFields()) {
+            throw new RuntimeException("请提供需要保存的销售订单字段");
+        }
+        SalesOrderHeader header = headerMapper.selectByIdForUpdate(salesOrderId);
+        if (header == null) {
+            throw new RuntimeException("销售订单不存在");
+        }
+        assertDataScope(header);
+        assertEditable(header);
+
+        Map<String, Object> before = orderSnapshot(header);
+        Set<String> changedFields = applyOrderFields(header, req);
+        List<SalesOrderItem> items = listItems(salesOrderId);
+        Map<Long, Set<String>> changedFieldsByItem = new LinkedHashMap<>();
+        int itemDefaultFillCount = propagateOrderDefaults(header, req, items, changedFieldsByItem);
+        LocalDateTime now = LocalDateTime.now();
+        if (!changedFields.isEmpty()) {
+            header.setUpdatedAt(now);
+            persistHeader(header, now);
+        }
+        if (salesOrderChangeNoticeService != null && !changedFieldsByItem.isEmpty()) {
+            salesOrderChangeNoticeService.captureModify(header, items, changedFieldsByItem);
+        }
+        Map<String, Object> after = orderSnapshot(header);
+        after.put("itemDefaultFillCount", itemDefaultFillCount);
+        after.put("durationMs", System.currentTimeMillis() - startedAt);
+        auditSuccess(ACTION_ORDER_UPDATE, header, before, after, changedFields, System.currentTimeMillis() - startedAt);
+        return response(header, changedFields.isEmpty() ? 0 : 1, changedFields, "销售订单信息已保存。");
+    }
+
+    @Transactional
+    public SalesOrderMaintenanceUpdateResp saveItems(Long salesOrderId, SalesOrderItemUpdateReq req) {
+        long startedAt = System.currentTimeMillis();
+        SalesOrderHeader header = lockEditableHeader(salesOrderId);
+        List<SalesOrderItemUpdateLineReq> lines = normalizeLines(req);
+        assertNoDuplicateLineIds(lines);
+
+        int updatedCount = 0;
+        Set<String> changedFields = new LinkedHashSet<>();
+        Map<Long, Set<String>> changedFieldsByItem = new LinkedHashMap<>();
+        List<SalesOrderItem> changedItems = new ArrayList<>();
+        List<Map<String, Object>> allocationQtyChanges = new ArrayList<>();
+        LocalDateTime now = LocalDateTime.now();
+        for (SalesOrderItemUpdateLineReq line : lines) {
+            SalesOrderItem item = lockItem(header, line.getSalesOrderItemId());
+            Integer oldQty = item.getQty();
+            Set<String> rowChanged = applyItemLine(header, item, line, now);
+            if (rowChanged.isEmpty()) {
+                continue;
+            }
+            changedFields.addAll(rowChanged);
+            changedFieldsByItem.put(item.getId(), rowChanged);
+            changedItems.add(item);
+            updatedCount++;
+            if (rowChanged.contains(SalesOrderItemUpdateLineReq.FIELD_QTY)) {
+                SalesOrderAllocationLinkService.AllocationQuantitySyncResult syncResult =
+                        salesOrderAllocationLinkService.syncAllocationQtyFromItem(header, item, oldQty);
+                if (syncResult != null) {
+                    Map<String, Object> change = new LinkedHashMap<>();
+                    change.put("allocationId", syncResult.allocationId());
+                    change.put("salesOrderItemId", syncResult.salesOrderItemId());
+                    change.put("salesOrderItemLineNo", item.getLineNo());
+                    change.put("oldQty", syncResult.oldQty());
+                    change.put("newQty", syncResult.newQty());
+                    allocationQtyChanges.add(change);
+                }
+            }
+        }
+        if (salesOrderChangeNoticeService != null && !changedFieldsByItem.isEmpty()) {
+            salesOrderChangeNoticeService.captureModify(header, changedItems, changedFieldsByItem);
+        }
+        auditSuccess(ACTION_ITEM_UPDATE, header, null, itemAuditSummary(header, updatedCount, changedFields), changedFields,
+                System.currentTimeMillis() - startedAt);
+        if (!allocationQtyChanges.isEmpty() && auditService != null) {
+            Map<String, Object> allocationAudit = new LinkedHashMap<>();
+            allocationAudit.put("salesOrderId", header.getId());
+            allocationAudit.put("salesOrderNo", header.getSalesOrderNo());
+            allocationAudit.put("changes", allocationQtyChanges);
+            allocationAudit.put("durationMs", System.currentTimeMillis() - startedAt);
+            auditService.record(
+                    "SALES_ORDER_ALLOCATION_QTY_UPDATE",
+                    TARGET_TYPE,
+                    header.getId(),
+                    null,
+                    allocationAudit,
+                    "MARKET",
+                    "SUCCESS",
+                    AuditService.labelForAction("SALES_ORDER_ALLOCATION_QTY_UPDATE"),
+                    null);
+        }
+        return response(header, updatedCount, changedFields, "销售订单零件信息已保存。");
+    }
+
+    @Transactional
+    public ManualAllocationSplitResp manualAllocationSplit(Long salesOrderId, ManualAllocationSplitReq req) {
+        long startedAt = System.currentTimeMillis();
+        if (salesOrderId == null || req == null || req.getAllocationId() == null) {
+            throw new RuntimeException("请提供需要人工拆行的待产 Allocation");
+        }
+        SalesOrderHeader header = headerMapper.selectByIdForUpdate(salesOrderId);
+        if (header == null) {
+            throw new RuntimeException("销售订单不存在");
+        }
+        assertDataScope(header);
+        AllocationSplitService.SplitResult result = allocationSplitService.applyManualSplit(
+                salesOrderId,
+                req.getAllocationId(),
+                req.getInStockQty(),
+                req.getInProductionQty());
+        ManualAllocationSplitResp response = new ManualAllocationSplitResp();
+        response.setSuccess(true);
+        response.setMessage(req.getInStockQty() == 0 && req.getInProductionQty() == 0
+                ? "人工确认无库存，全部保留待产"
+                : "人工拆行已完成");
+        response.setSalesOrderId(result.salesOrderId());
+        response.setSourceAllocationId(result.sourceAllocationId());
+        response.setSourceAllocationOldQty(result.sourceAllocationOldQty());
+        response.setInStockQty(req.getInStockQty());
+        response.setInProductionQty(req.getInProductionQty());
+        response.setProductionRequiredQty(result.productionRequiredQty());
+        response.setCreatedAllocationIds(result.createdAllocations().stream()
+                .map(com.machining.quote.entity.OrderDeliveryTicketAllocation::getId)
+                .toList());
+        response.setCreatedSalesOrderItemIds(result.createdSalesOrderItemIds());
+
+        if (auditService != null) {
+            Map<String, Object> summary = new LinkedHashMap<>();
+            summary.put("salesOrderId", salesOrderId);
+            summary.put("salesOrderNo", header.getSalesOrderNo());
+            summary.put("sourceAllocationId", result.sourceAllocationId());
+            summary.put("inStockQty", req.getInStockQty());
+            summary.put("inProductionQty", req.getInProductionQty());
+            summary.put("productionRequiredQty", result.productionRequiredQty());
+            summary.put("createdAllocationIds", response.getCreatedAllocationIds());
+            summary.put("createdSalesOrderItemIds", response.getCreatedSalesOrderItemIds());
+            summary.put("durationMs", System.currentTimeMillis() - startedAt);
+            auditService.record(
+                    "SALES_ORDER_MANUAL_ALLOCATION_SPLIT",
+                    TARGET_TYPE,
+                    salesOrderId,
+                    null,
+                    summary,
+                    "MARKET",
+                    "SUCCESS",
+                    AuditService.labelForAction("SALES_ORDER_MANUAL_ALLOCATION_SPLIT"),
+                    null);
+        }
+        return response;
+    }
+
+    @Transactional
+    public SalesOrderMaintenanceUpdateResp replaceItemField(Long salesOrderId, SalesOrderItemFieldReplacementReq req) {
+        long startedAt = System.currentTimeMillis();
+        SalesOrderHeader header = lockEditableHeader(salesOrderId);
+        String field = normalizeReplacementField(req);
+        String value = validateReplacementValue(field, req.getValue());
+        List<SalesOrderItem> items = listItems(salesOrderId);
+        if (items.isEmpty()) {
+            throw new RuntimeException("销售订单没有可替换的零件行");
+        }
+
+        int updatedCount = 0;
+        Set<String> changedFields = new LinkedHashSet<>();
+        Map<Long, Set<String>> changedFieldsByItem = new LinkedHashMap<>();
+        List<SalesOrderItem> changedItems = new ArrayList<>();
+        LocalDateTime now = LocalDateTime.now();
+        for (SalesOrderItem listed : items) {
+            SalesOrderItem item = lockItem(header, listed.getId());
+            SalesOrderItemUpdateLineReq line = new SalesOrderItemUpdateLineReq();
+            line.setSalesOrderItemId(item.getId());
+            applyReplacementValue(line, field, value);
+            Set<String> rowChanged = applyItemLine(header, item, line, now);
+            if (rowChanged.isEmpty()) {
+                continue;
+            }
+            changedFields.addAll(rowChanged);
+            changedFieldsByItem.put(item.getId(), rowChanged);
+            changedItems.add(item);
+            updatedCount++;
+        }
+        if (salesOrderChangeNoticeService != null && !changedFieldsByItem.isEmpty()) {
+            salesOrderChangeNoticeService.captureModify(header, changedItems, changedFieldsByItem);
+        }
+        auditSuccess(ACTION_ITEM_UPDATE, header, null, itemAuditSummary(header, updatedCount, changedFields), changedFields,
+                System.currentTimeMillis() - startedAt);
+        return response(header, updatedCount, changedFields, "销售订单零件字段已整单替换。");
+    }
+
+    @Transactional
+    public SalesOrderMaintenanceUpdateResp convertUntaxedToTaxIncluded(Long salesOrderId) {
+        return convertItemPrices(
+                salesOrderId,
+                SalesOrderItemUpdateLineReq.FIELD_UNTAXED_UNIT_PRICE,
+                SalesOrderItemUpdateLineReq.FIELD_TAX_INCLUDED_UNIT_PRICE,
+                true,
+                "未税单价已按税率转换为含税单价。");
+    }
+
+    @Transactional
+    public SalesOrderMaintenanceUpdateResp convertTaxIncludedToUntaxed(Long salesOrderId) {
+        return convertItemPrices(
+                salesOrderId,
+                SalesOrderItemUpdateLineReq.FIELD_TAX_INCLUDED_UNIT_PRICE,
+                SalesOrderItemUpdateLineReq.FIELD_UNTAXED_UNIT_PRICE,
+                false,
+                "含税单价已按税率转换为未税单价。");
+    }
+
+    private SalesOrderMaintenanceUpdateResp convertItemPrices(
+            Long salesOrderId,
+            String sourceField,
+            String targetField,
+            boolean multiplyByTaxFactor,
+            String message) {
+        long startedAt = System.currentTimeMillis();
+        SalesOrderHeader header = lockEditableHeader(salesOrderId);
+        BigDecimal taxFactor = loadNormalTaxFactor();
+        List<SalesOrderItem> items = listItems(salesOrderId);
+        if (items.isEmpty()) {
+            throw new RuntimeException("销售订单没有可换算的零件行");
+        }
+        List<SalesOrderItem> lockedItems = new ArrayList<>();
+        for (SalesOrderItem listed : items) {
+            SalesOrderItem item = lockItem(header, listed.getId());
+            BigDecimal sourcePrice = unitPrice(item, sourceField);
+            if (sourcePrice == null) {
+                throw new RuntimeException("销售订单零件行 " + itemLineLabel(item) + " 缺少 " + sourceField + "，不能进行价格换算");
+            }
+            validatePrice(sourcePrice, sourceField);
+            lockedItems.add(item);
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        for (SalesOrderItem item : lockedItems) {
+            BigDecimal sourcePrice = unitPrice(item, sourceField);
+            BigDecimal targetPrice = multiplyByTaxFactor
+                    ? sourcePrice.multiply(taxFactor).setScale(UNIT_PRICE_SCALE, RoundingMode.HALF_UP)
+                    : sourcePrice.divide(taxFactor, UNIT_PRICE_SCALE, RoundingMode.HALF_UP);
+            setUnitPrice(item, targetField, targetPrice);
+            recalculateDerivedFields(item);
+            item.setUpdatedAt(now);
+            persistItem(header, item, now);
+        }
+        Set<String> changedFields = new LinkedHashSet<>();
+        changedFields.add(targetField);
+        auditSuccess(ACTION_ITEM_UPDATE, header, null, itemAuditSummary(header, lockedItems.size(), changedFields), changedFields,
+                System.currentTimeMillis() - startedAt);
+        return response(header, lockedItems.size(), changedFields, message);
+    }
+
+    SalesOrderHeader lockEditableHeader(Long salesOrderId) {
+        if (salesOrderId == null) {
+            throw new RuntimeException("销售订单 ID 不能为空");
+        }
+        SalesOrderHeader header = headerMapper.selectByIdForUpdate(salesOrderId);
+        if (header == null) {
+            throw new RuntimeException("销售订单不存在");
+        }
+        assertDataScope(header);
+        assertEditable(header);
+        return header;
+    }
+
+    Set<String> applyItemLine(
+            SalesOrderHeader header,
+            SalesOrderItem item,
+            SalesOrderItemUpdateLineReq line,
+            LocalDateTime updatedAt) {
+        assertItemIdentityImmutable(item, line);
+        assertItemQuantityEditable(item, line);
+        Set<String> changed = new LinkedHashSet<>();
+        if (line.hasField(SalesOrderItemUpdateLineReq.FIELD_QTY)) {
+            Integer qty = line.getQty();
+            validateQty(qty);
+            if (!Objects.equals(item.getQty(), qty)) {
+                item.setQty(qty);
+                changed.add(SalesOrderItemUpdateLineReq.FIELD_QTY);
+            }
+        }
+        if (line.hasField(SalesOrderItemUpdateLineReq.FIELD_CUSTOMER_DELIVERY_DATE)) {
+            changedIfDate(item.getCustomerDeliveryDate(), line.getCustomerDeliveryDate(), changed,
+                    SalesOrderItemUpdateLineReq.FIELD_CUSTOMER_DELIVERY_DATE);
+            item.setCustomerDeliveryDate(line.getCustomerDeliveryDate());
+        }
+        if (line.hasField(SalesOrderItemUpdateLineReq.FIELD_INTERNAL_DELIVERY_DATE)) {
+            changedIfDate(item.getInternalDeliveryDate(), line.getInternalDeliveryDate(), changed,
+                    SalesOrderItemUpdateLineReq.FIELD_INTERNAL_DELIVERY_DATE);
+            item.setInternalDeliveryDate(line.getInternalDeliveryDate());
+        }
+        if (line.hasField(SalesOrderItemUpdateLineReq.FIELD_UNTAXED_UNIT_PRICE)) {
+            BigDecimal price = line.getUntaxedUnitPrice();
+            validatePrice(price, "未税单价");
+            if (!sameDecimal(item.getUntaxedUnitPrice(), price)) {
+                item.setUntaxedUnitPrice(price);
+                changed.add(SalesOrderItemUpdateLineReq.FIELD_UNTAXED_UNIT_PRICE);
+            }
+        }
+        if (line.hasField(SalesOrderItemUpdateLineReq.FIELD_TAX_INCLUDED_UNIT_PRICE)) {
+            BigDecimal price = line.getTaxIncludedUnitPrice();
+            validatePrice(price, "含税单价");
+            if (!sameDecimal(item.getTaxIncludedUnitPrice(), price)) {
+                item.setTaxIncludedUnitPrice(price);
+                changed.add(SalesOrderItemUpdateLineReq.FIELD_TAX_INCLUDED_UNIT_PRICE);
+            }
+        }
+        applyText(item.getMaterialName(), line.getMaterialName(), TEXT_255,
+                SalesOrderItemUpdateLineReq.FIELD_MATERIAL_NAME, changed, line, item::setMaterialName);
+        applyText(item.getSurfaceTreatment(), line.getSurfaceTreatment(), TEXT_255,
+                SalesOrderItemUpdateLineReq.FIELD_SURFACE_TREATMENT, changed, line, item::setSurfaceTreatment);
+        applyText(item.getCustomerOrderNo(), line.getCustomerOrderNo(), TEXT_120,
+                SalesOrderItemUpdateLineReq.FIELD_CUSTOMER_ORDER_NO, changed, line, item::setCustomerOrderNo);
+        applyText(item.getCustomerProjectNo(), line.getCustomerProjectNo(), TEXT_120,
+                SalesOrderItemUpdateLineReq.FIELD_CUSTOMER_PROJECT_NO, changed, line, item::setCustomerProjectNo);
+        applyText(item.getManufacturingProcessType(), line.getManufacturingProcessType(), TEXT_120,
+                SalesOrderItemUpdateLineReq.FIELD_MANUFACTURING_PROCESS_TYPE, changed, line, item::setManufacturingProcessType);
+        applyText(item.getReservedField1(), line.getReservedField1(), TEXT_120,
+                SalesOrderItemUpdateLineReq.FIELD_RESERVED_FIELD_1, changed, line, item::setReservedField1);
+        applyText(item.getReservedField2(), line.getReservedField2(), TEXT_120,
+                SalesOrderItemUpdateLineReq.FIELD_RESERVED_FIELD_2, changed, line, item::setReservedField2);
+        applyText(item.getReservedField3(), line.getReservedField3(), TEXT_120,
+                SalesOrderItemUpdateLineReq.FIELD_RESERVED_FIELD_3, changed, line, item::setReservedField3);
+        applyText(item.getCustomerOrderTitle(), line.getCustomerOrderTitle(), TEXT_255,
+                SalesOrderItemUpdateLineReq.FIELD_CUSTOMER_ORDER_TITLE, changed, line, item::setCustomerOrderTitle);
+        applyText(item.getInternalProjectNo(), line.getInternalProjectNo(), TEXT_120,
+                SalesOrderItemUpdateLineReq.FIELD_INTERNAL_PROJECT_NO, changed, line, item::setInternalProjectNo);
+        applyText(item.getDescription(), line.getDescription(), TEXT_500,
+                SalesOrderItemUpdateLineReq.FIELD_DESCRIPTION, changed, line, item::setDescription);
+        applyText(item.getStatus(), line.getStatus(), TEXT_50,
+                SalesOrderItemUpdateLineReq.FIELD_STATUS, changed, line, item::setStatus);
+        if (line.hasField(SalesOrderItemUpdateLineReq.FIELD_ORDER_TYPE)) {
+            String orderType = validateOrderType(line.getOrderType());
+            if (!Objects.equals(trimToNull(item.getOrderType()), orderType)) {
+                changed.add(SalesOrderItemUpdateLineReq.FIELD_ORDER_TYPE);
+            }
+            item.setOrderType(orderType);
+        }
+        applyText(item.getRemark(), line.getRemark(), TEXT_500,
+                SalesOrderItemUpdateLineReq.FIELD_REMARK, changed, line, item::setRemark);
+
+        if (!changed.isEmpty()) {
+            recalculateDerivedFields(item);
+            item.setUpdatedAt(updatedAt);
+            persistItem(header, item, updatedAt);
+        }
+        return changed;
+    }
+
+    private void assertItemQuantityEditable(SalesOrderItem item, SalesOrderItemUpdateLineReq line) {
+        if (!line.hasField(SalesOrderItemUpdateLineReq.FIELD_QTY)) {
+            return;
+        }
+        Integer qty = line.getQty();
+        validateQty(qty);
+        if (!Objects.equals(item.getQty(), qty) && item.getAllocationId() == null) {
+            throw new RuntimeException("物料号获取成功并关联 Allocation 后才能修改数量");
+        }
+    }
+
+    private void assertItemIdentityImmutable(SalesOrderItem item, SalesOrderItemUpdateLineReq line) {
+        if (line.hasField(SalesOrderItemUpdateLineReq.FIELD_PART_NO)
+                && !Objects.equals(item.getPartNo(), line.getPartNo())) {
+            throw new RuntimeException("销售订单零件的图号和版本创建后不可修改");
+        }
+        if (line.hasField(SalesOrderItemUpdateLineReq.FIELD_VERSION)
+                && !Objects.equals(item.getVersion(), line.getVersion())) {
+            throw new RuntimeException("销售订单零件的图号和版本创建后不可修改");
+        }
+    }
+
+    private Set<String> applyOrderFields(SalesOrderHeader header, SalesOrderMaintenanceOrderUpdateReq req) {
+        Set<String> changed = new LinkedHashSet<>();
+        applyOrderText(header.getDocumentTypeCode(), req.getDocumentTypeCode(), TEXT_120,
+                SalesOrderMaintenanceOrderUpdateReq.FIELD_DOCUMENT_TYPE_CODE, changed, req, header::setDocumentTypeCode);
+        if (req.hasField(SalesOrderMaintenanceOrderUpdateReq.FIELD_SALES_ORDER_DATE)) {
+            if (!Objects.equals(header.getSalesOrderDate(), req.getSalesOrderDate())) {
+                changed.add(SalesOrderMaintenanceOrderUpdateReq.FIELD_SALES_ORDER_DATE);
+            }
+            header.setSalesOrderDate(req.getSalesOrderDate());
+        }
+        applyOrderText(header.getCustomerOrderNo(), req.getCustomerOrderNo(), TEXT_120,
+                SalesOrderMaintenanceOrderUpdateReq.FIELD_CUSTOMER_ORDER_NO, changed, req, header::setCustomerOrderNo);
+        applyOrderText(header.getCustomerProjectNo(), req.getCustomerProjectNo(), TEXT_120,
+                SalesOrderMaintenanceOrderUpdateReq.FIELD_CUSTOMER_PROJECT_NO, changed, req, header::setCustomerProjectNo);
+        applyOrderText(header.getManufacturingProcessType(), req.getManufacturingProcessType(), TEXT_120,
+                SalesOrderMaintenanceOrderUpdateReq.FIELD_MANUFACTURING_PROCESS_TYPE, changed, req, header::setManufacturingProcessType);
+        applyOrderText(header.getReservedField1(), req.getReservedField1(), TEXT_120,
+                SalesOrderMaintenanceOrderUpdateReq.FIELD_RESERVED_FIELD_1, changed, req, header::setReservedField1);
+        applyOrderText(header.getReservedField2(), req.getReservedField2(), TEXT_120,
+                SalesOrderMaintenanceOrderUpdateReq.FIELD_RESERVED_FIELD_2, changed, req, header::setReservedField2);
+        applyOrderText(header.getReservedField3(), req.getReservedField3(), TEXT_120,
+                SalesOrderMaintenanceOrderUpdateReq.FIELD_RESERVED_FIELD_3, changed, req, header::setReservedField3);
+        applyOrderText(header.getCustomerOrderTitle(), req.getCustomerOrderTitle(), TEXT_200,
+                SalesOrderMaintenanceOrderUpdateReq.FIELD_CUSTOMER_ORDER_TITLE, changed, req, header::setCustomerOrderTitle);
+        if (req.hasField(SalesOrderMaintenanceOrderUpdateReq.FIELD_ORDER_TYPE)) {
+            String orderType = validateOrderType(req.getOrderType());
+            if (!Objects.equals(trimToNull(header.getOrderType()), orderType)) {
+                changed.add(SalesOrderMaintenanceOrderUpdateReq.FIELD_ORDER_TYPE);
+            }
+            header.setOrderType(orderType);
+        }
+        applyOrderText(header.getInternalProjectNo(), req.getInternalProjectNo(), TEXT_120,
+                SalesOrderMaintenanceOrderUpdateReq.FIELD_INTERNAL_PROJECT_NO, changed, req, header::setInternalProjectNo);
+        return changed;
+    }
+
+    private int propagateOrderDefaults(
+            SalesOrderHeader header,
+            SalesOrderMaintenanceOrderUpdateReq req,
+            List<SalesOrderItem> items,
+            Map<Long, Set<String>> changedFieldsByItem) {
+        int changedRows = 0;
+        LocalDateTime now = LocalDateTime.now();
+        for (SalesOrderItem item : items) {
+            if (item == null || item.getId() == null) {
+                continue;
+            }
+            Set<String> rowChanged = new LinkedHashSet<>();
+            if (req.hasField(SalesOrderMaintenanceOrderUpdateReq.FIELD_SALES_ORDER_DATE)
+                    && !Objects.equals(item.getSalesOrderDate(), header.getSalesOrderDate())) {
+                item.setSalesOrderDate(header.getSalesOrderDate());
+                rowChanged.add(SalesOrderMaintenanceOrderUpdateReq.FIELD_SALES_ORDER_DATE);
+            }
+            fillBlank(item.getCustomerOrderNo(), header.getCustomerOrderNo(),
+                    req.hasField(SalesOrderMaintenanceOrderUpdateReq.FIELD_CUSTOMER_ORDER_NO),
+                    item::setCustomerOrderNo, rowChanged,
+                    SalesOrderMaintenanceOrderUpdateReq.FIELD_CUSTOMER_ORDER_NO);
+            fillBlank(item.getCustomerProjectNo(), header.getCustomerProjectNo(),
+                    req.hasField(SalesOrderMaintenanceOrderUpdateReq.FIELD_CUSTOMER_PROJECT_NO),
+                    item::setCustomerProjectNo, rowChanged,
+                    SalesOrderMaintenanceOrderUpdateReq.FIELD_CUSTOMER_PROJECT_NO);
+            fillBlank(item.getCustomerOrderTitle(), header.getCustomerOrderTitle(),
+                    req.hasField(SalesOrderMaintenanceOrderUpdateReq.FIELD_CUSTOMER_ORDER_TITLE),
+                    item::setCustomerOrderTitle, rowChanged,
+                    SalesOrderMaintenanceOrderUpdateReq.FIELD_CUSTOMER_ORDER_TITLE);
+            fillBlank(item.getOrderType(), header.getOrderType(),
+                    req.hasField(SalesOrderMaintenanceOrderUpdateReq.FIELD_ORDER_TYPE),
+                    item::setOrderType, rowChanged,
+                    SalesOrderMaintenanceOrderUpdateReq.FIELD_ORDER_TYPE);
+            fillBlank(item.getInternalProjectNo(), header.getInternalProjectNo(),
+                    req.hasField(SalesOrderMaintenanceOrderUpdateReq.FIELD_INTERNAL_PROJECT_NO),
+                    item::setInternalProjectNo, rowChanged,
+                    SalesOrderMaintenanceOrderUpdateReq.FIELD_INTERNAL_PROJECT_NO);
+            if (!rowChanged.isEmpty()) {
+                item.setUpdatedAt(now);
+                persistOrderDefaultItem(header, item, now);
+                changedFieldsByItem.put(item.getId(), rowChanged);
+                changedRows++;
+            }
+        }
+        return changedRows;
+    }
+
+    private void fillBlank(String current, String candidate, boolean fieldProvided, Consumer<String> setter,
+                           Set<String> changedFields, String field) {
+        String value = trimToNull(candidate);
+        if (!fieldProvided || !isBlank(current) || value == null) {
+            return;
+        }
+        setter.accept(value);
+        changedFields.add(field);
+    }
+
+    private SalesOrderItem lockItem(SalesOrderHeader header, Long itemId) {
+        if (itemId == null) {
+            throw new RuntimeException("销售订单零件行 ID 不能为空");
+        }
+        SalesOrderItem item = salesOrderAllocationLinkService.lockItemForMutation(header.getId(), itemId);
+        if (item == null) {
+            throw new RuntimeException("销售订单零件行不存在：" + itemId);
+        }
+        if (!Objects.equals(header.getId(), item.getSalesOrderId())) {
+            throw new RuntimeException("销售订单零件行 " + itemId + " 不属于当前销售订单");
+        }
+        return item;
+    }
+
+    private List<SalesOrderItem> normalizeItems(List<SalesOrderItem> items) {
+        return items == null ? List.of() : items.stream().filter(Objects::nonNull).toList();
+    }
+
+    private List<SalesOrderItem> listItems(Long salesOrderId) {
+        QueryWrapper<SalesOrderItem> query = new QueryWrapper<>();
+        query.eq("sales_order_id", salesOrderId)
+                .orderByAsc("line_no")
+                .orderByAsc("id");
+        return normalizeItems(itemMapper.selectList(query));
+    }
+
+    private List<SalesOrderItemUpdateLineReq> normalizeLines(SalesOrderItemUpdateReq req) {
+        if (req == null || req.getItems() == null || req.getItems().isEmpty()) {
+            throw new RuntimeException("请提供需要保存的销售订单零件行");
+        }
+        List<SalesOrderItemUpdateLineReq> lines = req.getItems().stream()
+                .filter(Objects::nonNull)
+                .toList();
+        if (lines.isEmpty()) {
+            throw new RuntimeException("请提供需要保存的销售订单零件行");
+        }
+        for (SalesOrderItemUpdateLineReq line : lines) {
+            if (line.getSalesOrderItemId() == null) {
+                throw new RuntimeException("销售订单零件行 ID 不能为空");
+            }
+            if (!line.hasEditableFields()) {
+                throw new RuntimeException("销售订单零件行 " + line.getSalesOrderItemId() + " 没有可保存字段");
+            }
+        }
+        return lines;
+    }
+
+    private void assertNoDuplicateLineIds(List<SalesOrderItemUpdateLineReq> lines) {
+        Set<Long> seen = new LinkedHashSet<>();
+        for (SalesOrderItemUpdateLineReq line : lines) {
+            if (!seen.add(line.getSalesOrderItemId())) {
+                throw new RuntimeException("销售订单零件行重复提交：" + line.getSalesOrderItemId());
+            }
+        }
+    }
+
+    private void applyText(
+            String current,
+            String raw,
+            int maxLength,
+            String field,
+            Set<String> changed,
+            SalesOrderItemUpdateLineReq line,
+            Consumer<String> setter) {
+        if (!line.hasField(field)) {
+            return;
+        }
+        String value = validateText(raw, maxLength, label(field));
+        if (!Objects.equals(trimToNull(current), value)) {
+            changed.add(field);
+        }
+        setter.accept(value);
+    }
+
+    private void applyOrderText(
+            String current,
+            String raw,
+            int maxLength,
+            String field,
+            Set<String> changed,
+            SalesOrderMaintenanceOrderUpdateReq req,
+            Consumer<String> setter) {
+        if (!req.hasField(field)) {
+            return;
+        }
+        String value = validateText(raw, maxLength, label(field));
+        if (!Objects.equals(trimToNull(current), value)) {
+            changed.add(field);
+        }
+        setter.accept(value);
+    }
+
+    private String validateText(String raw, int maxLength, String label) {
+        String value = trimToNull(raw);
+        if (value != null && value.length() > maxLength) {
+            throw new RuntimeException(label + "长度不能超过 " + maxLength + " 个字符");
+        }
+        return value;
+    }
+
+    private String validateOrderType(String raw) {
+        String orderType = trimToNull(raw);
+        if (orderType != null && !ORDER_TYPES.contains(orderType)) {
+            throw new RuntimeException("订单类型必须为预测订单、备货订单或正式订单");
+        }
+        return orderType;
+    }
+
+    private String normalizeReplacementField(SalesOrderItemFieldReplacementReq req) {
+        if (req == null || isBlank(req.getField())) {
+            throw new RuntimeException("请选择需要整单替换的销售订单零件字段");
+        }
+        String field = req.getField().trim();
+        if (!ITEM_FIELD_REPLACEMENT_FIELDS.contains(field)) {
+            throw new RuntimeException("不支持整单替换字段：" + field);
+        }
+        return field;
+    }
+
+    private String validateReplacementValue(String field, String raw) {
+        if (SalesOrderItemUpdateLineReq.FIELD_ORDER_TYPE.equals(field)) {
+            return validateOrderType(raw);
+        }
+        int maxLength = switch (field) {
+            case SalesOrderItemUpdateLineReq.FIELD_CUSTOMER_ORDER_TITLE -> TEXT_255;
+            case SalesOrderItemUpdateLineReq.FIELD_CUSTOMER_ORDER_NO,
+                 SalesOrderItemUpdateLineReq.FIELD_CUSTOMER_PROJECT_NO,
+                 SalesOrderItemUpdateLineReq.FIELD_MANUFACTURING_PROCESS_TYPE,
+                 SalesOrderItemUpdateLineReq.FIELD_RESERVED_FIELD_1,
+                 SalesOrderItemUpdateLineReq.FIELD_RESERVED_FIELD_2,
+                 SalesOrderItemUpdateLineReq.FIELD_RESERVED_FIELD_3,
+                 SalesOrderItemUpdateLineReq.FIELD_INTERNAL_PROJECT_NO -> TEXT_120;
+            default -> TEXT_255;
+        };
+        return validateText(raw, maxLength, label(field));
+    }
+
+    private void applyReplacementValue(SalesOrderItemUpdateLineReq line, String field, String value) {
+        switch (field) {
+            case SalesOrderItemUpdateLineReq.FIELD_CUSTOMER_ORDER_TITLE -> line.setCustomerOrderTitle(value);
+            case SalesOrderItemUpdateLineReq.FIELD_CUSTOMER_ORDER_NO -> line.setCustomerOrderNo(value);
+            case SalesOrderItemUpdateLineReq.FIELD_CUSTOMER_PROJECT_NO -> line.setCustomerProjectNo(value);
+            case SalesOrderItemUpdateLineReq.FIELD_MANUFACTURING_PROCESS_TYPE -> line.setManufacturingProcessType(value);
+            case SalesOrderItemUpdateLineReq.FIELD_RESERVED_FIELD_1 -> line.setReservedField1(value);
+            case SalesOrderItemUpdateLineReq.FIELD_RESERVED_FIELD_2 -> line.setReservedField2(value);
+            case SalesOrderItemUpdateLineReq.FIELD_RESERVED_FIELD_3 -> line.setReservedField3(value);
+            case SalesOrderItemUpdateLineReq.FIELD_INTERNAL_PROJECT_NO -> line.setInternalProjectNo(value);
+            case SalesOrderItemUpdateLineReq.FIELD_ORDER_TYPE -> line.setOrderType(value);
+            default -> throw new RuntimeException("不支持整单替换字段：" + field);
+        }
+    }
+
+    private void changedIfDate(LocalDate current, LocalDate value, Set<String> changed, String field) {
+        if (!Objects.equals(current, value)) {
+            changed.add(field);
+        }
+    }
+
+    private void validateQty(Integer qty) {
+        if (qty == null || qty < 0) {
+            throw new RuntimeException("数量必须大于等于 0");
+        }
+    }
+
+    private void validatePrice(BigDecimal price, String label) {
+        if (price == null || price.compareTo(BigDecimal.ZERO) < 0) {
+            throw new RuntimeException(label + "必须大于等于 0");
+        }
+    }
+
+    private BigDecimal loadNormalTaxFactor() {
+        if (pricingMarkupFeeMapper == null) {
+            throw new RuntimeException("未配置材料工艺税率，不能进行价格换算");
+        }
+        QueryWrapper<DictPricingMarkupFee> query = new QueryWrapper<>();
+        query.eq("pricing_scope", "NORMAL")
+                .eq("fee_category", "TAX")
+                .eq("enabled", true)
+                .orderByAsc("sort_no")
+                .orderByAsc("id");
+        List<DictPricingMarkupFee> fees = pricingMarkupFeeMapper.selectList(query);
+        if (fees == null || fees.isEmpty()) {
+            throw new RuntimeException("未配置启用的材料工艺税率，不能进行价格换算");
+        }
+        BigDecimal totalRate = fees.stream()
+                .filter(Objects::nonNull)
+                .map(DictPricingMarkupFee::getRatePercent)
+                .filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        if (totalRate.compareTo(BigDecimal.ZERO) < 0) {
+            throw new RuntimeException("材料工艺税率不能为负数");
+        }
+        return BigDecimal.ONE.add(totalRate.divide(ONE_HUNDRED, 10, RoundingMode.HALF_UP));
+    }
+
+    private BigDecimal unitPrice(SalesOrderItem item, String field) {
+        if (SalesOrderItemUpdateLineReq.FIELD_UNTAXED_UNIT_PRICE.equals(field)) {
+            return item.getUntaxedUnitPrice();
+        }
+        if (SalesOrderItemUpdateLineReq.FIELD_TAX_INCLUDED_UNIT_PRICE.equals(field)) {
+            return item.getTaxIncludedUnitPrice();
+        }
+        throw new IllegalArgumentException("Unsupported price field: " + field);
+    }
+
+    private void setUnitPrice(SalesOrderItem item, String field, BigDecimal value) {
+        if (SalesOrderItemUpdateLineReq.FIELD_UNTAXED_UNIT_PRICE.equals(field)) {
+            item.setUntaxedUnitPrice(value);
+            return;
+        }
+        if (SalesOrderItemUpdateLineReq.FIELD_TAX_INCLUDED_UNIT_PRICE.equals(field)) {
+            item.setTaxIncludedUnitPrice(value);
+            return;
+        }
+        throw new IllegalArgumentException("Unsupported price field: " + field);
+    }
+
+    private String itemLineLabel(SalesOrderItem item) {
+        return item.getLineNo() == null ? String.valueOf(item.getId()) : String.valueOf(item.getLineNo());
+    }
+
+    private BigDecimal lineTotal(BigDecimal unitPrice, Integer qty) {
+        return unitPrice.multiply(BigDecimal.valueOf(qty)).setScale(TOTAL_PRICE_SCALE, RoundingMode.HALF_UP);
+    }
+
+    private void recalculateDerivedFields(SalesOrderItem item) {
+        Integer qty = item.getQty();
+        if (qty == null) {
+            item.setUntaxedTotalPrice(null);
+            item.setTaxIncludedTotalPrice(null);
+            item.setRemainingQty(0);
+            item.setUnshippedQty(0);
+            return;
+        }
+        if (item.getUntaxedUnitPrice() != null) {
+            item.setUntaxedTotalPrice(lineTotal(item.getUntaxedUnitPrice(), qty));
+        } else {
+            item.setUntaxedTotalPrice(null);
+        }
+        if (item.getTaxIncludedUnitPrice() != null) {
+            item.setTaxIncludedTotalPrice(lineTotal(item.getTaxIncludedUnitPrice(), qty));
+        } else {
+            item.setTaxIncludedTotalPrice(null);
+        }
+        item.setRemainingQty(Math.max(0, qty - safeInt(item.getReleasedQty())));
+        item.setUnshippedQty(Math.max(0, qty - safeInt(item.getShippedQty())));
+    }
+
+    private void persistHeader(SalesOrderHeader header, LocalDateTime updatedAt) {
+        UpdateWrapper<SalesOrderHeader> update = new UpdateWrapper<>();
+        update.eq("id", header.getId())
+                .set("document_type_code", header.getDocumentTypeCode())
+                .set("sales_order_date", header.getSalesOrderDate())
+                .set("customer_order_no", header.getCustomerOrderNo())
+                .set("customer_project_no", header.getCustomerProjectNo())
+                .set("customer_order_title", header.getCustomerOrderTitle())
+                .set("manufacturing_process_type", header.getManufacturingProcessType())
+                .set("reserved_field_1", header.getReservedField1())
+                .set("reserved_field_2", header.getReservedField2())
+                .set("reserved_field_3", header.getReservedField3())
+                .set("order_type", header.getOrderType())
+                .set("internal_project_no", header.getInternalProjectNo())
+                .set("updated_at", updatedAt);
+        if (headerMapper.update(null, update) <= 0) {
+            throw new RuntimeException("销售订单信息保存失败，请刷新后重试");
+        }
+    }
+
+    private void persistOrderDefaultItem(SalesOrderHeader header, SalesOrderItem item, LocalDateTime updatedAt) {
+        UpdateWrapper<SalesOrderItem> update = new UpdateWrapper<>();
+        update.eq("id", item.getId())
+                .eq("sales_order_id", header.getId())
+                .set("sales_order_date", item.getSalesOrderDate())
+                .set("customer_order_no", item.getCustomerOrderNo())
+                .set("customer_project_no", item.getCustomerProjectNo())
+                .set("customer_order_title", item.getCustomerOrderTitle())
+                .set("manufacturing_process_type", item.getManufacturingProcessType())
+                .set("reserved_field_1", item.getReservedField1())
+                .set("reserved_field_2", item.getReservedField2())
+                .set("reserved_field_3", item.getReservedField3())
+                .set("order_type", item.getOrderType())
+                .set("internal_project_no", item.getInternalProjectNo())
+                .set("updated_at", updatedAt);
+        if (itemMapper.update(null, update) <= 0) {
+            throw new RuntimeException("销售订单零件默认字段保存失败，请刷新后重试");
+        }
+    }
+
+    private void persistItem(SalesOrderHeader header, SalesOrderItem item, LocalDateTime updatedAt) {
+        UpdateWrapper<SalesOrderItem> update = new UpdateWrapper<>();
+        update.eq("id", item.getId())
+                .eq("sales_order_id", header.getId())
+                .set("qty", item.getQty())
+                .set("customer_delivery_date", item.getCustomerDeliveryDate())
+                .set("internal_delivery_date", item.getInternalDeliveryDate())
+                .set("untaxed_unit_price", item.getUntaxedUnitPrice())
+                .set("tax_included_unit_price", item.getTaxIncludedUnitPrice())
+                .set("material_name", item.getMaterialName())
+                .set("surface_treatment", item.getSurfaceTreatment())
+                .set("customer_order_no", item.getCustomerOrderNo())
+                .set("customer_project_no", item.getCustomerProjectNo())
+                .set("customer_order_title", item.getCustomerOrderTitle())
+                .set("manufacturing_process_type", item.getManufacturingProcessType())
+                .set("reserved_field_1", item.getReservedField1())
+                .set("reserved_field_2", item.getReservedField2())
+                .set("reserved_field_3", item.getReservedField3())
+                .set("internal_project_no", item.getInternalProjectNo())
+                .set("order_type", item.getOrderType())
+                .set("description", item.getDescription())
+                .set("status", item.getStatus())
+                .set("remark", item.getRemark())
+                .set("untaxed_total_price", item.getUntaxedTotalPrice())
+                .set("tax_included_total_price", item.getTaxIncludedTotalPrice())
+                .set("remaining_qty", item.getRemainingQty())
+                .set("unshipped_qty", item.getUnshippedQty())
+                .set("updated_at", updatedAt);
+        if (itemMapper.update(null, update) <= 0) {
+            throw new RuntimeException("销售订单零件行保存失败，请刷新后重试");
+        }
+    }
+
+    private void assertDataScope(SalesOrderHeader header) {
+        if (dataScopeService != null) {
+            dataScopeService.assertCanAccessSalesOrder(header);
+        }
+    }
+
+    private void assertEditable(SalesOrderHeader header) {
+        String status = trimToNull(header.getU9SyncStatus());
+        if (STATUS_SYNCING.equals(status) || STATUS_PENDING_CONFIRMATION.equals(status)) {
+            throw new RuntimeException("U9 状态为" + status + "，不能修改销售订单");
+        }
+    }
+
+    private void auditSuccess(
+            String action,
+            SalesOrderHeader header,
+            Map<String, Object> before,
+            Map<String, Object> after,
+            Set<String> changedFields,
+            long durationMs) {
+        if (auditService == null || changedFields.isEmpty()) {
+            return;
+        }
+        Map<String, Object> safeAfter = after == null ? new LinkedHashMap<>() : new LinkedHashMap<>(after);
+        safeAfter.put("salesOrderId", header.getId());
+        safeAfter.put("salesOrderNo", header.getSalesOrderNo());
+        safeAfter.put("changedFields", new ArrayList<>(changedFields));
+        safeAfter.put("durationMs", durationMs);
+        auditService.record(
+                action,
+                TARGET_TYPE,
+                header.getId(),
+                before,
+                safeAfter,
+                "MARKET",
+                "SUCCESS",
+                AuditService.labelForAction(action),
+                null);
+    }
+
+    private Map<String, Object> itemAuditSummary(SalesOrderHeader header, int updatedCount, Set<String> changedFields) {
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("salesOrderId", header.getId());
+        summary.put("salesOrderNo", header.getSalesOrderNo());
+        summary.put("updatedCount", updatedCount);
+        summary.put("changedFields", new ArrayList<>(changedFields));
+        return summary;
+    }
+
+    private Map<String, Object> orderSnapshot(SalesOrderHeader header) {
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("salesOrderId", header.getId());
+        data.put("salesOrderNo", header.getSalesOrderNo());
+        data.put("documentTypeCode", header.getDocumentTypeCode());
+        data.put("salesOrderDate", header.getSalesOrderDate());
+        data.put("customerOrderNo", header.getCustomerOrderNo());
+        data.put("customerProjectNo", header.getCustomerProjectNo());
+        data.put("manufacturingProcessType", header.getManufacturingProcessType());
+        data.put("reservedField1", header.getReservedField1());
+        data.put("reservedField2", header.getReservedField2());
+        data.put("reservedField3", header.getReservedField3());
+        data.put("customerOrderTitle", header.getCustomerOrderTitle());
+        data.put("orderType", header.getOrderType());
+        data.put("internalProjectNo", header.getInternalProjectNo());
+        data.put("u9SyncStatus", header.getU9SyncStatus());
+        return data;
+    }
+
+    private SalesOrderMaintenanceUpdateResp response(
+            SalesOrderHeader header,
+            int updatedCount,
+            Set<String> changedFields,
+            String message) {
+        SalesOrderMaintenanceUpdateResp resp = new SalesOrderMaintenanceUpdateResp();
+        resp.setSuccess(true);
+        resp.setMessage(message);
+        resp.setSalesOrderId(header.getId());
+        resp.setSalesOrderNo(header.getSalesOrderNo());
+        resp.setUpdatedCount(updatedCount);
+        resp.setChangedFields(new ArrayList<>(changedFields));
+        return resp;
+    }
+
+    private boolean sameDecimal(BigDecimal left, BigDecimal right) {
+        if (left == null || right == null) {
+            return left == right;
+        }
+        return left.compareTo(right) == 0;
+    }
+
+    private int safeInt(Integer value) {
+        return value == null ? 0 : value;
+    }
+
+    private String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
+    }
+
+    private String label(String field) {
+        if (SalesOrderMaintenanceOrderUpdateReq.FIELD_DOCUMENT_TYPE_CODE.equals(field)) {
+            return "单据类型";
+        }
+        if (SalesOrderMaintenanceOrderUpdateReq.FIELD_CUSTOMER_ORDER_TITLE.equals(field)) {
+            return "客户下单抬头";
+        }
+        if (SalesOrderItemUpdateLineReq.FIELD_VERSION.equals(field)) {
+            return "版本";
+        }
+        if (SalesOrderItemUpdateLineReq.FIELD_MATERIAL_NAME.equals(field)) {
+            return "材料";
+        }
+        if (SalesOrderItemUpdateLineReq.FIELD_SURFACE_TREATMENT.equals(field)) {
+            return "表面处理";
+        }
+        if (SalesOrderItemUpdateLineReq.FIELD_CUSTOMER_ORDER_NO.equals(field)) {
+            return "客户订单号";
+        }
+        if (SalesOrderItemUpdateLineReq.FIELD_CUSTOMER_PROJECT_NO.equals(field)) {
+            return "客户项目号";
+        }
+        if (SalesOrderItemUpdateLineReq.FIELD_MANUFACTURING_PROCESS_TYPE.equals(field)) {
+            return "制造加工类型";
+        }
+        if (SalesOrderItemUpdateLineReq.FIELD_RESERVED_FIELD_1.equals(field)) {
+            return "备用字段1";
+        }
+        if (SalesOrderItemUpdateLineReq.FIELD_RESERVED_FIELD_2.equals(field)) {
+            return "备用字段2";
+        }
+        if (SalesOrderItemUpdateLineReq.FIELD_RESERVED_FIELD_3.equals(field)) {
+            return "备用字段3";
+        }
+        if (SalesOrderItemUpdateLineReq.FIELD_CUSTOMER_ORDER_TITLE.equals(field)) {
+            return "客户下单抬头";
+        }
+        if (SalesOrderItemUpdateLineReq.FIELD_INTERNAL_PROJECT_NO.equals(field)) {
+            return "内部项目号";
+        }
+        if (SalesOrderItemUpdateLineReq.FIELD_DESCRIPTION.equals(field)) {
+            return "物料描述";
+        }
+        if (SalesOrderItemUpdateLineReq.FIELD_STATUS.equals(field)) {
+            return "订单状态";
+        }
+        if (SalesOrderItemUpdateLineReq.FIELD_ORDER_TYPE.equals(field)) {
+            return "订单类型";
+        }
+        if (SalesOrderItemUpdateLineReq.FIELD_REMARK.equals(field)) {
+            return "备注";
+        }
+        return field;
+    }
+}

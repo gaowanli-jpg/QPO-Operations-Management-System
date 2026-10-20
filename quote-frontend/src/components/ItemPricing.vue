@@ -1,0 +1,3252 @@
+<template>
+  <div class="erp-page pricing-workbench-page">
+    <header class="erp-page-header pricing-page-header">
+      <div>
+        <h1 class="erp-page-title">逐件工艺路线与核价中心</h1>
+        <p class="erp-page-description">
+          按零件逐项核算材料、工艺、费用与报价，完成后提交市场报价。
+        </p>
+      </div>
+      <div class="erp-page-actions pricing-page-actions">
+        <el-tag type="success" size="large" v-if="rfqId">询价单 ID: {{ rfqId }}</el-tag>
+        <el-tag type="warning" size="large" v-if="isSupplementalDrawingScope">补图待核价</el-tag>
+        <el-tag size="large" v-if="quoteData?.orderInfo?.status">订单状态：{{ quoteData.orderInfo.status }}</el-tag>
+      </div>
+    </header>
+
+    <section class="erp-surface pricing-context-card">
+      <div class="pricing-context-copy">
+        <span class="pricing-context-kicker">当前核价任务</span>
+        <strong>RFQ {{ rfqId || '-' }}</strong>
+        <p v-if="isSupplementalDrawingScope">补图待核价完成后进入市场补充报价待确认，不改变整单历史提单状态。</p>
+        <p v-else>继承工程全局配置后，在这里完成每个零件的材料与工艺核价。</p>
+      </div>
+      <div class="pricing-metric-grid">
+        <div class="pricing-metric">
+          <span class="pricing-metric-label">零件总数</span>
+          <strong class="pricing-metric-value">{{ pricingItemTotal }}</strong>
+        </div>
+        <div class="pricing-metric">
+          <span class="pricing-metric-label">已核价</span>
+          <strong class="pricing-metric-value">
+            {{ pricedItemTotal }}
+          </strong>
+        </div>
+        <div class="pricing-metric">
+          <span class="pricing-metric-label">重复件</span>
+          <strong class="pricing-metric-value">
+            {{ repeatItemTotal }}
+          </strong>
+        </div>
+      </div>
+    </section>
+
+    <section class="erp-toolbar pricing-toolbar">
+      <div class="erp-toolbar-group pricing-toolbar-copy">
+        <span class="pricing-toolbar-title">逐件核价清单</span>
+        <small>先处理有图纸零件，再提交到市场报价处理。</small>
+      </div>
+      <div class="erp-toolbar-group pricing-toolbar-actions">
+        <el-button @click="returnToGlobalSetup">返回修改全局设定</el-button>
+        <el-button
+          v-permission="ENGINEER_PRICING_EXPORT_SHEET_PERMISSION"
+          type="success"
+          plain
+          :disabled="!canExportPricingSheet || exportPricingSheetLoading"
+          :loading="exportPricingSheetLoading"
+          @click="exportPricingSheet"
+        >
+          生成核价单
+        </el-button>
+        <el-button
+          v-permission="'engineer:pricing:refresh'"
+          type="warning"
+          plain
+          :disabled="!canRefreshQuotes || refreshLoading || completeLoading || repeatApplyLoading"
+          :loading="refreshLoading"
+          @click="refreshOrderQuotes"
+        >
+          一键刷新核价
+        </el-button>
+        <el-button
+          v-permission="'engineer:pricing:complete-order'"
+          type="primary"
+          :disabled="!canCompleteQuote || completeLoading || refreshLoading || repeatApplyLoading"
+          :loading="completeLoading"
+          @click="completeOrderQuote"
+        >
+          完成核价提交
+        </el-button>
+      </div>
+    </section>
+
+    <section class="erp-table-surface pricing-table-surface">
+      <div v-if="!quoteData" class="erp-empty-state pricing-empty-state" v-loading="loading">
+        <el-empty description="正在拉取市场部数据..." />
+      </div>
+
+      <!-- 数据大表格 -->
+      <div v-else class="erp-table-body pricing-table-body">
+        <el-table
+          ref="pricingTableRef"
+          :data="pagedPricingItems"
+          row-key="id"
+          border
+          stripe
+          class="pricing-table"
+          height="450"
+        >
+          <el-table-column prop="partNo" label="图号" width="140" fixed show-overflow-tooltip />
+          <el-table-column prop="version" label="版本" width="80" align="center" />
+          <el-table-column prop="description" label="名称/描述" min-width="150" show-overflow-tooltip />
+          <el-table-column prop="qty" label="数量" width="70" align="center" />
+          <el-table-column label="类型" width="90" align="center">
+            <template #default="scope">
+              <el-tag :type="isAssemblyItem(scope.row) ? 'warning' : 'info'" size="small">
+                {{ isAssemblyItem(scope.row) ? '组合件' : '普通件' }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="材料毛重(kg)" width="120" align="right">
+            <template #default="scope">{{ formatWeight(scope.row.materialGrossWeight) }}</template>
+          </el-table-column>
+          <el-table-column label="零件净重(kg)" width="120" align="right">
+            <template #default="scope">{{ formatWeight(scope.row.partNetWeight) }}</template>
+          </el-table-column>
+          <el-table-column label="重复" width="90" align="center">
+            <template #default="scope">
+              <el-tag v-if="repeatItemMap.has(itemIdentityKey(scope.row))" type="success" size="small">重复</el-tag>
+              <el-tag v-else type="info" size="small">新件</el-tag>
+            </template>
+          </el-table-column>
+
+          <el-table-column label="图纸" width="90" align="center">
+            <template #default="scope">
+              <div v-if="scope.row.drawingUrl" class="erp-table-actions pricing-row-actions">
+                <el-button
+                  type="success"
+                  size="small"
+                  plain
+                  @click="openPdfPreview(scope.row.drawingUrl, scope.row.partNo)"
+                >
+                  图纸
+                </el-button>
+              </div>
+              <el-tag v-else type="info" size="small">无图</el-tag>
+            </template>
+          </el-table-column>
+
+          <el-table-column label="核算总成本" width="110" align="right">
+            <template #default="scope">
+              <span v-if="scope.row.baseCost">¥ {{ scope.row.baseCost.toFixed(2) }}</span><span v-else class="muted-price">待核算</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="含税单价" width="110" align="right">
+            <template #default="scope"><span v-if="scope.row.taxIncludedUnitPrice != null" class="success-price">¥ {{ scope.row.taxIncludedUnitPrice.toFixed(2) }}</span></template>
+          </el-table-column>
+          <el-table-column label="含税金额" width="110" align="right">
+            <template #default="scope"><span v-if="scope.row.taxIncludedTotalPrice != null" class="danger-price">¥ {{ scope.row.taxIncludedTotalPrice.toFixed(2) }}</span></template>
+          </el-table-column>
+          <el-table-column prop="status" label="状态" width="100" align="center" />
+          <el-table-column label="操作" width="120" align="center" fixed="right">
+            <template #default="scope">
+              <div class="erp-table-actions pricing-row-actions">
+                <el-button v-permission="'engineer:pricing:save-item'"
+                  v-if="scope.row.drawingUrl"
+                  type="primary"
+                  size="small"
+                  @click="openQuoteDialog(scope.row)"
+                  :loading="isItemQuoteSaving(scope.row)"
+                  :disabled="orderPricingActionPending"
+                >
+                  去核价
+                </el-button>
+                <el-tag v-else type="warning" size="small">无图不核价</el-tag>
+              </div>
+            </template>
+          </el-table-column>
+        </el-table>
+        <div v-if="quoteData.itemList?.length" class="erp-pagination">
+          <el-pagination
+            v-model:current-page="pricingListPagination.page"
+            v-model:page-size="pricingListPagination.pageSize"
+            :page-sizes="CLIENT_PAGE_SIZES"
+            :pager-count="7"
+            :total="pricingItemTotal"
+            layout="total, sizes, prev, pager, next, jumper"
+            background
+            @size-change="pricingListPagination.page = 1"
+          />
+        </div>
+      </div>
+    </section>
+
+    <!-- 工程师核价控制台 -->
+    <el-dialog
+      v-model="dialogVisible"
+      title="工程师精准核价控制台"
+      width="95vw"
+      top="3vh"
+      class="pricing-workbench-dialog"
+      :close-on-click-modal="false"
+    >
+      <div class="pricing-workbench">
+        <div class="pricing-form-pane">
+          <!-- 弹窗顶部状态条：左边是信息，右边是图纸操作 -->
+          <div class="dialog-header-bar">
+            <el-alert
+              :title="`当前核价：${currentRow?.partNo} / ${currentRow?.version || '-'} - ${currentRow?.description} (需生产: ${currentRow?.qty} 件)`"
+              type="success"
+              show-icon
+              :closable="false"
+              class="current-item-alert"
+            />
+            <div v-if="currentRow?.drawingUrl" class="erp-table-actions dialog-drawing-actions">
+              <el-button type="warning" plain @click="openPdfPreview(currentRow.drawingUrl, currentRow.partNo)">
+                弹窗预览
+              </el-button>
+              <el-button type="primary" plain @click="openDrawingInNewWindow(currentRow.drawingUrl)">
+                新窗口打开图纸
+              </el-button>
+            </div>
+          </div>
+
+          <section class="erp-dialog-section pricing-workbench-section pricing-mode-section">
+            <div class="form-section-title pricing-section-title">核价模式</div>
+            <el-form label-width="100px" class="pricing-section-form quote-mode-form">
+              <el-form-item label="核价类型">
+                <el-radio-group v-model="quoteMode">
+                  <el-radio-button label="NORMAL">普通零件</el-radio-button>
+                  <el-radio-button label="ASSEMBLY">组合件</el-radio-button>
+                </el-radio-group>
+              </el-form-item>
+            </el-form>
+          </section>
+
+          <section class="erp-dialog-section pricing-workbench-section pricing-item-note-section">
+            <div class="pricing-item-note-header">
+              <div class="form-section-title pricing-section-title">零件备注与信息</div>
+            </div>
+            <el-form label-width="100px" class="pricing-section-form pricing-item-note-form">
+              <el-form-item label="零件备注">
+                <div class="pricing-item-note-control">
+                  <el-input
+                    v-model="itemRemarkDraft"
+                    type="textarea"
+                    :rows="2"
+                    maxlength="500"
+                    show-word-limit
+                    placeholder="填写当前零件备注"
+                  />
+                  <el-button
+                    class="pricing-item-info-inline-button"
+                    type="primary"
+                    plain
+                    :disabled="!currentRow?.id"
+                    @click="itemInfoDialogVisible = true"
+                  >查看零件信息</el-button>
+                </div>
+              </el-form-item>
+            </el-form>
+          </section>
+
+          <template v-if="quoteMode === 'NORMAL'">
+          <section class="erp-dialog-section pricing-workbench-section pricing-material-section">
+            <!-- 模块A：材料 -->
+            <div class="form-section-title pricing-section-title">模块 A：材料成本核算（已继承全局设定）</div>
+            <el-form label-width="100px" class="pricing-section-form">
+              <el-row :gutter="20">
+                <el-col :span="12">
+                  <el-form-item label="材质选择">
+                    <el-button class="picker-trigger full-width" :title="selectedMaterialLabel" @click="materialPickerVisible = true">
+                      <span class="picker-trigger-text" :title="selectedMaterialLabel">{{ selectedMaterialLabel }}</span>
+                      <span class="picker-trigger-action">选择</span>
+                    </el-button>
+                  </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                  <el-form-item label="毛坯形态">
+                    <el-radio-group v-model="matForm.shape">
+                      <el-radio label="板材">板/块</el-radio><el-radio label="棒材">棒材</el-radio><el-radio label="管材">管材</el-radio>
+                    </el-radio-group>
+                  </el-form-item>
+                </el-col>
+              </el-row>
+
+              <!-- 尺寸填写 -->
+              <el-row :gutter="20" class="dimension-row">
+                <el-col :span="12" v-if="matForm.shape === '板材'"><el-form-item label="长(m)"><el-input-number v-model="matForm.L" :min="0" :step="0.01" :precision="4" placeholder="请输入" controls-position="right" class="full-width" /></el-form-item></el-col>
+                <el-col :span="12" v-if="matForm.shape === '板材'"><el-form-item label="宽(m)"><el-input-number v-model="matForm.W" :min="0" :step="0.01" :precision="4" placeholder="请输入" controls-position="right" class="full-width" /></el-form-item></el-col>
+                <el-col :span="12" v-if="matForm.shape === '板材'"><el-form-item label="厚(m)"><el-input-number v-model="matForm.T" :min="0" :step="0.01" :precision="4" placeholder="请输入" controls-position="right" class="full-width" /></el-form-item></el-col>
+                <el-col :span="12" v-if="matForm.shape !== '板材'"><el-form-item label="长度(m)"><el-input-number v-model="matForm.L" :min="0" :step="0.01" :precision="4" placeholder="请输入" controls-position="right" class="full-width" /></el-form-item></el-col>
+                <el-col :span="12" v-if="matForm.shape !== '板材'"><el-form-item label="外径(m)"><el-input-number v-model="matForm.outR" :min="0" :step="0.01" :precision="4" placeholder="请输入" controls-position="right" class="full-width" /></el-form-item></el-col>
+                <el-col :span="12" v-if="matForm.shape === '管材'"><el-form-item label="内径(m)"><el-input-number v-model="matForm.inR" :min="0" :step="0.01" :precision="4" placeholder="请输入" controls-position="right" class="full-width" /></el-form-item></el-col>
+              </el-row>
+              <el-row :gutter="20" class="weight-row">
+                <el-col :span="12">
+                  <el-form-item label="客户权重(%)">
+                    <div class="customer-weight-control">
+                      <el-input-number
+                        v-model="customerWeightRatePercent"
+                        :min="0"
+                        :step="1"
+                        :precision="2"
+                        placeholder="请输入"
+                        controls-position="right"
+                        class="customer-weight-input"
+                        :disabled="customerWeightSavePending"
+                      />
+                      <el-button
+                        v-permission="'engineer:dict:fee-manage'"
+                        type="primary"
+                        plain
+                        :loading="customerWeightSavePending"
+                        :disabled="!customerWeightDirty || customerWeightSavePending"
+                        @click="() => saveCustomerWeightRate()"
+                      >保存</el-button>
+                    </div>
+                  </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                  <el-form-item label="零件净重(kg)">
+                    <el-input-number
+                      v-model="matForm.netWeight"
+                      :min="0"
+                      :step="0.01"
+                      :precision="3"
+                      placeholder="请输入"
+                      controls-position="right"
+                      class="full-width"
+                    />
+                  </el-form-item>
+                </el-col>
+              </el-row>
+              <div class="pricing-workbench-summary material-summary">
+                <table class="material-summary-table" aria-label="材料成本核算汇总">
+                  <tbody>
+                    <tr>
+                      <th scope="row" title="毛坯体积">毛坯体积</th>
+                      <td :title="`${calculatedVolume.toFixed(6)} m³`">{{ calculatedVolume.toFixed(6) }} m³</td>
+                      <th scope="row" title="毛坯重量">毛坯重量</th>
+                      <td :title="`${calculatedWeight.toFixed(3)} kg`">{{ calculatedWeight.toFixed(3) }} kg</td>
+                    </tr>
+                    <tr>
+                      <th scope="row" title="材料单价">材料单价</th>
+                      <td :title="`${currentUnitPrice.toFixed(2)} 元/kg`">{{ currentUnitPrice.toFixed(2) }} 元/kg</td>
+                      <th scope="row" title="预测本件材料费">预测本件材料费</th>
+                      <td :title="`¥ ${calculatedMaterialCost.toFixed(2)}`">¥ {{ calculatedMaterialCost.toFixed(2) }}</td>
+                    </tr>
+                    <tr v-if="quoteMode === 'NORMAL'">
+                      <th scope="row" title="未税单价">未税单价</th>
+                      <td :title="`¥ ${normalUntaxedUnitPricePreview.toFixed(2)}`">¥ {{ normalUntaxedUnitPricePreview.toFixed(2) }}</td>
+                      <th scope="row" title="含税单价">含税单价</th>
+                      <td :title="`¥ ${normalTaxIncludedUnitPricePreview.toFixed(2)}`">¥ {{ normalTaxIncludedUnitPricePreview.toFixed(2) }}</td>
+                    </tr>
+                    <tr v-if="quoteMode === 'NORMAL'">
+                      <th scope="row" title="未税金额">未税金额</th>
+                      <td :title="`¥ ${normalUntaxedTotalPricePreview.toFixed(2)}`">¥ {{ normalUntaxedTotalPricePreview.toFixed(2) }}</td>
+                      <th scope="row" title="含税金额">含税金额</th>
+                      <td :title="`¥ ${normalTaxIncludedTotalPricePreview.toFixed(2)}`">¥ {{ normalTaxIncludedTotalPricePreview.toFixed(2) }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </el-form>
+          </section>
+
+          <!-- 模块B：工艺 -->
+          <section class="erp-dialog-section pricing-workbench-section pricing-process-section">
+            <div class="process-title-row">
+              <div class="form-section-title process-title pricing-section-title">模块 B：工艺路线排程（已继承全局设定）</div>
+              <el-button type="primary" plain size="small" :icon="Plus" @click="addProcess">
+                新增工序
+              </el-button>
+            </div>
+            <div class="process-box">
+              <el-empty v-if="processRoute.length === 0" description="暂无工艺路线" :image-size="60">
+                <el-button type="primary" plain size="small" :icon="Plus" @click="addProcess">新增工序</el-button>
+              </el-empty>
+              <el-row :gutter="10" v-for="(proc, index) in processRoute" :key="proc.rowKey || index" class="process-row">
+                <el-col :span="7">
+                  <el-button class="picker-trigger full-width" :title="formatProcessLabel(proc, '选择工序')" @click="openProcessPicker(index)">
+                    <span :class="proc.processName ? 'picker-trigger-text' : 'picker-trigger-placeholder'" :title="formatProcessLabel(proc, '选择工序')">
+                      {{ formatProcessLabel(proc, '选择工序') }}
+                    </span>
+                    <span class="picker-trigger-action">选择</span>
+                  </el-button>
+                </el-col>
+                <el-col :span="3">
+                  <el-tag :type="proc.calcType === '非工时费用' ? 'warning' : 'info'">{{ proc.calcType || '工时' }}</el-tag>
+                </el-col>
+                <el-col :span="6">
+                  <el-input-number
+                    v-model="proc.inputVal"
+                    :min="0"
+                    :step="proc.calcType === '非工时费用' ? 10 : 0.5"
+                    placeholder="请输入"
+                    class="full-width"
+                  />
+                </el-col>
+                <el-col :span="8">
+                  <div class="erp-table-actions process-row-actions">
+                    <el-tooltip content="在当前行前插入工序" placement="top">
+                      <el-button size="small" plain :icon="Plus" @click="insertProcess(index)">插入</el-button>
+                    </el-tooltip>
+                    <el-tooltip :content="index === 0 ? '第一道工艺无法上移' : '与上一道工艺交换顺序'" placement="top">
+                      <el-button size="small" plain :icon="Top" :disabled="index === 0" @click="moveProcessUp(index)">上移</el-button>
+                    </el-tooltip>
+                    <el-tooltip content="删除当前工序" placement="top">
+                      <el-button size="small" type="danger" plain :icon="Delete" @click="removeProcess(index)">删除</el-button>
+                    </el-tooltip>
+                  </div>
+                </el-col>
+              </el-row>
+            </div>
+          </section>
+          </template>
+
+          <section v-else class="erp-dialog-section pricing-workbench-section pricing-assembly-section assembly-box">
+            <div class="form-section-title pricing-section-title">模块 A：组合件子件汇总</div>
+            <el-alert
+              type="info"
+              :closable="false"
+              title="组合件父件价格 = 子件含税单价汇总 + 组装费 + 组装件百分比费用；费用项在材料与工艺管理中维护。"
+              class="assembly-tip"
+            />
+            <div class="erp-table-actions assembly-actions">
+              <el-button type="primary" plain size="small" :icon="Plus" @click="openAssemblyChildPicker">选择子件</el-button>
+            </div>
+            <el-empty v-if="assemblyChildren.length === 0" description="暂无子件关系" :image-size="60">
+              <el-button type="primary" plain size="small" :icon="Plus" @click="openAssemblyChildPicker">选择子件</el-button>
+            </el-empty>
+            <el-row
+              v-for="(child, index) in assemblyChildren"
+              :key="child.rowKey || index"
+              :gutter="10"
+              class="assembly-row"
+            >
+              <el-col :span="10">
+                <div class="assembly-child-info">
+                  <div class="assembly-child-title" :title="formatAssemblyChildTitle(child)">{{ formatAssemblyChildTitle(child) }}</div>
+                  <div class="assembly-child-desc" :title="child.description || '-'">{{ child.description || '-' }}</div>
+                </div>
+              </el-col>
+              <el-col :span="4">
+                <el-input-number
+                  v-model="child.qtyPerParent"
+                  :min="0.0001"
+                  :step="1"
+                  :precision="4"
+                  controls-position="right"
+                  class="full-width"
+                />
+              </el-col>
+              <el-col :span="6">
+                <div class="assembly-line-price">
+                  {{ child.taxIncludedUnitPrice != null ? `¥ ${(Number(child.taxIncludedUnitPrice) * Number(child.qtyPerParent || 0)).toFixed(2)}` : '子件未核价' }}
+                </div>
+              </el-col>
+              <el-col :span="4">
+                <div class="erp-table-actions assembly-child-actions">
+                  <el-button size="small" type="danger" plain :icon="Delete" @click="removeAssemblyChild(index)">删除</el-button>
+                </div>
+              </el-col>
+            </el-row>
+            <el-form label-width="100px" class="pricing-section-form assembly-fee-form">
+              <el-form-item label="客户权重(%)">
+                <div class="assembly-customer-weight-control">
+                  <el-input-number
+                    v-model="assemblyCustomerWeightRatePercent"
+                    :min="0"
+                    :step="1"
+                    :precision="2"
+                    placeholder="请输入"
+                    controls-position="right"
+                    class="assembly-pricing-number-input"
+                    :disabled="assemblyCustomerWeightSavePending"
+                  />
+                  <el-button
+                    v-permission="'engineer:dict:fee-manage'"
+                    type="primary"
+                    plain
+                    :loading="assemblyCustomerWeightSavePending"
+                    :disabled="!assemblyCustomerWeightDirty || assemblyCustomerWeightSavePending"
+                    @click="() => saveAssemblyCustomerWeightRate()"
+                  >保存</el-button>
+                </div>
+              </el-form-item>
+              <el-form-item label="组装费">
+                <div class="assembly-fee-control">
+                  <el-input-number
+                    v-model="assemblyFee"
+                    :min="0"
+                    :step="10"
+                    :precision="2"
+                    placeholder="请输入"
+                    controls-position="right"
+                    class="assembly-pricing-number-input"
+                  />
+                  <span class="assembly-fee-spacer" aria-hidden="true"></span>
+                </div>
+              </el-form-item>
+            </el-form>
+            <div class="pricing-workbench-summary assembly-summary">
+              子件含税汇总：¥ {{ assemblyChildrenTotal.toFixed(2) }}，
+              组装费：¥ {{ Number(assemblyFee || 0).toFixed(2) }}，
+              组装费附加费用：¥ {{ assemblyFeeMarkupTotal.toFixed(2) }}，
+              父件含税单价：¥ {{ assemblyTaxIncludedUnitPrice.toFixed(2) }}
+            </div>
+            <div v-if="assemblyFeeMarkupRows.length" class="assembly-fee-breakdown">
+              <el-tag
+                v-for="row in assemblyFeeMarkupRows"
+                :key="row.feeName"
+                type="info"
+                size="small"
+              >
+                {{ row.feeName }} {{ row.ratePercent }}%：¥ {{ row.cost.toFixed(2) }}
+              </el-tag>
+            </div>
+          </section>
+        </div>
+
+        <aside class="drawing-pane">
+          <div class="drawing-pane-header">
+            <div>
+              <div class="drawing-pane-title">当前零件图纸</div>
+              <div class="drawing-pane-subtitle">{{ currentRow ? `${currentRow.partNo || '-'} / ${currentRow.version || '-'}` : '-' }}</div>
+            </div>
+            <el-button
+              v-if="currentRow?.drawingUrl"
+              type="primary"
+              plain
+              size="small"
+              @click="openDrawingInNewWindow(currentRow.drawingUrl)"
+            >
+              新窗口打开
+            </el-button>
+          </div>
+          <div v-if="currentRow?.drawingUrl && !isDrawingFolderUrl(currentRow.drawingUrl)" v-loading="currentDrawingLoading" class="drawing-frame">
+            <iframe
+              :key="currentRow?.id"
+              :src="currentDrawingSrc"
+              class="drawing-frame-iframe"
+              frameborder="0"
+            ></iframe>
+          </div>
+          <div v-else-if="currentRow?.drawingUrl && isDrawingFolderUrl(currentRow.drawingUrl)" class="drawing-folder-pane">
+            <template v-if="selectedFolderDrawingSrc">
+              <div class="folder-drawing-preview-toolbar">
+                <el-button size="small" plain @click="backToFolderFileList">返回文件列表</el-button>
+                <span class="folder-drawing-preview-title" :title="selectedFolderDrawingName">
+                  {{ selectedFolderDrawingName || '图纸预览' }}
+                </span>
+                <el-button type="primary" size="small" plain @click="openDrawingInNewWindow(selectedFolderDrawingPath)">
+                  新窗口打开
+                </el-button>
+              </div>
+              <div v-loading="selectedFolderDrawingLoading" class="drawing-frame folder-drawing-frame">
+                <iframe
+                  :key="selectedFolderDrawingPath"
+                  :src="selectedFolderDrawingSrc"
+                  class="drawing-frame-iframe"
+                  frameborder="0"
+                  @load="selectedFolderDrawingLoading = false"
+                ></iframe>
+              </div>
+            </template>
+            <div v-else class="drawing-folder-inline-shell">
+              <DrawingFolderFileBrowser
+                :folder-url="currentRow.drawingUrl"
+                :compact="true"
+                preview-behavior="emit"
+                table-height="420"
+                empty-text="当前文件夹暂无附件文件"
+                @preview="previewFolderDrawingInPane"
+              />
+            </div>
+          </div>
+          <el-empty v-else description="当前零件没有绑定图纸" :image-size="90" class="drawing-empty" />
+        </aside>
+      </div>
+
+      <template #footer>
+        <div class="erp-dialog-footer pricing-dialog-footer">
+          <el-button @click="dialogVisible = false">取消</el-button>
+          <el-button
+            v-permission="'engineer:pricing:save-item'"
+            type="success"
+            @click="submitCurrentQuote"
+            :loading="submitLoading"
+            :disabled="submitLoading || completeLoading || refreshLoading || pricingCustomerWeightSavePending"
+          >确认提交</el-button>
+        </div>
+      </template>
+    </el-dialog>
+
+    <el-dialog
+      v-model="itemInfoDialogVisible"
+      title="零件信息"
+      width="520px"
+      class="pricing-item-info-dialog"
+      destroy-on-close
+    >
+      <div class="pricing-item-info-list">
+        <div v-for="row in currentItemInfoRows" :key="row.label" class="pricing-item-info-row">
+          <span>{{ row.label }}</span>
+          <strong>{{ row.value || '-' }}</strong>
+        </div>
+      </div>
+      <template #footer>
+        <div class="erp-dialog-footer pricing-dialog-footer">
+          <el-button type="primary" @click="itemInfoDialogVisible = false">关闭</el-button>
+        </div>
+      </template>
+    </el-dialog>
+
+    <el-dialog
+      v-model="assemblyPickerVisible"
+      title="选择组合件子件"
+      width="86vw"
+      top="6vh"
+      class="assembly-picker-dialog"
+      destroy-on-close
+    >
+      <div class="assembly-picker-toolbar">
+        <div>
+          <div class="assembly-picker-title">当前 RFQ 零件表</div>
+          <div class="assembly-picker-subtitle">可一次选择多个子件，已加入的子件不可重复选择。</div>
+        </div>
+        <div class="assembly-picker-tools">
+          <el-input
+            v-model="assemblyChildKeyword"
+            clearable
+            placeholder="搜索图号/版本/描述"
+            class="assembly-picker-search"
+            @keyup.enter="searchAssemblyChildCandidates"
+            @clear="searchAssemblyChildCandidates"
+          />
+          <el-button type="primary" plain @click="searchAssemblyChildCandidates">搜索</el-button>
+          <el-tag type="info">已选 {{ assemblyPickerSelection.length }} 项</el-tag>
+        </div>
+      </div>
+      <el-table
+        ref="assemblyPickerTableRef"
+        :data="pagedAssemblyChildOptions"
+        row-key="id"
+        border
+        stripe
+        height="560"
+        v-loading="assemblyChildLoading"
+        @selection-change="handleAssemblyPickerSelection"
+      >
+        <el-table-column type="selection" width="48" :selectable="isAssemblyPickerRowSelectable" :reserve-selection="true" />
+        <el-table-column prop="partNo" label="图号" width="150" fixed show-overflow-tooltip />
+        <el-table-column prop="version" label="版本" width="80" align="center" />
+        <el-table-column prop="description" label="名称/描述" min-width="180" show-overflow-tooltip />
+        <el-table-column prop="qty" label="数量" width="80" align="center" />
+        <el-table-column label="类型" width="90" align="center">
+          <template #default="{ row }">
+            <el-tag :type="isAssemblyItem(row) ? 'warning' : 'info'" size="small">
+              {{ isAssemblyItem(row) ? '组合件' : '普通件' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="状态" width="100" align="center">
+          <template #default="{ row }">{{ row.status || '-' }}</template>
+        </el-table-column>
+        <el-table-column label="含税单价" width="110" align="right">
+          <template #default="{ row }">
+            <span v-if="row.taxIncludedUnitPrice != null">¥ {{ Number(row.taxIncludedUnitPrice).toFixed(2) }}</span>
+            <el-tag v-else type="warning" size="small">未核价</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="图纸" width="190" align="center" fixed="right">
+          <template #default="{ row }">
+            <div v-if="row.drawingUrl" class="erp-table-actions picker-drawing-actions">
+              <el-button type="warning" plain size="small" @click.stop="openPdfPreview(row.drawingUrl, row.partNo)">
+                弹窗预览
+              </el-button>
+              <el-button type="primary" plain size="small" @click.stop="openDrawingInNewWindow(row.drawingUrl)">
+                新窗口
+              </el-button>
+            </div>
+            <el-tag v-else type="info" size="small">无图</el-tag>
+          </template>
+        </el-table-column>
+      </el-table>
+      <div v-if="assemblyChildTotal" class="erp-pagination assembly-picker-pagination">
+        <el-pagination
+          v-model:current-page="assemblyPickerPagination.page"
+          v-model:page-size="assemblyPickerPagination.pageSize"
+          :page-sizes="CLIENT_PAGE_SIZES"
+          :pager-count="7"
+          :total="assemblyChildTotal"
+          layout="total, sizes, prev, pager, next, jumper"
+          background
+          @size-change="assemblyPickerPagination.page = 1"
+        />
+      </div>
+      <template #footer>
+        <div class="erp-dialog-footer pricing-dialog-footer assembly-picker-footer">
+          <el-button @click="assemblyPickerVisible = false">取消</el-button>
+          <el-button type="primary" :disabled="assemblyPickerSelection.length === 0" @click="confirmAssemblyChildPicker">
+            加入子件
+          </el-button>
+        </div>
+      </template>
+    </el-dialog>
+
+    <EngineeringOptionPickerDialog
+      v-model="materialPickerVisible"
+      title="选择材料"
+      type="material"
+      :remote-loader="pagePricingMaterialOptions"
+      :material-u9-category-loader="listPricingMaterialU9CategoryNames"
+      :page-size-options="[10, 20, 50, 100]"
+      :default-page-size="10"
+      default-material-common-scope="COMMON"
+      :selected-key="matForm.materialCode"
+      :enable-material-price-edit="true"
+      empty-text="暂无材料字典数据"
+      @confirm="selectMaterial"
+      @material-price-updated="handleMaterialPriceUpdated"
+    />
+
+    <EngineeringOptionPickerDialog
+      v-model="processPickerVisible"
+      title="选择工艺"
+      type="process"
+      :remote-loader="pagePricingProcessOptions"
+      :process-arrangement-tree-loader="listPricingProcessArrangementTree"
+      :page-size-options="[10, 20, 50, 100]"
+      :default-page-size="10"
+      :selected-key="selectedProcessOptionKey"
+      :enable-process-rate-edit="true"
+      empty-text="暂无工艺字典数据"
+      @confirm="selectProcess"
+      @process-rate-updated="handleProcessRateUpdated"
+    />
+
+    <!-- 图纸预览 -->
+    <el-dialog
+      v-model="pdfVisible"
+      :title="`图纸预览：${pdfTitle}`"
+      width="75%"
+      top="5vh"
+      destroy-on-close
+    >
+      <div v-loading="!pdfLoaded" class="pdf-frame-shell">
+        <iframe
+          :src="currentPdfSrc"
+          width="100%"
+          height="100%"
+          frameborder="0"
+          @load="pdfLoaded = true"
+        ></iframe>
+      </div>
+    </el-dialog>
+
+    <DrawingFolderViewer
+      v-model="folderViewerVisible"
+      :folder-url="currentDrawingFolderUrl"
+      :title="currentDrawingFolderTitle"
+    />
+
+  </div>
+</template>
+
+<script setup>
+import { ref, reactive, computed, nextTick, onMounted, onBeforeUnmount, watch } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Delete, Plus, Top } from '@element-plus/icons-vue'
+import { useRoute, useRouter } from 'vue-router'
+import EngineeringOptionPickerDialog from './EngineeringOptionPickerDialog.vue'
+import DrawingFolderFileBrowser from './common/DrawingFolderFileBrowser.vue'
+import DrawingFolderViewer from './common/DrawingFolderViewer.vue'
+import {
+  applyRepeatQuotes,
+  completeOrderQuote as completeOrderQuoteRequest,
+  completeSupplementalDrawingQuote as completeSupplementalDrawingQuoteRequest,
+  getPricingSummary,
+  getRepeatAnalysis,
+  listAssemblyChildCandidates,
+  listAssemblyRelations,
+  listPricingItems,
+  listPricingMaterialU9CategoryNames,
+  listPricingProcessArrangementTree,
+  pagePricingMaterialOptions,
+  pagePricingProcessOptions,
+  downloadPricingSheet,
+  savePricingItemRemark,
+  saveOrderConfig,
+  submitQuote
+} from '../services/engineerApi'
+import { refreshEngineerQuotes } from '../services/taskApi'
+import { updatePricingMarkupFee } from '../services/dictApi'
+import { useAuthStore } from '../stores/authStore'
+import { useDictionaryStore } from '../stores/dictionaryStore'
+import { useGlobalConfigStore } from '../stores/globalConfigStore'
+import {
+  createAuthenticatedObjectUrl,
+  isDrawingFolderUrl,
+  openAuthenticatedFileInNewWindow,
+  readFileErrorMessage,
+  revokeObjectUrl
+} from '../api'
+import {
+  buildPricingOptionIndex,
+  hydrateMaterialPricingSnapshot,
+  hydrateProcessPricingSnapshot,
+  materialCodeKey,
+  processDetailIdKey
+} from '../utils/pricingSnapshotHydrator'
+import {
+  CLIENT_PAGE_SIZES,
+  DEFAULT_CLIENT_PAGE_SIZE
+} from '../utils/clientPagination'
+import { usePendingAction } from '../composables/usePendingAction'
+import {
+  buildMaterialSpecSelection,
+  effectiveSpecPrice,
+  findPriceSpec,
+  normalizePriceSpecs,
+  unitPriceSource
+} from '../utils/materialPriceSpecs'
+
+const ENGINEER_PRICING_EXPORT_SHEET_PERMISSION = 'engineer:pricing:export-sheet'
+const ENGINEER_PRICING_SAVE_ITEM_PERMISSION = 'engineer:pricing:save-item'
+const SUPPLEMENTAL_DRAWING_SCOPE = 'SUPPLEMENTAL_DRAWING'
+const DEFAULT_MATERIAL_PRICE_SPEC_CODE = 'SPEC_1'
+const DEFAULT_GLOBAL_PROCESS_ROUTE_COUNT = 3
+
+const route = useRoute()
+const router = useRouter()
+const authStore = useAuthStore()
+const dictionaryStore = useDictionaryStore()
+const globalConfigStore = useGlobalConfigStore()
+const rfqId = ref('')
+const pricingScope = ref('')
+const globalConfig = ref({
+  materialId: null,
+  materialCode: '',
+  materialName: '',
+  materialTypeId: null,
+  materialTypeCode: '',
+  materialTypeName: '',
+  materialCategory: '',
+  density: null,
+  priceSpecs: normalizePriceSpecs([]),
+  priceSpecCode: DEFAULT_MATERIAL_PRICE_SPEC_CODE,
+  priceSpecName: '规格一',
+  priceSpec: findPriceSpec(normalizePriceSpecs([]), DEFAULT_MATERIAL_PRICE_SPEC_CODE),
+  remarks: '',
+  shape: '板材',
+  processRoute: [],
+  legacyMaterialIdentity: false
+}) // 默认保底配置
+const { isPending, runAction } = usePendingAction()
+const pricingActionKeys = {
+  repeatApply: () => `engineer:pricing:repeat-quote:${rfqId.value || 'none'}`,
+  refreshOrder: () => `engineer:pricing:refresh:${rfqId.value || 'none'}`,
+  completeOrder: () => `engineer:pricing:complete-order:${rfqId.value || 'none'}`,
+  exportSheet: () => `engineer:pricing:export-sheet:${rfqId.value || 'none'}`,
+  saveCustomerWeight: () => `engineer:pricing:customer-weight:${normalCustomerWeightFee.value?.id || 'none'}`,
+  saveAssemblyCustomerWeight: () => `engineer:pricing:assembly-customer-weight:${assemblyCustomerWeightFee.value?.id || 'none'}`,
+  saveItem: (itemId) => `engineer:pricing:save-item:${itemId || 'none'}`
+}
+
+const quoteData = ref(null)
+const loading = ref(false)
+const completeLoading = computed(() => isPending(pricingActionKeys.completeOrder()))
+const refreshLoading = computed(() => isPending(pricingActionKeys.refreshOrder()))
+const repeatApplyAttempted = ref(false)
+const repeatApplyLoading = computed(() => isPending(pricingActionKeys.repeatApply()))
+const exportPricingSheetLoading = computed(() => isPending(pricingActionKeys.exportSheet()))
+const orderPricingActionPending = computed(() => completeLoading.value || refreshLoading.value || repeatApplyLoading.value)
+const isItemQuoteSaving = (row) => isPending(pricingActionKeys.saveItem(row?.id))
+const pricingTableRef = ref(null)
+const pricingListPagination = reactive({ page: 1, pageSize: DEFAULT_CLIENT_PAGE_SIZE })
+const pricingItemTotal = ref(0)
+const markupFeeOptions = computed(() => dictionaryStore.getPricingMarkupFees('NORMAL'))
+const assemblyMarkupFeeOptions = computed(() => dictionaryStore.getPricingMarkupFees('ASSEMBLY'))
+const customerWeightRatePercent = ref(0)
+const assemblyCustomerWeightRatePercent = ref(0)
+const materialPickerVisible = ref(false)
+const processPickerVisible = ref(false)
+const editingProcessIndex = ref(null)
+const pricingMaterialOptionCache = ref(new Map())
+const pricingProcessOptionCache = ref(new Map())
+const repeatAnalysis = ref(null)
+
+const pricingOptionIndex = computed(() => buildPricingOptionIndex({
+  materialOptions: Array.from(pricingMaterialOptionCache.value.values()),
+  processOptions: Array.from(pricingProcessOptionCache.value.values())
+}))
+
+const isSupplementalDrawingScope = computed(() => pricingScope.value === SUPPLEMENTAL_DRAWING_SCOPE)
+
+const defaultGlobalConfig = () => ({
+  materialId: null,
+  materialCode: '',
+  materialName: '',
+  materialTypeId: null,
+  materialTypeCode: '',
+  materialTypeName: '',
+  materialCategory: '',
+  density: null,
+  priceSpecs: normalizePriceSpecs([]),
+  priceSpecCode: DEFAULT_MATERIAL_PRICE_SPEC_CODE,
+  priceSpecName: '规格一',
+  priceSpec: findPriceSpec(normalizePriceSpecs([]), DEFAULT_MATERIAL_PRICE_SPEC_CODE),
+  remarks: '',
+  shape: '板材',
+  processRoute: [],
+  legacyMaterialIdentity: false
+})
+const normalizePartNo = (value) => String(value || '').trim().toUpperCase()
+const normalizeVersion = (value) => {
+  const text = String(value || '').trim().toUpperCase()
+  return text
+}
+const itemIdentityKey = (item) => `${normalizePartNo(item?.partNo)}||${normalizeVersion(item?.version)}`
+
+const numberOrNullForSnapshot = (value) => {
+  if (value === null || value === undefined || value === '') return null
+  const numericValue = Number(value)
+  return Number.isFinite(numericValue) ? numericValue : null
+}
+
+const nonNegativeNumberOrNullForSnapshot = (value) => {
+  const numericValue = numberOrNullForSnapshot(value)
+  return numericValue != null && numericValue >= 0 ? numericValue : null
+}
+
+const effectiveMaterialDensity = (material = {}) => (
+  nonNegativeNumberOrNullForSnapshot(material.density) ?? nonNegativeNumberOrNullForSnapshot(material.mesDensityRaw)
+)
+
+const normalizeGlobalConfig = (config) => {
+  const defaults = defaultGlobalConfig()
+  if (!config || typeof config !== 'object') return defaults
+  const materialCode = String(config.materialCode || '').trim()
+  const materialName = config.materialName || config.name || defaults.materialName || ''
+  const density = numberOrNullForSnapshot(config.density ?? defaults.density)
+  const priceSpecs = normalizePriceSpecs(config.priceSpecs ?? (config.priceSpec ? [config.priceSpec] : defaults.priceSpecs))
+  const priceSpecCode = String(config.priceSpecCode || config.priceSpec?.specCode || defaults.priceSpecCode || '').trim().toUpperCase()
+  const priceSpec = priceSpecCode ? findPriceSpec(priceSpecs, priceSpecCode) : null
+  return {
+    materialId: config.materialId ?? config.id ?? defaults.materialId,
+    materialCode,
+    materialName,
+    materialTypeId: config.materialTypeId ?? defaults.materialTypeId,
+    materialTypeCode: config.materialTypeCode || defaults.materialTypeCode,
+    materialTypeName: config.materialTypeName || defaults.materialTypeName,
+    materialCategory: config.materialCategory || defaults.materialCategory,
+    density,
+    priceSpecs,
+    priceSpecCode,
+    priceSpecName: priceSpec?.specName || config.priceSpecName || defaults.priceSpecName || '',
+    priceSpec,
+    remarks: config.remarks || defaults.remarks || '',
+    shape: config.shape || defaults.shape,
+    legacyMaterialIdentity: (!materialCode && Boolean(materialName)) || (Boolean(materialCode) && !priceSpecCode),
+    processRoute: normalizeRouteList(config.processRoute)
+  }
+}
+
+const numberOrZero = (value) => {
+  const numericValue = Number(value || 0)
+  return Number.isFinite(numericValue) ? numericValue : 0
+}
+const CUSTOMER_WEIGHT = 'CUSTOMER_WEIGHT'
+const BASIC_PERCENT = 'BASIC_PERCENT'
+const TAX = 'TAX'
+const UNTAXED_PRICING_FEE_SEQUENCE = [CUSTOMER_WEIGHT, BASIC_PERCENT]
+const TAX_INCLUDED_PRICING_FEE_SEQUENCE = [CUSTOMER_WEIGHT, BASIC_PERCENT, TAX]
+const TAX_ONLY_PRICING_FEE_SEQUENCE = TAX_INCLUDED_PRICING_FEE_SEQUENCE.filter(
+  feeCategory => !UNTAXED_PRICING_FEE_SEQUENCE.includes(feeCategory)
+)
+
+const normalCustomerWeightFee = computed(() => markupFeeOptions.value.find(fee => (
+  fee.feeCategory === CUSTOMER_WEIGHT && fee.pricingScope === 'NORMAL'
+)))
+const assemblyCustomerWeightFee = computed(() => assemblyMarkupFeeOptions.value.find(fee => (
+  fee.feeCategory === CUSTOMER_WEIGHT && fee.pricingScope === 'ASSEMBLY'
+)))
+const customerWeightRateValue = computed(() => numberOrZero(customerWeightRatePercent.value))
+const assemblyCustomerWeightRateValue = computed(() => numberOrZero(assemblyCustomerWeightRatePercent.value))
+const customerWeightDirty = computed(() => Math.abs(
+  customerWeightRateValue.value - numberOrZero(normalCustomerWeightFee.value?.ratePercent)
+) > 0.000001)
+const assemblyCustomerWeightDirty = computed(() => Math.abs(
+  assemblyCustomerWeightRateValue.value - numberOrZero(assemblyCustomerWeightFee.value?.ratePercent)
+) > 0.000001)
+const customerWeightSavePending = computed(() => isPending(pricingActionKeys.saveCustomerWeight()))
+const assemblyCustomerWeightSavePending = computed(() => isPending(pricingActionKeys.saveAssemblyCustomerWeight()))
+const pricingCustomerWeightSavePending = computed(() => customerWeightSavePending.value || assemblyCustomerWeightSavePending.value)
+const effectiveNormalMarkupFeeOptions = computed(() => markupFeeOptions.value.map((fee) => {
+  if (fee.feeCategory !== CUSTOMER_WEIGHT || fee.pricingScope !== 'NORMAL') return fee
+  return {
+    ...fee,
+    ratePercent: customerWeightRateValue.value,
+    enabled: customerWeightRateValue.value > 0
+  }
+}))
+const effectiveAssemblyMarkupFeeOptions = computed(() => assemblyMarkupFeeOptions.value.map((fee) => {
+  if (fee.feeCategory !== CUSTOMER_WEIGHT || fee.pricingScope !== 'ASSEMBLY') return fee
+  return {
+    ...fee,
+    ratePercent: assemblyCustomerWeightRateValue.value,
+    enabled: assemblyCustomerWeightRateValue.value > 0
+  }
+}))
+
+const pricingFeeSortValue = (value) => {
+  const numericValue = Number(value)
+  return Number.isFinite(numericValue) ? numericValue : 0
+}
+
+const enabledPricingFeesByCategory = (fees = [], feeCategory, pricingScope) => (fees || [])
+  .filter(fee => fee.enabled !== false && fee.feeCategory === feeCategory && fee.pricingScope === pricingScope)
+  .slice()
+  .sort((left, right) => (
+    pricingFeeSortValue(left.sortNo) - pricingFeeSortValue(right.sortNo)
+    || pricingFeeSortValue(left.id) - pricingFeeSortValue(right.id)
+  ))
+
+const sumPricingFeeRatePercent = (fees = []) => fees.reduce(
+  (sum, fee) => sum + numberOrZero(fee.ratePercent),
+  0
+)
+
+const applyPreviewPricingSequence = (baseAmount, fees, pricingScope, feeCategorySequence) => {
+  const feeRows = []
+  let currentAmount = numberOrZero(baseAmount)
+  feeCategorySequence.forEach((feeCategory) => {
+    const categoryFees = enabledPricingFeesByCategory(fees, feeCategory, pricingScope)
+    if (categoryFees.length === 0) return
+    const categoryBaseAmount = currentAmount
+    const categoryRatePercent = sumPricingFeeRatePercent(categoryFees)
+    let cumulativeRatePercent = 0
+    categoryFees.forEach((fee) => {
+      const ratePercent = numberOrZero(fee.ratePercent)
+      cumulativeRatePercent += ratePercent
+      const factor = 1 + ratePercent / 100
+      const cost = categoryBaseAmount * ratePercent / 100
+      const amountAfter = categoryBaseAmount * (1 + cumulativeRatePercent / 100)
+      feeRows.push({
+        feeName: fee.feeName,
+        pricingScope: fee.pricingScope,
+        feeCategory: fee.feeCategory,
+        ratePercent,
+        factor,
+        baseAmount: categoryBaseAmount,
+        cost,
+        amountAfter,
+        includedInUntaxedPrice: feeCategory !== TAX,
+        includedInTaxIncludedPrice: true
+      })
+    })
+    currentAmount = categoryBaseAmount * (1 + categoryRatePercent / 100)
+  })
+  return { amount: currentAmount, feeRows }
+}
+
+const calculatePreviewPriceByFeeCategory = (baseAmount, fees, pricingScope) => {
+  const untaxedResult = applyPreviewPricingSequence(
+    baseAmount,
+    fees,
+    pricingScope,
+    UNTAXED_PRICING_FEE_SEQUENCE
+  )
+  const taxIncludedResult = applyPreviewPricingSequence(
+    untaxedResult.amount,
+    fees,
+    pricingScope,
+    TAX_ONLY_PRICING_FEE_SEQUENCE
+  )
+  return {
+    untaxedUnitPrice: untaxedResult.amount,
+    taxIncludedUnitPrice: taxIncludedResult.amount,
+    feeRows: [...untaxedResult.feeRows, ...taxIncludedResult.feeRows]
+  }
+}
+const numberOrNullForInput = (value) => {
+  if (value === null || value === undefined || value === '') return null
+  const numericValue = Number(value)
+  if (!Number.isFinite(numericValue) || numericValue === 0) return null
+  return numericValue
+}
+const formatWeight = (value) => {
+  const numericValue = Number(value)
+  return Number.isFinite(numericValue) ? numericValue.toFixed(3) : '-'
+}
+const isPersistablePricingMarkupFeeId = (id) => {
+  const numericId = Number(id)
+  return Number.isInteger(numericId) && numericId > 0
+}
+const syncCustomerWeightDraftFromFee = () => {
+  customerWeightRatePercent.value = numberOrZero(normalCustomerWeightFee.value?.ratePercent)
+}
+const syncAssemblyCustomerWeightDraftFromFee = () => {
+  assemblyCustomerWeightRatePercent.value = numberOrZero(assemblyCustomerWeightFee.value?.ratePercent)
+}
+const buildCustomerWeightFeePayload = (customerWeightFee) => ({
+  pricingScope: customerWeightFee.pricingScope || 'NORMAL',
+  feeCategory: CUSTOMER_WEIGHT,
+  feeName: customerWeightFee.feeName || '客户权重',
+  ratePercent: customerWeightRateValue.value,
+  sortNo: Number(customerWeightFee.sortNo || 0),
+  enabled: customerWeightRateValue.value > 0
+})
+const buildAssemblyCustomerWeightFeePayload = (customerWeightFee) => ({
+  pricingScope: customerWeightFee.pricingScope || 'ASSEMBLY',
+  feeCategory: CUSTOMER_WEIGHT,
+  feeName: customerWeightFee.feeName || '客户权重',
+  ratePercent: assemblyCustomerWeightRateValue.value,
+  sortNo: Number(customerWeightFee.sortNo || 0),
+  enabled: assemblyCustomerWeightRateValue.value > 0
+})
+const saveCustomerWeightRate = async ({ silent = false } = {}) => {
+  if (!customerWeightDirty.value) return { updated: false }
+  const customerWeightFee = normalCustomerWeightFee.value
+  if (!customerWeightFee || !isPersistablePricingMarkupFeeId(customerWeightFee.id)) {
+    const message = '未找到可保存的客户权重配置，请先到材料工艺模块维护客户权重。'
+    if (!silent) ElMessage.warning(message)
+    throw new Error(message)
+  }
+  return runAction(pricingActionKeys.saveCustomerWeight(), async () => {
+    const payload = buildCustomerWeightFeePayload(customerWeightFee)
+    const response = await updatePricingMarkupFee(customerWeightFee.id, payload)
+    const savedFee = {
+      ...customerWeightFee,
+      ...payload,
+      ...(response?.data || {}),
+      id: response?.data?.id ?? customerWeightFee.id,
+      systemRequired: response?.data?.systemRequired ?? customerWeightFee.systemRequired ?? true
+    }
+    dictionaryStore.upsertPricingMarkupFee(savedFee)
+    customerWeightRatePercent.value = numberOrZero(savedFee.ratePercent)
+    if (!silent) ElMessage.success('客户权重已保存，价格预估已刷新。')
+    return { updated: true, fee: savedFee }
+  })
+}
+const saveAssemblyCustomerWeightRate = async ({ silent = false } = {}) => {
+  if (!assemblyCustomerWeightDirty.value) return { updated: false }
+  if (!assemblyCustomerWeightFee.value || !isPersistablePricingMarkupFeeId(assemblyCustomerWeightFee.value.id)) {
+    const message = '未找到可保存的组合件客户权重配置，请先到材料工艺模块维护客户权重。'
+    if (!silent) ElMessage.warning(message)
+    throw new Error(message)
+  }
+  return runAction(pricingActionKeys.saveAssemblyCustomerWeight(), async () => {
+    const payload = buildAssemblyCustomerWeightFeePayload(assemblyCustomerWeightFee.value)
+    const response = await updatePricingMarkupFee(assemblyCustomerWeightFee.value.id, payload)
+    const savedFee = {
+      ...assemblyCustomerWeightFee.value,
+      ...payload,
+      ...(response?.data || {}),
+      id: response?.data?.id ?? assemblyCustomerWeightFee.value.id,
+      systemRequired: response?.data?.systemRequired ?? assemblyCustomerWeightFee.value.systemRequired ?? true
+    }
+    dictionaryStore.upsertPricingMarkupFee(savedFee)
+    assemblyCustomerWeightRatePercent.value = numberOrZero(savedFee.ratePercent)
+    if (!silent) ElMessage.success('组合件客户权重已保存，价格预估已刷新。')
+    return { updated: true, fee: savedFee }
+  })
+}
+const formatAssemblyChildTitle = (child) => `${child?.partNo || '-'} / ${child?.version || '-'}`
+const toMetricDimension = (value, unit = 'm') => {
+  if (value === null || value === undefined || value === '') return null
+  const numericValue = numberOrZero(value)
+  return unit === 'm' ? numericValue : numericValue / 1000
+}
+
+const repeatItemMap = computed(() => {
+  const map = new Map()
+  ;(repeatAnalysis.value?.repeatItems || []).forEach(item => {
+    map.set(itemIdentityKey(item), item)
+  })
+  return map
+})
+
+const pagedPricingItems = computed(() => quoteData.value?.itemList || [])
+const pricedItemTotal = computed(() => Number(quoteData.value?.summary?.pricedCount ?? 0))
+const repeatItemTotal = computed(() => Number(
+  quoteData.value?.summary?.repeatCount
+  ?? repeatAnalysis.value?.repeatCount
+  ?? repeatAnalysis.value?.repeatItems?.length
+  ?? 0
+))
+
+const canExportPricingSheet = computed(() => !!rfqId.value
+  && quoteData.value?.orderInfo?.status === '已核价'
+  && pricingItemTotal.value > 0)
+
+const canCompleteQuote = computed(() => {
+  if (isSupplementalDrawingScope.value) {
+    return !!rfqId.value
+      && !refreshLoading.value
+      && pricingItemTotal.value > 0
+  }
+  return !!rfqId.value
+    && !refreshLoading.value
+    && quoteData.value?.orderInfo?.status === '未核价'
+    && pricingItemTotal.value > 0
+})
+
+const canRefreshQuotes = computed(() => !!rfqId.value
+  && !!quoteData.value
+  && pricingItemTotal.value > 0)
+const canApplyRepeatQuotes = computed(() => authStore.hasPermission(ENGINEER_PRICING_SAVE_ITEM_PERMISSION))
+
+const returnToGlobalSetup = () => {
+  if (!rfqId.value) {
+    router.push({ path: '/engineering' })
+    return
+  }
+  router.push({
+    path: '/engineering',
+    query: { rfqId: rfqId.value }
+  })
+}
+
+watch(
+  () => [pricingListPagination.page, pricingListPagination.pageSize],
+  () => {
+    if (quoteData.value && rfqId.value) {
+      fetchPricingItems({ keepScroll: true })
+    }
+  }
+)
+
+// 页面加载时自动拉取数据
+onMounted(async () => {
+  rfqId.value = route.query.rfqId
+  pricingScope.value = route.query.scope === SUPPLEMENTAL_DRAWING_SCOPE ? SUPPLEMENTAL_DRAWING_SCOPE : ''
+  await fetchDicts()
+
+  // 1. 读取全局缓存
+  globalConfig.value = globalConfigStore.loadLocalConfig(rfqId.value)
+
+  // 2. 自动根据路由 ID 获取数据
+  if (rfqId.value) {
+    fetchQuoteData()
+  } else {
+    ElMessage.error('缺失订单 ID 参数，请返回上一页重新进入！')
+  }
+})
+
+const fetchDicts = async () => {
+  try {
+    await dictionaryStore.loadPricingFeeDicts()
+    syncCustomerWeightDraftFromFee()
+    syncAssemblyCustomerWeightDraftFromFee()
+  } catch (error) {
+    console.error(error)
+    dictionaryStore.applyPricingFallbackData()
+    syncCustomerWeightDraftFromFee()
+    syncAssemblyCustomerWeightDraftFromFee()
+    ElMessage.warning('费用字典加载失败，已启用本地兜底数据。')
+  }
+}
+
+const extractPageRecords = (response) => {
+  const pageData = response?.data ?? response ?? {}
+  return Array.isArray(pageData.records) ? pageData.records : []
+}
+
+const cachePricingMaterialOptions = (records = []) => {
+  if (!records.length) return
+  const next = new Map(pricingMaterialOptionCache.value)
+  records.forEach((record) => {
+    const key = materialCodeKey(record?.materialCode)
+    if (key) next.set(key, record)
+  })
+  pricingMaterialOptionCache.value = next
+}
+
+const cachePricingProcessOptions = (records = []) => {
+  if (!records.length) return
+  const next = new Map(pricingProcessOptionCache.value)
+  records.forEach((record) => {
+    const key = processDetailIdKey(record?.processDetailId ?? record?.id)
+    if (key) next.set(key, record)
+  })
+  pricingProcessOptionCache.value = next
+}
+
+const loadLatestPricingOptionsForQuote = async (materialSource = {}, processRoutes = []) => {
+  const materialCodes = [materialSource?.materialCode]
+    .map(code => String(code || '').trim())
+    .filter(Boolean)
+  const missingMaterialCodes = materialCodes.filter(code => !pricingMaterialOptionCache.value.has(materialCodeKey(code)))
+  const processDetailIds = Array.from(new Set((processRoutes || [])
+    .filter(route => resolveProcessSourceType(route) !== 'extra')
+    .map(route => route?.processDetailId ?? route?.id)
+    .map(id => String(id ?? '').trim())
+    .filter(Boolean)))
+  const missingProcessDetailIds = processDetailIds.filter(id => !pricingProcessOptionCache.value.has(processDetailIdKey(id)))
+
+  const requests = []
+  if (missingMaterialCodes.length > 0) {
+    requests.push(pagePricingMaterialOptions({
+      materialCodes: missingMaterialCodes.join(','),
+      page: 1,
+      pageSize: 100
+    }).then(response => cachePricingMaterialOptions(extractPageRecords(response))))
+  }
+  if (missingProcessDetailIds.length > 0) {
+    requests.push(pagePricingProcessOptions({
+      processDetailIds: missingProcessDetailIds.join(','),
+      page: 1,
+      pageSize: 100
+    }).then(response => cachePricingProcessOptions(extractPageRecords(response))))
+  }
+  if (requests.length === 0) return
+  try {
+    await Promise.all(requests)
+  } catch (error) {
+    console.warn('最新材料/工艺价格加载失败，将使用当前快照并以后端保存重算为准。', error)
+  }
+}
+
+// 拉取订单核心数据
+const getPricingTableScrollTop = () => {
+  const wrapper = pricingTableRef.value?.$el?.querySelector('.el-scrollbar__wrap')
+  return wrapper?.scrollTop || 0
+}
+
+const restorePricingTableScrollTop = (scrollTop) => {
+  requestAnimationFrame(() => {
+    const wrapper = pricingTableRef.value?.$el?.querySelector('.el-scrollbar__wrap')
+    if (wrapper) {
+      wrapper.scrollTop = scrollTop
+    }
+  })
+}
+
+const fetchPricingItems = async (options = {}) => {
+  const scrollTop = options.keepScroll ? getPricingTableScrollTop() : 0
+  const response = await listPricingItems(rfqId.value, {
+    page: pricingListPagination.page,
+    pageSize: pricingListPagination.pageSize,
+    scope: isSupplementalDrawingScope.value ? SUPPLEMENTAL_DRAWING_SCOPE : undefined
+  })
+  if (!quoteData.value) {
+    quoteData.value = { itemList: [] }
+  }
+  quoteData.value.itemList = response.records || []
+  quoteData.value.itemPage = response
+  pricingItemTotal.value = Number(response.total ?? 0)
+  if (options.keepScroll) {
+    restorePricingTableScrollTop(scrollTop)
+  }
+}
+
+const fetchQuoteData = async (options = {}) => {
+  loading.value = true
+  try {
+    const summary = await getPricingSummary(rfqId.value)
+    quoteData.value = {
+      ...summary,
+      itemList: quoteData.value?.itemList || []
+    }
+    pricingItemTotal.value = Number(summary?.summary?.itemCount ?? 0)
+    if (!options.keepScroll) {
+      pricingListPagination.page = 1
+    }
+    await fetchPricingItems({ keepScroll: options.keepScroll })
+    if (quoteData.value?.orderInfo?.engineerConfig) {
+      globalConfig.value = globalConfigStore.applyEngineerConfig(rfqId.value, quoteData.value.orderInfo.engineerConfig)
+    }
+    await loadRepeatAnalysis()
+    if (!options.skipRepeatApply) {
+      await applyRepeatQuotesOnPricingLoad()
+    }
+  } catch (error) {
+    ElMessage.error('获取失败，请检查后端状态！')
+  } finally {
+    loading.value = false
+  }
+}
+
+const applyRepeatQuotesOnPricingLoad = async () => {
+  if (!rfqId.value || repeatApplyAttempted.value) return
+  if (!canApplyRepeatQuotes.value) return
+  repeatApplyAttempted.value = true
+  return runAction(pricingActionKeys.repeatApply(), async () => {
+    try {
+      const response = await applyRepeatQuotes(rfqId.value)
+      if (response?.appliedCount > 0) {
+        ElMessage.success(`已自动套用 ${response.appliedCount} 个重复零件的历史核价。`)
+        await fetchQuoteData({ keepScroll: true, skipRepeatApply: true })
+      }
+    } catch (error) {
+      console.error(error)
+      ElMessage.warning('重复件自动核价失败，可继续手动核价。')
+    }
+  })
+}
+
+const loadRepeatAnalysis = async () => {
+  if (!rfqId.value) return
+  try {
+    repeatAnalysis.value = await getRepeatAnalysis(rfqId.value)
+  } catch (error) {
+    console.error(error)
+    repeatAnalysis.value = null
+  }
+}
+
+const exportPricingSheet = async () => {
+  if (!rfqId.value) return ElMessage.warning('缺失订单 ID。')
+  if (!canExportPricingSheet.value) return ElMessage.warning('只有已核价订单可以生成核价单。')
+  const fallbackName = `${quoteData.value?.orderInfo?.rfqNo || `pricing-sheet-${rfqId.value}`}-核价单.xlsx`
+  return runAction(pricingActionKeys.exportSheet(), async () => {
+    const result = await downloadPricingSheet(rfqId.value, fallbackName)
+    if (!result.success) {
+      ElMessage.error(result.message || '核价单生成失败。')
+    }
+    return result
+  })
+}
+
+const completeOrderQuote = async () => {
+  if (isSupplementalDrawingScope.value) {
+    return runAction(pricingActionKeys.completeOrder(), async () => {
+      try {
+        const response = await completeSupplementalDrawingQuoteRequest(rfqId.value)
+        ElMessage.success(response.message || '补图待核价已完成，已进入市场补充报价待确认。')
+        await fetchQuoteData()
+      } catch (error) {
+        console.error(error)
+        ElMessage.error(error.response?.data?.message || '补图待核价完成提交失败。')
+      }
+    })
+  }
+  if (!canCompleteQuote.value) {
+    return ElMessage.warning('只有未核价订单在所有有图零件完成核价后，才能提交到市场报价处理。')
+  }
+  return runAction(pricingActionKeys.completeOrder(), async () => {
+    try {
+      const response = await completeOrderQuoteRequest(rfqId.value)
+      ElMessage.success(response.message || '订单核价已完成，已进入市场报价处理。')
+      await fetchQuoteData()
+    } catch (error) {
+      console.error(error)
+      ElMessage.error(error.response?.data?.message || '完成核价提交失败。')
+    }
+  })
+}
+
+const refreshOrderQuotes = async () => {
+  if (!canRefreshQuotes.value) {
+    return ElMessage.warning('当前订单没有可刷新的核价数据。')
+  }
+  try {
+    await ElMessageBox.confirm(
+      '将使用当前材料单价、工艺单价、费率字典，对本 RFQ 已有核价参数的零件重新计算价格；未核价且没有参数的零件不会被自动报价。',
+      '确认一键刷新核价',
+      {
+        confirmButtonText: '确认刷新',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+  } catch {
+    return
+  }
+
+  return runAction(pricingActionKeys.refreshOrder(), async () => {
+    try {
+      const submitResponse = await refreshEngineerQuotes(rfqId.value)
+      const taskId = submitResponse?.task?.id
+      if (!taskId) {
+        throw new Error('任务提交失败')
+      }
+      ElMessage.info('一键刷新核价任务已提交，系统正在后台处理，可稍后刷新查看结果。')
+      return submitResponse
+    } catch (error) {
+      console.error(error)
+      ElMessage.error(error.response?.data?.message || error.message || '一键刷新核价失败，请检查后端服务。')
+    }
+  })
+}
+
+// 图纸预览核心逻辑
+const pdfVisible = ref(false)
+const currentPdfUrl = ref('')
+const pdfTitle = ref('')
+const pdfLoaded = ref(false)
+const currentPdfSrc = ref('')
+const folderViewerVisible = ref(false)
+const currentDrawingFolderUrl = ref('')
+const currentDrawingFolderTitle = ref('')
+const selectedFolderDrawingSrc = ref('')
+const selectedFolderDrawingPath = ref('')
+const selectedFolderDrawingName = ref('')
+const selectedFolderDrawingLoading = ref(false)
+let selectedFolderDrawingRequestSeq = 0
+
+const cleanupPdfSrc = () => {
+  revokeObjectUrl(currentPdfSrc.value)
+  currentPdfSrc.value = ''
+}
+
+const cleanupSelectedFolderDrawingSrc = () => {
+  revokeObjectUrl(selectedFolderDrawingSrc.value)
+  selectedFolderDrawingSrc.value = ''
+  selectedFolderDrawingPath.value = ''
+  selectedFolderDrawingName.value = ''
+  selectedFolderDrawingLoading.value = false
+}
+
+const folderFilePath = (row) => row?.publicPath || row?.url || ''
+
+const previewFolderDrawingInPane = async (row) => {
+  const path = folderFilePath(row)
+  if (!path) {
+    return ElMessage.warning('当前文件缺少访问地址。')
+  }
+  const requestSeq = ++selectedFolderDrawingRequestSeq
+  cleanupSelectedFolderDrawingSrc()
+  selectedFolderDrawingPath.value = path
+  selectedFolderDrawingName.value = row?.fileName || '图纸预览'
+  selectedFolderDrawingLoading.value = true
+  try {
+    const objectUrl = await createAuthenticatedObjectUrl(path)
+    if (requestSeq === selectedFolderDrawingRequestSeq) {
+      selectedFolderDrawingSrc.value = objectUrl
+    } else {
+      revokeObjectUrl(objectUrl)
+    }
+  } catch (error) {
+    if (requestSeq === selectedFolderDrawingRequestSeq) {
+      cleanupSelectedFolderDrawingSrc()
+      ElMessage.error(await readFileErrorMessage(error) || '图纸预览失败。')
+    }
+  } finally {
+    if (requestSeq === selectedFolderDrawingRequestSeq && !selectedFolderDrawingSrc.value) {
+      selectedFolderDrawingLoading.value = false
+    }
+  }
+}
+
+const backToFolderFileList = () => {
+  selectedFolderDrawingRequestSeq += 1
+  cleanupSelectedFolderDrawingSrc()
+}
+
+const openPdfPreview = async (url, partNo) => {
+  if (!url) {
+    return ElMessage.warning('当前零件没有绑定图纸。')
+  }
+  if (isDrawingFolderUrl(url)) {
+    currentDrawingFolderUrl.value = url
+    currentDrawingFolderTitle.value = `附件文件夹：${partNo || '未命名文件夹'}`
+    folderViewerVisible.value = true
+    return
+  }
+  pdfTitle.value = partNo
+  currentPdfUrl.value = url
+  pdfLoaded.value = false
+  cleanupPdfSrc()
+  pdfVisible.value = true
+  try {
+    currentPdfSrc.value = await createAuthenticatedObjectUrl(url)
+  } catch (error) {
+    pdfVisible.value = false
+    ElMessage.error(await readFileErrorMessage(error) || '图纸预览失败。')
+  }
+}
+
+const openDrawingInNewWindow = async (url) => {
+  if (!url) {
+    return ElMessage.warning('当前零件没有绑定图纸。')
+  }
+  if (isDrawingFolderUrl(url)) {
+    currentDrawingFolderUrl.value = url
+    currentDrawingFolderTitle.value = currentRow.value?.partNo ? `附件文件夹：${currentRow.value.partNo}` : '附件文件夹'
+    folderViewerVisible.value = true
+    return
+  }
+  const result = await openAuthenticatedFileInNewWindow(url)
+  if (!result.success) {
+    ElMessage.warning(result.blocked ? '浏览器拦截了新窗口，请允许弹窗后重试。' : (result.message || '图纸打开失败。'))
+  }
+}
+
+// 核价弹窗核心逻辑
+const dialogVisible = ref(false)
+const currentRow = ref(null)
+const currentDrawingSrc = ref('')
+const currentDrawingLoading = ref(false)
+const submitLoading = computed(() => isPending(pricingActionKeys.saveItem(currentRow.value?.id)))
+const quoteMode = ref('NORMAL')
+const itemRemarkDraft = ref('')
+const itemInfoDialogVisible = ref(false)
+const assemblyFee = ref(null)
+const assemblyChildren = ref([])
+const assemblyPickerVisible = ref(false)
+const assemblyPickerSelection = ref([])
+const assemblyPickerTableRef = ref(null)
+const assemblyPickerPagination = reactive({ page: 1, pageSize: DEFAULT_CLIENT_PAGE_SIZE })
+const assemblyChildOptions = ref([])
+const assemblyChildTotal = ref(0)
+const assemblyChildKeyword = ref('')
+const assemblyChildLoading = ref(false)
+let assemblyChildSeq = 0
+let currentDrawingRequestSeq = 0
+let syncingAssemblyPickerSelection = false
+
+const currentItemInfoRows = computed(() => [
+  { label: '材料名称', value: currentRow.value?.materialName },
+  { label: '物料描述', value: currentRow.value?.description },
+  { label: '表面处理', value: currentRow.value?.surfaceTreatment }
+])
+
+const cleanupCurrentDrawingSrc = () => {
+  revokeObjectUrl(currentDrawingSrc.value)
+  currentDrawingSrc.value = ''
+}
+
+const loadCurrentDrawing = async (url) => {
+  currentDrawingRequestSeq += 1
+  const requestSeq = currentDrawingRequestSeq
+  cleanupCurrentDrawingSrc()
+  currentDrawingLoading.value = false
+  if (!url || isDrawingFolderUrl(url)) return
+
+  currentDrawingLoading.value = true
+  try {
+    const objectUrl = await createAuthenticatedObjectUrl(url)
+    if (requestSeq === currentDrawingRequestSeq) {
+      currentDrawingSrc.value = objectUrl
+    } else {
+      revokeObjectUrl(objectUrl)
+    }
+  } catch (error) {
+    if (requestSeq === currentDrawingRequestSeq) {
+      ElMessage.warning(await readFileErrorMessage(error) || '当前图纸加载失败。')
+    }
+  } finally {
+    if (requestSeq === currentDrawingRequestSeq) {
+      currentDrawingLoading.value = false
+    }
+  }
+}
+
+watch(dialogVisible, (visible) => {
+  if (visible) {
+    loadCurrentDrawing(currentRow.value?.drawingUrl)
+  } else {
+    currentDrawingRequestSeq += 1
+    selectedFolderDrawingRequestSeq += 1
+    cleanupCurrentDrawingSrc()
+    cleanupSelectedFolderDrawingSrc()
+    currentDrawingLoading.value = false
+    materialPickerVisible.value = false
+    processPickerVisible.value = false
+    editingProcessIndex.value = null
+    itemInfoDialogVisible.value = false
+  }
+})
+
+watch(processPickerVisible, (visible) => {
+  if (!visible) {
+    editingProcessIndex.value = null
+  }
+})
+
+watch(pdfVisible, (visible) => {
+  if (!visible) {
+    cleanupPdfSrc()
+    pdfLoaded.value = false
+  }
+})
+
+onBeforeUnmount(() => {
+  currentDrawingRequestSeq += 1
+  selectedFolderDrawingRequestSeq += 1
+  cleanupCurrentDrawingSrc()
+  cleanupSelectedFolderDrawingSrc()
+  cleanupPdfSrc()
+})
+
+const matForm = reactive({
+  materialId: null,
+  materialCode: '',
+  materialName: '',
+  materialTypeId: null,
+  materialTypeCode: '',
+  materialTypeName: '',
+  materialCategory: '',
+  density: null,
+  priceSpecs: normalizePriceSpecs([]),
+  priceSpecCode: '',
+  priceSpecName: '',
+  priceSpec: null,
+  remarks: '',
+  shape: '',
+  L: null,
+  W: null,
+  T: null,
+  outR: null,
+  inR: null,
+  netWeight: null
+})
+const processRoute = ref([])
+let processRouteSeq = 0
+const PROCESS_SORT_STEP = 10
+
+const applyMaterialIdentityToMatForm = (source = {}) => {
+  const selectedMaterial = buildMaterialSpecSelection(
+    source,
+    source.priceSpecCode || source.priceSpec?.specCode || matForm.priceSpecCode || 'SPEC_1'
+  )
+  matForm.materialId = selectedMaterial.materialId ?? selectedMaterial.id ?? null
+  matForm.materialCode = selectedMaterial.materialCode || ''
+  matForm.materialName = selectedMaterial.materialName || selectedMaterial.name || ''
+  matForm.materialTypeId = selectedMaterial.materialTypeId ?? null
+  matForm.materialTypeCode = selectedMaterial.materialTypeCode || ''
+  matForm.materialTypeName = selectedMaterial.materialTypeName || ''
+  matForm.materialCategory = selectedMaterial.materialCategory || ''
+  matForm.density = effectiveMaterialDensity(selectedMaterial)
+  matForm.priceSpecs = normalizePriceSpecs(selectedMaterial.priceSpecs)
+  matForm.priceSpecCode = selectedMaterial.priceSpecCode || ''
+  matForm.priceSpecName = selectedMaterial.priceSpecName || ''
+  matForm.priceSpec = selectedMaterial.priceSpec || findPriceSpec(matForm.priceSpecs, matForm.priceSpecCode)
+  matForm.remarks = selectedMaterial.remarks || ''
+}
+
+const formatMaterialLabel = (material) => {
+  if (!material) return ''
+  const code = material.materialCode || '-'
+  const name = material.materialName || '-'
+  const typeName = material.materialTypeName || '-'
+  const category = material.materialCategory || '-'
+  const specName = material.priceSpecName ? ` / ${material.priceSpecName}` : ''
+  return material.remarks
+    ? `${code} / ${name} / ${typeName} / ${category}${specName} ${material.remarks}`
+    : `${code} / ${name} / ${typeName} / ${category}${specName}`
+}
+
+const selectedMaterialLabel = computed(() => {
+  if (matForm.materialCode) return formatMaterialLabel(matForm)
+  if (!matForm.materialCode && matForm.materialName) return `${matForm.materialName}（缺少材料编码或规格，请重新选择）`
+  return matForm.materialName || matForm.materialCode || '请选择材质'
+})
+
+const applyMaterialToMatForm = (material) => {
+  if (!material?.materialCode) return
+  applyMaterialIdentityToMatForm(material)
+}
+
+const applyMaterialSnapshotToMatForm = (source = {}) => {
+  const normalized = normalizeGlobalConfig(hydrateMaterialPricingSnapshot(source, pricingOptionIndex.value))
+  applyMaterialIdentityToMatForm(normalized)
+  matForm.shape = normalized.shape || '板材'
+}
+
+const formatProcessRateText = (value) => {
+  const hourlyRate = Number(value)
+  return Number.isFinite(hourlyRate) ? `${hourlyRate.toFixed(2)}元/小时` : '-'
+}
+
+const buildProcessSnapshotOption = (proc) => {
+  if (!proc) return null
+  const sourceType = resolveProcessSourceType(proc)
+  if (sourceType === 'extra') {
+    const processName = proc.processName || proc.feeName || ''
+    if (!processName && !proc.optionKey) return null
+    return {
+      ...proc,
+      optionKey: proc.optionKey || (proc.feeCode ? `extra:${String(proc.feeCode).trim().toUpperCase()}` : (proc.feeItemId ? `extra:${proc.feeItemId}` : '')),
+      feeItemId: proc.feeItemId ?? null,
+      feeCode: proc.feeCode || '',
+      feeName: proc.feeName || processName,
+      processName,
+      label: proc.label || (processName ? `${processName}（非工时费用）` : ''),
+      calcType: '非工时费用',
+      sourceType
+    }
+  }
+
+  const processDetailId = proc.processDetailId ?? proc.id ?? null
+  const detailName = proc.detailName || proc.processName || ''
+  if (!processDetailId && !proc.optionKey && !detailName && !proc.processCode) return null
+  const hourlyRate = proc.hourlyRate ?? proc.effectiveHourlyRate ?? proc.unitRate ?? null
+  const processCode = proc.processCode || '-'
+  return {
+    ...proc,
+    optionKey: proc.optionKey || (processDetailId ? `process:${processDetailId}` : ''),
+    processDetailId,
+    processCategoryId: proc.processCategoryId ?? proc.categoryId ?? null,
+    categoryId: proc.categoryId ?? proc.processCategoryId ?? null,
+    detailName,
+    processName: detailName,
+    hourlyRate,
+    label: proc.label || (detailName ? `${detailName}（${processCode} / ${formatProcessRateText(hourlyRate)}）` : ''),
+    calcType: '工时',
+    sourceType
+  }
+}
+
+const findProcessOption = (proc) => {
+  if (!proc) return null
+  return buildProcessSnapshotOption(hydrateProcessPricingSnapshot(proc, pricingOptionIndex.value))
+}
+
+const selectedProcessOptionKey = computed(() => {
+  const proc = processRoute.value[editingProcessIndex.value]
+  return findProcessOption(proc)?.optionKey || proc?.optionKey || ''
+})
+
+const formatProcessLabel = (proc, fallback = '请选择工序') => {
+  const option = findProcessOption(proc)
+  if (option?.label) return option.label
+  if (isSelectableProcessRoute(proc) && !proc?.processDetailId && proc?.processName) return `${proc.processName}（请重新选择具体工艺）`
+  if (proc?.detailName || proc?.processCode) {
+    const detailName = proc.detailName || proc.processName || '-'
+    const processCode = proc.processCode || '-'
+    const hourlyRate = Number(proc.hourlyRate)
+    const rateText = Number.isFinite(hourlyRate) ? `${hourlyRate.toFixed(2)}元/小时` : '-'
+    return `${detailName}（${processCode} / ${rateText}）`
+  }
+  if (proc?.processName) return `${proc.processName}（${proc.calcType || '工时'}）`
+  return fallback
+}
+
+const applyProcessSelection = (proc, selected) => {
+  if (!proc || !selected) return
+  const sourceType = selected.sourceType || resolveProcessSourceType(selected)
+  const processDetailId = sourceType === 'process' ? (selected.processDetailId ?? selected.id ?? null) : null
+  const processCategoryId = sourceType === 'process' ? (selected.processCategoryId ?? selected.categoryId ?? null) : null
+  const processName = sourceType === 'extra'
+    ? (selected.processName || selected.feeName || '')
+    : (selected.detailName || selected.processName || '')
+  const hourlyRate = sourceType === 'process'
+    ? (selected.hourlyRate ?? selected.effectiveHourlyRate ?? selected.unitRate ?? null)
+    : null
+  proc.optionKey = selected.optionKey || (sourceType === 'process' && processDetailId
+    ? `process:${processDetailId}`
+    : (sourceType === 'extra' && selected.feeCode ? `extra:${String(selected.feeCode).trim().toUpperCase()}` : ''))
+  proc.processDetailId = processDetailId
+  proc.processCategoryId = processCategoryId
+  proc.categoryId = processCategoryId
+  proc.processCode = sourceType === 'process' ? (selected.processCode || '') : ''
+  proc.categoryName = ''
+  proc.detailName = sourceType === 'process' ? processName : ''
+  proc.detailHourlyRate = sourceType === 'process' ? (selected.detailHourlyRate ?? null) : null
+  proc.categoryHourlyRate = null
+  proc.effectiveHourlyRate = sourceType === 'process' ? (selected.effectiveHourlyRate ?? hourlyRate) : null
+  proc.hourlyRate = hourlyRate
+  proc.unitRate = hourlyRate
+  proc.feeItemId = sourceType === 'extra' ? (selected.feeItemId ?? selected.id ?? null) : null
+  proc.feeCode = sourceType === 'extra' ? (selected.feeCode || '') : ''
+  proc.feeName = sourceType === 'extra' ? (selected.feeName || processName) : ''
+  proc.processName = processName
+  proc.label = selected.label || ''
+  proc.calcType = sourceType === 'extra' ? '非工时费用' : '工时'
+  proc.sourceType = sourceType
+}
+
+const selectMaterial = (material) => {
+  cachePricingMaterialOptions(material ? [material] : [])
+  applyMaterialToMatForm(material)
+}
+
+const handleMaterialPriceUpdated = (updatedMaterial) => {
+  cachePricingMaterialOptions(updatedMaterial ? [updatedMaterial] : [])
+  if (materialCodeKey(updatedMaterial?.materialCode) !== materialCodeKey(matForm.materialCode)) return
+  applyMaterialIdentityToMatForm(buildMaterialSpecSelection(updatedMaterial, matForm.priceSpecCode || 'SPEC_1'))
+}
+
+const openProcessPicker = (index) => {
+  editingProcessIndex.value = index
+  processPickerVisible.value = true
+}
+
+const selectProcess = (selected) => {
+  cachePricingProcessOptions(selected ? [selected] : [])
+  const proc = processRoute.value[editingProcessIndex.value]
+  applyProcessSelection(proc, selected)
+  editingProcessIndex.value = null
+}
+
+const syncCurrentSelectedProcessRate = (updatedDetail = {}) => {
+  const detailId = updatedDetail.id ?? updatedDetail.processDetailId
+  if (detailId == null) return
+  const hourlyRate = Number(updatedDetail.hourlyRate ?? updatedDetail.effectiveHourlyRate)
+  const hasHourlyRate = Number.isFinite(hourlyRate)
+  processRoute.value.forEach((proc) => {
+    if (String(proc?.processDetailId ?? '') !== String(detailId)) return
+    proc.processCategoryId = updatedDetail.categoryId ?? updatedDetail.processCategoryId ?? proc.processCategoryId
+    proc.processCode = updatedDetail.processCode ?? proc.processCode
+    proc.categoryName = ''
+    proc.detailName = updatedDetail.detailName ?? proc.detailName
+    proc.processName = updatedDetail.detailName ?? proc.processName
+    proc.detailHourlyRate = updatedDetail.detailHourlyRate ?? proc.detailHourlyRate
+    proc.categoryHourlyRate = null
+    proc.effectiveHourlyRate = updatedDetail.effectiveHourlyRate ?? proc.effectiveHourlyRate
+    if (hasHourlyRate) {
+      proc.hourlyRate = hourlyRate
+      proc.unitRate = hourlyRate
+    }
+  })
+}
+
+const handleProcessRateUpdated = (updatedDetail) => {
+  dictionaryStore.upsertProcessDetail(updatedDetail)
+  cachePricingProcessOptions(updatedDetail ? [updatedDetail] : [])
+  syncCurrentSelectedProcessRate(updatedDetail)
+}
+
+const isAssemblyItem = (item) => String(item?.quoteMode || '').toUpperCase() === 'ASSEMBLY'
+
+const pagedAssemblyChildOptions = computed(() => assemblyChildOptions.value)
+
+const selectedAssemblyChildIds = computed(() => new Set(
+  assemblyChildren.value
+    .map(child => child.childItemId)
+    .filter(Boolean)
+))
+
+const selectedAssemblyPickerIds = computed(() => new Set(assemblyPickerSelection.value.map(row => row.id)))
+
+const syncAssemblyPickerTableSelection = async () => {
+  if (!assemblyPickerVisible.value) return
+  syncingAssemblyPickerSelection = true
+  await nextTick()
+  assemblyPickerTableRef.value?.clearSelection()
+  pagedAssemblyChildOptions.value.forEach(row => {
+    if (selectedAssemblyPickerIds.value.has(row.id)) {
+      assemblyPickerTableRef.value?.toggleRowSelection(row, true)
+    }
+  })
+  await nextTick()
+  syncingAssemblyPickerSelection = false
+}
+
+watch(
+  () => [assemblyPickerPagination.page, assemblyPickerPagination.pageSize],
+  () => {
+    if (assemblyPickerVisible.value) {
+      fetchAssemblyChildCandidates()
+    }
+  }
+)
+
+const assemblyChildrenTotal = computed(() => assemblyChildren.value.reduce((sum, child) => {
+  const unitPrice = Number(child.taxIncludedUnitPrice)
+  const qty = Number(child.qtyPerParent || 0)
+  return Number.isFinite(unitPrice) ? sum + unitPrice * qty : sum
+}, 0))
+
+const assemblyPreviewPricingResult = computed(() => calculatePreviewPriceByFeeCategory(
+  numberOrZero(assemblyFee.value),
+  effectiveAssemblyMarkupFeeOptions.value,
+  'ASSEMBLY'
+))
+
+const assemblyFeeMarkupRows = computed(() => assemblyPreviewPricingResult.value.feeRows)
+
+const assemblyFeeMarkupTotal = computed(() => assemblyFeeMarkupRows.value.reduce((sum, row) => sum + numberOrZero(row.cost), 0))
+
+const assemblyTaxIncludedUnitPrice = computed(() => assemblyChildrenTotal.value + assemblyPreviewPricingResult.value.taxIncludedUnitPrice)
+
+const numericSortNo = (value) => {
+  const numericValue = Number(value)
+  return Number.isFinite(numericValue) ? numericValue : null
+}
+
+const resolveProcessSourceType = (route = {}) => route.sourceType || (route.calcType === '非工时费用' ? 'extra' : 'process')
+const isSelectableProcessRoute = (route = {}) => resolveProcessSourceType(route) === 'process'
+const isExtraFeeRoute = (route = {}) => resolveProcessSourceType(route) === 'extra'
+
+const createProcessRow = (source = {}) => ({
+  rowKey: `process-${Date.now()}-${processRouteSeq++}`,
+  processName: source.sourceType === 'extra' ? (source.processName || '') : (source.detailName || source.processName || ''),
+  optionKey: source.optionKey || '',
+  processDetailId: source.processDetailId ?? null,
+  processCategoryId: source.processCategoryId ?? source.categoryId ?? null,
+  categoryId: source.categoryId ?? source.processCategoryId ?? null,
+  processCode: source.processCode || '',
+  categoryName: '',
+  detailName: source.detailName || '',
+  detailHourlyRate: source.detailHourlyRate ?? null,
+  categoryHourlyRate: null,
+  effectiveHourlyRate: source.effectiveHourlyRate ?? source.hourlyRate ?? source.unitRate ?? null,
+  hourlyRate: source.hourlyRate ?? source.effectiveHourlyRate ?? source.unitRate ?? null,
+  unitRate: source.unitRate ?? source.hourlyRate ?? source.effectiveHourlyRate ?? null,
+  feeItemId: source.feeItemId ?? null,
+  feeCode: source.feeCode || '',
+  feeName: source.feeName || '',
+  label: source.label || '',
+  calcType: source.calcType || '工时',
+  sourceType: source.sourceType || (source.calcType === '非工时费用' ? 'extra' : 'process'),
+  inputVal: numberOrNullForInput(source.unitWorkHours ?? source.inputVal),
+  sortNo: numericSortNo(source.sortNo)
+})
+
+const createDefaultBlankProcessRows = () => (
+  Array.from({ length: DEFAULT_GLOBAL_PROCESS_ROUTE_COUNT }, () => createProcessRow())
+)
+
+const createAssemblyChildRow = (source = {}) => {
+  const childId = source.childItemId ?? source.id ?? null
+  const option = assemblyChildOptions.value.find(item => item.id === childId)
+  return {
+    rowKey: `assembly-child-${Date.now()}-${assemblyChildSeq++}`,
+    childItemId: childId,
+    qtyPerParent: Number(source.qtyPerParent ?? source.childQtyPerParent ?? 1),
+    sortNo: numericSortNo(source.sortNo),
+    partNo: source.partNo || option?.partNo || '',
+    version: source.version || option?.version || '',
+    description: source.description || option?.description || '',
+    taxIncludedUnitPrice: source.taxIncludedUnitPrice ?? option?.taxIncludedUnitPrice ?? null,
+    status: source.status || option?.status || ''
+  }
+}
+
+const removeAssemblyChild = (index) => {
+  assemblyChildren.value.splice(index, 1)
+}
+
+const fetchAssemblyChildCandidates = async () => {
+  if (!assemblyPickerVisible.value || !rfqId.value) return
+  assemblyChildLoading.value = true
+  try {
+    const response = await listAssemblyChildCandidates(rfqId.value, {
+      parentItemId: currentRow.value?.id,
+      page: assemblyPickerPagination.page,
+      pageSize: assemblyPickerPagination.pageSize,
+      keyword: assemblyChildKeyword.value
+    })
+    assemblyChildOptions.value = response.records || []
+    assemblyChildTotal.value = Number(response.total ?? 0)
+    await syncAssemblyPickerTableSelection()
+  } catch (error) {
+    console.error(error)
+    ElMessage.error('子件候选加载失败。')
+  } finally {
+    assemblyChildLoading.value = false
+  }
+}
+
+const searchAssemblyChildCandidates = () => {
+  if (assemblyPickerPagination.page !== 1) {
+    assemblyPickerPagination.page = 1
+    return
+  }
+  fetchAssemblyChildCandidates()
+}
+
+const openAssemblyChildPicker = async () => {
+  assemblyPickerSelection.value = []
+  assemblyChildOptions.value = []
+  assemblyChildTotal.value = 0
+  assemblyChildKeyword.value = ''
+  assemblyPickerPagination.page = 1
+  assemblyPickerVisible.value = true
+  await nextTick()
+  assemblyPickerTableRef.value?.clearSelection()
+  await fetchAssemblyChildCandidates()
+}
+
+const handleAssemblyPickerSelection = (rows) => {
+  if (syncingAssemblyPickerSelection) return
+  const currentPageIds = new Set(pagedAssemblyChildOptions.value.map(row => row.id))
+  const preservedRows = assemblyPickerSelection.value.filter(row => !currentPageIds.has(row.id))
+  assemblyPickerSelection.value = [...preservedRows, ...rows]
+}
+
+const isAssemblyPickerRowSelectable = (row) => !selectedAssemblyChildIds.value.has(row.id)
+
+const confirmAssemblyChildPicker = () => {
+  const existingIds = selectedAssemblyChildIds.value
+  const rowsToAdd = assemblyPickerSelection.value.filter(row => !existingIds.has(row.id))
+  rowsToAdd.forEach(row => {
+    assemblyChildren.value.push(createAssemblyChildRow({
+      childItemId: row.id,
+      qtyPerParent: 1,
+      partNo: row.partNo,
+      version: row.version,
+      description: row.description,
+      taxIncludedUnitPrice: row.taxIncludedUnitPrice,
+      status: row.status
+    }))
+  })
+  assemblyPickerVisible.value = false
+  assemblyPickerSelection.value = []
+  if (rowsToAdd.length > 0) {
+    ElMessage.success(`已加入 ${rowsToAdd.length} 个子件。`)
+  }
+}
+
+const assignProcessSortNos = (rows = processRoute.value) => {
+  rows.forEach((row, index) => {
+    row.sortNo = (index + 1) * PROCESS_SORT_STEP
+  })
+  return rows
+}
+
+const addProcess = () => {
+  processRoute.value.push(createProcessRow())
+  assignProcessSortNos()
+}
+
+const insertProcess = (index) => {
+  processRoute.value.splice(index, 0, createProcessRow())
+  assignProcessSortNos()
+}
+
+const moveProcessUp = (index) => {
+  if (index <= 0 || index >= processRoute.value.length) return
+  ;[processRoute.value[index - 1], processRoute.value[index]] = [processRoute.value[index], processRoute.value[index - 1]]
+  assignProcessSortNos()
+}
+
+const removeProcess = (index) => {
+  processRoute.value.splice(index, 1)
+  assignProcessSortNos()
+}
+
+const hydrateRouteItem = (proc) => {
+  const selected = buildProcessSnapshotOption(hydrateProcessPricingSnapshot(proc, pricingOptionIndex.value))
+  if (selected) {
+    applyProcessSelection(proc, selected)
+  }
+  return proc
+}
+
+const normalizeRouteList = (route) => {
+  let list = []
+  if (!route) return list
+  if (Array.isArray(route)) {
+    list = JSON.parse(JSON.stringify(route))
+  } else if (typeof route === 'string') {
+    try {
+      list = JSON.parse(route)
+    } catch {
+      return list
+    }
+  } else {
+    return list
+  }
+  return sortRouteList(Array.isArray(list) ? list : [])
+}
+
+const sortRouteList = (routes) => {
+  const withIndex = routes.map((route, index) => ({ route, index }))
+  const hasSortNo = withIndex.some(item => numericSortNo(item.route?.sortNo) != null)
+  if (!hasSortNo) return routes
+  return withIndex
+    .sort((a, b) => {
+      const aSort = numericSortNo(a.route?.sortNo)
+      const bSort = numericSortNo(b.route?.sortNo)
+      if (aSort != null && bSort != null && aSort !== bSort) return aSort - bSort
+      if (aSort != null && bSort == null) return -1
+      if (aSort == null && bSort != null) return 1
+      return a.index - b.index
+    })
+    .map(item => item.route)
+}
+
+const buildQuoteProcessRoute = () => processRoute.value
+  .map((p, index) => ({ ...p, sortNo: (index + 1) * PROCESS_SORT_STEP }))
+  .filter(p => p.inputVal > 0 && (isSelectableProcessRoute(p) ? p.processDetailId : p.processName))
+  .map(p => {
+    if (isSelectableProcessRoute(p)) {
+      return {
+        sortNo: p.sortNo,
+        processDetailId: p.processDetailId,
+        processCode: p.processCode || '',
+        unitWorkHours: p.inputVal,
+        calcType: '工时'
+      }
+    }
+    return {
+      sortNo: p.sortNo,
+      processName: p.processName,
+      feeItemId: p.feeItemId ?? null,
+      feeCode: p.feeCode || '',
+      feeName: p.feeName || p.processName || '',
+      inputVal: p.inputVal,
+      calcType: '非工时费用',
+      sourceType: 'extra'
+    }
+  })
+
+const buildGlobalProcessRoute = () => processRoute.value
+  .map((p, index) => ({ ...p, sortNo: (index + 1) * PROCESS_SORT_STEP }))
+  .filter(p => isSelectableProcessRoute(p) ? p.processDetailId : p.processName)
+  .map(p => {
+    const sourceType = resolveProcessSourceType(p)
+    if (sourceType === 'process') {
+      return {
+        sortNo: p.sortNo,
+        processName: p.detailName || p.processName || '',
+        optionKey: p.optionKey || '',
+        processDetailId: p.processDetailId ?? null,
+        processCategoryId: p.processCategoryId ?? null,
+        processCode: p.processCode || '',
+        categoryName: p.categoryName || '',
+        detailName: p.detailName || p.processName || '',
+        hourlyRate: p.hourlyRate ?? null,
+        calcType: '工时',
+        sourceType
+      }
+    }
+    return {
+      sortNo: p.sortNo,
+      processName: p.processName,
+      optionKey: p.optionKey || '',
+      feeItemId: p.feeItemId ?? null,
+      feeCode: p.feeCode || '',
+      feeName: p.feeName || p.processName || '',
+      calcType: '非工时费用',
+      sourceType
+    }
+  })
+
+const buildGlobalMaterialConfig = () => ({
+  materialId: matForm.materialId,
+  materialCode: matForm.materialCode,
+  materialName: matForm.materialName,
+  materialTypeId: matForm.materialTypeId,
+  materialTypeCode: matForm.materialTypeCode,
+  materialTypeName: matForm.materialTypeName,
+  materialCategory: matForm.materialCategory,
+  density: matForm.density,
+  priceSpecs: normalizePriceSpecs(matForm.priceSpecs),
+  priceSpecCode: matForm.priceSpecCode,
+  priceSpecName: matForm.priceSpecName,
+  priceSpec: matForm.priceSpec,
+  remarks: matForm.remarks,
+  shape: matForm.shape,
+  legacyMaterialIdentity: false
+})
+
+const comparableMaterialConfig = (config) => {
+  const normalized = normalizeGlobalConfig(config)
+  return {
+    materialId: normalized.materialId ?? null,
+    materialCode: normalized.materialCode || '',
+    materialName: normalized.materialName || '',
+    materialTypeId: normalized.materialTypeId ?? null,
+    materialTypeCode: normalized.materialTypeCode || '',
+    materialTypeName: normalized.materialTypeName || '',
+    materialCategory: normalized.materialCategory || '',
+    density: numberOrNullForSnapshot(normalized.density),
+    priceSpecCode: normalized.priceSpecCode || '',
+    priceSpecName: normalized.priceSpecName || '',
+    priceSpec: normalized.priceSpec || null,
+    remarks: normalized.remarks || '',
+    shape: normalized.shape || '板材'
+  }
+}
+
+const comparableProcessRoute = (route) => normalizeRouteList(route)
+  .filter(p => isSelectableProcessRoute(p) ? p.processDetailId : p.processName)
+  .map((p, index) => {
+    const sourceType = resolveProcessSourceType(p)
+    return {
+      sortNo: (index + 1) * PROCESS_SORT_STEP,
+      processDetailId: sourceType === 'process' ? (p.processDetailId ?? null) : null,
+      processCode: sourceType === 'process' ? (p.processCode || '') : '',
+      feeCode: sourceType === 'extra' ? (p.feeCode || '') : '',
+      processName: p.processName || '',
+      calcType: sourceType === 'extra' ? '非工时费用' : '工时',
+      sourceType
+    }
+  })
+
+const comparableGlobalConfig = (config) => ({
+  ...comparableMaterialConfig(config),
+  processRoute: comparableProcessRoute(config?.processRoute)
+})
+
+const syncCurrentSelectionToGlobalConfig = async () => {
+  const nextProcessRoute = buildGlobalProcessRoute()
+  const nextConfig = normalizeGlobalConfig({
+    ...normalizeGlobalConfig(globalConfig.value),
+    ...buildGlobalMaterialConfig(),
+    processRoute: nextProcessRoute
+  })
+
+  if (JSON.stringify(comparableGlobalConfig(globalConfig.value)) === JSON.stringify(comparableGlobalConfig(nextConfig))) {
+    return { updated: false }
+  }
+
+  globalConfig.value = globalConfigStore.setConfig(rfqId.value, nextConfig)
+  await saveOrderConfig(rfqId.value, JSON.parse(JSON.stringify(nextConfig)))
+  return { updated: true }
+}
+
+const loadAssemblyRelations = async (row) => {
+  assemblyChildren.value = []
+  if (!row?.id) return
+  try {
+    const response = await listAssemblyRelations(row.id)
+    assemblyChildren.value = (response || []).map(item => createAssemblyChildRow(item))
+  } catch (error) {
+    console.error(error)
+    ElMessage.error('组合件子件关系加载失败。')
+  }
+}
+
+const updatePricingItemRemarkInMemory = (itemId, remark) => {
+  if (currentRow.value?.id === itemId) {
+    currentRow.value = { ...currentRow.value, remark }
+  }
+  const row = quoteData.value?.itemList?.find(item => item.id === itemId)
+  if (row) {
+    row.remark = remark
+  }
+}
+
+// 打开弹窗，继承全局配置
+const openQuoteDialog = async (row) => {
+  selectedFolderDrawingRequestSeq += 1
+  cleanupSelectedFolderDrawingSrc()
+  currentRow.value = row
+  itemRemarkDraft.value = row?.remark || ''
+  syncCustomerWeightDraftFromFee()
+  syncAssemblyCustomerWeightDraftFromFee()
+  dialogVisible.value = true
+  quoteMode.value = isAssemblyItem(row) ? 'ASSEMBLY' : 'NORMAL'
+  assemblyFee.value = numberOrNullForInput(row.assemblyFee)
+  assemblyChildren.value = []
+
+  // 已核价零件优先使用自己的材料快照；未核价零件才继承订单全局默认材料。
+  const savedMaterialData = row.materialData || {}
+  const savedDimensions = savedMaterialData.dimensions || {}
+  const hasSavedMaterialSnapshot = Boolean(savedMaterialData.materialCode || savedMaterialData.materialName || savedMaterialData.name)
+  const materialSnapshotSource = hasSavedMaterialSnapshot
+    ? {
+        materialId: savedMaterialData.materialId,
+        materialCode: savedMaterialData.materialCode,
+        materialName: savedMaterialData.materialName || savedMaterialData.name,
+        materialTypeId: savedMaterialData.materialTypeId,
+        materialTypeCode: savedMaterialData.materialTypeCode,
+        materialTypeName: savedMaterialData.materialTypeName,
+        materialCategory: savedMaterialData.materialCategory,
+        density: savedMaterialData.density,
+        unitPrice: savedMaterialData.unitPrice,
+        priceSpecs: savedMaterialData.priceSpecs,
+        priceSpecCode: savedMaterialData.priceSpecCode,
+        priceSpecName: savedMaterialData.priceSpecName,
+        priceSpec: savedMaterialData.priceSpec,
+        remarks: savedMaterialData.remarks,
+        shape: savedMaterialData.shape || globalConfig.value.shape || '板材'
+      }
+    : globalConfig.value
+  const savedProcessRoutes = normalizeRouteList(row.processRoute)
+  const shouldUseSavedProcessRoutes = quoteMode.value === 'NORMAL' && savedProcessRoutes.length > 0
+  const processSnapshotSource = shouldUseSavedProcessRoutes
+    ? savedProcessRoutes
+    : normalizeRouteList(globalConfig.value.processRoute)
+
+  await loadLatestPricingOptionsForQuote(materialSnapshotSource, processSnapshotSource)
+  applyMaterialSnapshotToMatForm(materialSnapshotSource)
+  const savedDimensionUnit = savedMaterialData.dimensionUnit || 'mm'
+  matForm.L = toMetricDimension(savedDimensions.L, savedDimensionUnit)
+  matForm.W = toMetricDimension(savedDimensions.W, savedDimensionUnit)
+  matForm.T = toMetricDimension(savedDimensions.T, savedDimensionUnit)
+  matForm.outR = toMetricDimension(savedDimensions.outR, savedDimensionUnit)
+  matForm.inR = toMetricDimension(savedDimensions.inR, savedDimensionUnit)
+  matForm.netWeight = numberOrNullForInput(row.partNetWeight ?? savedMaterialData.netWeight)
+
+  const loadGlobalProcessRouteDefaults = () => {
+    if (processSnapshotSource.length > 0) {
+      processRoute.value = assignProcessSortNos(processSnapshotSource
+        .map(p => hydrateRouteItem(createProcessRow(p))))
+    } else {
+      processRoute.value = assignProcessSortNos(createDefaultBlankProcessRows())
+    }
+  }
+
+  if (shouldUseSavedProcessRoutes) {
+    processRoute.value = assignProcessSortNos(processSnapshotSource.map(route => hydrateRouteItem(createProcessRow(route))))
+  } else {
+    // 组合件的 processRoute 是后端保存的“组装费”快照，不能回灌到普通件工艺模板状态。
+    loadGlobalProcessRouteDefaults()
+  }
+
+  if (quoteMode.value === 'ASSEMBLY') {
+    await loadAssemblyRelations(row)
+  }
+}
+
+// 智能计算材料费
+const currentMatInfo = computed(() => ({
+  id: matForm.materialId,
+  density: numberOrZero(matForm.density),
+  priceSpecCode: matForm.priceSpecCode,
+  priceSpecName: matForm.priceSpecName,
+  priceSpec: matForm.priceSpec || findPriceSpec(matForm.priceSpecs, matForm.priceSpecCode)
+}))
+const currentUnitPrice = computed(() => effectiveSpecPrice(currentMatInfo.value.priceSpec, matForm.shape) || 0)
+const currentDensity = computed(() => {
+  return currentMatInfo.value.density || 0
+})
+const calculatedVolume = computed(() => {
+  const length = numberOrZero(matForm.L)
+  const width = numberOrZero(matForm.W)
+  const thickness = numberOrZero(matForm.T)
+  const outerDiameter = numberOrZero(matForm.outR)
+  const innerDiameter = numberOrZero(matForm.inR)
+
+  if (matForm.shape === '板材') {
+    return length * width * thickness
+  }
+  if (matForm.shape === '棒材') {
+    return Math.PI * Math.pow(outerDiameter / 2, 2) * length
+  }
+  if (matForm.shape === '管材') {
+    const ringArea = Math.PI * (Math.pow(outerDiameter / 2, 2) - Math.pow(innerDiameter / 2, 2))
+    return Math.max(ringArea, 0) * length
+  }
+  return 0
+})
+const calculatedWeight = computed(() => calculatedVolume.value * currentDensity.value)
+const calculatedMaterialCost = computed(() => calculatedWeight.value * currentUnitPrice.value)
+const currentItemQty = computed(() => numberOrZero(currentRow.value?.qty))
+
+const normalProcessCostPreview = computed(() => processRoute.value.reduce((sum, proc) => {
+  const inputVal = numberOrZero(proc.inputVal)
+  if (inputVal <= 0) return sum
+  if (isSelectableProcessRoute(proc)) {
+    const option = findProcessOption(proc)
+    const hourlyRate = numberOrZero(option?.hourlyRate ?? proc.hourlyRate ?? proc.unitRate)
+    return sum + inputVal * hourlyRate
+  }
+  if (!proc.processName) return sum
+  return sum + inputVal
+}, 0))
+
+const normalBaseCostPreview = computed(() => calculatedMaterialCost.value + normalProcessCostPreview.value)
+const normalPreviewPricingResult = computed(() => calculatePreviewPriceByFeeCategory(
+  normalBaseCostPreview.value,
+  effectiveNormalMarkupFeeOptions.value,
+  'NORMAL'
+))
+const normalMarkupFeeRowsPreview = computed(() => normalPreviewPricingResult.value.feeRows)
+const normalTaxIncludedUnitPricePreview = computed(() => normalPreviewPricingResult.value.taxIncludedUnitPrice)
+const normalUntaxedUnitPricePreview = computed(() => normalPreviewPricingResult.value.untaxedUnitPrice)
+const normalTaxIncludedTotalPricePreview = computed(() => normalTaxIncludedUnitPricePreview.value * currentItemQty.value)
+const normalUntaxedTotalPricePreview = computed(() => normalUntaxedUnitPricePreview.value * currentItemQty.value)
+
+// 提交逻辑
+const submitCurrentQuote = async () => {
+  if (!currentRow.value?.id) return
+  let payload
+
+  if (quoteMode.value === 'ASSEMBLY') {
+    const validChildren = assemblyChildren.value
+      .filter(child => child.childItemId && Number(child.qtyPerParent) > 0)
+      .map((child, index) => ({
+        childItemId: child.childItemId,
+        qtyPerParent: Number(child.qtyPerParent),
+        sortNo: (index + 1) * PROCESS_SORT_STEP
+      }))
+    if (validChildren.length === 0) {
+      return ElMessage.warning('组合件至少需要选择一个子件。')
+    }
+    const unquotedChildren = assemblyChildren.value.filter(child => child.childItemId && child.taxIncludedUnitPrice == null)
+    if (unquotedChildren.length > 0) {
+      return ElMessage.warning('组合件存在未核价子件，请先完成子件核价。')
+    }
+    payload = {
+      itemId: currentRow.value.id,
+      quoteMode: 'ASSEMBLY',
+      assemblyFee: numberOrZero(assemblyFee.value),
+      assemblyChildren: validChildren,
+      materialData: {},
+      partNetWeight: 0,
+      processRoute: []
+    }
+  } else {
+    if (!matForm.materialCode) {
+      return ElMessage.warning('请重新选择带编码材料后再核价。')
+    }
+    if (!matForm.priceSpecCode) {
+      return ElMessage.warning('请重新选择材料规格后再核价。')
+    }
+    const validProcess = buildQuoteProcessRoute()
+    const selectedPriceSpec = currentMatInfo.value.priceSpec
+    payload = {
+      itemId: currentRow.value.id,
+      quoteMode: 'NORMAL',
+      partNetWeight: numberOrZero(matForm.netWeight),
+      materialData: {
+        materialId: currentMatInfo.value.id,
+        materialCode: matForm.materialCode,
+        materialName: matForm.materialName,
+        materialTypeId: matForm.materialTypeId,
+        materialTypeCode: matForm.materialTypeCode,
+        materialTypeName: matForm.materialTypeName,
+        materialCategory: matForm.materialCategory,
+        priceSpecCode: matForm.priceSpecCode,
+        priceSpecName: matForm.priceSpecName,
+        priceSpec: selectedPriceSpec,
+        name: matForm.materialName,
+        shape: matForm.shape,
+        volume: calculatedVolume.value,
+        weight: calculatedWeight.value,
+        grossWeight: calculatedWeight.value,
+        grossWeightUnit: 'kg',
+        netWeight: numberOrZero(matForm.netWeight),
+        netWeightUnit: 'kg',
+        density: currentDensity.value,
+        densityUnit: 'kg/m3',
+        unitPrice: currentUnitPrice.value,
+        unitPriceSource: unitPriceSource(selectedPriceSpec, matForm.shape),
+        unitPriceUnit: '元/kg',
+        cost: calculatedMaterialCost.value,
+        dimensionUnit: 'm',
+        volumeUnit: 'm3',
+        weightUnit: 'kg',
+        dimensions: {
+          L: matForm.L,
+          W: matForm.W,
+          T: matForm.T,
+          outR: matForm.outR,
+          inR: matForm.inR
+        }
+      },
+      processRoute: validProcess
+    }
+  }
+
+  return runAction(pricingActionKeys.saveItem(currentRow.value.id), async () => {
+    try {
+      const remarkResponse = await savePricingItemRemark(currentRow.value.id, itemRemarkDraft.value)
+      const hasReturnedRemark = Object.prototype.hasOwnProperty.call(remarkResponse || {}, 'remark')
+      const savedRemark = hasReturnedRemark ? remarkResponse.remark : itemRemarkDraft.value
+      itemRemarkDraft.value = savedRemark || ''
+      updatePricingItemRemarkInMemory(currentRow.value.id, savedRemark || null)
+      if (quoteMode.value === 'NORMAL') {
+        await saveCustomerWeightRate({ silent: true })
+      }
+      if (quoteMode.value === 'ASSEMBLY') {
+        await saveAssemblyCustomerWeightRate({ silent: true })
+      }
+      await submitQuote(payload)
+      let globalSynced = true
+      let globalUpdated = false
+      if (quoteMode.value === 'NORMAL') {
+        try {
+          const syncResult = await syncCurrentSelectionToGlobalConfig()
+          globalUpdated = !!syncResult.updated
+        } catch (syncError) {
+          console.error(syncError)
+          globalSynced = false
+        }
+      }
+      ElMessage[globalSynced ? 'success' : 'warning'](
+        quoteMode.value === 'ASSEMBLY'
+          ? '组合件核价成功。'
+          : globalSynced
+          ? (globalUpdated ? '核价成功，当前材料、规格、形态和工艺路线已同步为订单全局设定。' : '核价成功，订单全局设定未变化。')
+          : '核价成功，但订单全局工艺同步失败，请返回全局设定页检查。'
+      )
+      dialogVisible.value = false
+      await fetchQuoteData({ keepScroll: true }) // 刷新大表格，保留当前滚动位置
+    } catch (error) {
+      console.error(error)
+      ElMessage.error(error.response?.data?.message || '核价或备注保存失败，请检查后端服务。')
+    }
+  })
+}
+</script>
+
+<style scoped>
+.pricing-workbench-page {
+  gap: var(--erp-space-4);
+}
+
+.pricing-page-header {
+  align-items: center;
+}
+
+.pricing-page-actions {
+  min-width: 260px;
+}
+
+.pricing-context-card {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: var(--erp-space-5);
+  padding: var(--erp-space-5);
+}
+
+.pricing-context-copy {
+  display: flex;
+  min-width: 240px;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--erp-space-2);
+}
+
+.pricing-context-kicker {
+  color: var(--erp-primary);
+  font-size: var(--erp-font-size-xs);
+  font-weight: var(--erp-font-weight-bold);
+  letter-spacing: 0;
+}
+
+.pricing-context-copy strong {
+  color: var(--erp-text);
+  font-size: var(--erp-font-size-xl);
+  line-height: var(--erp-line-height-tight);
+}
+
+.pricing-context-copy p {
+  max-width: 520px;
+  margin: 0;
+  color: var(--erp-text-secondary);
+  font-size: var(--erp-font-size-sm);
+}
+
+.pricing-metric-grid {
+  display: grid;
+  min-width: 360px;
+  grid-template-columns: repeat(3, minmax(96px, 1fr));
+  gap: var(--erp-space-3);
+}
+
+.pricing-metric {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--erp-space-2);
+  min-height: 84px;
+  padding: var(--erp-space-4);
+  border: 1px solid var(--erp-border-soft);
+  border-radius: var(--erp-radius-lg);
+  background: var(--erp-surface-muted);
+}
+
+.pricing-metric-label {
+  color: var(--erp-text-secondary);
+  font-size: var(--erp-font-size-xs);
+}
+
+.pricing-metric-value {
+  color: var(--erp-text);
+  font-size: 24px;
+  line-height: 1;
+}
+
+.pricing-toolbar {
+  align-items: center;
+}
+
+.pricing-toolbar-copy {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.pricing-toolbar-title {
+  color: var(--erp-text);
+  font-weight: var(--erp-font-weight-bold);
+}
+
+.pricing-toolbar-copy small {
+  color: var(--erp-text-secondary);
+  font-size: var(--erp-font-size-xs);
+}
+
+.pricing-toolbar-actions {
+  justify-content: flex-end;
+}
+
+.pricing-table-body {
+  padding: var(--erp-space-3);
+}
+
+.pricing-empty-state {
+  margin: var(--erp-space-4);
+}
+
+.pricing-table,
+.full-width {
+  width: 100%;
+}
+
+.pricing-row-actions {
+  width: 100%;
+}
+
+.picker-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 40px;
+  padding: 0 12px;
+  border-color: var(--erp-border);
+  background: var(--erp-surface);
+  color: var(--erp-text);
+}
+
+.picker-trigger :deep(> span) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+}
+
+.picker-trigger:hover,
+.picker-trigger:focus {
+  border-color: var(--erp-primary);
+  color: var(--erp-primary);
+}
+
+.picker-trigger-text,
+.picker-trigger-placeholder {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.picker-trigger-placeholder {
+  color: var(--erp-text-secondary);
+}
+
+.picker-trigger-action {
+  flex: none;
+  color: var(--erp-primary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.muted-price {
+  color: var(--erp-text-secondary);
+}
+
+.success-price {
+  color: var(--erp-success);
+  font-weight: 700;
+}
+
+.danger-price {
+  color: var(--erp-danger);
+  font-weight: 700;
+}
+
+.pricing-workbench-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--erp-space-3);
+  padding: var(--erp-space-4);
+  background: var(--erp-surface);
+}
+
+.form-section-title {
+  margin: 0;
+  padding-left: 10px;
+  border-left: 3px solid var(--erp-primary);
+  color: var(--erp-text);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.pricing-section-form {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.quote-mode-form {
+  margin-top: 0;
+}
+
+.pricing-item-note-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.pricing-item-note-form :deep(.el-form-item) {
+  margin-bottom: 0;
+}
+
+.pricing-item-note-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  width: 100%;
+  align-items: stretch;
+}
+
+.pricing-item-info-inline-button {
+  align-self: stretch;
+  min-width: 112px;
+  min-height: 54px;
+  height: auto;
+}
+
+.pricing-item-info-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pricing-item-info-row {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--erp-border-soft);
+  border-radius: 6px;
+  background: var(--erp-surface-muted);
+}
+
+.pricing-item-info-row span {
+  color: var(--erp-text-secondary);
+  font-size: var(--erp-font-size-sm);
+}
+
+.pricing-item-info-row strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--erp-text);
+  font-weight: 700;
+}
+
+.dimension-row,
+.weight-row {
+  margin-top: 4px;
+  padding: 10px;
+  border: 1px solid var(--erp-border-soft);
+  border-radius: 6px;
+  background: var(--erp-surface-muted);
+}
+
+.weight-row {
+  margin-top: 10px;
+}
+
+.customer-weight-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  width: 100%;
+  align-items: center;
+}
+
+.customer-weight-input {
+  width: 100%;
+}
+
+.assembly-fee-form {
+  --assembly-pricing-input-width: 240px;
+  --assembly-pricing-action-width: 74px;
+}
+
+.assembly-customer-weight-control,
+.assembly-fee-control {
+  display: grid;
+  grid-template-columns: var(--assembly-pricing-input-width) var(--assembly-pricing-action-width);
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+  width: 100%;
+}
+
+.assembly-pricing-number-input {
+  width: var(--assembly-pricing-input-width);
+  max-width: 100%;
+}
+
+.assembly-customer-weight-control :deep(.el-button),
+.assembly-fee-spacer {
+  width: var(--assembly-pricing-action-width);
+}
+
+.pricing-workbench-summary {
+  margin-top: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--erp-border-soft);
+  border-radius: 8px;
+  background: var(--erp-surface-muted);
+  color: var(--erp-danger);
+  font-weight: 700;
+  text-align: right;
+}
+
+.material-summary {
+  margin-right: -10px;
+  margin-left: -10px;
+  padding: 0;
+  overflow: hidden;
+  color: var(--erp-text);
+  text-align: left;
+}
+
+.material-summary-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.material-summary-table th,
+.material-summary-table td {
+  min-width: 0;
+  max-width: 0;
+  overflow: hidden;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--erp-border-soft);
+  text-overflow: ellipsis;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.material-summary-table tr:last-child th,
+.material-summary-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.material-summary-table th {
+  width: 24%;
+  color: var(--erp-text-secondary);
+  font-size: var(--erp-font-size-xs);
+  font-weight: 600;
+  text-align: left;
+  background: var(--erp-surface-soft);
+}
+
+.material-summary-table td {
+  width: 26%;
+  color: var(--erp-danger);
+  font-weight: 700;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.process-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.process-box {
+  padding: 14px;
+  border: 1px dashed var(--erp-border);
+  border-radius: 8px;
+  background: var(--erp-surface-muted);
+}
+
+.process-row {
+  margin-bottom: 10px;
+  align-items: center;
+}
+
+.process-row-actions {
+  width: 100%;
+  justify-content: flex-end;
+}
+
+.assembly-box {
+  margin-top: 0;
+}
+
+.assembly-tip {
+  margin-bottom: 0;
+}
+
+.assembly-actions {
+  justify-content: flex-end;
+}
+
+.assembly-row {
+  margin-bottom: 10px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid var(--erp-border-soft);
+  border-radius: 8px;
+  background: var(--erp-surface-muted);
+}
+
+.assembly-child-info {
+  min-width: 0;
+}
+
+.assembly-child-title {
+  color: var(--erp-text);
+  font-weight: 700;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assembly-child-desc {
+  margin-top: 2px;
+  color: var(--erp-text-secondary);
+  font-size: 12px;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assembly-line-price {
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  color: var(--erp-text);
+  font-weight: 700;
+}
+
+.assembly-child-actions {
+  width: 100%;
+  justify-content: flex-end;
+}
+
+.assembly-fee-form {
+  margin-top: 0;
+}
+
+.assembly-fee-breakdown {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.assembly-picker-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+
+.assembly-picker-title {
+  color: var(--erp-text);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.assembly-picker-subtitle {
+  margin-top: 4px;
+  color: var(--erp-text-secondary);
+  font-size: 13px;
+}
+
+.picker-drawing-actions {
+  width: 100%;
+}
+
+.picker-drawing-actions :deep(.el-button + .el-button) {
+  margin-left: 0;
+}
+
+.pricing-dialog-footer {
+  width: 100%;
+}
+
+:deep(.pricing-workbench-dialog .el-dialog__body) {
+  max-height: 82vh;
+  overflow: hidden;
+  padding-top: 12px;
+}
+
+.pricing-workbench {
+  display: grid;
+  grid-template-columns: minmax(520px, 0.95fr) minmax(460px, 1.05fr);
+  gap: 16px;
+  height: 74vh;
+  min-height: 560px;
+}
+
+.pricing-form-pane,
+.drawing-pane {
+  min-width: 0;
+  min-height: 0;
+}
+
+.pricing-form-pane {
+  display: flex;
+  flex-direction: column;
+  gap: var(--erp-space-3);
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.drawing-pane {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--erp-border-soft);
+  border-radius: 8px;
+  background: var(--erp-surface);
+  overflow: hidden;
+}
+
+.drawing-pane-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--erp-border-soft);
+  background: var(--erp-surface-soft);
+}
+
+.drawing-pane-title {
+  color: var(--erp-text);
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.drawing-pane-subtitle {
+  color: var(--erp-text-secondary);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.drawing-frame {
+  flex: 1;
+  min-height: 0;
+  background: var(--erp-surface-soft);
+}
+
+.drawing-folder-pane,
+.drawing-folder-inline-shell {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.folder-drawing-preview-toolbar {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--erp-border-soft);
+  background: var(--erp-surface);
+}
+
+.folder-drawing-preview-title {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--erp-text);
+  font-size: 13px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.folder-drawing-frame {
+  border-top: 0;
+}
+
+.drawing-frame-iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.drawing-empty {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+}
+
+.dialog-header-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--erp-border-soft);
+  border-radius: 8px;
+  background: var(--erp-surface-muted);
+}
+
+.current-item-alert {
+  flex: 1;
+}
+
+.dialog-drawing-actions {
+  flex-shrink: 0;
+}
+
+.pdf-frame-shell {
+  width: 100%;
+  height: 70vh;
+}
+
+@media (max-width: 1180px) {
+  :deep(.pricing-workbench-dialog .el-dialog__body) {
+    max-height: none;
+    overflow: visible;
+  }
+
+  .pricing-context-card,
+  .pricing-page-header,
+  .pricing-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .pricing-metric-grid,
+  .pricing-page-actions {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .pricing-workbench {
+    grid-template-columns: 1fr;
+    height: auto;
+    min-height: 0;
+  }
+
+  .pricing-form-pane {
+    overflow: visible;
+    padding-right: 0;
+  }
+
+  .drawing-pane {
+    min-height: 520px;
+  }
+}
+
+@media (max-width: 720px) {
+  .pricing-metric-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dialog-header-bar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .pricing-item-note-header,
+  .pricing-item-note-control {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+    flex-direction: column;
+  }
+}
+</style>

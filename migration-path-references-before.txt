@@ -1,0 +1,1608 @@
+.\AGENTS.md:5:- QPO quotation system: `quote-frontend`, `quote-system`, `docker-compose.yml`, and `erp.env`.
+.\AGENTS.md:6:- APS scheduling system: `aps-frontend`, `aps-system`, `docker-compose.aps.yml`, and `aps.env`.
+.\aps-frontend\APS前端说明.md:5:`aps-frontend` 是APS前端页面，包含登录、用户权限、ERP同步、PMC任务分配、部门任务中心、库存、工艺和机台能力等页面。
+.\aps-frontend\APS前端说明.md:17:cd D:\Code\aps-frontend
+.\aps-frontend\APS前端说明.md:27:cd D:\Code\aps-frontend
+.\aps-frontend\APS前端说明.md:33:前端Docker镜像由 `D:\Code\aps-frontend\Dockerfile` 构建，生产环境由Nginx提供静态页面，并把 `/api` 转发到APS后端容器。
+.\APS上线验收清单.md:5:- [x] `aps.env` 已配置强随机 `APS_POSTGRES_PASSWORD`
+.\APS上线验收清单.md:6:- [x] `aps.env` 已配置强随机 `APS_JWT_SECRET`
+.\APS上线验收清单.md:16:- [x] `docker compose --env-file aps.env -f docker-compose.aps.yml ps` 显示三个容器 healthy
+.\APS上线验收清单.md:51:- [x] `scripts\backup-aps.ps1` 可生成备份；最终备份为 `D:\Code\backups\aps\20260612_234217`
+.\APS上线验收清单.md:55:- [x] 定时备份日志可查看；日志文件 `D:\Code\backups\aps\logs\scheduled-aps-backup.log`
+.\aps-system\APS系统帮助.md:5:`aps-system` 是APS后端服务，负责ERP交付任务同步、PMC派工、部门任务中心、零件库存、材料库存、工艺和机台能力等接口。
+.\aps-system\APS系统帮助.md:19:cd D:\Code\aps-system
+.\aps-system\APS系统帮助.md:23:默认后端端口是 `8091`。本地开发配置可参考 `aps-system\.env.example`。
+.\aps-system\APS系统帮助.md:28:cd D:\Code\aps-system
+.\aps-system\APS系统帮助.md:34:APS的Docker编排文件在 `D:\Code\docker-compose.aps.yml`，运行配置在 `D:\Code\aps.env`。
+.\aps-system\APS系统帮助.md:37:cd D:\Code
+.\aps-system\APS系统帮助.md:38:docker compose --env-file aps.env -f docker-compose.aps.yml up -d --build
+.\APS部署说明.md:6:cd D:\Code
+.\APS部署说明.md:7:docker compose --env-file aps.env -f docker-compose.aps.yml up -d --build
+.\APS部署说明.md:20:Copy-Item aps.env.example aps.env
+.\APS部署说明.md:21:notepad aps.env
+.\APS部署说明.md:34:正式部署时，在 `aps.env` 使用新的PostgreSQL卷名：
+.\APS部署说明.md:42:当前本机迁移环境为了保留旧数据，`aps.env` 可以继续使用：
+.\APS部署说明.md:55:127.0.0.1:8095 -> aps-frontend:80
+.\APS部署说明.md:69:cd D:\Code
+.\APS部署说明.md:82:D:\Code\backups\aps\<timestamp>\
+.\APS部署说明.md:90:powershell -ExecutionPolicy Bypass -File .\scripts\restore-aps.ps1 -BackupDir "D:\Code\backups\aps\20260612_020000" -Force
+.\APS部署说明.md:96:powershell -ExecutionPolicy Bypass -File .\scripts\restore-drill-aps.ps1 -BackupDir "D:\Code\backups\aps\20260612_020000"
+.\APS部署说明.md:102:docker compose --env-file aps.env -f docker-compose.aps.yml down
+.\aps-system\Dockerfile:16:COPY --from=build /workspace/target/aps-system-0.0.1-SNAPSHOT.jar /app/app.jar
+.\docker-compose.aps.yml:1:name: aps-system
+.\docker-compose.aps.yml:4:# docker compose --env-file aps.env -f docker-compose.aps.yml up -d --build
+.\docker-compose.aps.yml:20:      POSTGRES_PASSWORD: ${APS_POSTGRES_PASSWORD:?Set APS_POSTGRES_PASSWORD in aps.env before starting}
+.\docker-compose.aps.yml:38:      context: ./aps-system
+.\docker-compose.aps.yml:48:      DB_PASSWORD: ${APS_POSTGRES_PASSWORD:?Set APS_POSTGRES_PASSWORD in aps.env before starting}
+.\docker-compose.aps.yml:56:      APS_JWT_SECRET: ${APS_JWT_SECRET:?Set APS_JWT_SECRET in aps.env before starting}
+.\docker-compose.aps.yml:58:      APS_ERP_BASE_URL: ${APS_ERP_BASE_URL:?Set APS_ERP_BASE_URL in aps.env before starting}
+.\docker-compose.aps.yml:80:  aps-frontend:
+.\docker-compose.aps.yml:82:      context: ./aps-frontend
+.\docker-compose.aps.yml:85:    container_name: aps-frontend
+.\aps-frontend\index.html:7:    <title>aps-frontend</title>
+.\docker-compose.yml:1:name: quote-system
+.\docker-compose.yml:52:      context: ./quote-system
+.\docker-compose.yml:121:      context: ./quote-frontend
+.\docker-compose.yml:124:    container_name: quote-frontend
+.\docs\QPO项目治理\01-QPO-APS工作区拆分迁移开发文档.md:5:当前 `D:\Code` 是一个 Git 根目录，里面同时包含 QPO 与 APS 两套系统：
+.\docs\QPO项目治理\01-QPO-APS工作区拆分迁移开发文档.md:7:- QPO：`quote-frontend`、`quote-system`、`docker-compose.yml`、`erp.env`、QPO 文档与业务资料。
+.\docs\QPO项目治理\01-QPO-APS工作区拆分迁移开发文档.md:8:- APS：`aps-frontend`、`aps-system`、`docker-compose.aps.yml`、`aps.env`、APS 部署/验收/备份资料。
+.\docs\QPO项目治理\01-QPO-APS工作区拆分迁移开发文档.md:18:同时，QPO 后端目录从 `quote-system` 改名为 `quote-backend`，让前后端命名更直观。
+.\docs\QPO项目治理\01-QPO-APS工作区拆分迁移开发文档.md:32:- `quote-backend\`：由当前 `quote-system\` 重命名而来。
+.\docs\QPO项目治理\01-QPO-APS工作区拆分迁移开发文档.md:33:- `quote-frontend\`
+.\docs\QPO项目治理\01-QPO-APS工作区拆分迁移开发文档.md:71:- `aps-backend\` 或保留 `aps-system\`：默认先保留 `aps-system\`，避免一次性扩大 APS 内部重命名范围。
+.\docs\QPO项目治理\01-QPO-APS工作区拆分迁移开发文档.md:72:- `aps-frontend\`
+.\docs\QPO项目治理\01-QPO-APS工作区拆分迁移开发文档.md:73:- `docker-compose.aps.yml`
+.\docs\QPO项目治理\01-QPO-APS工作区拆分迁移开发文档.md:74:- `aps.env`
+.\docs\QPO项目治理\01-QPO-APS工作区拆分迁移开发文档.md:75:- `aps.env.example`
+.\docs\QPO项目治理\01-QPO-APS工作区拆分迁移开发文档.md:93:   - 先用 `git mv quote-system quote-backend`，更新 QPO 内部引用并提交。
+.\docs\QPO项目治理\01-QPO-APS工作区拆分迁移开发文档.md:95:   - 最后从 `D:\Code` 改名为 `D:\QPO-Operations-Management-System`。
+.\docs\QPO项目治理\01-QPO-APS工作区拆分迁移开发文档.md:103:   - `quote-system` 作为文件夹名改为 `quote-backend`；Maven artifact、Spring application name、数据库兼容名称是否改名，单独评估。
+.\docs\QPO项目治理\01-QPO-APS工作区拆分迁移开发文档.md:110:   - QPO 脚本默认根目录从 `D:\Code` 改为 `D:\QPO-Operations-Management-System`。
+.\docs\QPO项目治理\01-QPO-APS工作区拆分迁移开发文档.md:111:   - APS 脚本默认根目录从 `D:\Code` 改为 `D:\APS-Operations-Management-System`。
+.\docs\QPO项目治理\01-QPO-APS工作区拆分迁移开发文档.md:123:cd D:\Code
+.\docs\QPO项目治理\01-QPO-APS工作区拆分迁移开发文档.md:126:rg -n "quote-system|quote-frontend|aps-system|aps-frontend|docker-compose\.aps|aps\.env|D:\\Code" -S .
+.\docs\QPO项目治理\01-QPO-APS工作区拆分迁移开发文档.md:137:目标：把 `quote-system` 改为 `quote-backend`。
+.\docs\QPO项目治理\01-QPO-APS工作区拆分迁移开发文档.md:142:cd D:\Code
+.\docs\QPO项目治理\01-QPO-APS工作区拆分迁移开发文档.md:143:git mv quote-system quote-backend
+.\docs\QPO项目治理\01-QPO-APS工作区拆分迁移开发文档.md:149:- QPO 文档中的 `quote-system` 路径。
+.\docs\QPO项目治理\01-QPO-APS工作区拆分迁移开发文档.md:150:- 后端测试中指向前端的相对路径，如 `../quote-frontend` 仍需保持正确。
+.\docs\QPO项目治理\01-QPO-APS工作区拆分迁移开发文档.md:151:- QPO 脚本和说明文档里的 `cd D:\Code\quote-system`。
+.\docs\QPO项目治理\01-QPO-APS工作区拆分迁移开发文档.md:157:cd D:\Code\quote-backend
+.\docs\QPO项目治理\01-QPO-APS工作区拆分迁移开发文档.md:160:cd D:\Code\quote-frontend
+.\docs\QPO项目治理\01-QPO-APS工作区拆分迁移开发文档.md:163:cd D:\Code
+.\docs\QPO项目治理\01-QPO-APS工作区拆分迁移开发文档.md:180:aps-system\
+.\docs\QPO项目治理\01-QPO-APS工作区拆分迁移开发文档.md:181:aps-frontend\
+.\docs\QPO项目治理\01-QPO-APS工作区拆分迁移开发文档.md:182:docker-compose.aps.yml
+.\docs\QPO项目治理\01-QPO-APS工作区拆分迁移开发文档.md:183:aps.env
+.\docs\QPO项目治理\01-QPO-APS工作区拆分迁移开发文档.md:184:aps.env.example
+.\docs\QPO项目治理\01-QPO-APS工作区拆分迁移开发文档.md:198:docker compose --env-file aps.env -f docker-compose.aps.yml config
+.\docs\QPO项目治理\01-QPO-APS工作区拆分迁移开发文档.md:201:rg -n "aps-system|aps-frontend|docker-compose\.aps|aps\.env" -S .
+.\docs\QPO项目治理\01-QPO-APS工作区拆分迁移开发文档.md:208:目标：把当前 `D:\Code` 改名为 `D:\QPO-Operations-Management-System`。
+.\docs\QPO项目治理\01-QPO-APS工作区拆分迁移开发文档.md:214:- 当前没有 Docker / IDE / 终端进程占用 `D:\Code`。
+.\docs\QPO项目治理\01-QPO-APS工作区拆分迁移开发文档.md:220:Rename-Item -LiteralPath "D:\Code" -NewName "QPO-Operations-Management-System"
+.\docs\QPO项目治理\01-QPO-APS工作区拆分迁移开发文档.md:226:- QPO 文档中的 `cd D:\Code`。
+.\docs\QPO项目治理\01-QPO-APS工作区拆分迁移开发文档.md:255:rg -n "D:\\Code|quote-system|aps-system|aps-frontend|docker-compose\.aps|aps\.env" -S AGENTS.md docs scripts docker-compose.yml
+.\docs\QPO项目治理\01-QPO-APS工作区拆分迁移开发文档.md:260:- `quote-system` 不再作为 QPO 当前目录名出现。
+.\docs\QPO项目治理\01-QPO-APS工作区拆分迁移开发文档.md:261:- `D:\Code` 不再作为 QPO 当前项目根路径出现。
+.\docs\QPO项目治理\01-QPO-APS工作区拆分迁移开发文档.md:272:cd D:\QPO-Operations-Management-System\quote-frontend
+.\docs\QPO项目治理\01-QPO-APS工作区拆分迁移开发文档.md:283:cd D:\APS-Operations-Management-System\aps-system
+.\docs\QPO项目治理\01-QPO-APS工作区拆分迁移开发文档.md:286:cd D:\APS-Operations-Management-System\aps-frontend
+.\docs\QPO项目治理\01-QPO-APS工作区拆分迁移开发文档.md:291:docker compose --env-file aps.env -f docker-compose.aps.yml config
+.\docs\QPO项目治理\01-QPO-APS工作区拆分迁移开发文档.md:304:`erp.env` 和 `aps.env` 中包含真实密钥。迁移时只移动文件，不把密钥复制到公开文档、提交说明或截图中。
+.\docs\QPO项目治理\01-QPO-APS工作区拆分迁移开发文档.md:314:当前备份脚本默认 `ProjectRoot = "D:\Code"`。主目录改名后，Windows 计划任务仍会调用旧路径，需要重装：
+.\docs\QPO项目治理\01-QPO-APS工作区拆分迁移开发文档.md:330:- QPO 文档、脚本、Docker 配置不再引用当前项目路径 `D:\Code`。
+.\migration-files-before.txt:8:aps-frontend/.dockerignore
+.\migration-files-before.txt:9:aps-frontend/.env.example
+.\migration-files-before.txt:10:aps-frontend/.gitignore
+.\migration-files-before.txt:11:aps-frontend/.vscode/extensions.json
+.\migration-files-before.txt:12:"aps-frontend/APS\345\211\215\347\253\257\350\257\264\346\230\216.md"
+.\migration-files-before.txt:13:aps-frontend/Dockerfile
+.\migration-files-before.txt:14:aps-frontend/index.html
+.\migration-files-before.txt:15:aps-frontend/nginx.conf
+.\migration-files-before.txt:16:aps-frontend/package-lock.json
+.\migration-files-before.txt:17:aps-frontend/package.json
+.\migration-files-before.txt:18:aps-frontend/public/favicon.svg
+.\migration-files-before.txt:19:aps-frontend/src/App.vue
+.\migration-files-before.txt:20:aps-frontend/src/api.js
+.\migration-files-before.txt:21:aps-frontend/src/api.test.js
+.\migration-files-before.txt:22:aps-frontend/src/components/ApsPager.vue
+.\migration-files-before.txt:23:aps-frontend/src/components/ApsProcessTable.vue
+.\migration-files-before.txt:24:aps-frontend/src/components/ApsStatusTag.vue
+.\migration-files-before.txt:25:aps-frontend/src/components/DataTable.vue
+.\migration-files-before.txt:26:aps-frontend/src/components/TaskTable.vue
+.\migration-files-before.txt:27:aps-frontend/src/config.js
+.\migration-files-before.txt:28:aps-frontend/src/helpers.js
+.\migration-files-before.txt:29:aps-frontend/src/main.js
+.\migration-files-before.txt:30:aps-frontend/src/router/index.js
+.\migration-files-before.txt:31:aps-frontend/src/services/apiServices.test.js
+.\migration-files-before.txt:32:aps-frontend/src/services/authApi.js
+.\migration-files-before.txt:33:aps-frontend/src/services/departmentApi.js
+.\migration-files-before.txt:34:aps-frontend/src/services/inventoryApi.js
+.\migration-files-before.txt:35:aps-frontend/src/services/inventoryApi.test.js
+.\migration-files-before.txt:36:aps-frontend/src/services/machineApi.js
+.\migration-files-before.txt:37:aps-frontend/src/services/processApi.js
+.\migration-files-before.txt:38:aps-frontend/src/services/taskApi.js
+.\migration-files-before.txt:39:aps-frontend/src/services/taskApi.test.js
+.\migration-files-before.txt:40:aps-frontend/src/services/userApi.js
+.\migration-files-before.txt:41:aps-frontend/src/stores/authStore.js
+.\migration-files-before.txt:42:aps-frontend/src/stores/authStore.test.js
+.\migration-files-before.txt:43:aps-frontend/src/stores/inventoryStore.js
+.\migration-files-before.txt:44:aps-frontend/src/stores/inventoryStore.test.js
+.\migration-files-before.txt:45:aps-frontend/src/stores/referenceDataStore.js
+.\migration-files-before.txt:46:aps-frontend/src/stores/referenceDataStore.test.js
+.\migration-files-before.txt:47:aps-frontend/src/stores/taskStore.js
+.\migration-files-before.txt:48:aps-frontend/src/stores/taskStore.test.js
+.\migration-files-before.txt:49:aps-frontend/src/style.css
+.\migration-files-before.txt:50:aps-frontend/src/utils/confirm.js
+.\migration-files-before.txt:51:aps-frontend/src/views/AssignedTasksView.vue
+.\migration-files-before.txt:52:aps-frontend/src/views/DepartmentCenterView.vue
+.\migration-files-before.txt:53:aps-frontend/src/views/DepartmentsView.vue
+.\migration-files-before.txt:54:aps-frontend/src/views/LoginView.vue
+.\migration-files-before.txt:55:aps-frontend/src/views/MachinesView.vue
+.\migration-files-before.txt:56:aps-frontend/src/views/MaterialInventoryView.vue
+.\migration-files-before.txt:57:aps-frontend/src/views/MaterialLocksView.vue
+.\migration-files-before.txt:58:aps-frontend/src/views/MaterialShortagesView.vue
+.\migration-files-before.txt:59:aps-frontend/src/views/PartInventoryLocksView.vue
+.\migration-files-before.txt:60:aps-frontend/src/views/PartInventoryView.vue
+.\migration-files-before.txt:61:aps-frontend/src/views/PartProductionRequirementsView.vue
+.\migration-files-before.txt:62:aps-frontend/src/views/ProcessesView.vue
+.\migration-files-before.txt:63:aps-frontend/src/views/SyncView.vue
+.\migration-files-before.txt:64:aps-frontend/src/views/TasksView.vue
+.\migration-files-before.txt:65:aps-frontend/src/views/UsersView.vue
+.\migration-files-before.txt:66:aps-frontend/vite.config.js
+.\migration-files-before.txt:67:aps-system/.dockerignore
+.\migration-files-before.txt:68:aps-system/.env.example
+.\migration-files-before.txt:69:aps-system/.gitattributes
+.\migration-files-before.txt:70:aps-system/.gitignore
+.\migration-files-before.txt:71:aps-system/.mvn/wrapper/maven-wrapper.properties
+.\migration-files-before.txt:72:"aps-system/APS\347\263\273\347\273\237\345\270\256\345\212\251.md"
+.\migration-files-before.txt:73:aps-system/Dockerfile
+.\migration-files-before.txt:74:aps-system/maven-settings.xml
+.\migration-files-before.txt:75:aps-system/mvnw
+.\migration-files-before.txt:76:aps-system/mvnw.cmd
+.\migration-files-before.txt:77:aps-system/pom.xml
+.\migration-files-before.txt:78:aps-system/src/main/java/com/machining/apssystem/ApsSystemApplication.java
+.\migration-files-before.txt:79:aps-system/src/main/java/com/machining/apssystem/config/ApsAuthContext.java
+.\migration-files-before.txt:80:aps-system/src/main/java/com/machining/apssystem/config/ApsAuthInterceptor.java
+.\migration-files-before.txt:81:aps-system/src/main/java/com/machining/apssystem/config/GlobalExceptionHandler.java
+.\migration-files-before.txt:82:aps-system/src/main/java/com/machining/apssystem/config/RequireRole.java
+.\migration-files-before.txt:83:aps-system/src/main/java/com/machining/apssystem/config/WebConfig.java
+.\migration-files-before.txt:84:aps-system/src/main/java/com/machining/apssystem/controller/ApsAdminController.java
+.\migration-files-before.txt:85:aps-system/src/main/java/com/machining/apssystem/controller/ApsAuthController.java
+.\migration-files-before.txt:86:aps-system/src/main/java/com/machining/apssystem/controller/ApsDepartmentCenterController.java
+.\migration-files-before.txt:87:aps-system/src/main/java/com/machining/apssystem/controller/ApsHealthController.java
+.\migration-files-before.txt:88:aps-system/src/main/java/com/machining/apssystem/controller/ApsInventoryController.java
+.\migration-files-before.txt:89:aps-system/src/main/java/com/machining/apssystem/controller/ApsPmcController.java
+.\migration-files-before.txt:90:aps-system/src/main/java/com/machining/apssystem/controller/ApsProcessController.java
+.\migration-files-before.txt:91:aps-system/src/main/java/com/machining/apssystem/controller/ApsSyncController.java
+.\migration-files-before.txt:92:aps-system/src/main/java/com/machining/apssystem/dto/ApsDepartmentAssignmentDTO.java
+.\migration-files-before.txt:93:aps-system/src/main/java/com/machining/apssystem/dto/ApsDepartmentDTO.java
+.\migration-files-before.txt:94:aps-system/src/main/java/com/machining/apssystem/dto/ApsMachineCapabilityDTO.java
+.\migration-files-before.txt:95:aps-system/src/main/java/com/machining/apssystem/dto/ApsMachineDTO.java
+.\migration-files-before.txt:96:aps-system/src/main/java/com/machining/apssystem/dto/ApsMaterialInventoryDTO.java
+.\migration-files-before.txt:97:aps-system/src/main/java/com/machining/apssystem/dto/ApsMaterialLockDTO.java
+.\migration-files-before.txt:98:aps-system/src/main/java/com/machining/apssystem/dto/ApsMaterialShortageDTO.java
+.\migration-files-before.txt:99:aps-system/src/main/java/com/machining/apssystem/dto/ApsPartInventoryDTO.java
+.\migration-files-before.txt:100:aps-system/src/main/java/com/machining/apssystem/dto/ApsPartInventoryLockDTO.java
+.\migration-files-before.txt:101:aps-system/src/main/java/com/machining/apssystem/dto/ApsPartInventoryPageDTO.java
+.\migration-files-before.txt:102:aps-system/src/main/java/com/machining/apssystem/dto/ApsPartInventoryPendingStockDTO.java
+.\migration-files-before.txt:103:aps-system/src/main/java/com/machining/apssystem/dto/ApsPartProductionRequirementDTO.java
+.\migration-files-before.txt:104:aps-system/src/main/java/com/machining/apssystem/dto/ApsPmcTaskDetailDTO.java
+.\migration-files-before.txt:105:aps-system/src/main/java/com/machining/apssystem/dto/ApsProcessDTO.java
+.\migration-files-before.txt:106:aps-system/src/main/java/com/machining/apssystem/dto/ApsSyncResultDTO.java
+.\migration-files-before.txt:107:aps-system/src/main/java/com/machining/apssystem/dto/ApsUserDTO.java
+.\migration-files-before.txt:108:aps-system/src/main/java/com/machining/apssystem/dto/ApsUserSaveReq.java
+.\migration-files-before.txt:109:aps-system/src/main/java/com/machining/apssystem/dto/ApsWorkItemDTO.java
+.\migration-files-before.txt:110:aps-system/src/main/java/com/machining/apssystem/dto/ApsWorkItemPageDTO.java
+.\migration-files-before.txt:111:aps-system/src/main/java/com/machining/apssystem/dto/ApsWorkItemProcessDTO.java
+.\migration-files-before.txt:112:aps-system/src/main/java/com/machining/apssystem/dto/DepartmentAssignmentReq.java
+.\migration-files-before.txt:113:aps-system/src/main/java/com/machining/apssystem/dto/DepartmentCapacityAdjustReq.java
+.\migration-files-before.txt:114:aps-system/src/main/java/com/machining/apssystem/dto/DepartmentCapacityResetReq.java
+.\migration-files-before.txt:115:aps-system/src/main/java/com/machining/apssystem/dto/DepartmentSaveReq.java
+.\migration-files-before.txt:116:aps-system/src/main/java/com/machining/apssystem/dto/ErpDeliveryItemBatchDTO.java
+.\migration-files-before.txt:117:aps-system/src/main/java/com/machining/apssystem/dto/ErpDeliveryItemDTO.java
+.\migration-files-before.txt:118:aps-system/src/main/java/com/machining/apssystem/dto/ErpProcessDTO.java
+.\migration-files-before.txt:119:aps-system/src/main/java/com/machining/apssystem/dto/LoginReq.java
+.\migration-files-before.txt:120:aps-system/src/main/java/com/machining/apssystem/dto/MachineCapabilitySaveReq.java
+.\migration-files-before.txt:121:aps-system/src/main/java/com/machining/apssystem/dto/MachineSaveReq.java
+.\migration-files-before.txt:122:aps-system/src/main/java/com/machining/apssystem/dto/MaterialInventorySaveReq.java
+.\migration-files-before.txt:123:aps-system/src/main/java/com/machining/apssystem/dto/PartInventoryModifyReq.java
+.\migration-files-before.txt:124:aps-system/src/main/java/com/machining/apssystem/dto/PartInventorySaveReq.java
+.\migration-files-before.txt:125:aps-system/src/main/java/com/machining/apssystem/dto/PartInventoryStockOpReq.java
+.\migration-files-before.txt:126:aps-system/src/main/java/com/machining/apssystem/dto/PartInventoryTransferReq.java
+.\migration-files-before.txt:127:aps-system/src/main/java/com/machining/apssystem/dto/PasswordChangeReq.java
+.\migration-files-before.txt:128:aps-system/src/main/java/com/machining/apssystem/dto/WorkItemBulkAssignReq.java
+.\migration-files-before.txt:129:aps-system/src/main/java/com/machining/apssystem/dto/WorkItemBulkDeleteReq.java
+.\migration-files-before.txt:130:aps-system/src/main/java/com/machining/apssystem/dto/WorkItemSummaryDTO.java
+.\migration-files-before.txt:131:aps-system/src/main/java/com/machining/apssystem/entity/ApsDepartment.java
+.\migration-files-before.txt:132:aps-system/src/main/java/com/machining/apssystem/entity/ApsDepartmentAssignment.java
+.\migration-files-before.txt:133:aps-system/src/main/java/com/machining/apssystem/entity/ApsDepartmentTask.java
+.\migration-files-before.txt:134:aps-system/src/main/java/com/machining/apssystem/entity/ApsErpSyncRun.java
+.\migration-files-before.txt:135:aps-system/src/main/java/com/machining/apssystem/entity/ApsMachine.java
+.\migration-files-before.txt:136:aps-system/src/main/java/com/machining/apssystem/entity/ApsMachineProcessCapability.java
+.\migration-files-before.txt:137:aps-system/src/main/java/com/machining/apssystem/entity/ApsMaterialInventory.java
+.\migration-files-before.txt:138:aps-system/src/main/java/com/machining/apssystem/entity/ApsMaterialLock.java
+.\migration-files-before.txt:139:aps-system/src/main/java/com/machining/apssystem/entity/ApsMaterialShortage.java
+.\migration-files-before.txt:140:aps-system/src/main/java/com/machining/apssystem/entity/ApsPartInventory.java
+.\migration-files-before.txt:141:aps-system/src/main/java/com/machining/apssystem/entity/ApsPartInventoryLock.java
+.\migration-files-before.txt:142:aps-system/src/main/java/com/machining/apssystem/entity/ApsPartInventoryLockDetail.java
+.\migration-files-before.txt:143:aps-system/src/main/java/com/machining/apssystem/entity/ApsPartInventoryPendingStock.java
+.\migration-files-before.txt:144:aps-system/src/main/java/com/machining/apssystem/entity/ApsProcess.java
+.\migration-files-before.txt:145:aps-system/src/main/java/com/machining/apssystem/entity/ApsProductionRequirement.java
+.\migration-files-before.txt:146:aps-system/src/main/java/com/machining/apssystem/entity/ApsUser.java
+.\migration-files-before.txt:147:aps-system/src/main/java/com/machining/apssystem/entity/ApsWorkItem.java
+.\migration-files-before.txt:148:aps-system/src/main/java/com/machining/apssystem/entity/ApsWorkItemProcess.java
+.\migration-files-before.txt:149:aps-system/src/main/java/com/machining/apssystem/mapper/ApsDepartmentAssignmentMapper.java
+.\migration-files-before.txt:150:aps-system/src/main/java/com/machining/apssystem/mapper/ApsDepartmentMapper.java
+.\migration-files-before.txt:151:aps-system/src/main/java/com/machining/apssystem/mapper/ApsDepartmentTaskMapper.java
+.\migration-files-before.txt:152:aps-system/src/main/java/com/machining/apssystem/mapper/ApsErpSyncRunMapper.java
+.\migration-files-before.txt:153:aps-system/src/main/java/com/machining/apssystem/mapper/ApsMachineCapabilityMapper.java
+.\migration-files-before.txt:154:aps-system/src/main/java/com/machining/apssystem/mapper/ApsMachineMapper.java
+.\migration-files-before.txt:155:aps-system/src/main/java/com/machining/apssystem/mapper/ApsMaterialInventoryMapper.java
+.\migration-files-before.txt:156:aps-system/src/main/java/com/machining/apssystem/mapper/ApsMaterialLockMapper.java
+.\migration-files-before.txt:157:aps-system/src/main/java/com/machining/apssystem/mapper/ApsMaterialShortageMapper.java
+.\migration-files-before.txt:158:aps-system/src/main/java/com/machining/apssystem/mapper/ApsPartInventoryLockDetailMapper.java
+.\migration-files-before.txt:159:aps-system/src/main/java/com/machining/apssystem/mapper/ApsPartInventoryLockMapper.java
+.\migration-files-before.txt:160:aps-system/src/main/java/com/machining/apssystem/mapper/ApsPartInventoryMapper.java
+.\migration-files-before.txt:161:aps-system/src/main/java/com/machining/apssystem/mapper/ApsPartInventoryPendingStockMapper.java
+.\migration-files-before.txt:162:aps-system/src/main/java/com/machining/apssystem/mapper/ApsProcessMapper.java
+.\migration-files-before.txt:163:aps-system/src/main/java/com/machining/apssystem/mapper/ApsProductionRequirementMapper.java
+.\migration-files-before.txt:164:aps-system/src/main/java/com/machining/apssystem/mapper/ApsUserMapper.java
+.\migration-files-before.txt:165:aps-system/src/main/java/com/machining/apssystem/mapper/ApsWorkItemMapper.java
+.\migration-files-before.txt:166:aps-system/src/main/java/com/machining/apssystem/mapper/ApsWorkItemProcessMapper.java
+.\migration-files-before.txt:167:aps-system/src/main/java/com/machining/apssystem/service/ApsAuthService.java
+.\migration-files-before.txt:168:aps-system/src/main/java/com/machining/apssystem/service/ApsDepartmentCenterService.java
+.\migration-files-before.txt:169:aps-system/src/main/java/com/machining/apssystem/service/ApsDepartmentService.java
+.\migration-files-before.txt:170:aps-system/src/main/java/com/machining/apssystem/service/ApsInventoryExportService.java
+.\migration-files-before.txt:171:aps-system/src/main/java/com/machining/apssystem/service/ApsInventoryService.java
+.\migration-files-before.txt:172:aps-system/src/main/java/com/machining/apssystem/service/ApsJwtService.java
+.\migration-files-before.txt:173:aps-system/src/main/java/com/machining/apssystem/service/ApsMachineCapabilityService.java
+.\migration-files-before.txt:174:aps-system/src/main/java/com/machining/apssystem/service/ApsPasswordService.java
+.\migration-files-before.txt:175:aps-system/src/main/java/com/machining/apssystem/service/ApsPmcService.java
+.\migration-files-before.txt:176:aps-system/src/main/java/com/machining/apssystem/service/ApsProcessService.java
+.\migration-files-before.txt:177:aps-system/src/main/java/com/machining/apssystem/service/ApsSyncService.java
+.\migration-files-before.txt:178:aps-system/src/main/java/com/machining/apssystem/service/ApsUserAdminService.java
+.\migration-files-before.txt:179:aps-system/src/main/resources/application.yaml
+.\migration-files-before.txt:180:aps-system/src/main/resources/db/migration/V10__material_lock_warehouse_status.sql
+.\migration-files-before.txt:181:aps-system/src/main/resources/db/migration/V11__work_item_process_route_grouping.sql
+.\migration-files-before.txt:182:aps-system/src/main/resources/db/migration/V12__department_center_tasks.sql
+.\migration-files-before.txt:183:aps-system/src/main/resources/db/migration/V13__aps_user_management.sql
+.\migration-files-before.txt:184:aps-system/src/main/resources/db/migration/V14__drop_erp_process_sheet_id.sql
+.\migration-files-before.txt:185:aps-system/src/main/resources/db/migration/V1__aps_baseline.sql
+.\migration-files-before.txt:186:aps-system/src/main/resources/db/migration/V2__aps_part_pending_stock.sql
+.\migration-files-before.txt:187:aps-system/src/main/resources/db/migration/V3__department_assignment_nullable_department.sql
+.\migration-files-before.txt:188:aps-system/src/main/resources/db/migration/V4__department_assignment_capacity_counted.sql
+.\migration-files-before.txt:189:aps-system/src/main/resources/db/migration/V5__aps_process_management.sql
+.\migration-files-before.txt:190:aps-system/src/main/resources/db/migration/V6__work_item_customer_order_fields.sql
+.\migration-files-before.txt:191:aps-system/src/main/resources/db/migration/V7__drop_rfq_fields.sql
+.\migration-files-before.txt:192:aps-system/src/main/resources/db/migration/V8__part_inventory_lock_detail.sql
+.\migration-files-before.txt:193:aps-system/src/main/resources/db/migration/V9__part_lock_detail_status.sql
+.\migration-files-before.txt:194:aps-system/src/test/java/com/machining/apssystem/ApsSystemApplicationTests.java
+.\migration-files-before.txt:195:aps-system/src/test/java/com/machining/apssystem/ApsWorkflowIntegrationTests.java
+.\migration-files-before.txt:196:aps.env.example
+.\migration-files-before.txt:197:deploy/nginx/quote-system.https.example.conf
+.\migration-files-before.txt:198:docker-compose.aps.yml
+.\migration-files-before.txt:274:quote-frontend/.dockerignore
+.\migration-files-before.txt:275:quote-frontend/.env.example
+.\migration-files-before.txt:276:quote-frontend/.gitignore
+.\migration-files-before.txt:277:quote-frontend/.vscode/extensions.json
+.\migration-files-before.txt:278:quote-frontend/Dockerfile
+.\migration-files-before.txt:279:"quote-frontend/QPO\345\211\215\347\253\257\350\257\264\346\230\216.md"
+.\migration-files-before.txt:280:quote-frontend/index.html
+.\migration-files-before.txt:281:quote-frontend/nginx.conf
+.\migration-files-before.txt:282:quote-frontend/package-lock.json
+.\migration-files-before.txt:283:quote-frontend/package.json
+.\migration-files-before.txt:284:quote-frontend/public/favicon.svg
+.\migration-files-before.txt:285:quote-frontend/src/App.vue
+.\migration-files-before.txt:286:quote-frontend/src/api.js
+.\migration-files-before.txt:287:quote-frontend/src/api.test.js
+.\migration-files-before.txt:288:quote-frontend/src/appShell.test.js
+.\migration-files-before.txt:289:quote-frontend/src/auditLogModule.test.js
+.\migration-files-before.txt:290:quote-frontend/src/components/AuditLogManage.vue
+.\migration-files-before.txt:291:quote-frontend/src/components/CustomerPickerDialog.vue
+.\migration-files-before.txt:292:quote-frontend/src/components/DeliveredItemManage.vue
+.\migration-files-before.txt:293:quote-frontend/src/components/EngineeringOptionPickerDialog.vue
+.\migration-files-before.txt:294:quote-frontend/src/components/GlobalSetup.vue
+.\migration-files-before.txt:295:quote-frontend/src/components/HistoryOrderManage.vue
+.\migration-files-before.txt:296:quote-frontend/src/components/ItemPricing.vue
+.\migration-files-before.txt:297:quote-frontend/src/components/LockedItemManage.vue
+.\migration-files-before.txt:298:quote-frontend/src/components/LoginView.vue
+.\migration-files-before.txt:299:quote-frontend/src/components/MarketDashboard.vue
+.\migration-files-before.txt:300:quote-frontend/src/components/MarketRelease.vue
+.\migration-files-before.txt:301:quote-frontend/src/components/MaterialProcessManage.vue
+.\migration-files-before.txt:302:quote-frontend/src/components/OrderManage.vue
+.\migration-files-before.txt:303:quote-frontend/src/components/OrderPickerDialog.vue
+.\migration-files-before.txt:304:quote-frontend/src/components/QuoteProcess.vue
+.\migration-files-before.txt:305:quote-frontend/src/components/QuoteTemplateManage.vue
+.\migration-files-before.txt:306:quote-frontend/src/components/SystemOrgManage.vue
+.\migration-files-before.txt:307:quote-frontend/src/components/SystemRoleManage.vue
+.\migration-files-before.txt:308:quote-frontend/src/components/UserManage.vue
+.\migration-files-before.txt:309:quote-frontend/src/components/UserProfilePopover.vue
+.\migration-files-before.txt:310:quote-frontend/src/config.js
+.\migration-files-before.txt:311:quote-frontend/src/customerPickerDialog.test.js
+.\migration-files-before.txt:312:quote-frontend/src/deliveredItemApi.test.js
+.\migration-files-before.txt:313:quote-frontend/src/deliveredItemManage.test.js
+.\migration-files-before.txt:314:quote-frontend/src/deliveredItemMesSync.test.js
+.\migration-files-before.txt:315:quote-frontend/src/deliveredItemWmsAllocation.test.js
+.\migration-files-before.txt:316:quote-frontend/src/engineeringSetupStage5.test.js
+.\migration-files-before.txt:317:quote-frontend/src/finalConsistencyStage7.test.js
+.\migration-files-before.txt:318:quote-frontend/src/finalPunchList.test.js
+.\migration-files-before.txt:319:quote-frontend/src/itemPricingStage6.test.js
+.\migration-files-before.txt:320:quote-frontend/src/lockedItemManage.test.js
+.\migration-files-before.txt:321:quote-frontend/src/main.js
+.\migration-files-before.txt:322:quote-frontend/src/orderStatusManage.test.js
+.\migration-files-before.txt:323:quote-frontend/src/pageLayoutStage3.test.js
+.\migration-files-before.txt:324:quote-frontend/src/pageNormalizationStage4.test.js
+.\migration-files-before.txt:325:quote-frontend/src/paginationConsistency.test.js
+.\migration-files-before.txt:326:quote-frontend/src/permissionStage0.test.js
+.\migration-files-before.txt:327:quote-frontend/src/permissionStage4.test.js
+.\migration-files-before.txt:328:quote-frontend/src/permissionStage6Stage7.test.js
+.\migration-files-before.txt:329:quote-frontend/src/quoteStatusStage1.test.js
+.\migration-files-before.txt:330:quote-frontend/src/quoteStatusStage4.test.js
+.\migration-files-before.txt:331:quote-frontend/src/router/index.js
+.\migration-files-before.txt:332:quote-frontend/src/routerCodeSplitting.test.js
+.\migration-files-before.txt:333:quote-frontend/src/services/adminApi.js
+.\migration-files-before.txt:334:quote-frontend/src/services/adminApi.test.js
+.\migration-files-before.txt:335:quote-frontend/src/services/auditApi.js
+.\migration-files-before.txt:336:quote-frontend/src/services/auditApi.test.js
+.\migration-files-before.txt:337:quote-frontend/src/services/authApi.js
+.\migration-files-before.txt:338:quote-frontend/src/services/authApi.test.js
+.\migration-files-before.txt:339:quote-frontend/src/services/deliveredItemApi.js
+.\migration-files-before.txt:340:quote-frontend/src/services/dictApi.js
+.\migration-files-before.txt:341:quote-frontend/src/services/dictApi.test.js
+.\migration-files-before.txt:342:quote-frontend/src/services/engineerApi.js
+.\migration-files-before.txt:343:quote-frontend/src/services/engineerApi.test.js
+.\migration-files-before.txt:344:quote-frontend/src/services/marketApi.js
+.\migration-files-before.txt:345:quote-frontend/src/services/marketApi.test.js
+.\migration-files-before.txt:346:quote-frontend/src/services/orderApi.js
+.\migration-files-before.txt:347:quote-frontend/src/services/orderApi.test.js
+.\migration-files-before.txt:348:quote-frontend/src/services/taskApi.js
+.\migration-files-before.txt:349:quote-frontend/src/services/taskApi.test.js
+.\migration-files-before.txt:350:quote-frontend/src/stores/authStore.js
+.\migration-files-before.txt:351:quote-frontend/src/stores/authStore.test.js
+.\migration-files-before.txt:352:quote-frontend/src/stores/dictionaryStore.js
+.\migration-files-before.txt:353:quote-frontend/src/stores/dictionaryStore.test.js
+.\migration-files-before.txt:354:quote-frontend/src/stores/globalConfigStore.js
+.\migration-files-before.txt:355:quote-frontend/src/stores/globalConfigStore.test.js
+.\migration-files-before.txt:356:quote-frontend/src/style.css
+.\migration-files-before.txt:357:quote-frontend/src/styleFoundation.test.js
+.\migration-files-before.txt:358:quote-frontend/src/systemOrganizationManage.test.js
+.\migration-files-before.txt:359:quote-frontend/src/systemRoleManageDataScope.test.js
+.\migration-files-before.txt:360:quote-frontend/src/systemRolePermissionTree.test.js
+.\migration-files-before.txt:361:quote-frontend/src/systemRoleStage3.test.js
+.\migration-files-before.txt:362:quote-frontend/src/userProfilePopover.test.js
+.\migration-files-before.txt:363:quote-frontend/src/utils/auditLogFormat.js
+.\migration-files-before.txt:364:quote-frontend/src/utils/auditLogFormat.test.js
+.\migration-files-before.txt:365:quote-frontend/src/utils/clientPagination.js
+.\migration-files-before.txt:366:quote-frontend/src/utils/clientPagination.test.js
+.\migration-files-before.txt:367:quote-frontend/src/viteCodeSplitting.test.js
+.\migration-files-before.txt:368:quote-frontend/src/workflowPolish.test.js
+.\migration-files-before.txt:369:quote-frontend/vite.config.js
+.\migration-files-before.txt:370:quote-system/.dockerignore
+.\migration-files-before.txt:371:quote-system/.env.example
+.\migration-files-before.txt:372:quote-system/.gitattributes
+.\migration-files-before.txt:373:quote-system/.gitignore
+.\migration-files-before.txt:374:quote-system/.mvn/wrapper/maven-wrapper.properties
+.\migration-files-before.txt:375:quote-system/Dockerfile
+.\migration-files-before.txt:376:"quote-system/QPO\347\263\273\347\273\237\345\270\256\345\212\251.md"
+.\migration-files-before.txt:377:quote-system/maven-settings.xml
+.\migration-files-before.txt:378:quote-system/mvnw
+.\migration-files-before.txt:379:quote-system/mvnw.cmd
+.\migration-files-before.txt:380:quote-system/pom.xml
+.\migration-files-before.txt:381:quote-system/src/main/java/com/machining/quote/QuoteSystemApplication.java
+.\migration-files-before.txt:382:quote-system/src/main/java/com/machining/quote/config/AuthContext.java
+.\migration-files-before.txt:383:quote-system/src/main/java/com/machining/quote/config/AuthInterceptor.java
+.\migration-files-before.txt:384:quote-system/src/main/java/com/machining/quote/config/GlobalExceptionHandler.java
+.\migration-files-before.txt:385:quote-system/src/main/java/com/machining/quote/config/JsonbTypeHandler.java
+.\migration-files-before.txt:386:quote-system/src/main/java/com/machining/quote/config/ProductionSecurityGuard.java
+.\migration-files-before.txt:387:quote-system/src/main/java/com/machining/quote/config/RequestTraceContext.java
+.\migration-files-before.txt:388:quote-system/src/main/java/com/machining/quote/config/RequestTraceFilter.java
+.\migration-files-before.txt:389:quote-system/src/main/java/com/machining/quote/config/RequirePermission.java
+.\migration-files-before.txt:390:quote-system/src/main/java/com/machining/quote/config/SystemTaskExecutorConfig.java
+.\migration-files-before.txt:391:quote-system/src/main/java/com/machining/quote/config/WebConfig.java
+.\migration-files-before.txt:392:quote-system/src/main/java/com/machining/quote/controller/AdminController.java
+.\migration-files-before.txt:393:quote-system/src/main/java/com/machining/quote/controller/ApsSourceController.java
+.\migration-files-before.txt:394:quote-system/src/main/java/com/machining/quote/controller/AuditLogController.java
+.\migration-files-before.txt:395:quote-system/src/main/java/com/machining/quote/controller/AuthController.java
+.\migration-files-before.txt:396:quote-system/src/main/java/com/machining/quote/controller/DataScopeController.java
+.\migration-files-before.txt:397:quote-system/src/main/java/com/machining/quote/controller/DictController.java
+.\migration-files-before.txt:398:quote-system/src/main/java/com/machining/quote/controller/EngineerController.java
+.\migration-files-before.txt:399:quote-system/src/main/java/com/machining/quote/controller/HealthController.java
+.\migration-files-before.txt:400:quote-system/src/main/java/com/machining/quote/controller/InternalTargetLeadTimeController.java
+.\migration-files-before.txt:401:quote-system/src/main/java/com/machining/quote/controller/MarketController.java
+.\migration-files-before.txt:402:quote-system/src/main/java/com/machining/quote/controller/OrderDeliveryController.java
+.\migration-files-before.txt:403:quote-system/src/main/java/com/machining/quote/controller/OrderManagementController.java
+.\migration-files-before.txt:404:quote-system/src/main/java/com/machining/quote/controller/QuoteProcessController.java
+.\migration-files-before.txt:405:quote-system/src/main/java/com/machining/quote/controller/SystemDeptController.java
+.\migration-files-before.txt:406:quote-system/src/main/java/com/machining/quote/controller/SystemPostController.java
+.\migration-files-before.txt:407:quote-system/src/main/java/com/machining/quote/controller/SystemRoleController.java
+.\migration-files-before.txt:408:quote-system/src/main/java/com/machining/quote/controller/SystemTaskController.java
+.\migration-files-before.txt:409:quote-system/src/main/java/com/machining/quote/controller/SystemUserController.java
+.\migration-files-before.txt:410:quote-system/src/main/java/com/machining/quote/controller/UploadFileController.java
+.\migration-files-before.txt:411:quote-system/src/main/java/com/machining/quote/domain/QuoteStatusWorkflow.java
+.\migration-files-before.txt:412:quote-system/src/main/java/com/machining/quote/dto/AuditLogDTO.java
+.\migration-files-before.txt:413:quote-system/src/main/java/com/machining/quote/dto/AuditLogQueryReq.java
+.\migration-files-before.txt:414:quote-system/src/main/java/com/machining/quote/dto/AuditLogRetentionConfigDTO.java
+.\migration-files-before.txt:415:quote-system/src/main/java/com/machining/quote/dto/AuditLogRetentionConfigReq.java
+.\migration-files-before.txt:416:quote-system/src/main/java/com/machining/quote/dto/AuditLogRetentionRunDTO.java
+.\migration-files-before.txt:417:quote-system/src/main/java/com/machining/quote/dto/DeliveredItemDTO.java
+.\migration-files-before.txt:418:quote-system/src/main/java/com/machining/quote/dto/DeliveredItemQueryReq.java
+.\migration-files-before.txt:419:quote-system/src/main/java/com/machining/quote/dto/DeliveryGenerateReq.java
+.\migration-files-before.txt:420:quote-system/src/main/java/com/machining/quote/dto/InternalTargetLeadTimeSetReq.java
+.\migration-files-before.txt:421:quote-system/src/main/java/com/machining/quote/dto/InternalTargetLeadTimeShiftReq.java
+.\migration-files-before.txt:422:quote-system/src/main/java/com/machining/quote/dto/InternalTargetLeadTimeUpdateReq.java
+.\migration-files-before.txt:423:quote-system/src/main/java/com/machining/quote/dto/LockedItemDTO.java
+.\migration-files-before.txt:424:quote-system/src/main/java/com/machining/quote/dto/LockedItemPageDTO.java
+.\migration-files-before.txt:425:quote-system/src/main/java/com/machining/quote/dto/LockedItemQueryReq.java
+.\migration-files-before.txt:426:quote-system/src/main/java/com/machining/quote/dto/LoginReq.java
+.\migration-files-before.txt:427:quote-system/src/main/java/com/machining/quote/dto/LoginUserDTO.java
+.\migration-files-before.txt:428:quote-system/src/main/java/com/machining/quote/dto/MenuTreeDTO.java
+.\migration-files-before.txt:429:quote-system/src/main/java/com/machining/quote/dto/MesMaterialResolveReq.java
+.\migration-files-before.txt:430:quote-system/src/main/java/com/machining/quote/dto/MesMaterialResolveResp.java
+.\migration-files-before.txt:431:quote-system/src/main/java/com/machining/quote/dto/MyProfileUpdateReq.java
+.\migration-files-before.txt:432:quote-system/src/main/java/com/machining/quote/dto/OrderStatusChangeReq.java
+.\migration-files-before.txt:433:quote-system/src/main/java/com/machining/quote/dto/OrderStatusChangeResult.java
+.\migration-files-before.txt:434:quote-system/src/main/java/com/machining/quote/dto/PageResult.java
+.\migration-files-before.txt:435:quote-system/src/main/java/com/machining/quote/dto/PasswordChangeReq.java
+.\migration-files-before.txt:436:quote-system/src/main/java/com/machining/quote/dto/PermissionInfoDTO.java
+.\migration-files-before.txt:437:quote-system/src/main/java/com/machining/quote/dto/PermissionTreeNodeDTO.java
+.\migration-files-before.txt:438:quote-system/src/main/java/com/machining/quote/dto/ProcessSheetDTO.java
+.\migration-files-before.txt:439:quote-system/src/main/java/com/machining/quote/dto/QuoteLeadTimeSetReq.java
+.\migration-files-before.txt:440:quote-system/src/main/java/com/machining/quote/dto/QuoteLeadTimeShiftReq.java
+.\migration-files-before.txt:441:quote-system/src/main/java/com/machining/quote/dto/QuoteLeadTimeUpdateReq.java
+.\migration-files-before.txt:442:quote-system/src/main/java/com/machining/quote/dto/QuoteSubmitReq.java
+.\migration-files-before.txt:443:quote-system/src/main/java/com/machining/quote/dto/RfqExcelDTO.java
+.\migration-files-before.txt:444:quote-system/src/main/java/com/machining/quote/dto/RoleDataScopeAssignReq.java
+.\migration-files-before.txt:445:quote-system/src/main/java/com/machining/quote/dto/RolePermissionAssignReq.java
+.\migration-files-before.txt:446:quote-system/src/main/java/com/machining/quote/dto/SystemDeptDTO.java
+.\migration-files-before.txt:447:quote-system/src/main/java/com/machining/quote/dto/SystemDeptSaveReq.java
+.\migration-files-before.txt:448:quote-system/src/main/java/com/machining/quote/dto/SystemPermissionDTO.java
+.\migration-files-before.txt:449:quote-system/src/main/java/com/machining/quote/dto/SystemPostDTO.java
+.\migration-files-before.txt:450:quote-system/src/main/java/com/machining/quote/dto/SystemPostSaveReq.java
+.\migration-files-before.txt:451:quote-system/src/main/java/com/machining/quote/dto/SystemRoleDTO.java
+.\migration-files-before.txt:452:quote-system/src/main/java/com/machining/quote/dto/SystemRoleSaveReq.java
+.\migration-files-before.txt:453:quote-system/src/main/java/com/machining/quote/dto/SystemUserDTO.java
+.\migration-files-before.txt:454:quote-system/src/main/java/com/machining/quote/dto/SystemUserSaveReq.java
+.\migration-files-before.txt:455:quote-system/src/main/java/com/machining/quote/dto/UserSaveReq.java
+.\migration-files-before.txt:456:quote-system/src/main/java/com/machining/quote/dto/WmsAllocationReq.java
+.\migration-files-before.txt:457:quote-system/src/main/java/com/machining/quote/dto/WmsAllocationResp.java
+.\migration-files-before.txt:458:quote-system/src/main/java/com/machining/quote/dto/aps/ApsDeliveryItemBatchDTO.java
+.\migration-files-before.txt:459:quote-system/src/main/java/com/machining/quote/dto/aps/ApsDeliveryItemDTO.java
+.\migration-files-before.txt:460:quote-system/src/main/java/com/machining/quote/dto/aps/ApsProcessDTO.java
+.\migration-files-before.txt:461:quote-system/src/main/java/com/machining/quote/entity/AuditLog.java
+.\migration-files-before.txt:462:quote-system/src/main/java/com/machining/quote/entity/AuditLogRetentionConfig.java
+.\migration-files-before.txt:463:quote-system/src/main/java/com/machining/quote/entity/DictExtraFeeItem.java
+.\migration-files-before.txt:464:quote-system/src/main/java/com/machining/quote/entity/DictMarkupFee.java
+.\migration-files-before.txt:465:quote-system/src/main/java/com/machining/quote/entity/DictMaterial.java
+.\migration-files-before.txt:466:quote-system/src/main/java/com/machining/quote/entity/DictProcess.java
+.\migration-files-before.txt:467:quote-system/src/main/java/com/machining/quote/entity/ErpUser.java
+.\migration-files-before.txt:468:quote-system/src/main/java/com/machining/quote/entity/ItemAssemblyRelation.java
+.\migration-files-before.txt:469:quote-system/src/main/java/com/machining/quote/entity/ItemQuoteVersion.java
+.\migration-files-before.txt:470:quote-system/src/main/java/com/machining/quote/entity/OrderDeliveryTicket.java
+.\migration-files-before.txt:471:quote-system/src/main/java/com/machining/quote/entity/OrderDeliveryTicketAllocation.java
+.\migration-files-before.txt:472:quote-system/src/main/java/com/machining/quote/entity/OrderRfq.java
+.\migration-files-before.txt:473:quote-system/src/main/java/com/machining/quote/entity/SystemDept.java
+.\migration-files-before.txt:474:quote-system/src/main/java/com/machining/quote/entity/SystemPermission.java
+.\migration-files-before.txt:475:quote-system/src/main/java/com/machining/quote/entity/SystemPost.java
+.\migration-files-before.txt:476:quote-system/src/main/java/com/machining/quote/entity/SystemRole.java
+.\migration-files-before.txt:477:quote-system/src/main/java/com/machining/quote/entity/SystemRoleDataScopeCustomer.java
+.\migration-files-before.txt:478:quote-system/src/main/java/com/machining/quote/entity/SystemRoleDataScopeDept.java
+.\migration-files-before.txt:479:quote-system/src/main/java/com/machining/quote/entity/SystemRolePermission.java
+.\migration-files-before.txt:480:quote-system/src/main/java/com/machining/quote/entity/SystemTask.java
+.\migration-files-before.txt:481:quote-system/src/main/java/com/machining/quote/entity/SystemUser.java
+.\migration-files-before.txt:482:quote-system/src/main/java/com/machining/quote/entity/SystemUserRole.java
+.\migration-files-before.txt:483:quote-system/src/main/java/com/machining/quote/mapper/AuditLogMapper.java
+.\migration-files-before.txt:484:quote-system/src/main/java/com/machining/quote/mapper/AuditLogRetentionConfigMapper.java
+.\migration-files-before.txt:485:quote-system/src/main/java/com/machining/quote/mapper/DictExtraFeeItemMapper.java
+.\migration-files-before.txt:486:quote-system/src/main/java/com/machining/quote/mapper/DictMarkupFeeMapper.java
+.\migration-files-before.txt:487:quote-system/src/main/java/com/machining/quote/mapper/DictMaterialMapper.java
+.\migration-files-before.txt:488:quote-system/src/main/java/com/machining/quote/mapper/DictProcessMapper.java
+.\migration-files-before.txt:489:quote-system/src/main/java/com/machining/quote/mapper/ErpUserMapper.java
+.\migration-files-before.txt:490:quote-system/src/main/java/com/machining/quote/mapper/ItemAssemblyRelationMapper.java
+.\migration-files-before.txt:491:quote-system/src/main/java/com/machining/quote/mapper/ItemQuoteVersionMapper.java
+.\migration-files-before.txt:492:quote-system/src/main/java/com/machining/quote/mapper/OrderDeliveryTicketAllocationMapper.java
+.\migration-files-before.txt:493:quote-system/src/main/java/com/machining/quote/mapper/OrderDeliveryTicketMapper.java
+.\migration-files-before.txt:494:quote-system/src/main/java/com/machining/quote/mapper/OrderRfqMapper.java
+.\migration-files-before.txt:495:quote-system/src/main/java/com/machining/quote/mapper/SystemDeptMapper.java
+.\migration-files-before.txt:496:quote-system/src/main/java/com/machining/quote/mapper/SystemPermissionMapper.java
+.\migration-files-before.txt:497:quote-system/src/main/java/com/machining/quote/mapper/SystemPostMapper.java
+.\migration-files-before.txt:498:quote-system/src/main/java/com/machining/quote/mapper/SystemRoleDataScopeCustomerMapper.java
+.\migration-files-before.txt:499:quote-system/src/main/java/com/machining/quote/mapper/SystemRoleDataScopeDeptMapper.java
+.\migration-files-before.txt:500:quote-system/src/main/java/com/machining/quote/mapper/SystemRoleMapper.java
+.\migration-files-before.txt:501:quote-system/src/main/java/com/machining/quote/mapper/SystemRolePermissionMapper.java
+.\migration-files-before.txt:502:quote-system/src/main/java/com/machining/quote/mapper/SystemTaskMapper.java
+.\migration-files-before.txt:503:quote-system/src/main/java/com/machining/quote/mapper/SystemUserMapper.java
+.\migration-files-before.txt:504:quote-system/src/main/java/com/machining/quote/mapper/SystemUserRoleMapper.java
+.\migration-files-before.txt:505:quote-system/src/main/java/com/machining/quote/service/ApsSourceService.java
+.\migration-files-before.txt:506:quote-system/src/main/java/com/machining/quote/service/AuditLogQueryService.java
+.\migration-files-before.txt:507:quote-system/src/main/java/com/machining/quote/service/AuditLogRetentionService.java
+.\migration-files-before.txt:508:quote-system/src/main/java/com/machining/quote/service/AuditService.java
+.\migration-files-before.txt:509:quote-system/src/main/java/com/machining/quote/service/AuthService.java
+.\migration-files-before.txt:510:quote-system/src/main/java/com/machining/quote/service/DataScopeService.java
+.\migration-files-before.txt:511:quote-system/src/main/java/com/machining/quote/service/DeliveredItemService.java
+.\migration-files-before.txt:512:quote-system/src/main/java/com/machining/quote/service/DeliveryService.java
+.\migration-files-before.txt:513:quote-system/src/main/java/com/machining/quote/service/EngineerService.java
+.\migration-files-before.txt:514:quote-system/src/main/java/com/machining/quote/service/ExcelExportService.java
+.\migration-files-before.txt:515:quote-system/src/main/java/com/machining/quote/service/InternalTargetLeadTimeService.java
+.\migration-files-before.txt:516:quote-system/src/main/java/com/machining/quote/service/JwtService.java
+.\migration-files-before.txt:517:quote-system/src/main/java/com/machining/quote/service/LeadTimeService.java
+.\migration-files-before.txt:518:quote-system/src/main/java/com/machining/quote/service/LockedItemService.java
+.\migration-files-before.txt:519:quote-system/src/main/java/com/machining/quote/service/MesMaterialClient.java
+.\migration-files-before.txt:520:quote-system/src/main/java/com/machining/quote/service/MesMaterialSyncService.java
+.\migration-files-before.txt:521:quote-system/src/main/java/com/machining/quote/service/OrderFilePathService.java
+.\migration-files-before.txt:522:quote-system/src/main/java/com/machining/quote/service/OrderManagementService.java
+.\migration-files-before.txt:523:quote-system/src/main/java/com/machining/quote/service/OrderStatusManagementService.java
+.\migration-files-before.txt:524:quote-system/src/main/java/com/machining/quote/service/PermissionService.java
+.\migration-files-before.txt:525:quote-system/src/main/java/com/machining/quote/service/QuoteProcessService.java
+.\migration-files-before.txt:526:quote-system/src/main/java/com/machining/quote/service/QuoteTemplateExportService.java
+.\migration-files-before.txt:527:quote-system/src/main/java/com/machining/quote/service/QuoteTemplateService.java
+.\migration-files-before.txt:528:quote-system/src/main/java/com/machining/quote/service/RfqNumberService.java
+.\migration-files-before.txt:529:quote-system/src/main/java/com/machining/quote/service/StorageInitializer.java
+.\migration-files-before.txt:530:quote-system/src/main/java/com/machining/quote/service/SystemDeptService.java
+.\migration-files-before.txt:531:quote-system/src/main/java/com/machining/quote/service/SystemPostService.java
+.\migration-files-before.txt:532:quote-system/src/main/java/com/machining/quote/service/SystemRoleService.java
+.\migration-files-before.txt:533:quote-system/src/main/java/com/machining/quote/service/SystemTaskGuardService.java
+.\migration-files-before.txt:534:quote-system/src/main/java/com/machining/quote/service/SystemTaskService.java
+.\migration-files-before.txt:535:quote-system/src/main/java/com/machining/quote/service/UserAdminService.java
+.\migration-files-before.txt:536:quote-system/src/main/java/com/machining/quote/service/WmsAllocationClient.java
+.\migration-files-before.txt:537:quote-system/src/main/java/com/machining/quote/service/WmsAllocationService.java
+.\migration-files-before.txt:538:quote-system/src/main/java/com/machining/quote/util/DrawingPartNoResolver.java
+.\migration-files-before.txt:539:quote-system/src/main/java/com/machining/quote/util/MaterialDataResolver.java
+.\migration-files-before.txt:540:quote-system/src/main/resources/application.yaml
+.\migration-files-before.txt:541:quote-system/src/main/resources/db/migration/V10__internal_target_lead_time.sql
+.\migration-files-before.txt:542:quote-system/src/main/resources/db/migration/V11__internal_project_no.sql
+.\migration-files-before.txt:543:quote-system/src/main/resources/db/migration/V12__item_weight_fields.sql
+.\migration-files-before.txt:544:quote-system/src/main/resources/db/migration/V13__empty_version_stays_empty.sql
+.\migration-files-before.txt:545:quote-system/src/main/resources/db/migration/V14__assembly_quote_relations.sql
+.\migration-files-before.txt:546:quote-system/src/main/resources/db/migration/V15__delivery_item_type.sql
+.\migration-files-before.txt:547:quote-system/src/main/resources/db/migration/V16__order_listing_indexes.sql
+.\migration-files-before.txt:548:quote-system/src/main/resources/db/migration/V17__index_cleanup_and_composite_indexes.sql
+.\migration-files-before.txt:549:quote-system/src/main/resources/db/migration/V18__large_data_indexes_and_system_task.sql
+.\migration-files-before.txt:550:quote-system/src/main/resources/db/migration/V19__engineering_material_name.sql
+.\migration-files-before.txt:551:quote-system/src/main/resources/db/migration/V1__baseline.sql
+.\migration-files-before.txt:552:quote-system/src/main/resources/db/migration/V20__process_sheet_weight_fields.sql
+.\migration-files-before.txt:553:quote-system/src/main/resources/db/migration/V21__delivery_customer_order_fields.sql
+.\migration-files-before.txt:554:quote-system/src/main/resources/db/migration/V22__remove_warehouse_inventory.sql
+.\migration-files-before.txt:555:quote-system/src/main/resources/db/migration/V23__audit_log_enrichment.sql
+.\migration-files-before.txt:556:quote-system/src/main/resources/db/migration/V24__audit_log_retention_config.sql
+.\migration-files-before.txt:557:quote-system/src/main/resources/db/migration/V25__enterprise_permission_system.sql
+.\migration-files-before.txt:558:quote-system/src/main/resources/db/migration/V26__stage3_role_management_menu.sql
+.\migration-files-before.txt:559:quote-system/src/main/resources/db/migration/V27__data_scope_order_ownership.sql
+.\migration-files-before.txt:560:quote-system/src/main/resources/db/migration/V2__auth_audit_and_hardening.sql
+.\migration-files-before.txt:561:quote-system/src/main/resources/db/migration/V31__permission_module_tree.sql
+.\migration-files-before.txt:562:quote-system/src/main/resources/db/migration/V32__quote_status_workflow.sql
+.\migration-files-before.txt:563:quote-system/src/main/resources/db/migration/V33__quote_process_save_quote_permission.sql
+.\migration-files-before.txt:564:quote-system/src/main/resources/db/migration/V34__delivery_batch_immutability.sql
+.\migration-files-before.txt:565:quote-system/src/main/resources/db/migration/V35__retire_release_reset_permission.sql
+.\migration-files-before.txt:566:quote-system/src/main/resources/db/migration/V36__decommission_order_process_sheet.sql
+.\migration-files-before.txt:567:quote-system/src/main/resources/db/migration/V37__delivery_ticket_snapshot_defaults.sql
+.\migration-files-before.txt:568:quote-system/src/main/resources/db/migration/V38__retire_common_selection_permissions.sql
+.\migration-files-before.txt:569:quote-system/src/main/resources/db/migration/V39__retire_department_data_scopes.sql
+.\migration-files-before.txt:570:quote-system/src/main/resources/db/migration/V3__formal_basic_data.sql
+.\migration-files-before.txt:571:quote-system/src/main/resources/db/migration/V40__organization_identity_permissions.sql
+.\migration-files-before.txt:572:quote-system/src/main/resources/db/migration/V41__engineer_pricing_sheet_export_permission.sql
+.\migration-files-before.txt:573:quote-system/src/main/resources/db/migration/V42__order_status_management_permissions.sql
+.\migration-files-before.txt:574:quote-system/src/main/resources/db/migration/V43__rfq_order_type.sql
+.\migration-files-before.txt:575:quote-system/src/main/resources/db/migration/V44__rfq_order_type_select_permission.sql
+.\migration-files-before.txt:576:quote-system/src/main/resources/db/migration/V45__delivery_ticket_mes_wms_foundation.sql
+.\migration-files-before.txt:577:quote-system/src/main/resources/db/migration/V46__delivery_ticket_mes_sync_permission.sql
+.\migration-files-before.txt:578:quote-system/src/main/resources/db/migration/V47__delivery_ticket_wms_allocation_permissions.sql
+.\migration-files-before.txt:579:quote-system/src/main/resources/db/migration/V48__delivery_allocation_snapshot_fields.sql
+.\migration-files-before.txt:580:quote-system/src/main/resources/db/migration/V49__mes_wms_permission_tree_repair.sql
+.\migration-files-before.txt:581:quote-system/src/main/resources/db/migration/V4__password_security.sql
+.\migration-files-before.txt:582:quote-system/src/main/resources/db/migration/V5__rfq_number_sequence.sql
+.\migration-files-before.txt:583:quote-system/src/main/resources/db/migration/V6__remove_partial_quote_status.sql
+.\migration-files-before.txt:584:quote-system/src/main/resources/db/migration/V7__set_database_timezone.sql
+.\migration-files-before.txt:585:quote-system/src/main/resources/db/migration/V8__part_version_identity.sql
+.\migration-files-before.txt:586:quote-system/src/main/resources/db/migration/V9__quote_lead_time.sql
+.\migration-files-before.txt:587:quote-system/src/main/resources/logback-spring.xml
+.\migration-files-before.txt:588:quote-system/src/main/resources/schema.sql
+.\migration-files-before.txt:589:quote-system/src/test/java/com/machining/quote/AssemblyWorkflowIntegrationTests.java
+.\migration-files-before.txt:590:quote-system/src/test/java/com/machining/quote/AuditActionCoverageTests.java
+.\migration-files-before.txt:591:quote-system/src/test/java/com/machining/quote/AuditLogQueryServiceTests.java
+.\migration-files-before.txt:592:quote-system/src/test/java/com/machining/quote/AuditLogRetentionServiceTests.java
+.\migration-files-before.txt:593:quote-system/src/test/java/com/machining/quote/AuditServiceTests.java
+.\migration-files-before.txt:594:quote-system/src/test/java/com/machining/quote/CoreWorkflowIntegrationTests.java
+.\migration-files-before.txt:595:quote-system/src/test/java/com/machining/quote/DeliveredItemFoundationTest.java
+.\migration-files-before.txt:596:quote-system/src/test/java/com/machining/quote/DeliveredItemQueryBackendTest.java
+.\migration-files-before.txt:597:quote-system/src/test/java/com/machining/quote/DeliveredItemQueryIntegrationTest.java
+.\migration-files-before.txt:598:quote-system/src/test/java/com/machining/quote/DeliveryServiceDateParsingTests.java
+.\migration-files-before.txt:599:quote-system/src/test/java/com/machining/quote/DrawingPartNoResolverTests.java
+.\migration-files-before.txt:600:quote-system/src/test/java/com/machining/quote/EngineerServiceMaterialCalculationTests.java
+.\migration-files-before.txt:601:quote-system/src/test/java/com/machining/quote/EngineerServiceProcessSortTests.java
+.\migration-files-before.txt:602:quote-system/src/test/java/com/machining/quote/ExcelExportServiceProcessSheetTests.java
+.\migration-files-before.txt:603:quote-system/src/test/java/com/machining/quote/LockedItemQueryTest.java
+.\migration-files-before.txt:604:quote-system/src/test/java/com/machining/quote/LoggingConventionTest.java
+.\migration-files-before.txt:605:quote-system/src/test/java/com/machining/quote/MarketControllerPartSelectionTests.java
+.\migration-files-before.txt:606:quote-system/src/test/java/com/machining/quote/MesMaterialClientTest.java
+.\migration-files-before.txt:607:quote-system/src/test/java/com/machining/quote/MesMaterialSyncTest.java
+.\migration-files-before.txt:608:quote-system/src/test/java/com/machining/quote/OperationalWorkflowIntegrationTests.java
+.\migration-files-before.txt:609:quote-system/src/test/java/com/machining/quote/OrderFilePathServiceTests.java
+.\migration-files-before.txt:610:quote-system/src/test/java/com/machining/quote/OrderStatusManagementTest.java
+.\migration-files-before.txt:611:quote-system/src/test/java/com/machining/quote/OrganizationGovernanceDocumentationTest.java
+.\migration-files-before.txt:612:quote-system/src/test/java/com/machining/quote/PermissionModuleTreeTest.java
+.\migration-files-before.txt:613:quote-system/src/test/java/com/machining/quote/PermissionSystemStage0Test.java
+.\migration-files-before.txt:614:quote-system/src/test/java/com/machining/quote/PermissionSystemStage1Stage2Test.java
+.\migration-files-before.txt:615:quote-system/src/test/java/com/machining/quote/PermissionSystemStage3Test.java
+.\migration-files-before.txt:616:quote-system/src/test/java/com/machining/quote/PermissionSystemStage4Test.java
+.\migration-files-before.txt:617:quote-system/src/test/java/com/machining/quote/PermissionSystemStage5Test.java
+.\migration-files-before.txt:618:quote-system/src/test/java/com/machining/quote/PermissionSystemStage6Test.java
+.\migration-files-before.txt:619:quote-system/src/test/java/com/machining/quote/PermissionSystemStage7Test.java
+.\migration-files-before.txt:620:quote-system/src/test/java/com/machining/quote/PermissionSystemStage8_3Test.java
+.\migration-files-before.txt:621:quote-system/src/test/java/com/machining/quote/ProcessSheetDecommissionTest.java
+.\migration-files-before.txt:622:quote-system/src/test/java/com/machining/quote/QuoteStatusWorkflowStage1Test.java
+.\migration-files-before.txt:623:quote-system/src/test/java/com/machining/quote/QuoteStatusWorkflowStage2Test.java
+.\migration-files-before.txt:624:quote-system/src/test/java/com/machining/quote/QuoteStatusWorkflowTest.java
+.\migration-files-before.txt:625:quote-system/src/test/java/com/machining/quote/QuoteSystemApplicationTests.java
+.\migration-files-before.txt:626:quote-system/src/test/java/com/machining/quote/QuoteTemplateExportServiceTests.java
+.\migration-files-before.txt:627:quote-system/src/test/java/com/machining/quote/QuoteTemplateServiceTests.java
+.\migration-files-before.txt:628:quote-system/src/test/java/com/machining/quote/RequestTraceFilterTests.java
+.\migration-files-before.txt:629:quote-system/src/test/java/com/machining/quote/RfqNumberServiceTests.java
+.\migration-files-before.txt:630:quote-system/src/test/java/com/machining/quote/SystemOrganizationCrudTest.java
+.\migration-files-before.txt:631:quote-system/src/test/java/com/machining/quote/SystemOrganizationTest.java
+.\migration-files-before.txt:632:quote-system/src/test/java/com/machining/quote/UserProfileSelfServiceTest.java
+.\migration-files-before.txt:633:quote-system/src/test/java/com/machining/quote/WmsAllocationClientTest.java
+.\migration-files-before.txt:634:quote-system/src/test/java/com/machining/quote/WmsAllocationTest.java
+.\docs\QPO日志模块\01-操作日志模块开发文档.md:3:> 适用范围：QPO/ERP 系统。当前阶段只面向 `quote-system` 与 `quote-frontend`，不涉及 APS。
+.\docs\QPO日志模块\01-操作日志模块开发文档.md:44:- `quote-system/src/main/resources/db/migration/V2__auth_audit_and_hardening.sql`
+.\docs\QPO日志模块\01-操作日志模块开发文档.md:45:- `quote-system/src/main/java/com/machining/quote/entity/AuditLog.java`
+.\docs\QPO日志模块\01-操作日志模块开发文档.md:46:- `quote-system/src/main/java/com/machining/quote/mapper/AuditLogMapper.java`
+.\docs\QPO日志模块\01-操作日志模块开发文档.md:47:- `quote-system/src/main/java/com/machining/quote/service/AuditService.java`
+.\docs\QPO日志模块\01-操作日志模块开发文档.md:113:quote-frontend/src/components/AuditLogManage.vue
+.\docs\QPO日志模块\01-操作日志模块开发文档.md:119:quote-frontend/src/services/auditApi.js
+.\docs\QPO日志模块\01-操作日志模块开发文档.md:340:quote-system/src/main/resources/db/migration/V23__audit_log_enrichment.sql
+.\docs\QPO日志模块\01-操作日志模块开发文档.md:382:quote-system/src/main/java/com/machining/quote/controller/AuditLogController.java
+.\docs\QPO日志模块\01-操作日志模块开发文档.md:383:quote-system/src/main/java/com/machining/quote/service/AuditLogQueryService.java
+.\docs\QPO日志模块\01-操作日志模块开发文档.md:384:quote-system/src/main/java/com/machining/quote/dto/AuditLogQueryReq.java
+.\docs\QPO日志模块\01-操作日志模块开发文档.md:385:quote-system/src/main/java/com/machining/quote/dto/AuditLogDTO.java
+.\docs\QPO日志模块\01-操作日志模块开发文档.md:386:quote-system/src/main/java/com/machining/quote/dto/PageResult.java
+.\docs\QPO日志模块\01-操作日志模块开发文档.md:387:quote-system/src/main/java/com/machining/quote/config/RequestTraceFilter.java
+.\docs\QPO日志模块\01-操作日志模块开发文档.md:388:quote-system/src/main/resources/db/migration/V23__audit_log_enrichment.sql
+.\docs\QPO日志模块\01-操作日志模块开发文档.md:394:quote-system/src/main/java/com/machining/quote/entity/AuditLog.java
+.\docs\QPO日志模块\01-操作日志模块开发文档.md:395:quote-system/src/main/java/com/machining/quote/service/AuditService.java
+.\docs\QPO日志模块\01-操作日志模块开发文档.md:396:quote-system/src/main/java/com/machining/quote/service/AuthService.java
+.\docs\QPO日志模块\01-操作日志模块开发文档.md:397:quote-system/src/main/java/com/machining/quote/service/QuoteTemplateService.java
+.\docs\QPO日志模块\01-操作日志模块开发文档.md:398:quote-system/src/main/java/com/machining/quote/controller/AdminController.java
+.\docs\QPO日志模块\01-操作日志模块开发文档.md:399:quote-system/src/main/java/com/machining/quote/controller/MarketController.java
+.\docs\QPO日志模块\01-操作日志模块开发文档.md:400:quote-system/src/main/java/com/machining/quote/controller/SystemTaskController.java
+.\docs\QPO日志模块\01-操作日志模块开发文档.md:419:quote-frontend/src/services/auditApi.js
+.\docs\QPO日志模块\01-操作日志模块开发文档.md:420:quote-frontend/src/components/AuditLogManage.vue
+.\docs\QPO日志模块\01-操作日志模块开发文档.md:421:quote-frontend/src/services/auditApi.test.js
+.\docs\QPO日志模块\01-操作日志模块开发文档.md:427:quote-frontend/src/router/index.js
+.\docs\QPO日志模块\01-操作日志模块开发文档.md:428:quote-frontend/src/App.vue
+.\docs\QPO日志模块\01-操作日志模块开发文档.md:429:quote-frontend/src/routerCodeSplitting.test.js
+.\docs\QPO日志模块\01-操作日志模块开发文档.md:430:quote-frontend/src/appShell.test.js
+.\docs\QPO日志模块\01-操作日志模块开发文档.md:431:quote-frontend/src/finalConsistencyStage7.test.js
+.\docs\QPO日志模块\01-操作日志模块开发文档.md:685:quote-system/src/test/java/com/machining/quote/service/AuditLogQueryServiceTests.java
+.\docs\QPO日志模块\01-操作日志模块开发文档.md:686:quote-system/src/test/java/com/machining/quote/service/AuditServiceTests.java
+.\docs\QPO日志模块\01-操作日志模块开发文档.md:687:quote-system/src/test/java/com/machining/quote/controller/AuditLogControllerTests.java
+.\docs\QPO日志模块\01-操作日志模块开发文档.md:688:quote-system/src/test/java/com/machining/quote/AuditLogRetentionServiceTests.java
+.\docs\QPO日志模块\01-操作日志模块开发文档.md:710:quote-frontend/src/services/auditApi.test.js
+.\docs\QPO日志模块\01-操作日志模块开发文档.md:711:quote-frontend/src/auditLogModule.test.js
+.\docs\QPO日志模块\01-操作日志模块开发文档.md:712:quote-frontend/src/utils/auditLogFormat.test.js
+.\docs\QPO日志模块\01-操作日志模块开发文档.md:731:cd D:\Code\quote-frontend
+.\docs\QPO日志模块\01-操作日志模块开发文档.md:739:cd D:\Code\quote-system
+.\docs\QPO日志模块\01-操作日志模块开发文档.md:746:git -C D:\Code diff --check
+.\docs\QPO权限用户体系\01-企业级权限用户体系开发文档.md:84:- `quote-system/src/main/java/com/machining/quote/entity/ErpUser.java`
+.\docs\QPO权限用户体系\01-企业级权限用户体系开发文档.md:85:- `quote-system/src/main/java/com/machining/quote/service/UserAdminService.java`
+.\docs\QPO权限用户体系\01-企业级权限用户体系开发文档.md:86:- `quote-system/src/main/java/com/machining/quote/config/AuthInterceptor.java`
+.\docs\QPO权限用户体系\01-企业级权限用户体系开发文档.md:87:- `quote-system/src/main/java/com/machining/quote/config/RequireRole.java`
+.\docs\QPO权限用户体系\01-企业级权限用户体系开发文档.md:101:- `quote-frontend/src/stores/authStore.js`
+.\docs\QPO权限用户体系\01-企业级权限用户体系开发文档.md:102:- `quote-frontend/src/router/index.js`
+.\docs\QPO权限用户体系\01-企业级权限用户体系开发文档.md:103:- `quote-frontend/src/App.vue`
+.\docs\QPO权限用户体系\01-企业级权限用户体系开发文档.md:104:- `quote-frontend/src/components/UserManage.vue`
+.\docs\QPO日志模块\02-运行日志与数据库慢SQL日志开发文档.md:33:docker logs quote-frontend
+.\docs\QPO日志模块\02-运行日志与数据库慢SQL日志开发文档.md:112:quote-system_backups_data
+.\docs\QPO日志模块\02-运行日志与数据库慢SQL日志开发文档.md:166:quote-system/src/main/resources/logback-spring.xml
+.\docs\QPO日志模块\02-运行日志与数据库慢SQL日志开发文档.md:268:- 新增 `quote-system/src/main/resources/logback-spring.xml`
+.\docs\QPO日志模块\02-运行日志与数据库慢SQL日志开发文档.md:269:- 修改 `quote-system/src/main/java/com/machining/quote/config/RequestTraceFilter.java`
+.\docs\QPO日志模块\02-运行日志与数据库慢SQL日志开发文档.md:270:- 修改或检查 `quote-system/src/main/java/com/machining/quote/config/GlobalExceptionHandler.java`
+.\docs\QPO日志模块\02-运行日志与数据库慢SQL日志开发文档.md:326:quote-system/src/test/java/com/machining/quote/RequestTraceFilterTests.java
+.\docs\QPO日志模块\02-运行日志与数据库慢SQL日志开发文档.md:327:quote-system/src/test/java/com/machining/quote/GlobalExceptionHandlerTests.java
+.\aps-frontend\package-lock.json:2:  "name": "aps-frontend",
+.\aps-frontend\package-lock.json:8:      "name": "aps-frontend",
+.\docs\QPO前端优化\01-current-ui-audit.md:10:- `quote-frontend/src/style.css` already defines QPO color tokens such as `--erp-bg`, `--erp-surface`, `--erp-border`, and `--erp-primary`.
+.\docs\QPO前端优化\01-current-ui-audit.md:11:- The sidebar/header app shell exists in `quote-frontend/src/App.vue`.
+.\QPO备份与恢复说明.md:5:cd D:\Code
+.\QPO备份与恢复说明.md:18:powershell -ExecutionPolicy Bypass -File .\scripts\restore.ps1 -BackupDir "D:\Code\backups\20260517_020000" -Force
+.\QPO备份与恢复说明.md:23:powershell -ExecutionPolicy Bypass -File .\scripts\restore-drill.ps1 -BackupDir "D:\Code\backups\20260517_020000"
+.\docs\QPO报价状态流转\01-报价状态流转优化开发文档.md:151:quote-system/src/main/resources/db/migration/V32__quote_status_workflow.sql
+.\docs\QPO报价状态流转\01-报价状态流转优化开发文档.md:240:- `quote-system/src/main/java/com/machining/quote/controller/QuoteProcessController.java`
+.\docs\QPO报价状态流转\01-报价状态流转优化开发文档.md:241:- `quote-system/src/main/java/com/machining/quote/controller/MarketController.java`
+.\docs\QPO报价状态流转\01-报价状态流转优化开发文档.md:242:- `quote-system/src/main/java/com/machining/quote/controller/SystemTaskController.java`
+.\docs\QPO报价状态流转\01-报价状态流转优化开发文档.md:243:- `quote-system/src/main/java/com/machining/quote/service/QuoteProcessService.java`
+.\docs\QPO报价状态流转\01-报价状态流转优化开发文档.md:244:- `quote-system/src/main/java/com/machining/quote/service/ExcelExportService.java`
+.\docs\QPO报价状态流转\01-报价状态流转优化开发文档.md:245:- `quote-system/src/main/java/com/machining/quote/service/SystemTaskService.java`
+.\docs\QPO报价状态流转\01-报价状态流转优化开发文档.md:508:- `quote-frontend/src/services/marketApi.test.js`
+.\docs\QPO报价状态流转\01-报价状态流转优化开发文档.md:509:- `quote-frontend/src/permissionStage4.test.js`
+.\docs\QPO报价状态流转\01-报价状态流转优化开发文档.md:510:- `quote-frontend/src/permissionStage0.test.js`
+.\docs\QPO报价状态流转\01-报价状态流转优化开发文档.md:511:- `quote-frontend/src/components/QuoteProcess` 相关轻量源码测试。
+.\docs\QPO报价状态流转\01-报价状态流转优化开发文档.md:542:cd quote-system
+.\docs\QPO报价状态流转\01-报价状态流转优化开发文档.md:545:cd quote-frontend
+.\docs\QPO报价状态流转\01-报价状态流转优化开发文档.md:652:cd quote-system
+.\docs\QPO报价状态流转\01-报价状态流转优化开发文档.md:655:cd quote-frontend
+.\docs\QPO报价状态流转\01-报价状态流转优化开发文档.md:663:cd D:\Code
+.\docs\QPO-MES-WMS对接\02-基础数据模型与已提零件模块开发文档.md:71:| 新增 | `quote-system/src/main/resources/db/migration/V45__delivery_ticket_mes_wms_foundation.sql` | 增加提单需求池字段、allocation 表、索引、权限。 |
+.\docs\QPO-MES-WMS对接\02-基础数据模型与已提零件模块开发文档.md:72:| 修改 | `quote-system/src/main/resources/schema.sql` | 同步本地初始化 schema。 |
+.\docs\QPO-MES-WMS对接\02-基础数据模型与已提零件模块开发文档.md:73:| 修改 | `quote-system/src/main/java/com/machining/quote/entity/OrderDeliveryTicket.java` | 增加 `materialNo`、MES/WMS 状态字段。 |
+.\docs\QPO-MES-WMS对接\02-基础数据模型与已提零件模块开发文档.md:74:| 新增 | `quote-system/src/main/java/com/machining/quote/entity/OrderDeliveryTicketAllocation.java` | 锁库拆分明细实体。 |
+.\docs\QPO-MES-WMS对接\02-基础数据模型与已提零件模块开发文档.md:75:| 新增 | `quote-system/src/main/java/com/machining/quote/mapper/OrderDeliveryTicketAllocationMapper.java` | allocation 基础 Mapper。 |
+.\docs\QPO-MES-WMS对接\02-基础数据模型与已提零件模块开发文档.md:76:| 新增 | `quote-system/src/main/java/com/machining/quote/dto/DeliveredItemDTO.java` | 已提零件列表 DTO。 |
+.\docs\QPO-MES-WMS对接\02-基础数据模型与已提零件模块开发文档.md:77:| 新增 | `quote-system/src/main/java/com/machining/quote/dto/DeliveredItemPageDTO.java` | 分页结果 DTO。 |
+.\docs\QPO-MES-WMS对接\02-基础数据模型与已提零件模块开发文档.md:78:| 新增 | `quote-system/src/main/java/com/machining/quote/dto/DeliveredItemQueryReq.java` | 查询条件 DTO 或 controller 参数对象。 |
+.\docs\QPO-MES-WMS对接\02-基础数据模型与已提零件模块开发文档.md:79:| 新增 | `quote-system/src/main/java/com/machining/quote/service/DeliveredItemService.java` | 已提零件查询服务。 |
+.\docs\QPO-MES-WMS对接\02-基础数据模型与已提零件模块开发文档.md:80:| 新增 | `quote-system/src/main/java/com/machining/quote/controller/OrderDeliveryController.java` | `/api/order-delivery` 控制器。 |
+.\docs\QPO-MES-WMS对接\02-基础数据模型与已提零件模块开发文档.md:81:| 修改 | `quote-system/src/main/java/com/machining/quote/service/PermissionService.java` | fallback 权限目录补齐。 |
+.\docs\QPO-MES-WMS对接\02-基础数据模型与已提零件模块开发文档.md:87:| 新增 | `quote-frontend/src/services/deliveredItemApi.js` | 已提零件 API。 |
+.\docs\QPO-MES-WMS对接\02-基础数据模型与已提零件模块开发文档.md:88:| 新增 | `quote-frontend/src/components/DeliveredItemManage.vue` | 已提零件页面。 |
+.\docs\QPO-MES-WMS对接\02-基础数据模型与已提零件模块开发文档.md:89:| 修改 | `quote-frontend/src/router/index.js` | 新增 `/delivered-items` 路由。 |
+.\docs\QPO-MES-WMS对接\02-基础数据模型与已提零件模块开发文档.md:90:| 修改 | `quote-frontend/src/App.vue` | 订单分组增加“已提零件”菜单和标题说明。 |
+.\docs\QPO-MES-WMS对接\02-基础数据模型与已提零件模块开发文档.md:96:| 新增 | `quote-system/src/test/java/com/machining/quote/DeliveredItemFoundationTest.java` | 冻结表结构、字段、接口和查询口径。 |
+.\docs\QPO-MES-WMS对接\02-基础数据模型与已提零件模块开发文档.md:97:| 修改 | `quote-system/src/test/java/com/machining/quote/PermissionModuleTreeTest.java` | 冻结新菜单权限。 |
+.\docs\QPO-MES-WMS对接\02-基础数据模型与已提零件模块开发文档.md:98:| 新增 | `quote-frontend/src/deliveredItemApi.test.js` | 冻结前端 API。 |
+.\docs\QPO-MES-WMS对接\02-基础数据模型与已提零件模块开发文档.md:99:| 新增 | `quote-frontend/src/deliveredItemManage.test.js` | 冻结页面关键元素。 |
+.\docs\QPO-MES-WMS对接\02-基础数据模型与已提零件模块开发文档.md:100:| 修改 | `quote-frontend/src/permissionStage4.test.js` | 冻结路由权限。 |
+.\docs\QPO-MES-WMS对接\02-基础数据模型与已提零件模块开发文档.md:101:| 修改 | `quote-frontend/src/appShell.test.js` | 冻结左侧菜单和四字模块名。 |
+.\docs\QPO-MES-WMS对接\02-基础数据模型与已提零件模块开发文档.md:113:quote-system/src/main/resources/db/migration/V45__delivery_ticket_mes_wms_foundation.sql
+.\docs\QPO-MES-WMS对接\02-基础数据模型与已提零件模块开发文档.md:436:新增 `quote-frontend/src/services/deliveredItemApi.js`：
+.\docs\QPO-MES-WMS对接\02-基础数据模型与已提零件模块开发文档.md:578:cd D:\Code\quote-system
+.\docs\QPO-MES-WMS对接\02-基础数据模型与已提零件模块开发文档.md:581:cd D:\Code\quote-frontend
+.\docs\QPO-MES-WMS对接\02-基础数据模型与已提零件模块开发文档.md:662:cd D:\Code\quote-system
+.\docs\QPO-MES-WMS对接\02-基础数据模型与已提零件模块开发文档.md:665:cd D:\Code\quote-frontend
+.\docs\QPO-MES-WMS对接\02-基础数据模型与已提零件模块开发文档.md:674:  quote-system/src/main/resources/db/migration/V45__delivery_ticket_mes_wms_foundation.sql `
+.\docs\QPO-MES-WMS对接\02-基础数据模型与已提零件模块开发文档.md:675:  quote-system/src/main/resources/schema.sql `
+.\docs\QPO-MES-WMS对接\02-基础数据模型与已提零件模块开发文档.md:676:  quote-system/src/main/java/com/machining/quote/entity/OrderDeliveryTicket.java `
+.\docs\QPO-MES-WMS对接\02-基础数据模型与已提零件模块开发文档.md:677:  quote-system/src/main/java/com/machining/quote/entity/OrderDeliveryTicketAllocation.java `
+.\docs\QPO-MES-WMS对接\02-基础数据模型与已提零件模块开发文档.md:678:  quote-system/src/main/java/com/machining/quote/mapper/OrderDeliveryTicketAllocationMapper.java `
+.\docs\QPO-MES-WMS对接\02-基础数据模型与已提零件模块开发文档.md:679:  quote-system/src/main/java/com/machining/quote/dto/DeliveredItemDTO.java `
+.\docs\QPO-MES-WMS对接\02-基础数据模型与已提零件模块开发文档.md:680:  quote-system/src/main/java/com/machining/quote/dto/DeliveredItemPageDTO.java `
+.\docs\QPO-MES-WMS对接\02-基础数据模型与已提零件模块开发文档.md:681:  quote-system/src/main/java/com/machining/quote/dto/DeliveredItemQueryReq.java `
+.\docs\QPO-MES-WMS对接\02-基础数据模型与已提零件模块开发文档.md:682:  quote-system/src/main/java/com/machining/quote/service/DeliveredItemService.java `
+.\docs\QPO-MES-WMS对接\02-基础数据模型与已提零件模块开发文档.md:683:  quote-system/src/main/java/com/machining/quote/controller/OrderDeliveryController.java `
+.\docs\QPO-MES-WMS对接\02-基础数据模型与已提零件模块开发文档.md:684:  quote-system/src/main/java/com/machining/quote/service/PermissionService.java `
+.\docs\QPO-MES-WMS对接\02-基础数据模型与已提零件模块开发文档.md:685:  quote-system/src/test/java/com/machining/quote/DeliveredItemFoundationTest.java `
+.\docs\QPO-MES-WMS对接\02-基础数据模型与已提零件模块开发文档.md:686:  quote-system/src/test/java/com/machining/quote/PermissionModuleTreeTest.java `
+.\docs\QPO-MES-WMS对接\02-基础数据模型与已提零件模块开发文档.md:687:  quote-frontend/src/services/deliveredItemApi.js `
+.\docs\QPO-MES-WMS对接\02-基础数据模型与已提零件模块开发文档.md:688:  quote-frontend/src/components/DeliveredItemManage.vue `
+.\docs\QPO-MES-WMS对接\02-基础数据模型与已提零件模块开发文档.md:689:  quote-frontend/src/router/index.js `
+.\docs\QPO-MES-WMS对接\02-基础数据模型与已提零件模块开发文档.md:690:  quote-frontend/src/App.vue `
+.\docs\QPO-MES-WMS对接\02-基础数据模型与已提零件模块开发文档.md:691:  quote-frontend/src/deliveredItemApi.test.js `
+.\docs\QPO-MES-WMS对接\02-基础数据模型与已提零件模块开发文档.md:692:  quote-frontend/src/deliveredItemManage.test.js `
+.\docs\QPO-MES-WMS对接\02-基础数据模型与已提零件模块开发文档.md:693:  quote-frontend/src/permissionStage4.test.js `
+.\docs\QPO-MES-WMS对接\02-基础数据模型与已提零件模块开发文档.md:694:  quote-frontend/src/appShell.test.js `
+.\docs\superpowers\specs\2026-07-14-erp-pinia-service-refactor-design.md:4:> 范围：`quote-frontend` 前端
+.\docs\superpowers\specs\2026-07-14-erp-pinia-service-refactor-design.md:11:- `quote-frontend` 使用 Vue 3、Vite、Element Plus、Vue Router、Axios。
+.\docs\superpowers\specs\2026-07-14-erp-pinia-service-refactor-design.md:13:  - `quote-frontend/package.json` 没有 `pinia` 依赖。
+.\docs\superpowers\specs\2026-07-14-erp-pinia-service-refactor-design.md:14:  - `quote-frontend/src` 内没有 `createPinia`、`defineStore`、`useXxxStore`。
+.\docs\superpowers\specs\2026-07-14-erp-pinia-service-refactor-design.md:16:  - `aps-frontend/src/api.js`
+.\docs\superpowers\specs\2026-07-14-erp-pinia-service-refactor-design.md:17:  - `aps-frontend/src/services/authApi.js`
+.\docs\superpowers\specs\2026-07-14-erp-pinia-service-refactor-design.md:18:  - `aps-frontend/src/services/taskApi.js`
+.\docs\superpowers\specs\2026-07-14-erp-pinia-service-refactor-design.md:19:  - `aps-frontend/src/services/inventoryApi.js`
+.\docs\superpowers\specs\2026-07-14-erp-pinia-service-refactor-design.md:64:  - 风格对齐 APS 的 `aps-frontend/src/api.js`。
+.\docs\superpowers\specs\2026-07-14-erp-pinia-service-refactor-design.md:89:quote-frontend/src/
+.\docs\superpowers\specs\2026-07-14-erp-pinia-service-refactor-design.md:190:- 修改 `quote-frontend/package.json`
+.\docs\superpowers\specs\2026-07-14-erp-pinia-service-refactor-design.md:191:- 修改 `quote-frontend/package-lock.json`
+.\docs\superpowers\specs\2026-07-14-erp-pinia-service-refactor-design.md:192:- 新增 `quote-frontend/src/api.js`
+.\docs\superpowers\specs\2026-07-14-erp-pinia-service-refactor-design.md:193:- 修改 `quote-frontend/src/main.js`
+.\docs\superpowers\specs\2026-07-14-erp-pinia-service-refactor-design.md:220:- 新增 `quote-frontend/src/services/authApi.js`
+.\docs\superpowers\specs\2026-07-14-erp-pinia-service-refactor-design.md:221:- 新增 `quote-frontend/src/stores/authStore.js`
+.\docs\superpowers\specs\2026-07-14-erp-pinia-service-refactor-design.md:222:- 修改 `quote-frontend/src/main.js`
+.\docs\superpowers\specs\2026-07-14-erp-pinia-service-refactor-design.md:223:- 修改 `quote-frontend/src/router/index.js`
+.\docs\superpowers\specs\2026-07-14-erp-pinia-service-refactor-design.md:224:- 修改 `quote-frontend/src/App.vue`
+.\docs\superpowers\specs\2026-07-14-erp-pinia-service-refactor-design.md:225:- 修改 `quote-frontend/src/components/LoginView.vue`
+.\docs\superpowers\specs\2026-07-14-erp-pinia-service-refactor-design.md:226:- 修改 `quote-frontend/src/components/HistoryOrderManage.vue`
+.\docs\superpowers\specs\2026-07-14-erp-pinia-service-refactor-design.md:227:- 删除或废弃 `quote-frontend/src/auth.js`
+.\docs\superpowers\specs\2026-07-14-erp-pinia-service-refactor-design.md:262:- 新增 `quote-frontend/src/stores/globalConfigStore.js`
+.\docs\superpowers\specs\2026-07-14-erp-pinia-service-refactor-design.md:263:- 修改 `quote-frontend/src/components/GlobalSetup.vue`
+.\docs\superpowers\specs\2026-07-14-erp-pinia-service-refactor-design.md:264:- 修改 `quote-frontend/src/components/ItemPricing.vue`
+.\docs\superpowers\specs\2026-07-14-erp-pinia-service-refactor-design.md:265:- 新增或扩展 `quote-frontend/src/services/engineerApi.js`
+.\docs\superpowers\specs\2026-07-14-erp-pinia-service-refactor-design.md:266:- 新增或扩展 `quote-frontend/src/services/marketApi.js`
+.\docs\superpowers\specs\2026-07-14-erp-pinia-service-refactor-design.md:295:- 新增 `quote-frontend/src/services/dictApi.js`
+.\docs\superpowers\specs\2026-07-14-erp-pinia-service-refactor-design.md:296:- 新增 `quote-frontend/src/stores/dictionaryStore.js`
+.\docs\superpowers\specs\2026-07-14-erp-pinia-service-refactor-design.md:297:- 修改 `quote-frontend/src/components/GlobalSetup.vue`
+.\docs\superpowers\specs\2026-07-14-erp-pinia-service-refactor-design.md:298:- 修改 `quote-frontend/src/components/ItemPricing.vue`
+.\docs\superpowers\specs\2026-07-14-erp-pinia-service-refactor-design.md:299:- 修改 `quote-frontend/src/components/MaterialProcessManage.vue`
+.\docs\superpowers\specs\2026-07-14-erp-pinia-service-refactor-design.md:335:- `quote-frontend/src/services/marketApi.js`
+.\docs\superpowers\specs\2026-07-14-erp-pinia-service-refactor-design.md:336:- `quote-frontend/src/services/engineerApi.js`
+.\docs\superpowers\specs\2026-07-14-erp-pinia-service-refactor-design.md:337:- `quote-frontend/src/services/orderApi.js`
+.\docs\superpowers\specs\2026-07-14-erp-pinia-service-refactor-design.md:338:- `quote-frontend/src/services/adminApi.js`
+.\docs\superpowers\specs\2026-07-14-erp-pinia-service-refactor-design.md:339:- `quote-frontend/src/services/taskApi.js`
+.\docs\superpowers\specs\2026-07-14-erp-pinia-service-refactor-design.md:340:- `quote-frontend/src/services/fileApi.js`
+.\docs\superpowers\specs\2026-07-14-erp-pinia-service-refactor-design.md:355:- `rg -n "import axios|axios\\." quote-frontend/src` 只允许出现在 `src/api.js` 或少量文件下载兼容层中。
+.\docs\superpowers\specs\2026-07-14-erp-pinia-service-refactor-design.md:364:cd D:\Code\quote-frontend
+.\docs\superpowers\specs\2026-07-14-erp-pinia-service-refactor-design.md:376:cd D:\Code
+.\docs\superpowers\specs\2026-07-14-erp-pinia-service-refactor-design.md:377:rg -n "from '../auth'|from './auth'|authState|setAuth|clearAuth|updateAuthUser|verifyAuth|hasRole" quote-frontend/src
+.\docs\superpowers\specs\2026-07-14-erp-pinia-service-refactor-design.md:378:rg -n "import axios|axios\\." quote-frontend/src
+.\docs\superpowers\specs\2026-07-14-erp-pinia-service-refactor-design.md:379:rg -n "localStorage\\.getItem\\(`erp_global_config|localStorage\\.setItem\\(`erp_global_config" quote-frontend/src
+.\docs\superpowers\specs\2026-07-14-erp-pinia-service-refactor-design.md:393:cd D:\Code
+.\docs\superpowers\specs\2026-07-14-erp-pinia-service-refactor-design.md:402:- `quote-frontend` healthy。
+.\docs\superpowers\specs\2026-07-14-erp-pinia-service-refactor-design.md:468:- `quote-frontend` 已安装并注册 Pinia。
+.\docs\superpowers\specs\2026-07-14-aps-pinia-service-refactor-design.md:9:- `aps-frontend/src/api.test.js`
+.\docs\superpowers\specs\2026-07-14-aps-pinia-service-refactor-design.md:10:- `aps-frontend/src/services/apiServices.test.js`
+.\docs\superpowers\specs\2026-07-14-aps-pinia-service-refactor-design.md:16:- `aps-frontend/src/auth.test.js`
+.\docs\superpowers\specs\2026-07-14-aps-pinia-service-refactor-design.md:17:- `aps-frontend/src/services/taskApi.test.js`
+.\docs\superpowers\specs\2026-07-14-aps-pinia-service-refactor-design.md:18:- `aps-frontend/src/services/inventoryApi.test.js`
+.\docs\superpowers\specs\2026-07-14-aps-pinia-service-refactor-design.md:19:- 扩展 `aps-frontend/src/api.test.js`
+.\docs\superpowers\specs\2026-07-14-aps-pinia-service-refactor-design.md:27:- APS 已有统一 `apiClient` 与 `request()`，业务页面没有直接 `axios.*` 调用，直接 Axios 只集中在 `aps-frontend/src/api.js`。
+.\docs\superpowers\specs\2026-07-14-aps-pinia-service-refactor-design.md:28:- 业务 API 已按模块拆分在 `aps-frontend/src/services/`：
+.\docs\superpowers\specs\2026-07-14-aps-pinia-service-refactor-design.md:40:- `aps-frontend/package.json` 当前没有 `pinia`，认证状态仍由 `src/auth.js` 的模块级 `reactive()` 管理。
+.\docs\superpowers\specs\2026-07-14-aps-pinia-service-refactor-design.md:58:aps-frontend/src/
+.\docs\superpowers\specs\2026-07-14-aps-pinia-service-refactor-design.md:119:- 修改 `aps-frontend/package.json`
+.\docs\superpowers\specs\2026-07-14-aps-pinia-service-refactor-design.md:120:- 修改 `aps-frontend/package-lock.json`
+.\docs\superpowers\specs\2026-07-14-aps-pinia-service-refactor-design.md:121:- 修改 `aps-frontend/src/main.js`
+.\docs\superpowers\specs\2026-07-14-aps-pinia-service-refactor-design.md:144:- 新增 `aps-frontend/src/stores/authStore.js`
+.\docs\superpowers\specs\2026-07-14-aps-pinia-service-refactor-design.md:145:- 新增 `aps-frontend/src/stores/authStore.test.js`
+.\docs\superpowers\specs\2026-07-14-aps-pinia-service-refactor-design.md:146:- 修改 `aps-frontend/src/main.js`
+.\docs\superpowers\specs\2026-07-14-aps-pinia-service-refactor-design.md:147:- 修改 `aps-frontend/src/router/index.js`
+.\docs\superpowers\specs\2026-07-14-aps-pinia-service-refactor-design.md:148:- 修改 `aps-frontend/src/App.vue`
+.\docs\superpowers\specs\2026-07-14-aps-pinia-service-refactor-design.md:149:- 修改 `aps-frontend/src/views/LoginView.vue`
+.\docs\superpowers\specs\2026-07-14-aps-pinia-service-refactor-design.md:150:- 废弃或删除 `aps-frontend/src/auth.js`
+.\docs\superpowers\specs\2026-07-14-aps-pinia-service-refactor-design.md:196:- 新增 `aps-frontend/src/stores/taskStore.js`
+.\docs\superpowers\specs\2026-07-14-aps-pinia-service-refactor-design.md:197:- 新增 `aps-frontend/src/stores/taskStore.test.js`
+.\docs\superpowers\specs\2026-07-14-aps-pinia-service-refactor-design.md:199:  - `aps-frontend/src/views/SyncView.vue`
+.\docs\superpowers\specs\2026-07-14-aps-pinia-service-refactor-design.md:200:  - `aps-frontend/src/views/TasksView.vue`
+.\docs\superpowers\specs\2026-07-14-aps-pinia-service-refactor-design.md:201:  - `aps-frontend/src/views/AssignedTasksView.vue`
+.\docs\superpowers\specs\2026-07-14-aps-pinia-service-refactor-design.md:202:  - `aps-frontend/src/views/DepartmentCenterView.vue`
+.\docs\superpowers\specs\2026-07-14-aps-pinia-service-refactor-design.md:225:- 新增 `aps-frontend/src/stores/inventoryStore.js`
+.\docs\superpowers\specs\2026-07-14-aps-pinia-service-refactor-design.md:226:- 新增 `aps-frontend/src/stores/inventoryStore.test.js`
+.\docs\superpowers\specs\2026-07-14-aps-pinia-service-refactor-design.md:228:  - `aps-frontend/src/views/PartInventoryView.vue`
+.\docs\superpowers\specs\2026-07-14-aps-pinia-service-refactor-design.md:229:  - `aps-frontend/src/views/PartInventoryLocksView.vue`
+.\docs\superpowers\specs\2026-07-14-aps-pinia-service-refactor-design.md:230:  - `aps-frontend/src/views/PartProductionRequirementsView.vue`
+.\docs\superpowers\specs\2026-07-14-aps-pinia-service-refactor-design.md:231:  - `aps-frontend/src/views/MaterialInventoryView.vue`
+.\docs\superpowers\specs\2026-07-14-aps-pinia-service-refactor-design.md:232:  - `aps-frontend/src/views/MaterialLocksView.vue`
+.\docs\superpowers\specs\2026-07-14-aps-pinia-service-refactor-design.md:233:  - `aps-frontend/src/views/MaterialShortagesView.vue`
+.\docs\superpowers\specs\2026-07-14-aps-pinia-service-refactor-design.md:264:- 新增 `aps-frontend/src/stores/referenceDataStore.js`
+.\docs\superpowers\specs\2026-07-14-aps-pinia-service-refactor-design.md:266:  - `aps-frontend/src/views/DepartmentsView.vue`
+.\docs\superpowers\specs\2026-07-14-aps-pinia-service-refactor-design.md:267:  - `aps-frontend/src/views/ProcessesView.vue`
+.\docs\superpowers\specs\2026-07-14-aps-pinia-service-refactor-design.md:268:  - `aps-frontend/src/views/MachinesView.vue`
+.\docs\superpowers\specs\2026-07-14-aps-pinia-service-refactor-design.md:315:cd D:\Code\aps-frontend
+.\docs\superpowers\specs\2026-07-14-aps-pinia-service-refactor-design.md:319:cd D:\Code
+.\docs\superpowers\specs\2026-07-14-aps-pinia-service-refactor-design.md:326:rg -n "from '../auth'|from './auth'|authState|setAuth|clearAuth|updateAuthUser|verifyAuth|hasRole" aps-frontend/src
+.\docs\superpowers\specs\2026-07-14-aps-pinia-service-refactor-design.md:327:rg -n "import axios|axios\\.|API_BASE_URL|fetch\\(" aps-frontend/src
+.\docs\superpowers\specs\2026-07-14-aps-pinia-service-refactor-design.md:328:rg -n "window\\.confirm" aps-frontend/src
+.\docs\superpowers\specs\2026-07-14-aps-pinia-service-refactor-design.md:342:cd D:\Code
+.\docs\superpowers\specs\2026-07-14-aps-pinia-service-refactor-design.md:343:docker compose -f docker-compose.aps.yml --env-file aps.env up -d --build
+.\docs\superpowers\specs\2026-07-14-aps-pinia-service-refactor-design.md:344:docker compose -f docker-compose.aps.yml --env-file aps.env ps
+.\docs\QPO报价状态流转\02-零件状态与分批提单不可逆优化开发文档.md:115:quote-system/src/main/resources/db/migration/V34__delivery_batch_immutability.sql
+.\docs\QPO报价状态流转\02-零件状态与分批提单不可逆优化开发文档.md:554:cd quote-system
+.\docs\QPO报价状态流转\02-零件状态与分批提单不可逆优化开发文档.md:557:cd quote-frontend
+.\docs\QPO报价状态流转\02-零件状态与分批提单不可逆优化开发文档.md:686:cd quote-system
+.\docs\QPO报价状态流转\02-零件状态与分批提单不可逆优化开发文档.md:689:cd quote-frontend
+.\aps-frontend\package.json:2:  "name": "aps-frontend",
+.\docs\QPO日志模块\03-日志运维说明.md:128:docker logs quote-frontend
+.\docs\QPO报价状态流转\03-订单状态管理与废弃恢复开发文档.md:138:quote-system/src/main/java/com/machining/quote/domain/QuoteStatusWorkflow.java
+.\docs\QPO报价状态流转\03-订单状态管理与废弃恢复开发文档.md:214:quote-system/src/main/java/com/machining/quote/service/OrderStatusManagementService.java
+.\docs\QPO报价状态流转\03-订单状态管理与废弃恢复开发文档.md:243:quote-system/src/main/java/com/machining/quote/dto/OrderStatusChangeReq.java
+.\docs\QPO报价状态流转\03-订单状态管理与废弃恢复开发文档.md:244:quote-system/src/main/java/com/machining/quote/dto/OrderStatusChangeResult.java
+.\docs\QPO报价状态流转\03-订单状态管理与废弃恢复开发文档.md:271:quote-system/src/main/java/com/machining/quote/controller/OrderManagementController.java
+.\docs\QPO报价状态流转\03-订单状态管理与废弃恢复开发文档.md:363:quote-frontend/src/components/OrderManage.vue
+.\docs\QPO报价状态流转\03-订单状态管理与废弃恢复开发文档.md:364:quote-frontend/src/services/orderApi.js
+.\docs\QPO报价状态流转\03-订单状态管理与废弃恢复开发文档.md:370:quote-frontend/src/orderApi.test.js
+.\docs\QPO报价状态流转\03-订单状态管理与废弃恢复开发文档.md:371:quote-frontend/src/permissionStage4.test.js
+.\docs\QPO报价状态流转\03-订单状态管理与废弃恢复开发文档.md:372:quote-frontend/src/workflowPolish.test.js
+.\docs\QPO报价状态流转\03-订单状态管理与废弃恢复开发文档.md:587:quote-system/src/test/java/com/machining/quote/OrderStatusManagementTest.java
+.\docs\QPO报价状态流转\03-订单状态管理与废弃恢复开发文档.md:593:quote-system/src/test/java/com/machining/quote/QuoteStatusWorkflowTest.java
+.\docs\QPO报价状态流转\03-订单状态管理与废弃恢复开发文档.md:594:quote-system/src/test/java/com/machining/quote/PermissionModuleTreeTest.java
+.\docs\QPO报价状态流转\03-订单状态管理与废弃恢复开发文档.md:595:quote-system/src/test/java/com/machining/quote/PermissionSystemStage6Test.java
+.\docs\QPO报价状态流转\03-订单状态管理与废弃恢复开发文档.md:596:quote-system/src/test/java/com/machining/quote/AuditServiceTests.java
+.\docs\QPO报价状态流转\03-订单状态管理与废弃恢复开发文档.md:623:quote-frontend/src/orderApi.test.js
+.\docs\QPO报价状态流转\03-订单状态管理与废弃恢复开发文档.md:624:quote-frontend/src/orderStatusManage.test.js
+.\docs\QPO报价状态流转\03-订单状态管理与废弃恢复开发文档.md:625:quote-frontend/src/permissionStage4.test.js
+.\docs\QPO报价状态流转\03-订单状态管理与废弃恢复开发文档.md:626:quote-frontend/src/workflowPolish.test.js
+.\docs\QPO报价状态流转\03-订单状态管理与废弃恢复开发文档.md:664:cd D:\Code\quote-system
+.\docs\QPO报价状态流转\03-订单状态管理与废弃恢复开发文档.md:667:cd D:\Code\quote-frontend
+.\docs\QPO报价状态流转\03-订单状态管理与废弃恢复开发文档.md:787:cd D:\Code\quote-system
+.\docs\QPO报价状态流转\03-订单状态管理与废弃恢复开发文档.md:790:cd D:\Code\quote-frontend
+.\docs\QPO报价状态流转\03-订单状态管理与废弃恢复开发文档.md:798:cd D:\Code
+.\docs\QPO前端优化\02-open-source-reference.md:72:quote-frontend/src/styles/
+.\docs\QPO前端优化\02-open-source-reference.md:80:This can be phased in from the existing `quote-frontend/src/style.css`.
+.\docs\QPO前端优化\02-open-source-reference.md:135:- `quote-frontend/src/style.css`
+.\docs\QPO前端优化\02-open-source-reference.md:136:- `quote-frontend/src/App.vue`
+.\docs\QPO前端优化\02-open-source-reference.md:137:- `quote-frontend/src/components/GlobalSetup.vue`
+.\docs\QPO前端优化\02-open-source-reference.md:138:- `quote-frontend/src/components/ItemPricing.vue`
+.\docs\QPO前端优化\02-open-source-reference.md:139:- `quote-frontend/src/components/MarketDashboard.vue`
+.\docs\QPO前端优化\02-open-source-reference.md:140:- `quote-frontend/src/components/OrderManage.vue`
+.\docs\QPO前端优化\02-open-source-reference.md:141:- `quote-frontend/src/components/MaterialProcessManage.vue`
+.\docs\QPO权限用户体系\03-权限体系部署与管理员使用说明.md:37:cd D:\Code\quote-system
+.\docs\QPO权限用户体系\03-权限体系部署与管理员使用说明.md:40:cd D:\Code\quote-frontend
+.\docs\QPO权限用户体系\03-权限体系部署与管理员使用说明.md:69:cd D:\Code
+.\docs\QPO权限用户体系\03-权限体系部署与管理员使用说明.md:78:cd D:\Code
+.\docs\QPO-MES-WMS对接\03-MES物料号同步开发文档.md:78:| 新增 | `quote-system/src/main/resources/db/migration/V46__delivery_ticket_mes_sync_permission.sql` | 新增 MES 同步权限。 |
+.\docs\QPO-MES-WMS对接\03-MES物料号同步开发文档.md:79:| 修改 | `quote-system/src/main/java/com/machining/quote/service/PermissionService.java` | fallback catalog 和默认角色映射。 |
+.\docs\QPO-MES-WMS对接\03-MES物料号同步开发文档.md:80:| 新增 | `quote-system/src/main/java/com/machining/quote/dto/MesMaterialResolveReq.java` | QPO 调 MES 请求 DTO。 |
+.\docs\QPO-MES-WMS对接\03-MES物料号同步开发文档.md:81:| 新增 | `quote-system/src/main/java/com/machining/quote/dto/MesMaterialResolveResp.java` | MES 返回 DTO。 |
+.\docs\QPO-MES-WMS对接\03-MES物料号同步开发文档.md:82:| 新增 | `quote-system/src/main/java/com/machining/quote/service/MesMaterialClient.java` | MES HTTP 客户端。 |
+.\docs\QPO-MES-WMS对接\03-MES物料号同步开发文档.md:83:| 新增 | `quote-system/src/main/java/com/machining/quote/service/MesMaterialSyncService.java` | 物料号同步业务服务。 |
+.\docs\QPO-MES-WMS对接\03-MES物料号同步开发文档.md:84:| 修改 | `quote-system/src/main/java/com/machining/quote/service/SystemTaskService.java` | 增加 `submitMesMaterialSyncTask(ticketId)`。 |
+.\docs\QPO-MES-WMS对接\03-MES物料号同步开发文档.md:85:| 修改 | `quote-system/src/main/java/com/machining/quote/controller/OrderDeliveryController.java` | 增加触发接口。 |
+.\docs\QPO-MES-WMS对接\03-MES物料号同步开发文档.md:86:| 修改 | `quote-system/src/main/java/com/machining/quote/service/AuditService.java` | 增加 MES 动作中文化。 |
+.\docs\QPO-MES-WMS对接\03-MES物料号同步开发文档.md:94:| 修改 | `quote-frontend/src/services/deliveredItemApi.js` | 增加 `syncMesMaterial(ticketId)`。 |
+.\docs\QPO-MES-WMS对接\03-MES物料号同步开发文档.md:95:| 修改 | `quote-frontend/src/components/DeliveredItemManage.vue` | 增加按钮、状态刷新、任务提示。 |
+.\docs\QPO-MES-WMS对接\03-MES物料号同步开发文档.md:96:| 视情况修改 | `quote-frontend/src/services/taskApi.js` | 如已有任务 API 可复用则不新增。 |
+.\docs\QPO-MES-WMS对接\03-MES物料号同步开发文档.md:102:| 新增 | `quote-system/src/test/java/com/machining/quote/MesMaterialSyncTest.java` | MES 同步服务测试。 |
+.\docs\QPO-MES-WMS对接\03-MES物料号同步开发文档.md:103:| 新增 | `quote-system/src/test/java/com/machining/quote/MesMaterialClientTest.java` | MES 客户端契约测试。 |
+.\docs\QPO-MES-WMS对接\03-MES物料号同步开发文档.md:104:| 修改 | `quote-system/src/test/java/com/machining/quote/AuditActionCoverageTests.java` | 增加 MES 操作日志动作。 |
+.\docs\QPO-MES-WMS对接\03-MES物料号同步开发文档.md:105:| 修改 | `quote-system/src/test/java/com/machining/quote/PermissionModuleTreeTest.java` | 冻结 MES 权限。 |
+.\docs\QPO-MES-WMS对接\03-MES物料号同步开发文档.md:106:| 修改 | `quote-frontend/src/deliveredItemApi.test.js` | 增加 sync API 测试。 |
+.\docs\QPO-MES-WMS对接\03-MES物料号同步开发文档.md:107:| 新增 | `quote-frontend/src/deliveredItemMesSync.test.js` | 页面按钮和权限测试。 |
+.\docs\QPO-MES-WMS对接\03-MES物料号同步开发文档.md:543:cd D:\Code\quote-system
+.\docs\QPO-MES-WMS对接\03-MES物料号同步开发文档.md:546:cd D:\Code\quote-frontend
+.\docs\QPO-MES-WMS对接\03-MES物料号同步开发文档.md:641:cd D:\Code\quote-system
+.\docs\QPO-MES-WMS对接\03-MES物料号同步开发文档.md:644:cd D:\Code\quote-frontend
+.\docs\QPO-MES-WMS对接\03-MES物料号同步开发文档.md:653:  quote-system/src/main/resources/db/migration/V46__delivery_ticket_mes_sync_permission.sql `
+.\docs\QPO-MES-WMS对接\03-MES物料号同步开发文档.md:654:  quote-system/src/main/java/com/machining/quote/dto/MesMaterialResolveReq.java `
+.\docs\QPO-MES-WMS对接\03-MES物料号同步开发文档.md:655:  quote-system/src/main/java/com/machining/quote/dto/MesMaterialResolveResp.java `
+.\docs\QPO-MES-WMS对接\03-MES物料号同步开发文档.md:656:  quote-system/src/main/java/com/machining/quote/service/MesMaterialClient.java `
+.\docs\QPO-MES-WMS对接\03-MES物料号同步开发文档.md:657:  quote-system/src/main/java/com/machining/quote/service/MesMaterialSyncService.java `
+.\docs\QPO-MES-WMS对接\03-MES物料号同步开发文档.md:658:  quote-system/src/main/java/com/machining/quote/service/SystemTaskService.java `
+.\docs\QPO-MES-WMS对接\03-MES物料号同步开发文档.md:659:  quote-system/src/main/java/com/machining/quote/controller/OrderDeliveryController.java `
+.\docs\QPO-MES-WMS对接\03-MES物料号同步开发文档.md:660:  quote-system/src/main/java/com/machining/quote/service/AuditService.java `
+.\docs\QPO-MES-WMS对接\03-MES物料号同步开发文档.md:661:  quote-system/src/main/java/com/machining/quote/service/PermissionService.java `
+.\docs\QPO-MES-WMS对接\03-MES物料号同步开发文档.md:664:  quote-system/src/test/java/com/machining/quote/MesMaterialSyncTest.java `
+.\docs\QPO-MES-WMS对接\03-MES物料号同步开发文档.md:665:  quote-system/src/test/java/com/machining/quote/MesMaterialClientTest.java `
+.\docs\QPO-MES-WMS对接\03-MES物料号同步开发文档.md:666:  quote-system/src/test/java/com/machining/quote/AuditActionCoverageTests.java `
+.\docs\QPO-MES-WMS对接\03-MES物料号同步开发文档.md:667:  quote-system/src/test/java/com/machining/quote/PermissionModuleTreeTest.java `
+.\docs\QPO-MES-WMS对接\03-MES物料号同步开发文档.md:668:  quote-frontend/src/services/deliveredItemApi.js `
+.\docs\QPO-MES-WMS对接\03-MES物料号同步开发文档.md:669:  quote-frontend/src/components/DeliveredItemManage.vue `
+.\docs\QPO-MES-WMS对接\03-MES物料号同步开发文档.md:670:  quote-frontend/src/deliveredItemApi.test.js `
+.\docs\QPO-MES-WMS对接\03-MES物料号同步开发文档.md:671:  quote-frontend/src/deliveredItemMesSync.test.js `
+.\QPO运维说明.md:8:cd D:\Code
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:186:- `quote-system/src/main/java/com/machining/quote/controller/MarketController.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:193:- `quote-system/src/main/java/com/machining/quote/service/EngineerService.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:228:- `quote-system/src/main/java/com/machining/quote/service/AuthService.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:229:- `quote-system/src/main/java/com/machining/quote/controller/AuthController.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:255:- `quote-system/src/main/java/com/machining/quote/service/UserAdminService.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:256:- `quote-system/src/main/java/com/machining/quote/controller/AdminController.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:279:- `quote-system/src/main/java/com/machining/quote/service/SystemDeptService.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:280:- `quote-system/src/main/java/com/machining/quote/service/SystemPostService.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:281:- `quote-system/src/main/java/com/machining/quote/service/UserAdminService.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:312:- `quote-system/src/main/java/com/machining/quote/service/UserAdminService.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:313:- `quote-system/src/main/java/com/machining/quote/controller/AuthController.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:339:- `quote-system/src/main/java/com/machining/quote/controller/DictController.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:362:- `quote-system/src/main/java/com/machining/quote/controller/MarketController.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:363:- `quote-system/src/main/java/com/machining/quote/service/RfqNumberService.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:364:- `quote-system/src/main/java/com/machining/quote/service/OrderFilePathService.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:417:- `quote-system/src/main/java/com/machining/quote/service/OrderManagementService.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:418:- `quote-system/src/main/java/com/machining/quote/controller/OrderManagementController.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:452:- `quote-system/src/main/java/com/machining/quote/service/EngineerService.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:453:- `quote-system/src/main/java/com/machining/quote/controller/EngineerController.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:490:- `quote-system/src/main/java/com/machining/quote/service/QuoteProcessService.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:491:- `quote-system/src/main/java/com/machining/quote/controller/QuoteProcessController.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:515:- `quote-system/src/main/java/com/machining/quote/service/InternalTargetLeadTimeService.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:516:- `quote-system/src/main/java/com/machining/quote/service/DeliveryService.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:517:- `quote-system/src/main/java/com/machining/quote/controller/InternalTargetLeadTimeController.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:518:- `quote-system/src/main/java/com/machining/quote/controller/MarketController.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:550:- `quote-system/src/main/java/com/machining/quote/service/QuoteTemplateService.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:551:- `quote-system/src/main/java/com/machining/quote/controller/AdminController.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:578:- `quote-system/src/main/java/com/machining/quote/service/SystemTaskService.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:579:- `quote-system/src/main/java/com/machining/quote/service/ExcelExportService.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:580:- `quote-system/src/main/java/com/machining/quote/service/QuoteTemplateExportService.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:581:- `quote-system/src/main/java/com/machining/quote/controller/SystemTaskController.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:615:- `quote-system/src/main/java/com/machining/quote/service/AuditLogRetentionService.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:616:- `quote-system/src/main/java/com/machining/quote/service/AuditLogQueryService.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:617:- `quote-system/src/main/java/com/machining/quote/controller/AuditLogController.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:645:- `quote-system/src/main/java/com/machining/quote/controller/UploadFileController.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:646:- `quote-system/src/main/java/com/machining/quote/service/OrderFilePathService.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:665:- `quote-system/src/main/java/com/machining/quote/controller/OrderDeliveryController.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:666:- `quote-system/src/main/java/com/machining/quote/service/DeliveredItemService.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:667:- `quote-system/src/main/java/com/machining/quote/service/SystemTaskService.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:668:- `quote-system/src/main/java/com/machining/quote/service/MesMaterialSyncService.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:669:- `quote-system/src/main/java/com/machining/quote/service/MesMaterialClient.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:670:- `quote-system/src/main/java/com/machining/quote/service/WmsAllocationService.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:671:- `quote-system/src/main/java/com/machining/quote/service/WmsAllocationClient.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:713:- `quote-system/src/main/java/com/machining/quote/controller/HealthController.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:725:- `quote-system/src/main/java/com/machining/quote/service/AuditService.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:726:- `quote-system/src/main/java/com/machining/quote/service/JwtService.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:727:- `quote-system/src/main/java/com/machining/quote/service/LeadTimeService.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:728:- `quote-system/src/main/java/com/machining/quote/service/RfqNumberService.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:729:- `quote-system/src/main/java/com/machining/quote/service/OrderFilePathService.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:730:- `quote-system/src/main/java/com/machining/quote/service/StorageInitializer.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:766:quote-system/src/test/java/com/machining/quote/LoggingConventionTest.java
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:779:cd quote-system
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:789:- 修改 `quote-system/src/main/java/com/machining/quote/controller/MarketController.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:810:- 修改 `quote-system/src/main/java/com/machining/quote/service/EngineerService.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:834:- 修改 `quote-system/src/main/java/com/machining/quote/service/SystemTaskService.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:835:- 视情况修改 `quote-system/src/main/java/com/machining/quote/service/ExcelExportService.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:836:- 视情况修改 `quote-system/src/main/java/com/machining/quote/service/QuoteTemplateExportService.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:856:- 修改 `quote-system/src/main/java/com/machining/quote/service/QuoteTemplateService.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:857:- 修改 `quote-system/src/main/java/com/machining/quote/service/OrderManagementService.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:858:- 修改 `quote-system/src/main/java/com/machining/quote/service/DeliveryService.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:859:- 修改 `quote-system/src/main/java/com/machining/quote/service/QuoteProcessService.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:860:- 修改 `quote-system/src/main/java/com/machining/quote/service/InternalTargetLeadTimeService.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:882:- 修改 `quote-system/src/main/java/com/machining/quote/service/AuditLogRetentionService.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:883:- 检查 `quote-system/src/main/java/com/machining/quote/controller/UploadFileController.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:884:- 检查 `quote-system/src/main/java/com/machining/quote/controller/HealthController.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:885:- 检查 `quote-system/src/main/java/com/machining/quote/service/AuditService.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:886:- 检查 `quote-system/src/main/java/com/machining/quote/service/JwtService.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:887:- 检查 `quote-system/src/main/java/com/machining/quote/service/LeadTimeService.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:888:- 检查 `quote-system/src/main/java/com/machining/quote/service/OrderFilePathService.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:889:- 检查 `quote-system/src/main/java/com/machining/quote/service/StorageInitializer.java`
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:987:- 扫描 `quote-system/src/main/java`。
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:999:cd quote-system
+.\docs\QPO日志模块\04-主流程文件日志规范化开发文档.md:1006:cd quote-system
+.\docs\QPO权限用户体系\04-角色授权模块树企业级开发文档.md:213:- `quote-frontend/src/components/SystemRoleManage.vue`
+.\docs\QPO权限用户体系\04-角色授权模块树企业级开发文档.md:231:- `quote-system/src/main/resources/db/migration/V25__enterprise_permission_system.sql`
+.\docs\QPO权限用户体系\04-角色授权模块树企业级开发文档.md:232:- `quote-system/src/main/java/com/machining/quote/service/PermissionService.java`
+.\docs\QPO权限用户体系\04-角色授权模块树企业级开发文档.md:331:- `quote-frontend/src/router/index.js`：`/history-orders` 改为 `market:history-order:view`。
+.\docs\QPO权限用户体系\04-角色授权模块树企业级开发文档.md:332:- `quote-frontend/src/App.vue`：历史订单菜单改为 `market:history-order:view`。
+.\docs\QPO权限用户体系\04-角色授权模块树企业级开发文档.md:354:- `quote-frontend/src/router/index.js`：`/delivered-items` 必须使用 `market:delivered-item:view`。
+.\docs\QPO权限用户体系\04-角色授权模块树企业级开发文档.md:355:- `quote-frontend/src/router/index.js`：`/locked-items` 必须使用 `market:locked-item:view`。
+.\docs\QPO权限用户体系\04-角色授权模块树企业级开发文档.md:356:- `quote-frontend/src/App.vue`：订单分组下“已提零件”菜单必须使用 `market:delivered-item:view`。
+.\docs\QPO权限用户体系\04-角色授权模块树企业级开发文档.md:357:- `quote-frontend/src/App.vue`：订单分组下“锁库零件”菜单必须使用 `market:locked-item:view`。
+.\docs\QPO权限用户体系\04-角色授权模块树企业级开发文档.md:516:quote-system/src/main/resources/db/migration/V31__permission_module_tree.sql
+.\docs\QPO权限用户体系\04-角色授权模块树企业级开发文档.md:629:- `quote-system/src/main/java/com/machining/quote/service/PermissionService.java`
+.\docs\QPO权限用户体系\04-角色授权模块树企业级开发文档.md:701:- `quote-system/src/main/java/com/machining/quote/service/SystemRoleService.java`
+.\docs\QPO权限用户体系\04-角色授权模块树企业级开发文档.md:732:quote-system/src/test/java/com/machining/quote/PermissionModuleTreeTest.java
+.\docs\QPO权限用户体系\04-角色授权模块树企业级开发文档.md:751:- `quote-frontend/src/components/SystemRoleManage.vue`
+.\docs\QPO权限用户体系\04-角色授权模块树企业级开发文档.md:756:quote-frontend/src/components/RolePermissionTree.vue
+.\docs\QPO权限用户体系\04-角色授权模块树企业级开发文档.md:886:quote-frontend/src/systemRolePermissionTree.test.js
+.\docs\QPO权限用户体系\04-角色授权模块树企业级开发文档.md:986:cd quote-system
+.\docs\QPO权限用户体系\04-角色授权模块树企业级开发文档.md:989:cd quote-frontend
+.\docs\QPO权限用户体系\04-角色授权模块树企业级开发文档.md:999:- 新增 `quote-system/src/main/resources/db/migration/V31__permission_module_tree.sql`
+.\docs\QPO权限用户体系\04-角色授权模块树企业级开发文档.md:1000:- 修改 `quote-system/src/main/java/com/machining/quote/service/PermissionService.java`
+.\docs\QPO权限用户体系\04-角色授权模块树企业级开发文档.md:1001:- 视情况新增 `quote-system/src/main/java/com/machining/quote/service/PermissionTreeService.java`
+.\docs\QPO权限用户体系\04-角色授权模块树企业级开发文档.md:1028:- 修改 `quote-system/src/main/java/com/machining/quote/controller/SystemRoleController.java`
+.\docs\QPO权限用户体系\04-角色授权模块树企业级开发文档.md:1029:- 修改 `quote-system/src/main/java/com/machining/quote/service/SystemRoleService.java`
+.\docs\QPO权限用户体系\04-角色授权模块树企业级开发文档.md:1059:- 修改 `quote-frontend/src/services/adminApi.js`
+.\docs\QPO权限用户体系\04-角色授权模块树企业级开发文档.md:1060:- 修改 `quote-frontend/src/components/SystemRoleManage.vue`
+.\docs\QPO权限用户体系\04-角色授权模块树企业级开发文档.md:1061:- 可选新增 `quote-frontend/src/components/RolePermissionTree.vue`
+.\docs\QPO权限用户体系\04-角色授权模块树企业级开发文档.md:1088:- 修改 `quote-frontend/src/router/index.js`
+.\docs\QPO权限用户体系\04-角色授权模块树企业级开发文档.md:1089:- 修改 `quote-frontend/src/App.vue`
+.\docs\QPO权限用户体系\04-角色授权模块树企业级开发文档.md:1144:cd quote-system
+.\docs\QPO权限用户体系\04-角色授权模块树企业级开发文档.md:1160:cd quote-frontend
+.\QPO部署说明.md:7:cd D:\Code
+.\QPO部署说明.md:56:可参考 `deploy/nginx/quote-system.https.example.conf` 作为服务器级Nginx配置示例。
+.\docs\QPO-MES-WMS对接\04-WMS锁库分配与锁库零件模块开发文档.md:84:| 新增 | `quote-system/src/main/resources/db/migration/V47__delivery_ticket_wms_allocation_permissions.sql` | 新增 WMS 分配权限和锁库零件菜单权限。 |
+.\docs\QPO-MES-WMS对接\04-WMS锁库分配与锁库零件模块开发文档.md:85:| 修改 | `quote-system/src/main/resources/schema.sql` | 如 02 未完全同步 allocation 表，本阶段补齐。 |
+.\docs\QPO-MES-WMS对接\04-WMS锁库分配与锁库零件模块开发文档.md:86:| 修改 | `quote-system/src/main/java/com/machining/quote/service/PermissionService.java` | fallback catalog 和默认角色映射。 |
+.\docs\QPO-MES-WMS对接\04-WMS锁库分配与锁库零件模块开发文档.md:87:| 新增 | `quote-system/src/main/java/com/machining/quote/dto/WmsAllocationReq.java` | QPO 调 WMS 请求 DTO。 |
+.\docs\QPO-MES-WMS对接\04-WMS锁库分配与锁库零件模块开发文档.md:88:| 新增 | `quote-system/src/main/java/com/machining/quote/dto/WmsAllocationResp.java` | WMS 返回 DTO。 |
+.\docs\QPO-MES-WMS对接\04-WMS锁库分配与锁库零件模块开发文档.md:89:| 新增 | `quote-system/src/main/java/com/machining/quote/dto/LockedItemDTO.java` | 锁库零件列表 DTO。 |
+.\docs\QPO-MES-WMS对接\04-WMS锁库分配与锁库零件模块开发文档.md:90:| 新增 | `quote-system/src/main/java/com/machining/quote/dto/LockedItemPageDTO.java` | 锁库零件分页 DTO。 |
+.\docs\QPO-MES-WMS对接\04-WMS锁库分配与锁库零件模块开发文档.md:91:| 新增 | `quote-system/src/main/java/com/machining/quote/service/WmsAllocationClient.java` | WMS HTTP 客户端。 |
+.\docs\QPO-MES-WMS对接\04-WMS锁库分配与锁库零件模块开发文档.md:92:| 新增 | `quote-system/src/main/java/com/machining/quote/service/WmsAllocationService.java` | WMS 分配业务服务。 |
+.\docs\QPO-MES-WMS对接\04-WMS锁库分配与锁库零件模块开发文档.md:93:| 新增或扩展 | `quote-system/src/main/java/com/machining/quote/service/LockedItemService.java` | 锁库零件查询服务。 |
+.\docs\QPO-MES-WMS对接\04-WMS锁库分配与锁库零件模块开发文档.md:94:| 修改 | `quote-system/src/main/java/com/machining/quote/service/SystemTaskService.java` | 增加 `submitWmsAllocationTask(ticketId)`。 |
+.\docs\QPO-MES-WMS对接\04-WMS锁库分配与锁库零件模块开发文档.md:95:| 修改 | `quote-system/src/main/java/com/machining/quote/controller/OrderDeliveryController.java` | 增加 WMS 触发接口和 allocation 查询接口。 |
+.\docs\QPO-MES-WMS对接\04-WMS锁库分配与锁库零件模块开发文档.md:96:| 修改 | `quote-system/src/main/java/com/machining/quote/service/AuditService.java` | 增加 WMS 动作中文化。 |
+.\docs\QPO-MES-WMS对接\04-WMS锁库分配与锁库零件模块开发文档.md:104:| 修改 | `quote-frontend/src/services/deliveredItemApi.js` | 增加 `submitWmsAllocation(ticketId)`、`listLockedItems(params)`。 |
+.\docs\QPO-MES-WMS对接\04-WMS锁库分配与锁库零件模块开发文档.md:105:| 修改 | `quote-frontend/src/components/DeliveredItemManage.vue` | 增加 WMS 分配按钮、查看锁库结果入口。 |
+.\docs\QPO-MES-WMS对接\04-WMS锁库分配与锁库零件模块开发文档.md:106:| 新增 | `quote-frontend/src/components/LockedItemManage.vue` | 锁库零件页面。 |
+.\docs\QPO-MES-WMS对接\04-WMS锁库分配与锁库零件模块开发文档.md:107:| 修改 | `quote-frontend/src/router/index.js` | 新增 `/locked-items` 路由。 |
+.\docs\QPO-MES-WMS对接\04-WMS锁库分配与锁库零件模块开发文档.md:108:| 修改 | `quote-frontend/src/App.vue` | 订单分组新增“锁库零件”。 |
+.\docs\QPO-MES-WMS对接\04-WMS锁库分配与锁库零件模块开发文档.md:114:| 新增 | `quote-system/src/test/java/com/machining/quote/WmsAllocationTest.java` | WMS 分配服务测试。 |
+.\docs\QPO-MES-WMS对接\04-WMS锁库分配与锁库零件模块开发文档.md:115:| 新增 | `quote-system/src/test/java/com/machining/quote/WmsAllocationClientTest.java` | WMS 客户端契约测试。 |
+.\docs\QPO-MES-WMS对接\04-WMS锁库分配与锁库零件模块开发文档.md:116:| 新增 | `quote-system/src/test/java/com/machining/quote/LockedItemQueryTest.java` | 锁库零件查询测试。 |
+.\docs\QPO-MES-WMS对接\04-WMS锁库分配与锁库零件模块开发文档.md:117:| 修改 | `quote-system/src/test/java/com/machining/quote/AuditActionCoverageTests.java` | 增加 WMS 操作日志动作。 |
+.\docs\QPO-MES-WMS对接\04-WMS锁库分配与锁库零件模块开发文档.md:118:| 修改 | `quote-system/src/test/java/com/machining/quote/PermissionModuleTreeTest.java` | 冻结 WMS 和锁库零件权限。 |
+.\docs\QPO-MES-WMS对接\04-WMS锁库分配与锁库零件模块开发文档.md:119:| 修改 | `quote-frontend/src/deliveredItemApi.test.js` | 增加 WMS API 测试。 |
+.\docs\QPO-MES-WMS对接\04-WMS锁库分配与锁库零件模块开发文档.md:120:| 新增 | `quote-frontend/src/deliveredItemWmsAllocation.test.js` | 已提零件 WMS 按钮测试。 |
+.\docs\QPO-MES-WMS对接\04-WMS锁库分配与锁库零件模块开发文档.md:121:| 新增 | `quote-frontend/src/lockedItemManage.test.js` | 锁库零件页面测试。 |
+.\docs\QPO-MES-WMS对接\04-WMS锁库分配与锁库零件模块开发文档.md:122:| 修改 | `quote-frontend/src/permissionStage4.test.js` | 冻结 `/locked-items` 权限。 |
+.\docs\QPO-MES-WMS对接\04-WMS锁库分配与锁库零件模块开发文档.md:123:| 修改 | `quote-frontend/src/appShell.test.js` | 冻结左侧菜单四字模块名。 |
+.\docs\QPO-MES-WMS对接\04-WMS锁库分配与锁库零件模块开发文档.md:697:cd D:\Code\quote-system
+.\docs\QPO-MES-WMS对接\04-WMS锁库分配与锁库零件模块开发文档.md:700:cd D:\Code\quote-frontend
+.\docs\QPO-MES-WMS对接\04-WMS锁库分配与锁库零件模块开发文档.md:797:cd D:\Code\quote-system
+.\docs\QPO-MES-WMS对接\04-WMS锁库分配与锁库零件模块开发文档.md:800:cd D:\Code\quote-frontend
+.\docs\QPO-MES-WMS对接\04-WMS锁库分配与锁库零件模块开发文档.md:809:  quote-system/src/main/resources/db/migration/V47__delivery_ticket_wms_allocation_permissions.sql `
+.\docs\QPO-MES-WMS对接\04-WMS锁库分配与锁库零件模块开发文档.md:810:  quote-system/src/main/java/com/machining/quote/dto/WmsAllocationReq.java `
+.\docs\QPO-MES-WMS对接\04-WMS锁库分配与锁库零件模块开发文档.md:811:  quote-system/src/main/java/com/machining/quote/dto/WmsAllocationResp.java `
+.\docs\QPO-MES-WMS对接\04-WMS锁库分配与锁库零件模块开发文档.md:812:  quote-system/src/main/java/com/machining/quote/dto/LockedItemDTO.java `
+.\docs\QPO-MES-WMS对接\04-WMS锁库分配与锁库零件模块开发文档.md:813:  quote-system/src/main/java/com/machining/quote/dto/LockedItemPageDTO.java `
+.\docs\QPO-MES-WMS对接\04-WMS锁库分配与锁库零件模块开发文档.md:814:  quote-system/src/main/java/com/machining/quote/service/WmsAllocationClient.java `
+.\docs\QPO-MES-WMS对接\04-WMS锁库分配与锁库零件模块开发文档.md:815:  quote-system/src/main/java/com/machining/quote/service/WmsAllocationService.java `
+.\docs\QPO-MES-WMS对接\04-WMS锁库分配与锁库零件模块开发文档.md:816:  quote-system/src/main/java/com/machining/quote/service/LockedItemService.java `
+.\docs\QPO-MES-WMS对接\04-WMS锁库分配与锁库零件模块开发文档.md:817:  quote-system/src/main/java/com/machining/quote/service/SystemTaskService.java `
+.\docs\QPO-MES-WMS对接\04-WMS锁库分配与锁库零件模块开发文档.md:818:  quote-system/src/main/java/com/machining/quote/controller/OrderDeliveryController.java `
+.\docs\QPO-MES-WMS对接\04-WMS锁库分配与锁库零件模块开发文档.md:819:  quote-system/src/main/java/com/machining/quote/service/AuditService.java `
+.\docs\QPO-MES-WMS对接\04-WMS锁库分配与锁库零件模块开发文档.md:820:  quote-system/src/main/java/com/machining/quote/service/PermissionService.java `
+.\docs\QPO-MES-WMS对接\04-WMS锁库分配与锁库零件模块开发文档.md:823:  quote-system/src/test/java/com/machining/quote/WmsAllocationTest.java `
+.\docs\QPO-MES-WMS对接\04-WMS锁库分配与锁库零件模块开发文档.md:824:  quote-system/src/test/java/com/machining/quote/WmsAllocationClientTest.java `
+.\docs\QPO-MES-WMS对接\04-WMS锁库分配与锁库零件模块开发文档.md:825:  quote-system/src/test/java/com/machining/quote/LockedItemQueryTest.java `
+.\docs\QPO-MES-WMS对接\04-WMS锁库分配与锁库零件模块开发文档.md:826:  quote-frontend/src/services/deliveredItemApi.js `
+.\docs\QPO-MES-WMS对接\04-WMS锁库分配与锁库零件模块开发文档.md:827:  quote-frontend/src/components/DeliveredItemManage.vue `
+.\docs\QPO-MES-WMS对接\04-WMS锁库分配与锁库零件模块开发文档.md:828:  quote-frontend/src/components/LockedItemManage.vue `
+.\docs\QPO-MES-WMS对接\04-WMS锁库分配与锁库零件模块开发文档.md:829:  quote-frontend/src/router/index.js `
+.\docs\QPO-MES-WMS对接\04-WMS锁库分配与锁库零件模块开发文档.md:830:  quote-frontend/src/App.vue `
+.\docs\QPO-MES-WMS对接\04-WMS锁库分配与锁库零件模块开发文档.md:831:  quote-frontend/src/deliveredItemWmsAllocation.test.js `
+.\docs\QPO-MES-WMS对接\04-WMS锁库分配与锁库零件模块开发文档.md:832:  quote-frontend/src/lockedItemManage.test.js
+.\docs\QPO权限用户体系\05-角色管理数据范围优化开发文档.md:75:cd D:\Code\quote-frontend
+.\docs\QPO权限用户体系\05-角色管理数据范围优化开发文档.md:79:cd D:\Code\quote-system
+.\docs\QPO-MES-WMS对接\05-权限日志运维与回归收口开发文档.md:106:| `quote-system/src/main/java/com/machining/quote/service/PermissionService.java` | fallback catalog、默认角色映射。 |
+.\docs\QPO-MES-WMS对接\05-权限日志运维与回归收口开发文档.md:107:| `quote-system/src/main/resources/db/migration/V45__delivery_ticket_mes_wms_foundation.sql` | `market:delivered-item:view`、file-preview。 |
+.\docs\QPO-MES-WMS对接\05-权限日志运维与回归收口开发文档.md:108:| `quote-system/src/main/resources/db/migration/V46__delivery_ticket_mes_sync_permission.sql` | `market:delivered-item:mes-sync`。 |
+.\docs\QPO-MES-WMS对接\05-权限日志运维与回归收口开发文档.md:109:| `quote-system/src/main/resources/db/migration/V47__delivery_ticket_wms_allocation_permissions.sql` | `market:delivered-item:wms-allocate`、`market:locked-item:view`。 |
+.\docs\QPO-MES-WMS对接\05-权限日志运维与回归收口开发文档.md:110:| `quote-frontend/src/router/index.js` | `/delivered-items`、`/locked-items` route meta。 |
+.\docs\QPO-MES-WMS对接\05-权限日志运维与回归收口开发文档.md:111:| `quote-frontend/src/App.vue` | 菜单元数据和标题说明。 |
+.\docs\QPO-MES-WMS对接\05-权限日志运维与回归收口开发文档.md:259:cd D:\Code
+.\docs\QPO-MES-WMS对接\05-权限日志运维与回归收口开发文档.md:280:- `quote-system/src/main/java/com/machining/quote/controller/ApsSourceController.java`
+.\docs\QPO-MES-WMS对接\05-权限日志运维与回归收口开发文档.md:281:- `quote-system/src/main/java/com/machining/quote/service/ApsSourceService.java`
+.\docs\QPO-MES-WMS对接\05-权限日志运维与回归收口开发文档.md:282:- `quote-system/src/main/java/com/machining/quote/dto/aps/*`
+.\docs\QPO-MES-WMS对接\05-权限日志运维与回归收口开发文档.md:369:cd D:\Code\quote-system
+.\docs\QPO-MES-WMS对接\05-权限日志运维与回归收口开发文档.md:392:cd D:\Code\quote-frontend
+.\docs\QPO-MES-WMS对接\05-权限日志运维与回归收口开发文档.md:414:cd D:\Code
+.\docs\QPO-MES-WMS对接\05-权限日志运维与回归收口开发文档.md:505:cd D:\Code\quote-system
+.\docs\QPO-MES-WMS对接\05-权限日志运维与回归收口开发文档.md:508:cd D:\Code\quote-frontend
+.\docs\QPO-MES-WMS对接\05-权限日志运维与回归收口开发文档.md:571:cd D:\Code
+.\docs\QPO-MES-WMS对接\05-权限日志运维与回归收口开发文档.md:583:cd D:\Code\quote-system
+.\docs\QPO-MES-WMS对接\05-权限日志运维与回归收口开发文档.md:586:cd D:\Code\quote-frontend
+.\docs\QPO-MES-WMS对接\05-权限日志运维与回归收口开发文档.md:594:cd D:\Code
+.\docs\QPO-MES-WMS对接\05-权限日志运维与回归收口开发文档.md:611:  quote-system/src/test/java/com/machining/quote/PermissionModuleTreeTest.java `
+.\docs\QPO-MES-WMS对接\05-权限日志运维与回归收口开发文档.md:612:  quote-system/src/test/java/com/machining/quote/AuditActionCoverageTests.java `
+.\docs\QPO-MES-WMS对接\05-权限日志运维与回归收口开发文档.md:613:  quote-frontend/src/permissionStage4.test.js `
+.\docs\QPO-MES-WMS对接\05-权限日志运维与回归收口开发文档.md:614:  quote-frontend/src/appShell.test.js
+.\docs\QPO前端优化\04-design-tokens.md:3:The current `quote-frontend/src/style.css` already has useful QPO tokens. The redesign should expand them into a full token system.
+.\docs\QPO前端优化\04-design-tokens.md:10:quote-frontend/src/styles/
+.\docs\QPO前端优化\04-design-tokens.md:18:Until this split is implemented, keep using `quote-frontend/src/style.css` as the source of truth.
+.\start-aps-backend.ps1:8:$ApsDir = Join-Path $RootDir "aps-system"
+.\start-aps-backend.ps1:77:            ($_.CommandLine -like "*spring-boot:run*" -and $_.CommandLine -like "*aps-system*")
+.\docs\QPO权限用户体系\06-用户组织身份体系完善开发文档.md:252:quote-frontend/src/components/SystemOrgManage.vue
+.\docs\QPO权限用户体系\06-用户组织身份体系完善开发文档.md:282:quote-frontend/src/components/UserManage.vue
+.\docs\QPO权限用户体系\06-用户组织身份体系完善开发文档.md:311:quote-frontend/src/services/adminApi.js
+.\docs\QPO权限用户体系\06-用户组织身份体系完善开发文档.md:312:quote-frontend/src/router/index.js
+.\docs\QPO权限用户体系\06-用户组织身份体系完善开发文档.md:313:quote-frontend/src/App.vue
+.\docs\QPO权限用户体系\06-用户组织身份体系完善开发文档.md:410:cd D:\Code\quote-system
+.\docs\QPO权限用户体系\06-用户组织身份体系完善开发文档.md:413:cd D:\Code\quote-frontend
+.\docs\QPO权限用户体系\06-用户组织身份体系完善开发文档.md:533:cd D:\Code\quote-frontend
+.\docs\QPO权限用户体系\06-用户组织身份体系完善开发文档.md:537:cd D:\Code\quote-system
+.\docs\QPO前端优化\05-layout-navigation.md:7:- `quote-frontend/src/App.vue` owns sidebar, header, user actions, and password dialog.
+.\aps-system\pom.xml:12:    <artifactId>aps-system</artifactId>
+.\aps-system\pom.xml:14:    <name>aps-system</name>
+.\aps-system\pom.xml:15:    <description>aps-system</description>
+.\docs\QPO权限用户体系\07-个人入口与我的资料优化开发文档.md:27:quote-frontend/src/App.vue
+.\docs\QPO权限用户体系\07-个人入口与我的资料优化开发文档.md:28:quote-frontend/src/stores/authStore.js
+.\docs\QPO权限用户体系\07-个人入口与我的资料优化开发文档.md:29:quote-frontend/src/services/authApi.js
+.\docs\QPO权限用户体系\07-个人入口与我的资料优化开发文档.md:49:quote-system/src/main/java/com/machining/quote/controller/AuthController.java
+.\docs\QPO权限用户体系\07-个人入口与我的资料优化开发文档.md:50:quote-system/src/main/java/com/machining/quote/service/AuthService.java
+.\docs\QPO权限用户体系\07-个人入口与我的资料优化开发文档.md:51:quote-system/src/main/java/com/machining/quote/service/UserAdminService.java
+.\docs\QPO权限用户体系\07-个人入口与我的资料优化开发文档.md:52:quote-system/src/main/java/com/machining/quote/config/AuthInterceptor.java
+.\docs\QPO权限用户体系\07-个人入口与我的资料优化开发文档.md:194:quote-system/src/main/java/com/machining/quote/dto/MyProfileUpdateReq.java
+.\docs\QPO权限用户体系\07-个人入口与我的资料优化开发文档.md:255:quote-frontend/src/components/UserProfilePopover.vue
+.\docs\QPO权限用户体系\07-个人入口与我的资料优化开发文档.md:268:quote-frontend/src/App.vue
+.\docs\QPO权限用户体系\07-个人入口与我的资料优化开发文档.md:269:quote-frontend/src/stores/authStore.js
+.\docs\QPO权限用户体系\07-个人入口与我的资料优化开发文档.md:270:quote-frontend/src/services/authApi.js
+.\docs\QPO权限用户体系\07-个人入口与我的资料优化开发文档.md:429:quote-system/src/test/java/com/machining/quote/UserProfileSelfServiceTest.java
+.\docs\QPO权限用户体系\07-个人入口与我的资料优化开发文档.md:430:quote-system/src/test/java/com/machining/quote/AuditServiceTests.java
+.\docs\QPO权限用户体系\07-个人入口与我的资料优化开发文档.md:448:quote-frontend/src/userProfilePopover.test.js
+.\docs\QPO权限用户体系\07-个人入口与我的资料优化开发文档.md:449:quote-frontend/src/services/authApi.test.js
+.\docs\QPO权限用户体系\07-个人入口与我的资料优化开发文档.md:450:quote-frontend/src/stores/authStore.test.js
+.\docs\QPO权限用户体系\07-个人入口与我的资料优化开发文档.md:451:quote-frontend/src/appShell.test.js
+.\docs\QPO权限用户体系\07-个人入口与我的资料优化开发文档.md:484:cd D:\Code\quote-system
+.\docs\QPO权限用户体系\07-个人入口与我的资料优化开发文档.md:487:cd D:\Code\quote-frontend
+.\docs\QPO权限用户体系\07-个人入口与我的资料优化开发文档.md:573:cd D:\Code\quote-frontend
+.\docs\QPO权限用户体系\07-个人入口与我的资料优化开发文档.md:577:cd D:\Code\quote-system
+.\scripts\backup-aps.ps1:2:    [string]$ProjectRoot = "D:\Code",
+.\scripts\backup-aps.ps1:51:    $ComposeFile = Join-Path $ProjectRoot "docker-compose.aps.yml"
+.\scripts\backup-aps.ps1:54:    $EnvFile = Join-Path $ProjectRoot "aps.env"
+.\交接文档\01_系统总览\ERP系统总览.md:68:D:\Code\quote-frontend
+.\交接文档\01_系统总览\ERP系统总览.md:88:cd D:\Code\quote-frontend
+.\交接文档\01_系统总览\ERP系统总览.md:100:D:\Code\quote-system
+.\交接文档\01_系统总览\ERP系统总览.md:118:D:\Code\quote-system\src\main\java\com\machining\quote\QuoteSystemApplication.java
+.\交接文档\01_系统总览\ERP系统总览.md:150:D:\Code\quote-system\src\main\resources\db\migration
+.\交接文档\01_系统总览\ERP系统总览.md:819:D:\Code\docker-compose.yml
+.\交接文档\01_系统总览\ERP系统总览.md:825:D:\Code\erp.env
+.\交接文档\01_系统总览\ERP系统总览.md:831:cd D:\Code
+.\交接文档\01_系统总览\ERP系统总览.md:945:| 前端路由 | `D:\Code\quote-frontend\src\router\index.js` |
+.\交接文档\01_系统总览\ERP系统总览.md:946:| 前端主布局 | `D:\Code\quote-frontend\src\App.vue` |
+.\交接文档\01_系统总览\ERP系统总览.md:947:| 登录状态 | `D:\Code\quote-frontend\src\auth.js` |
+.\交接文档\01_系统总览\ERP系统总览.md:948:| 市场新单导入页面 | `D:\Code\quote-frontend\src\components\MarketDashboard.vue` |
+.\交接文档\01_系统总览\ERP系统总览.md:949:| 报价单处理页面 | `D:\Code\quote-frontend\src\components\QuoteProcess.vue` |
+.\交接文档\01_系统总览\ERP系统总览.md:950:| 议价提单页面 | `D:\Code\quote-frontend\src\components\MarketRelease.vue` |
+.\交接文档\01_系统总览\ERP系统总览.md:951:| 工程全局设定页面 | `D:\Code\quote-frontend\src\components\GlobalSetup.vue` |
+.\交接文档\01_系统总览\ERP系统总览.md:952:| 工程逐件核价页面 | `D:\Code\quote-frontend\src\components\ItemPricing.vue` |
+.\交接文档\01_系统总览\ERP系统总览.md:953:| 材料与工艺管理页面 | `D:\Code\quote-frontend\src\components\MaterialProcessManage.vue` |
+.\交接文档\01_系统总览\ERP系统总览.md:954:| 订单管理页面 | `D:\Code\quote-frontend\src\components\OrderManage.vue` |
+.\交接文档\01_系统总览\ERP系统总览.md:955:| 用户管理页面 | `D:\Code\quote-frontend\src\components\UserManage.vue` |
+.\交接文档\01_系统总览\ERP系统总览.md:956:| 市场接口控制器 | `D:\Code\quote-system\src\main\java\com\machining\quote\controller\MarketController.java` |
+.\交接文档\01_系统总览\ERP系统总览.md:957:| 工程接口控制器 | `D:\Code\quote-system\src\main\java\com\machining\quote\controller\EngineerController.java` |
+.\交接文档\01_系统总览\ERP系统总览.md:958:| 字典接口控制器 | `D:\Code\quote-system\src\main\java\com\machining\quote\controller\DictController.java` |
+.\交接文档\01_系统总览\ERP系统总览.md:959:| 系统管理控制器 | `D:\Code\quote-system\src\main\java\com\machining\quote\controller\AdminController.java` |
+.\交接文档\01_系统总览\ERP系统总览.md:960:| APS 数据源控制器 | `D:\Code\quote-system\src\main\java\com\machining\quote\controller\ApsSourceController.java` |
+.\交接文档\01_系统总览\ERP系统总览.md:961:| 工程核价服务 | `D:\Code\quote-system\src\main\java\com\machining\quote\service\EngineerService.java` |
+.\交接文档\01_系统总览\ERP系统总览.md:962:| 提单服务 | `D:\Code\quote-system\src\main\java\com\machining\quote\service\DeliveryService.java` |
+.\交接文档\01_系统总览\ERP系统总览.md:963:| APS 数据源服务 | `D:\Code\quote-system\src\main\java\com\machining\quote\service\ApsSourceService.java` |
+.\交接文档\01_系统总览\ERP系统总览.md:964:| 数据库迁移 | `D:\Code\quote-system\src\main\resources\db\migration` |
+.\交接文档\02_页面功能说明\ERP页面功能与输入输出说明.md:9:- 前端工程：`D:\Code\quote-frontend`
+.\交接文档\02_页面功能说明\ERP页面功能与输入输出说明.md:10:- 后端工程：`D:\Code\quote-system`
+.\交接文档\02_页面功能说明\ERP页面功能与输入输出说明.md:11:- 前端路由：`D:\Code\quote-frontend\src\router\index.js`
+.\交接文档\02_页面功能说明\ERP页面功能与输入输出说明.md:12:- 前端页面组件：`D:\Code\quote-frontend\src\components`
+.\交接文档\02_页面功能说明\ERP页面功能与输入输出说明.md:13:- 后端接口控制器：`D:\Code\quote-system\src\main\java\com\machining\quote\controller`
+.\交接文档\02_页面功能说明\ERP页面功能与输入输出说明.md:14:- 后端业务服务：`D:\Code\quote-system\src\main\java\com\machining\quote\service`
+.\交接文档\01_系统总览\APS系统总览.md:5:前端工程：`D:\Code\aps-frontend`
+.\交接文档\01_系统总览\APS系统总览.md:6:后端工程：`D:\Code\aps-system`
+.\交接文档\01_系统总览\APS系统总览.md:7:部署入口：`D:\Code\docker-compose.aps.yml`
+.\交接文档\01_系统总览\APS系统总览.md:77:  U["用户浏览器"] --> F["aps-frontend Nginx 容器"]
+.\交接文档\01_系统总览\APS系统总览.md:90:| `aps-frontend` | `aps-frontend` | APS 前端 Nginx |
+.\交接文档\01_系统总览\APS系统总览.md:126:当前前端菜单来自 `D:\Code\aps-frontend\src\App.vue`：
+.\交接文档\01_系统总览\APS系统总览.md:265:D:\Code\aps.env
+.\交接文档\01_系统总览\APS系统总览.md:271:D:\Code\aps.env.example
+.\交接文档\01_系统总览\APS系统总览.md:299:APS 当前主要数据都在 PostgreSQL 中，没有像 ERP 那样的业务上传文件目录。因此 APS 备份重点是数据库 dump 和 `aps.env` 的安全保管。
+.\scripts\backup.ps1:2:    [string]$ProjectRoot = "D:\Code",
+.\scripts\backup.ps1:83:    $containerDump = "/tmp/quote-system-backup-$timestamp.sql"
+.\交接文档\02_页面功能说明\APS页面功能与输入输出说明.md:9:- 前端工程：`D:\Code\aps-frontend`
+.\交接文档\02_页面功能说明\APS页面功能与输入输出说明.md:10:- 后端工程：`D:\Code\aps-system`
+.\交接文档\02_页面功能说明\APS页面功能与输入输出说明.md:11:- 前端路由：`D:\Code\aps-frontend\src\router\index.js`
+.\交接文档\02_页面功能说明\APS页面功能与输入输出说明.md:12:- 前端页面：`D:\Code\aps-frontend\src\views`
+.\交接文档\02_页面功能说明\APS页面功能与输入输出说明.md:13:- 后端控制器：`D:\Code\aps-system\src\main\java\com\machining\apssystem\controller`
+.\交接文档\02_页面功能说明\APS页面功能与输入输出说明.md:53:D:\Code\aps-frontend\src\api.js
+.\交接文档\02_页面功能说明\APS页面功能与输入输出说明.md:75:D:\Code\aps-frontend\src\config.js
+.\交接文档\04_部署运维\APS备份与恢复说明.md:7:- 项目根目录：`D:\Code`
+.\交接文档\04_部署运维\APS备份与恢复说明.md:8:- APS Compose 文件：`D:\Code\docker-compose.aps.yml`
+.\交接文档\04_部署运维\APS备份与恢复说明.md:9:- APS 环境变量文件：`D:\Code\aps.env`
+.\交接文档\04_部署运维\APS备份与恢复说明.md:10:- APS 备份脚本目录：`D:\Code\scripts`
+.\交接文档\04_部署运维\APS备份与恢复说明.md:11:- APS 默认备份目录：`D:\Code\backups\aps`
+.\交接文档\04_部署运维\APS备份与恢复说明.md:31:| `D:\Code\scripts\backup-aps.ps1` | 立即执行一次 APS 数据库备份 | 手动备份、上线前备份、恢复前备份 |
+.\交接文档\04_部署运维\APS备份与恢复说明.md:32:| `D:\Code\scripts\run-aps-backup-task.ps1` | 给 Windows 定时任务调用的备份入口 | 每天自动备份 |
+.\交接文档\04_部署运维\APS备份与恢复说明.md:33:| `D:\Code\scripts\install-aps-backup-task.ps1` | 创建 Windows 每日备份计划任务 | 部署完成后安装定时备份 |
+.\交接文档\04_部署运维\APS备份与恢复说明.md:34:| `D:\Code\scripts\restore-drill-aps.ps1` | 用临时 PostgreSQL 容器做恢复演练 | 验证备份文件是否能恢复 |
+.\交接文档\04_部署运维\APS备份与恢复说明.md:35:| `D:\Code\scripts\restore-aps.ps1` | 把指定备份恢复到当前 APS 数据库 | 灾难恢复、服务器迁移、误操作恢复 |
+.\交接文档\04_部署运维\APS备份与恢复说明.md:44:D:\Code\backups\aps\
+.\交接文档\04_部署运维\APS备份与恢复说明.md:92:- `aps.env`。
+.\交接文档\04_部署运维\APS备份与恢复说明.md:93:- `aps.env.example`。
+.\交接文档\04_部署运维\APS备份与恢复说明.md:100:`aps.env` 内包含数据库密码、JWT 密钥和 ERP 对接 Token，不能放进普通备份包一起流转。交接时应通过安全渠道单独交付生产环境变量。
+.\交接文档\04_部署运维\APS备份与恢复说明.md:110:- `D:\Code\aps.env` 存在。
+.\交接文档\04_部署运维\APS备份与恢复说明.md:111:- `aps.env` 内的数据库名、用户名、密码与当前容器一致。
+.\交接文档\04_部署运维\APS备份与恢复说明.md:112:- 当前用户有执行 Docker 命令和写入 `D:\Code\backups\aps` 的权限。
+.\交接文档\04_部署运维\APS备份与恢复说明.md:119:cd D:\Code
+.\交接文档\04_部署运维\APS备份与恢复说明.md:120:.\scripts\backup-aps.ps1 -ProjectRoot D:\Code
+.\交接文档\04_部署运维\APS备份与恢复说明.md:126:APS backup completed: D:\Code\backups\aps\20260613_023000
+.\交接文档\04_部署运维\APS备份与恢复说明.md:134:cd D:\Code
+.\交接文档\04_部署运维\APS备份与恢复说明.md:135:.\scripts\backup-aps.ps1 -ProjectRoot D:\Code -PruneOld -KeepDays 14
+.\交接文档\04_部署运维\APS备份与恢复说明.md:152:cd D:\Code
+.\交接文档\04_部署运维\APS备份与恢复说明.md:153:.\scripts\install-aps-backup-task.ps1 -ProjectRoot D:\Code -DailyAt 02:30 -KeepDays 14
+.\交接文档\04_部署运维\APS备份与恢复说明.md:161:- 日志文件：`D:\Code\backups\aps\logs\scheduled-aps-backup.log`
+.\交接文档\04_部署运维\APS备份与恢复说明.md:178:Get-Content D:\Code\backups\aps\logs\scheduled-aps-backup.log -Tail 100
+.\交接文档\04_部署运维\APS备份与恢复说明.md:186:cd D:\Code
+.\交接文档\04_部署运维\APS备份与恢复说明.md:187:.\scripts\install-aps-backup-task.ps1 -ProjectRoot D:\Code -DailyAt 03:00 -KeepDays 30
+.\交接文档\04_部署运维\APS备份与恢复说明.md:203:$latest = Get-ChildItem D:\Code\backups\aps -Directory |
+.\交接文档\04_部署运维\APS备份与恢复说明.md:220:cd D:\Code
+.\交接文档\04_部署运维\APS备份与恢复说明.md:221:.\scripts\restore-drill-aps.ps1 -BackupDir D:\Code\backups\aps\20260613_023000
+.\交接文档\04_部署运维\APS备份与恢复说明.md:282:4. 已确认 `D:\Code\aps.env` 指向正确数据库。
+.\交接文档\04_部署运维\APS备份与恢复说明.md:290:cd D:\Code
+.\交接文档\04_部署运维\APS备份与恢复说明.md:291:.\scripts\backup-aps.ps1 -ProjectRoot D:\Code
+.\交接文档\04_部署运维\APS备份与恢复说明.md:299:cd D:\Code
+.\交接文档\04_部署运维\APS备份与恢复说明.md:300:.\scripts\restore-aps.ps1 -BackupDir D:\Code\backups\aps\20260613_023000 -ProjectRoot D:\Code -Force
+.\交接文档\04_部署运维\APS备份与恢复说明.md:317:3. 读取 `aps.env` 和 `meta\backup.json` 中的数据库名称、数据库用户。
+.\交接文档\04_部署运维\APS备份与恢复说明.md:318:4. 停止 `aps-backend` 和 `aps-frontend`。
+.\交接文档\04_部署运维\APS备份与恢复说明.md:324:10. 重新启动 `aps-backend` 和 `aps-frontend`。
+.\交接文档\04_部署运维\APS备份与恢复说明.md:333:cd D:\Code
+.\交接文档\04_部署运维\APS备份与恢复说明.md:334:docker compose --env-file aps.env -f docker-compose.aps.yml ps
+.\交接文档\04_部署运维\APS备份与恢复说明.md:341:- `aps-frontend` 为 healthy 或 running。
+.\交接文档\04_部署运维\APS备份与恢复说明.md:361:如果恢复后登录失败，应先确认恢复的是正确备份，再确认 `aps.env` 中的 JWT 密钥是否变更。JWT 密钥变化会导致旧浏览器 Token 失效，重新登录即可。
+.\交接文档\04_部署运维\APS备份与恢复说明.md:376:2. 新环境配置新的 `aps.env`。
+.\交接文档\04_部署运维\APS备份与恢复说明.md:398:### 11.1 提示找不到 aps.env
+.\交接文档\04_部署运维\APS备份与恢复说明.md:402:- `D:\Code\aps.env` 不存在。
+.\交接文档\04_部署运维\APS备份与恢复说明.md:403:- 当前目录不是 `D:\Code`。
+.\交接文档\04_部署运维\APS备份与恢复说明.md:409:Copy-Item D:\Code\aps.env.example D:\Code\aps.env
+.\交接文档\04_部署运维\APS备份与恢复说明.md:410:notepad D:\Code\aps.env
+.\交接文档\04_部署运维\APS备份与恢复说明.md:420:cd D:\Code
+.\交接文档\04_部署运维\APS备份与恢复说明.md:421:docker compose --env-file aps.env -f docker-compose.aps.yml ps
+.\交接文档\04_部署运维\APS备份与恢复说明.md:427:docker compose --env-file aps.env -f docker-compose.aps.yml up -d
+.\交接文档\04_部署运维\APS备份与恢复说明.md:456:3. 确认 `aps.env` 中数据库用户、密码、库名与 Compose 一致。
+.\交接文档\04_部署运维\APS备份与恢复说明.md:473:cd D:\Code
+.\交接文档\04_部署运维\APS部署说明.md:6:部署根目录：`D:\Code`
+.\交接文档\04_部署运维\APS部署说明.md:10:- `D:\Code\docker-compose.aps.yml`
+.\交接文档\04_部署运维\APS部署说明.md:11:- `D:\Code\aps.env.example`
+.\交接文档\04_部署运维\APS部署说明.md:12:- `D:\Code\aps-system\Dockerfile`
+.\交接文档\04_部署运维\APS部署说明.md:13:- `D:\Code\aps-frontend\Dockerfile`
+.\交接文档\04_部署运维\APS部署说明.md:14:- `D:\Code\aps-frontend\nginx.conf`
+.\交接文档\04_部署运维\APS部署说明.md:15:- `D:\Code\aps-system\src\main\resources\application.yaml`
+.\交接文档\04_部署运维\APS部署说明.md:23:  U["用户浏览器"] --> F["aps-frontend Nginx 容器"]
+.\交接文档\04_部署运维\APS部署说明.md:36:| `aps-frontend` | `aps-frontend` | APS 前端 Nginx |
+.\交接文档\04_部署运维\APS部署说明.md:51:D:\Code\aps.env
+.\交接文档\04_部署运维\APS部署说明.md:57:cd D:\Code
+.\交接文档\04_部署运维\APS部署说明.md:58:Copy-Item .\aps.env.example .\aps.env
+.\交接文档\04_部署运维\APS部署说明.md:59:notepad .\aps.env
+.\交接文档\04_部署运维\APS部署说明.md:65:cd D:\Code
+.\交接文档\04_部署运维\APS部署说明.md:66:docker compose --env-file aps.env -f docker-compose.aps.yml up -d --build
+.\交接文档\04_部署运维\APS部署说明.md:72:docker compose --env-file aps.env -f docker-compose.aps.yml ps
+.\交接文档\04_部署运维\APS部署说明.md:78:docker compose --env-file aps.env -f docker-compose.aps.yml logs -f
+.\交接文档\04_部署运维\APS部署说明.md:84:docker compose --env-file aps.env -f docker-compose.aps.yml down
+.\交接文档\04_部署运维\APS部署说明.md:177:D:\Code\aps-system\Dockerfile
+.\交接文档\04_部署运维\APS部署说明.md:211:D:\Code\aps-frontend\Dockerfile
+.\交接文档\04_部署运维\APS部署说明.md:224:D:\Code\aps-frontend\nginx.conf
+.\交接文档\04_部署运维\APS部署说明.md:244:6. `aps-frontend` 启动。
+.\交接文档\04_部署运维\APS部署说明.md:293:docker compose --env-file aps.env -f docker-compose.aps.yml ps
+.\交接文档\04_部署运维\APS部署说明.md:299:docker compose --env-file aps.env -f docker-compose.aps.yml logs -f aps-backend
+.\交接文档\04_部署运维\APS部署说明.md:305:docker compose --env-file aps.env -f docker-compose.aps.yml logs -f aps-frontend
+.\交接文档\04_部署运维\APS部署说明.md:311:docker compose --env-file aps.env -f docker-compose.aps.yml logs -f aps-postgres
+.\交接文档\04_部署运维\APS部署说明.md:317:docker compose --env-file aps.env -f docker-compose.aps.yml restart aps-backend
+.\交接文档\04_部署运维\APS部署说明.md:323:docker compose --env-file aps.env -f docker-compose.aps.yml restart aps-frontend
+.\交接文档\04_部署运维\APS部署说明.md:329:docker compose --env-file aps.env -f docker-compose.aps.yml exec aps-postgres psql -U aps -d aps
+.\交接文档\04_部署运维\APS部署说明.md:338:| 容器状态 | `aps-postgres`、`aps-backend`、`aps-frontend` 正常运行 |
+.\交接文档\05_开发交接\APS开发交接说明.md:7:- APS 后端：`D:\Code\aps-system`
+.\交接文档\05_开发交接\APS开发交接说明.md:8:- APS 前端：`D:\Code\aps-frontend`
+.\交接文档\05_开发交接\APS开发交接说明.md:9:- APS Docker Compose：`D:\Code\docker-compose.aps.yml`
+.\交接文档\05_开发交接\APS开发交接说明.md:10:- APS 环境变量模板：`D:\Code\aps.env.example`
+.\交接文档\05_开发交接\APS开发交接说明.md:11:- APS 运维脚本：`D:\Code\scripts`
+.\交接文档\05_开发交接\APS开发交接说明.md:63:| `aps-backend` | `D:\Code\aps-system\Dockerfile` | Spring Boot 后端 |
+.\交接文档\05_开发交接\APS开发交接说明.md:64:| `aps-frontend` | `D:\Code\aps-frontend\Dockerfile` | Nginx 托管前端静态文件，并反代 `/api` |
+.\交接文档\05_开发交接\APS开发交接说明.md:89:cd D:\Code\aps-system
+.\交接文档\05_开发交接\APS开发交接说明.md:96:cd D:\Code\aps-system
+.\交接文档\05_开发交接\APS开发交接说明.md:113:cd D:\Code\aps-frontend
+.\交接文档\05_开发交接\APS开发交接说明.md:121:cd D:\Code\aps-frontend
+.\交接文档\05_开发交接\APS开发交接说明.md:125:前端默认开发接口地址在 `D:\Code\aps-frontend\src\config.js`：
+.\交接文档\05_开发交接\APS开发交接说明.md:138:cd D:\Code
+.\交接文档\05_开发交接\APS开发交接说明.md:139:Copy-Item aps.env.example aps.env
+.\交接文档\05_开发交接\APS开发交接说明.md:140:notepad aps.env
+.\交接文档\05_开发交接\APS开发交接说明.md:153:cd D:\Code
+.\交接文档\05_开发交接\APS开发交接说明.md:154:docker compose --env-file aps.env -f docker-compose.aps.yml up -d --build
+.\交接文档\05_开发交接\APS开发交接说明.md:166:docker compose --env-file aps.env -f docker-compose.aps.yml ps
+.\交接文档\05_开发交接\APS开发交接说明.md:304:D:\Code\aps-system\src\main\resources\db\migration
+.\交接文档\05_开发交接\APS开发交接说明.md:357:详细字段说明见 `D:\Code\交接文档\05_开发交接\数据库表说明.md`。
+.\交接文档\05_开发交接\APS开发交接说明.md:380:Docker 部署时在 `D:\Code\aps.env` 中配置。
+.\交接文档\05_开发交接\APS开发交接说明.md:476:D:\Code\aps-frontend\src\api.js
+.\交接文档\05_开发交接\APS开发交接说明.md:490:- `D:\Code\aps-frontend\src\router\index.js`
+.\交接文档\05_开发交接\APS开发交接说明.md:491:- `D:\Code\aps-frontend\src\App.vue` 侧边栏菜单
+.\交接文档\05_开发交接\APS开发交接说明.md:501:D:\Code\aps-frontend\src\style.css
+.\交接文档\05_开发交接\APS开发交接说明.md:559:cd D:\Code\aps-system
+.\交接文档\05_开发交接\APS开发交接说明.md:577:cd D:\Code\aps-frontend
+.\交接文档\05_开发交接\APS开发交接说明.md:588:cd D:\Code
+.\交接文档\05_开发交接\APS开发交接说明.md:589:docker compose --env-file aps.env -f docker-compose.aps.yml build
+.\交接文档\05_开发交接\APS开发交接说明.md:595:docker compose --env-file aps.env -f docker-compose.aps.yml up -d
+.\交接文档\05_开发交接\APS开发交接说明.md:602:| `D:\Code\docker-compose.aps.yml` | APS Compose 部署入口 |
+.\交接文档\05_开发交接\APS开发交接说明.md:603:| `D:\Code\aps.env.example` | APS 环境变量模板 |
+.\交接文档\05_开发交接\APS开发交接说明.md:604:| `D:\Code\aps-system\Dockerfile` | 后端镜像构建 |
+.\交接文档\05_开发交接\APS开发交接说明.md:605:| `D:\Code\aps-frontend\Dockerfile` | 前端镜像构建 |
+.\交接文档\05_开发交接\APS开发交接说明.md:606:| `D:\Code\aps-frontend\nginx.conf` | 前端 Nginx 静态资源和 `/api` 反代 |
+.\交接文档\05_开发交接\APS开发交接说明.md:607:| `D:\Code\scripts\backup-aps.ps1` | APS 备份 |
+.\交接文档\05_开发交接\APS开发交接说明.md:608:| `D:\Code\scripts\restore-aps.ps1` | APS 正式恢复 |
+.\交接文档\05_开发交接\APS开发交接说明.md:609:| `D:\Code\scripts\restore-drill-aps.ps1` | APS 恢复演练 |
+.\交接文档\05_开发交接\APS开发交接说明.md:614:D:\Code\交接文档\04_部署运维\APS部署说明.md
+.\交接文档\05_开发交接\APS开发交接说明.md:615:D:\Code\交接文档\04_部署运维\APS备份与恢复说明.md
+.\交接文档\05_开发交接\APS开发交接说明.md:723:- 生产 `aps.env`。
+.\交接文档\05_开发交接\APS开发交接说明.md:737:| Docker 构建 | `docker compose --env-file aps.env -f docker-compose.aps.yml build` 通过 |
+.\交接文档\05_开发交接\ERP开发交接说明.md:5:后端工程：`D:\Code\quote-system`
+.\交接文档\05_开发交接\ERP开发交接说明.md:6:前端工程：`D:\Code\quote-frontend`
+.\交接文档\05_开发交接\ERP开发交接说明.md:7:部署入口：`D:\Code\docker-compose.yml`
+.\交接文档\05_开发交接\ERP开发交接说明.md:43:D:\Code\quote-system
+.\交接文档\05_开发交接\ERP开发交接说明.md:121:D:\Code\quote-frontend
+.\交接文档\05_开发交接\ERP开发交接说明.md:165:cd D:\Code\quote-system
+.\交接文档\05_开发交接\ERP开发交接说明.md:199:cd D:\Code\quote-frontend
+.\交接文档\05_开发交接\ERP开发交接说明.md:232:cd D:\Code
+.\交接文档\05_开发交接\ERP开发交接说明.md:249:D:\Code\quote-system\src\main\resources\application.yaml
+.\交接文档\05_开发交接\ERP开发交接说明.md:276:D:\Code\quote-frontend\src\config.js
+.\交接文档\05_开发交接\ERP开发交接说明.md:306:D:\Code\quote-frontend\src\router\index.js
+.\交接文档\05_开发交接\ERP开发交接说明.md:320:D:\Code\quote-frontend\src\auth.js
+.\交接文档\05_开发交接\ERP开发交接说明.md:359:D:\Code\quote-system\src\main\resources\db\migration
+.\交接文档\05_开发交接\ERP开发交接说明.md:397:1. 在 `quote-frontend\src\components` 新增 Vue 组件。
+.\交接文档\05_开发交接\ERP开发交接说明.md:398:2. 在 `quote-frontend\src\router\index.js` 新增路由。
+.\交接文档\05_开发交接\ERP开发交接说明.md:540:D:\Code\quote-system\src\test\java\com\machining\quote
+.\交接文档\05_开发交接\ERP开发交接说明.md:564:cd D:\Code\quote-system
+.\交接文档\05_开发交接\ERP开发交接说明.md:575:cd D:\Code\quote-frontend
+.\交接文档\05_开发交接\ERP开发交接说明.md:582:cd D:\Code
+.\交接文档\06_验收测试\APS上线验收清单.md:7:- APS 前端：`D:\Code\aps-frontend`
+.\交接文档\06_验收测试\APS上线验收清单.md:8:- APS 后端：`D:\Code\aps-system`
+.\交接文档\06_验收测试\APS上线验收清单.md:9:- APS Compose：`D:\Code\docker-compose.aps.yml`
+.\交接文档\06_验收测试\APS上线验收清单.md:10:- APS 环境变量：`D:\Code\aps.env`
+.\交接文档\06_验收测试\APS上线验收清单.md:32:| APS-BASE-002 | 后端测试 | 在 `D:\Code\aps-system` 执行 `.\mvnw.cmd test` | 测试通过 |  |
+.\交接文档\06_验收测试\APS上线验收清单.md:33:| APS-BASE-003 | 前端构建 | 在 `D:\Code\aps-frontend` 执行 `npm run build` | 构建通过 |  |
+.\交接文档\06_验收测试\APS上线验收清单.md:34:| APS-BASE-004 | Docker 构建 | 执行 `docker compose --env-file aps.env -f docker-compose.aps.yml build` | 三个服务镜像构建成功 |  |
+.\交接文档\06_验收测试\APS上线验收清单.md:35:| APS-BASE-005 | 环境变量文件 | 检查 `D:\Code\aps.env` | 生产必填项已填写，无空密码、无默认弱密钥 |  |
+.\交接文档\06_验收测试\APS上线验收清单.md:57:cd D:\Code
+.\交接文档\06_验收测试\APS上线验收清单.md:58:docker compose --env-file aps.env -f docker-compose.aps.yml up -d --build
+.\交接文档\06_验收测试\APS上线验收清单.md:63:| APS-DOCKER-001 | 容器状态 | 执行 `docker compose --env-file aps.env -f docker-compose.aps.yml ps` | `aps-postgres`、`aps-backend`、`aps-frontend` 均 running 或 healthy |  |
+.\交接文档\06_验收测试\APS上线验收清单.md:212:| APS-PERSIST-002 | 重启容器 | 执行 `docker compose --env-file aps.env -f docker-compose.aps.yml restart` | 服务恢复正常 |  |
+.\交接文档\06_验收测试\APS上线验收清单.md:223:| APS-BACKUP-001 | 手动备份 | 执行 `.\scripts\backup-aps.ps1 -ProjectRoot D:\Code` | 生成新的备份目录 |  |
+.\交接文档\06_验收测试\APS上线验收清单.md:250:| APS-LOG-002 | 前端日志 | 执行 `docker logs aps-frontend --tail 100` | Nginx 正常启动 |  |
+.\交接文档\06_验收测试\ERP上线验收清单.md:29:| 1 | 已准备 ERP 源码和部署文件 | `D:\Code\docker-compose.yml`、`quote-system`、`quote-frontend` 存在 |  |  |
+.\交接文档\06_验收测试\ERP上线验收清单.md:44:| 1 | 后端测试 | `cd D:\Code\quote-system; .\mvnw.cmd test` | 测试通过 |  |
+.\交接文档\06_验收测试\ERP上线验收清单.md:45:| 2 | 前端构建 | `cd D:\Code\quote-frontend; npm run build` | 构建成功 |  |
+.\交接文档\06_验收测试\ERP上线验收清单.md:249:| 恢复演练 | 已用 `D:\Code\backups\20260527_080802` 验证成功 |
+.\交接文档\04_部署运维\ERP备份与恢复说明.md:6:当前项目根目录：`D:\Code`
+.\交接文档\04_部署运维\ERP备份与恢复说明.md:15:D:\Code\scripts
+.\交接文档\04_部署运维\ERP备份与恢复说明.md:38:D:\Code\backups\
+.\交接文档\04_部署运维\ERP备份与恢复说明.md:124:3. `D:\Code\erp.env` 存在且配置正确。
+.\交接文档\04_部署运维\ERP备份与恢复说明.md:130:cd D:\Code
+.\交接文档\04_部署运维\ERP备份与恢复说明.md:131:powershell -ExecutionPolicy Bypass -File .\scripts\backup.ps1 -ProjectRoot D:\Code
+.\交接文档\04_部署运维\ERP备份与恢复说明.md:137:cd D:\Code
+.\交接文档\04_部署运维\ERP备份与恢复说明.md:138:powershell -ExecutionPolicy Bypass -File .\scripts\backup.ps1 -ProjectRoot D:\Code -PruneOld -KeepDays 14
+.\交接文档\04_部署运维\ERP备份与恢复说明.md:146:2. 在 `D:\Code\backups` 下创建时间戳目录。
+.\交接文档\04_部署运维\ERP备份与恢复说明.md:158:Backup completed: D:\Code\backups\yyyyMMdd_HHmmss
+.\交接文档\04_部署运维\ERP备份与恢复说明.md:164:Get-Item D:\Code\backups\yyyyMMdd_HHmmss\db\postgres.sql
+.\交接文档\04_部署运维\ERP备份与恢复说明.md:165:Get-ChildItem D:\Code\backups\yyyyMMdd_HHmmss\uploads
+.\交接文档\04_部署运维\ERP备份与恢复说明.md:166:Get-Content D:\Code\backups\yyyyMMdd_HHmmss\meta\backup.json
+.\交接文档\04_部署运维\ERP备份与恢复说明.md:188:cd D:\Code
+.\交接文档\04_部署运维\ERP备份与恢复说明.md:189:powershell -ExecutionPolicy Bypass -File .\scripts\install-backup-task.ps1 -ProjectRoot D:\Code -DailyAt 02:00 -KeepDays 14
+.\交接文档\04_部署运维\ERP备份与恢复说明.md:197:D:\Code\backups\logs\scheduled-backup.log
+.\交接文档\04_部署运维\ERP备份与恢复说明.md:203:Get-Content D:\Code\backups\logs\scheduled-backup.log -Tail 100
+.\交接文档\04_部署运维\ERP备份与恢复说明.md:218:触发后查看日志和 `D:\Code\backups` 下是否产生新的有效备份目录。
+.\交接文档\04_部署运维\ERP备份与恢复说明.md:235:cd D:\Code
+.\交接文档\04_部署运维\ERP备份与恢复说明.md:236:powershell -ExecutionPolicy Bypass -File .\scripts\restore-drill.ps1 -BackupDir D:\Code\backups\yyyyMMdd_HHmmss -ProjectRoot D:\Code
+.\交接文档\04_部署运维\ERP备份与恢复说明.md:266:D:\Code\backups\20260527_080802
+.\交接文档\04_部署运维\ERP备份与恢复说明.md:299:cd D:\Code
+.\交接文档\04_部署运维\ERP备份与恢复说明.md:300:powershell -ExecutionPolicy Bypass -File .\scripts\backup.ps1 -ProjectRoot D:\Code
+.\交接文档\04_部署运维\ERP备份与恢复说明.md:306:cd D:\Code
+.\交接文档\04_部署运维\ERP备份与恢复说明.md:307:powershell -ExecutionPolicy Bypass -File .\scripts\restore.ps1 -BackupDir D:\Code\backups\yyyyMMdd_HHmmss -ProjectRoot D:\Code -Force
+.\交接文档\04_部署运维\ERP备份与恢复说明.md:335:cd D:\Code
+.\交接文档\04_部署运维\ERP备份与恢复说明.md:384:1. 只清理 `D:\Code\backups` 下名称符合 `yyyyMMdd_HHmmss` 的目录。
+.\交接文档\03_业务流程\ERP与APS数据流转说明.md:138:D:\Code\quote-system\src\main\java\com\machining\quote\controller\ApsSourceController.java
+.\docs\QPO前端优化\08-implementation-roadmap.md:20:- `npm test` and `npm run build` pass in `quote-frontend`.
+.\docs\QPO前端优化\08-implementation-roadmap.md:30:- Modify: `quote-frontend/src/style.css`
+.\docs\QPO前端优化\08-implementation-roadmap.md:32:  - `quote-frontend/src/styles/tokens.css`
+.\docs\QPO前端优化\08-implementation-roadmap.md:33:  - `quote-frontend/src/styles/element-plus.css`
+.\docs\QPO前端优化\08-implementation-roadmap.md:34:  - `quote-frontend/src/styles/layout.css`
+.\docs\QPO前端优化\08-implementation-roadmap.md:35:  - `quote-frontend/src/styles/components.css`
+.\docs\QPO前端优化\08-implementation-roadmap.md:51:- Modify: `quote-frontend/src/App.vue`
+.\docs\QPO前端优化\08-implementation-roadmap.md:52:- Modify: `quote-frontend/src/style.css`
+.\交接文档\05_开发交接\接口说明.md:92:D:\Code\quote-system\src\main\java\com\machining\quote\controller
+.\交接文档\05_开发交接\接口说明.md:405:D:\Code\交接文档\03_业务流程\ERP与APS数据流转说明.md
+.\交接文档\05_开发交接\接口说明.md:413:D:\Code\aps-system\src\main\java\com\machining\apssystem\controller
+.\aps-system\src\main\resources\application.yaml:6:    name: aps-system
+.\交接文档\04_部署运维\ERP部署说明.md:6:当前部署根目录：`D:\Code`
+.\交接文档\04_部署运维\ERP部署说明.md:8:本文用于交接 ERP 系统的部署方式。内容依据当前 `D:\Code\docker-compose.yml`、`D:\Code\erp.env`、`quote-system/Dockerfile`、`quote-frontend/Dockerfile`、`quote-frontend/nginx.conf` 和后端 `application.yaml` 整理。
+.\交接文档\04_部署运维\ERP部署说明.md:18:  U["用户浏览器"] --> N["ERP 前端 Nginx 容器 quote-frontend"]
+.\交接文档\04_部署运维\ERP部署说明.md:32:| `backend` | `quote-backend` | 从 `quote-system/Dockerfile` 构建 | 宿主机 `127.0.0.1:8080` -> 容器 `8080` |
+.\交接文档\04_部署运维\ERP部署说明.md:33:| `frontend` | `quote-frontend` | 从 `quote-frontend/Dockerfile` 构建 | 宿主机 `127.0.0.1:8088` -> 容器 `80` |
+.\交接文档\04_部署运维\ERP部署说明.md:48:D:\Code\docker-compose.yml
+.\交接文档\04_部署运维\ERP部署说明.md:54:name: quote-system
+.\交接文档\04_部署运维\ERP部署说明.md:60:cd D:\Code
+.\交接文档\04_部署运维\ERP部署说明.md:106:| `D:\Code\docker-compose.yml` | ERP Docker Compose 主文件 |
+.\交接文档\04_部署运维\ERP部署说明.md:107:| `D:\Code\erp.env` | ERP 部署环境变量文件，包含真实密码和密钥 |
+.\交接文档\04_部署运维\ERP部署说明.md:108:| `D:\Code\quote-system` | ERP 后端 Spring Boot 工程 |
+.\交接文档\04_部署运维\ERP部署说明.md:109:| `D:\Code\quote-system\Dockerfile` | 后端镜像构建文件 |
+.\交接文档\04_部署运维\ERP部署说明.md:110:| `D:\Code\quote-system\src\main\resources\application.yaml` | 后端配置入口 |
+.\交接文档\04_部署运维\ERP部署说明.md:111:| `D:\Code\quote-system\src\main\resources\db\migration` | Flyway 数据库迁移脚本 |
+.\交接文档\04_部署运维\ERP部署说明.md:112:| `D:\Code\quote-frontend` | ERP 前端 Vue 工程 |
+.\交接文档\04_部署运维\ERP部署说明.md:113:| `D:\Code\quote-frontend\Dockerfile` | 前端镜像构建文件 |
+.\交接文档\04_部署运维\ERP部署说明.md:114:| `D:\Code\quote-frontend\nginx.conf` | 前端容器 Nginx 配置 |
+.\交接文档\04_部署运维\ERP部署说明.md:115:| `D:\Code\backups` | 当前本机已有的手动备份目录，不等同于 Compose volume |
+.\交接文档\04_部署运维\ERP部署说明.md:122:D:\Code\erp.env
+.\交接文档\04_部署运维\ERP部署说明.md:215:docker volume ls | Select-String quote-system
+.\交接文档\04_部署运维\ERP部署说明.md:285:D:\Code\quote-frontend\nginx.conf
+.\交接文档\04_部署运维\ERP部署说明.md:309:cd D:\Code
+.\交接文档\04_部署运维\ERP部署说明.md:356:cd D:\Code
+.\交接文档\04_部署运维\ERP部署说明.md:501:D:\Code\quote-system\src\main\resources\db\migration
+.\交接文档\04_部署运维\ERP部署说明.md:577:docker volume ls | Select-String quote-system
+.\quote-frontend\package-lock.json:2:  "name": "quote-frontend",
+.\quote-frontend\package-lock.json:8:      "name": "quote-frontend",
+.\交接文档\05_开发交接\数据库表说明.md:25:D:\Code\quote-system
+.\交接文档\05_开发交接\数据库表说明.md:31:D:\Code\quote-system\src\main\resources\db\migration
+.\交接文档\05_开发交接\数据库表说明.md:439:D:\Code\aps-system
+.\交接文档\05_开发交接\数据库表说明.md:445:D:\Code\aps-system\src\main\resources\db\migration
+.\交接文档\04_部署运维\运维常见问题.md:10:cd D:\Code
+.\交接文档\04_部署运维\运维常见问题.md:15:docker logs quote-frontend --tail 100
+.\交接文档\04_部署运维\运维常见问题.md:22:cd D:\Code
+.\交接文档\04_部署运维\运维常见问题.md:23:docker compose --env-file aps.env -f docker-compose.aps.yml ps
+.\交接文档\04_部署运维\运维常见问题.md:24:docker compose --env-file aps.env -f docker-compose.aps.yml up -d --build
+.\交接文档\04_部署运维\运维常见问题.md:25:docker compose --env-file aps.env -f docker-compose.aps.yml restart
+.\交接文档\04_部署运维\运维常见问题.md:27:docker logs aps-frontend --tail 100
+.\交接文档\04_部署运维\运维常见问题.md:36:cd D:\Code\quote-system
+.\交接文档\04_部署运维\运维常见问题.md:39:cd D:\Code\quote-frontend
+.\交接文档\04_部署运维\运维常见问题.md:46:cd D:\Code\aps-system
+.\交接文档\04_部署运维\运维常见问题.md:49:cd D:\Code\aps-frontend
+.\交接文档\04_部署运维\运维常见问题.md:63:| ERP | `D:\Code\erp.env` | `D:\Code\docker-compose.yml` |
+.\交接文档\04_部署运维\运维常见问题.md:64:| APS | `D:\Code\aps.env` | `D:\Code\docker-compose.aps.yml` |
+.\交接文档\04_部署运维\运维常见问题.md:79:cd D:\Code
+.\交接文档\04_部署运维\运维常见问题.md:87:cd D:\Code
+.\交接文档\04_部署运维\运维常见问题.md:88:Copy-Item aps.env.example aps.env
+.\交接文档\04_部署运维\运维常见问题.md:89:notepad aps.env
+.\交接文档\04_部署运维\运维常见问题.md:104:- 改错文件，例如改了 `aps.env.example` 而不是 `aps.env`。
+.\交接文档\04_部署运维\运维常见问题.md:111:cd D:\Code
+.\交接文档\04_部署运维\运维常见问题.md:112:docker compose --env-file aps.env -f docker-compose.aps.yml up -d --build
+.\交接文档\04_部署运维\运维常见问题.md:124:docker compose --env-file aps.env -f docker-compose.aps.yml ps
+.\交接文档\04_部署运维\运维常见问题.md:132:docker logs aps-frontend --tail 200
+.\交接文档\04_部署运维\运维常见问题.md:197:2. 修改 `aps.env`：
+.\交接文档\04_部署运维\运维常见问题.md:206:cd D:\Code
+.\交接文档\04_部署运维\运维常见问题.md:207:docker compose --env-file aps.env -f docker-compose.aps.yml up -d --build
+.\交接文档\04_部署运维\运维常见问题.md:294:2. 检查 APS `aps.env`。
+.\交接文档\04_部署运维\运维常见问题.md:433:D:\Code\交接文档\04_部署运维\ERP备份与恢复说明.md
+.\交接文档\04_部署运维\运维常见问题.md:439:cd D:\Code
+.\交接文档\04_部署运维\运维常见问题.md:440:.\scripts\backup-aps.ps1 -ProjectRoot D:\Code
+.\交接文档\04_部署运维\运维常见问题.md:446:D:\Code\backups\aps
+.\docs\QPO前端优化\09-acceptance-checklist.md:45:- [ ] `npm test` passes in `quote-frontend`.
+.\docs\QPO前端优化\09-acceptance-checklist.md:46:- [ ] `npm run build` passes in `quote-frontend`.
+.\docs\QPO前端优化\10-stage-0-baseline-audit.md:5:Scope: QPO frontend UI redesign baseline for `quote-frontend`.
+.\docs\QPO前端优化\10-stage-0-baseline-audit.md:13:| Unit tests | `npm test` in `quote-frontend` | Passed | 11 test files passed; 59 tests passed. |
+.\docs\QPO前端优化\10-stage-0-baseline-audit.md:14:| Production build | `npm run build` in `quote-frontend` | Passed | Vite transformed 1684 modules and built successfully in 1.23s. |
+.\docs\QPO前端优化\10-stage-0-baseline-audit.md:15:| Build warning | `npm run build` in `quote-frontend` | Present | Main JS chunk is larger than 500 kB after minification. This is a future performance topic, not a blocker for visual Stage 1. |
+.\docs\QPO前端优化\10-stage-0-baseline-audit.md:53:| App shell | `quote-frontend/src/App.vue` | 371 | 156 | 22 | Sidebar/header colors and layout are partly hardcoded; clean in Stage 2 after tokens are stable. |
+.\docs\QPO前端优化\10-stage-0-baseline-audit.md:54:| Login | `quote-frontend/src/components/LoginView.vue` | 125 | 54 | 15 | Self-contained and visually separate; good early candidate after shell tokens exist. |
+.\docs\QPO前端优化\10-stage-0-baseline-audit.md:55:| Market import | `quote-frontend/src/components/MarketDashboard.vue` | 444 | 140 | 39 | Upload/dropzone, card header, inline message HTML, and alert styling need shared patterns. |
+.\docs\QPO前端优化\10-stage-0-baseline-audit.md:56:| Engineering setup | `quote-frontend/src/components/GlobalSetup.vue` | 792 | 210 | 14 | Workflow is complex; preserve behavior until Stage 5. |
+.\docs\QPO前端优化\10-stage-0-baseline-audit.md:57:| Item pricing | `quote-frontend/src/components/ItemPricing.vue` | 1775 | 420 | 33 | Largest visual surface; defer heavy redesign until Stage 6. |
+.\docs\QPO前端优化\10-stage-0-baseline-audit.md:58:| Order management | `quote-frontend/src/components/OrderManage.vue` | 631 | 161 | 20 | Repeats page/card/table patterns and is a good Stage 3 or Stage 4 migration candidate. |
+.\docs\QPO前端优化\10-stage-0-baseline-audit.md:59:| Material/process management | `quote-frontend/src/components/MaterialProcessManage.vue` | 533 | 17 | 20 | Uses less CSS but has repeated admin-table layout needs. |
+.\docs\QPO前端优化\10-stage-0-baseline-audit.md:60:| Quote process | `quote-frontend/src/components/QuoteProcess.vue` | 556 | 163 | 16 | Shares market/order workflow styling; should follow shared page patterns later. |
+.\docs\QPO前端优化\10-stage-0-baseline-audit.md:61:| User management | `quote-frontend/src/components/UserManage.vue` | 282 | 23 | 7 | Simple admin page; useful as a low-risk shared layout migration page. |
+.\docs\QPO前端优化\10-stage-0-baseline-audit.md:62:| Quote template | `quote-frontend/src/components/QuoteTemplateManage.vue` | 245 | 74 | 6 | Upload/admin pattern should share the same surface and toolbar classes. |
+.\docs\QPO前端优化\10-stage-0-baseline-audit.md:63:| Global stylesheet | `quote-frontend/src/style.css` | 143 | n/a | 36 | Already contains starter QPO tokens; Stage 1 should expand and organize this file first. |
+.\docs\QPO前端优化\10-stage-0-baseline-audit.md:123:- `quote-frontend/src/style.css`
+.\docs\QPO前端优化\10-stage-0-baseline-audit.md:135:- `npm test` passes in `quote-frontend`.
+.\docs\QPO前端优化\10-stage-0-baseline-audit.md:136:- `npm run build` passes in `quote-frontend`.
+.\quote-frontend\package.json:2:  "name": "quote-frontend",
+.\docs\QPO前端优化\11-stage-1-style-foundation.md:5:Scope: QPO frontend visual foundation for `quote-frontend`.
+.\docs\QPO前端优化\11-stage-1-style-foundation.md:14:| `quote-frontend/src/style.css` | Expands QPO design tokens, maps Element Plus base variables, and introduces shared QPO layout/component classes. |
+.\docs\QPO前端优化\11-stage-1-style-foundation.md:15:| `quote-frontend/src/styleFoundation.test.js` | Guards that the Stage 1 style foundation keeps required tokens, Element Plus mappings, and shared classes. |
+.\docs\QPO前端优化\11-stage-1-style-foundation.md:102:1. Modify `quote-frontend/src/App.vue` and shared shell styles only.
+.\quote-system\pom.xml:14:    <name>quote-system</name>
+.\quote-system\pom.xml:15:    <description>quote-system</description>
+.\quote-frontend\QPO前端说明.md:5:`quote-frontend` 是QPO前端页面，包含市场部订单处理、工程部工艺与核价、仓库、报价、系统管理等业务界面。
+.\quote-frontend\QPO前端说明.md:17:cd D:\Code\quote-frontend
+.\quote-frontend\QPO前端说明.md:22:Vite默认会使用本地开发端口。后端API地址由 `VITE_API_BASE_URL` 控制，可参考 `quote-frontend\.env.example`。
+.\quote-frontend\QPO前端说明.md:27:cd D:\Code\quote-frontend
+.\quote-frontend\QPO前端说明.md:33:前端Docker镜像由 `D:\Code\quote-frontend\Dockerfile` 构建。生产环境由Nginx提供静态页面，并通过 QPO 的 Docker Compose 统一启动。
+.\docs\QPO前端优化\16-stage-6-item-pricing-workbench.md:5:Scope: QPO frontend item pricing workbench polish for `quote-frontend`.
+.\docs\QPO前端优化\16-stage-6-item-pricing-workbench.md:13:| `quote-frontend/src/components/ItemPricing.vue` | Moves the pricing page onto the shared QPO shell, adds order/workbench context metrics, normalizes the toolbar/table actions, and separates pricing dialog sections. |
+.\docs\QPO前端优化\16-stage-6-item-pricing-workbench.md:14:| `quote-frontend/src/itemPricingStage6.test.js` | Guards the Stage 6 structure and confirms the pricing workflow remains in place rather than being split or rewritten. |
+.\docs\QPO前端优化\15-stage-5-engineering-setup.md:5:Scope: QPO frontend engineering setup workflow polish for `quote-frontend`.
+.\docs\QPO前端优化\15-stage-5-engineering-setup.md:13:| `quote-frontend/src/components/GlobalSetup.vue` | Moves the engineering setup page onto the shared QPO shell and reorganizes order context, drawing review, configuration groups, and save/continue action. |
+.\docs\QPO前端优化\15-stage-5-engineering-setup.md:14:| `quote-frontend/src/engineeringSetupStage5.test.js` | Guards the Stage 5 structure and confirms `ItemPricing.vue` remains deferred. |
+.\docs\QPO前端优化\15-stage-5-engineering-setup.md:105:1. Start with `quote-frontend/src/components/ItemPricing.vue`.
+.\docs\QPO前端优化\14-stage-4-dialog-form-table-normalization.md:5:Scope: QPO frontend dialog, form, table action, upload, empty-state, and destructive-action normalization for `quote-frontend`.
+.\docs\QPO前端优化\14-stage-4-dialog-form-table-normalization.md:13:| `quote-frontend/src/style.css` | Adds shared classes for dialog forms, dialog sections, table action groups, danger actions, and upload surfaces. |
+.\docs\QPO前端优化\14-stage-4-dialog-form-table-normalization.md:14:| `quote-frontend/src/components/OrderManage.vue` | Applies shared action, danger, dialog-section, upload-surface, and footer classes to order actions and supplement drawing upload dialog. |
+.\docs\QPO前端优化\14-stage-4-dialog-form-table-normalization.md:15:| `quote-frontend/src/components/MaterialProcessManage.vue` | Applies shared form, footer, action-group, and danger-action classes to material/process/fee dictionary dialogs and operation columns. |
+.\docs\QPO前端优化\14-stage-4-dialog-form-table-normalization.md:16:| `quote-frontend/src/pageNormalizationStage4.test.js` | Guards Stage 4 shared class coverage for styles and the two migrated pages. |
+.\docs\QPO前端优化\14-stage-4-dialog-form-table-normalization.md:90:1. Modify `quote-frontend/src/components/GlobalSetup.vue` first, using the Stage 1 tokens and Stage 4 dialog/form/action classes.
+.\docs\QPO前端优化\13-stage-3-shared-page-layout.md:5:Scope: QPO frontend shared page layout migration for `quote-frontend`.
+.\docs\QPO前端优化\13-stage-3-shared-page-layout.md:13:| `quote-frontend/src/components/MarketDashboard.vue` | Replaces the old card shell with `erp-page`, `erp-page-header`, `erp-surface`, and a shared toolbar footer. |
+.\docs\QPO前端优化\13-stage-3-shared-page-layout.md:14:| `quote-frontend/src/components/OrderManage.vue` | Moves page title, filters, table body, and pagination into shared page, toolbar, table surface, and pagination classes. |
+.\docs\QPO前端优化\13-stage-3-shared-page-layout.md:15:| `quote-frontend/src/components/MaterialProcessManage.vue` | Moves dictionary management title, action row, tabs, and table area into shared page, toolbar, and table surface classes. |
+.\docs\QPO前端优化\13-stage-3-shared-page-layout.md:16:| `quote-frontend/src/pageLayoutStage3.test.js` | Guards the Stage 3 shared page layout migration for all three pages. |
+.\docs\QPO前端优化\12-stage-2-app-shell.md:5:Scope: QPO frontend app shell polish for `quote-frontend`.
+.\docs\QPO前端优化\12-stage-2-app-shell.md:13:| `quote-frontend/src/App.vue` | Reworks shell navigation labels, route-to-active-menu mapping, header context, user card, and shell CSS. |
+.\docs\QPO前端优化\12-stage-2-app-shell.md:14:| `quote-frontend/src/style.css` | Adds rail-specific design tokens for the app shell. |
+.\docs\QPO前端优化\12-stage-2-app-shell.md:15:| `quote-frontend/src/appShell.test.js` | Guards Stage 2 shell structure, short labels, tokenized colors, and `/pricing` active route behavior. |
+.\docs\QPO前端优化\19-final-browser-walkthrough.md:13:Important: Docker `quote-frontend` was not used for this visual walkthrough because it still represents the older composed frontend image. The screenshots intentionally use the hot-start frontend.
+.\docs\QPO前端优化\18-workflow-page-polish.md:5:- `quote-frontend/src/components/QuoteProcess.vue`
+.\docs\QPO前端优化\18-workflow-page-polish.md:6:- `quote-frontend/src/components/MarketRelease.vue`
+.\docs\QPO前端优化\18-workflow-page-polish.md:26:| `quote-frontend/src/style.css` | Adds shared `workflow-*` classes for dense business workbenches, quiet secondary buttons, action stacks, and grouped batch panels. |
+.\docs\QPO前端优化\18-workflow-page-polish.md:27:| `quote-frontend/src/components/QuoteProcess.vue` | Applies workflow layout classes, reduces quote adjustment/export button color noise, and lays out manual quote-date selection as one compact row. |
+.\docs\QPO前端优化\18-workflow-page-polish.md:28:| `quote-frontend/src/components/MarketRelease.vue` | Restores the tighter Stage 7 layout, keeps selected secondary actions visually quieter, and lays out manual internal target-date selection as one compact row. |
+.\docs\QPO前端优化\18-workflow-page-polish.md:29:| `quote-frontend/src/workflowPolish.test.js` | Guards the quote workflow classes, one-row manual quote/internal target-date controls, compact market release layout, quiet action styling, and key click handlers. |
+.\docs\QPO前端优化\17-stage-7-final-consistency.md:5:Scope: QPO frontend final visual consistency pass for `quote-frontend`.
+.\docs\QPO前端优化\17-stage-7-final-consistency.md:13:| `quote-frontend/src/components/HistoryOrderManage.vue` | Replaces the old history card shell with shared page, toolbar, table surface, empty state, pagination, and table action classes. |
+.\docs\QPO前端优化\17-stage-7-final-consistency.md:14:| `quote-frontend/src/components/MarketRelease.vue` | Replaces the old release card shell with shared page/header/workspace surfaces and normalizes destructive table actions. |
+.\docs\QPO前端优化\17-stage-7-final-consistency.md:15:| `quote-frontend/src/components/QuoteProcess.vue` | Replaces the old quote process card shell with shared page/header/workspace surfaces and shared batch action styling. |
+.\docs\QPO前端优化\17-stage-7-final-consistency.md:16:| `quote-frontend/src/components/QuoteTemplateManage.vue` | Replaces the old template card shell with shared page, toolbar, table surface, upload surface, and footer classes. |
+.\docs\QPO前端优化\17-stage-7-final-consistency.md:17:| `quote-frontend/src/components/UserManage.vue` | Replaces the old user card shell with shared page/table/dialog patterns and shared table action/footer classes. |
+.\docs\QPO前端优化\17-stage-7-final-consistency.md:18:| `quote-frontend/src/finalConsistencyStage7.test.js` | Guards the remaining page shell, table/action, and dialog consistency expectations. |
+.\docs\QPO前端优化\19-final-walkthrough-and-punch-list.md:13:| 1 | Market import upload fallback | Replaced the native-looking small folder button with the existing quiet workflow button style and gave the row consistent inline spacing. | `quote-frontend/src/components/MarketDashboard.vue` |
+.\docs\QPO前端优化\19-final-walkthrough-and-punch-list.md:14:| 2 | Dense table operations | Added a shared minimum height and horizontal padding for small buttons inside shared table action groups, so edit/delete/save actions are less cramped while preserving dense desktop tables. | `quote-frontend/src/style.css` |
+.\docs\QPO前端优化\19-final-walkthrough-and-punch-list.md:15:| 3 | Regression guard | Added a static guard so these final punch-list rules do not drift later. | `quote-frontend/src/finalPunchList.test.js` |
+.\docs\QPO前端优化\19-final-walkthrough-and-punch-list.md:33:- `npm test` and `npm run build` must pass in `quote-frontend` before commit.
+.\docs\QPO前端优化\20-performance-code-splitting.md:13:| Business routes | Converted QPO business route components from static imports to Vue Router lazy components. `LoginView` remains eager for the default entry path. | `quote-frontend/src/router/index.js` |
+.\docs\QPO前端优化\20-performance-code-splitting.md:14:| Vendor chunk safety | Removed Vite 8 / Rolldown manual third-party vendor chunk groups after Docker/browser verification showed they could produce invalid runtime module bindings before Vue mounted. | `quote-frontend/vite.config.js` |
+.\docs\QPO前端优化\20-performance-code-splitting.md:15:| Regression guards | Added static tests for lazy route components and for keeping fragile manual vendor splitting out of Vite config. | `quote-frontend/src/routerCodeSplitting.test.js`, `quote-frontend/src/viteCodeSplitting.test.js` |
+.\docs\QPO前端优化\20-performance-code-splitting.md:42:- `npm test` passes in `quote-frontend`.
+.\docs\QPO前端优化\20-performance-code-splitting.md:43:- `npm run build` passes in `quote-frontend` with no oversized JavaScript chunk warning under the documented `1000` kB threshold.
+.\quote-system\src\main\resources\application.yaml:6:    name: quote-system
+.\scripts\run-backup-task.ps1:2:    [string]$ProjectRoot = "D:\Code",
+.\scripts\run-aps-backup-task.ps1:2:    [string]$ProjectRoot = "D:\Code",
+.\scripts\restore.ps1:4:    [string]$ProjectRoot = "D:\Code",
+.\scripts\restore.ps1:84:    $containerDump = "/tmp/quote-system-restore.sql"
+.\scripts\restore-drill.ps1:4:    [string]$ProjectRoot = "D:\Code",
+.\scripts\restore-drill.ps1:90:    $containerDump = "/tmp/quote-system-restore-drill.sql"
+.\scripts\restore-drill-aps.ps1:4:    [string]$ProjectRoot = "D:\Code",
+.\scripts\restore-drill-aps.ps1:43:    $EnvFile = Join-Path $ProjectRoot "aps.env"
+.\scripts\restore-aps.ps1:4:    [string]$ProjectRoot = "D:\Code",
+.\scripts\restore-aps.ps1:47:    $ComposeFile = Join-Path $ProjectRoot "docker-compose.aps.yml"
+.\scripts\restore-aps.ps1:50:    $EnvFile = Join-Path $ProjectRoot "aps.env"
+.\scripts\restore-aps.ps1:82:    docker compose @compose stop aps-backend aps-frontend
+.\scripts\restore-aps.ps1:116:    docker compose @compose up -d aps-backend aps-frontend
+.\scripts\install-backup-task.ps1:2:    [string]$ProjectRoot = "D:\Code",
+.\scripts\install-aps-backup-task.ps1:2:    [string]$ProjectRoot = "D:\Code",
+.\scripts\capacity-report.ps1:2:    [string]$ProjectRoot = "D:\Code",
+.\quote-system\QPO系统帮助.md:5:`quote-system` 是QPO后端服务，负责订单、报价、材料与工艺、文件、库存和APS数据同步等业务接口。
+.\quote-system\QPO系统帮助.md:18:cd D:\Code\quote-system
+.\quote-system\QPO系统帮助.md:27:cd D:\Code\quote-system
+.\quote-system\QPO系统帮助.md:33:QPO 的 Docker 编排文件在 `D:\Code\docker-compose.yml`，运行配置在 `D:\Code\erp.env`。
+.\quote-system\QPO系统帮助.md:36:cd D:\Code
+.\docs\QPO前端优化\references\vue-element-plus-admin.md:24:quote-frontend/src/styles/
+.\docs\QPO前端优化\references\vue-element-plus-admin.md:32:This should be phased in from the current `quote-frontend/src/style.css`.
+.\docs\QPO前端优化\README.md:3:This folder is the source of truth for the completed `quote-frontend` QPO UI redesign and the ongoing stable maintenance baseline.
+.\docs\QPO前端优化\README.md:63:- `quote-frontend/src/style.css` - current global Element Plus overrides and QPO tokens.
+.\docs\QPO前端优化\README.md:64:- `quote-frontend/src/App.vue` - sidebar, header, app shell, password dialog.
+.\docs\QPO前端优化\README.md:65:- `quote-frontend/src/components/MarketDashboard.vue` - market import center.
+.\docs\QPO前端优化\README.md:66:- `quote-frontend/src/components/GlobalSetup.vue` - engineering setup page.
+.\docs\QPO前端优化\README.md:67:- `quote-frontend/src/components/ItemPricing.vue` - quotation workbench, currently the densest page.
+.\docs\QPO前端优化\README.md:68:- `quote-frontend/src/components/OrderManage.vue` - order management page.
+.\docs\QPO前端优化\README.md:69:- `quote-frontend/src/components/MaterialProcessManage.vue` - dictionary management page.
+.\docs\QPO前端优化\21-stable-maintenance-baseline.md:7:The QPO UI redesign is complete and has entered stable maintenance. The current `quote-frontend` UI should be treated as the baseline for future work.
+.\docs\QPO前端优化\21-stable-maintenance-baseline.md:13:New pages and substantially edited pages must use the shared QPO layout and component classes already defined in `quote-frontend/src/style.css`:
+.\docs\QPO前端优化\21-stable-maintenance-baseline.md:55:8. `npm test` and `npm run build` pass in `quote-frontend`.
+.\quote-system\src\test\java\com\machining\quote\PermissionModuleTreeTest.java:35:    private static final Path FRONTEND_ROUTER = Path.of("..", "quote-frontend", "src", "router", "index.js");
+.\quote-system\src\test\java\com\machining\quote\ProcessSheetDecommissionTest.java:27:    private static final Path APS_MAIN_JAVA = Path.of("..", "aps-system", "src", "main", "java", "com", "machining", "apssystem");
+.\quote-frontend\src\userProfilePopover.test.js:19:    expect(profilePlan).toContain('quote-frontend/src/components/UserProfilePopover.vue')

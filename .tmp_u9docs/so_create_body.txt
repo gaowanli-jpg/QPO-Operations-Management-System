@@ -1,0 +1,2254 @@
+U9C OPENAPI
+主页
+Swagger Models
+7
+OAuth2授权
+5
+AlterDoc资产变更
+6
+APBill应付单
+6
+ARBill应收单
+5
+AssetCard资产卡片
+10
+AttachmentFile附件
+8
+BOM物料清单
+5
+CheckDiffBill盘点差异单
+5
+CMRcvPayBill现金银行收付款单
+6
+CompleteApplyDoc完工申报单
+5
+CompleteDoc完工报告
+1
+ControlObjSend档案下发
+1
+CustomerItem客户料品交叉
+4
+Department部门
+4
+DimissionDoc离职单
+4
+DispatchCompleteOrderDoc派工申报单
+8
+DispatchOrderDoc派工单
+3
+InnerBalance内部交易结算单
+4
+InsideTransferDoc内部调动单
+4
+InterOrgTransferDoc跨组织调动单
+6
+InventorySheet日常盘点单
+8
+IssueDoc生产领料单
+6
+ItemMaster料品
+5
+ItemRequest料品需求单
+5
+LoadBill借款单
+5
+LoanPaying还款单
+2
+LotMaster批号主档
+3
+MaterialDeliveryDoc材料出库
+5
+MiscRcvTrans杂收
+5
+MiscShip杂发
+1
+MobileApproval工作流审批
+8
+MODoc生产订单
+3
+Operator业务员
+6
+OpTransferDoc工序转移单
+5
+PayBill付款单
+6
+PayReqFund请款单
+7
+PC采购合同
+1
+PlanOrder计划订单
+8
+PMIssueDoc委外发料
+9
+PR请购单
+6
+Project项目
+14
+PurchaseOrder采购订单
+6
+PurDiscountPolicy厂商折扣
+5
+PurPriceAdjustment厂商价格调整单
+6
+PurPriceList厂商价表
+8
+QCDoc质检
+6
+QCDocLine质检单行
+1
+Quot报价单
+6
+RcvRptDoc成品入库单
+5
+RecBill收款单
+18
+Receivement收货单
+5
+ReimBill报销单
+3
+ResUsageRptDoc资源报告单
+6
+RMA退回申请单
+7
+RMR退回处理单
+4
+Routing工艺路线
+5
+SaleContract销售合同
+4
+SalePriceAdjustment销售调价单
+8
+Ship出货单
+6
+ShipPlan出货计划
+7
+Supplier供应商
+1
+SupplierItem供应商料品交叉
+5
+TransferApply调拨申请
+5
+TransferForm形态转换
+6
+TransferIn调入单
+6
+TransferOut调出单
+1
+TransOutDoc资产调出单
+1
+Verification核销单
+5
+Voucher凭证
+10
+BarCode条码
+10
+BarCode条码
+ItemCustomer
+AIRouting
+4
+Attachment
+4
+Bank
+1
+BankAccount
+1
+BankCategory
+4
+BarcodeCreate
+1
+BarCodeOperatorDoc
+1
+BaseBarCodeAnaylse
+5
+BaseInfo
+6
+BIP
+13
+BIService
+1
+cc
+3
+CommonEntity
+2
+ConfirmReqFund
+3
+Contact
+1
+Country
+5
+Customer
+1
+CustomerRelation
+8
+DAS
+DataGetSystem
+5
+DefineValue
+1
+DoPrint
+7
+ECNDoc
+3
+EmploymentDoc
+1
+ERBill
+1
+ExtEnumValue
+1
+GeneratePrintFile
+1
+GetAppDynamicConfig
+1
+GetCommonReference
+1
+GetDocReference
+1
+GetParamSetting
+1
+GetPrinters
+1
+GetUsedLabel
+1
+GetUserLabelsList
+1
+GetValueSetDef
+Idoc
+InstructionRobot
+2
+Invtrans
+2
+IssueApplyDoc
+2
+ItemCategory
+3
+ItemConvertRatioInClass
+3
+ItemConvertRatioOverClass
+1
+ItemMasterFree
+1
+ItemMasterVersion
+4
+Job
+1
+LanguageConfig
+1
+LanguageGetConfig
+5
+LendBackTrans
+5
+LendTrans
+1
+LicenseInfo
+4
+Location
+2
+MESAPIMOWorkHour
+2
+MESAPIWorkingHoursDataDI
+2
+MOWorkHour
+4
+OpBusiness
+OpenAPIServiceHub
+PeriodCloseRobot
+9
+PersonInfoDoc
+2
+POModify
+4
+Position
+7
+POToAsn
+1
+PrintToService
+3
+ProbationDoc
+3
+ProjMaster
+2
+QueryCommon
+Report
+4
+Resource
+4
+SalePriceList
+1
+Seiban
+1
+SeibanMaster
+1
+SetPrintDatasServices
+1
+SignInData
+16
+SO
+3
+SOModify
+1
+StdWorkingHours
+3
+SupplySource
+3
+TemporaryStorage
+2
+UbfCache
+4
+UOM
+3
+UploadFile
+3
+UserInfo
+3
+ValueSetDef
+1
+WorkCenterOperationRpt
+1
+WorkingHoursDataDI
+1
+YDBPreview
+U9C OPENAPI
+ 
+中
+主页创建SO
+下方区域不可复制，可复制版本点这里
+文档
+调试
+Open
+创建SO
+复制接口
+复制文档
+复制地址
+POST
+/webapi/SO/Create
+请求数据类型
+application/json
+响应数据类型
+[ "*/*" ]
+请求示例
+默认示例
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+50
+51
+52
+53
+54
+55
+56
+57
+58
+59
+60
+61
+62
+63
+64
+65
+66
+67
+68
+69
+70
+71
+72
+73
+74
+75
+76
+77
+78
+79
+80
+81
+82
+83
+84
+85
+86
+87
+88
+89
+90
+91
+92
+93
+94
+95
+96
+97
+98
+99
+100
+101
+102
+103
+104
+105
+106
+107
+108
+109
+110
+111
+112
+113
+114
+115
+116
+117
+118
+119
+120
+121
+122
+123
+124
+125
+126
+127
+128
+129
+130
+131
+132
+133
+134
+135
+136
+137
+138
+139
+140
+141
+142
+143
+144
+145
+146
+147
+148
+149
+150
+151
+152
+153
+154
+155
+156
+157
+158
+159
+160
+161
+162
+163
+164
+165
+166
+167
+168
+169
+170
+171
+172
+173
+174
+175
+176
+177
+178
+179
+180
+181
+182
+183
+184
+185
+186
+187
+188
+189
+190
+191
+192
+193
+194
+195
+196
+197
+198
+199
+200
+201
+202
+203
+204
+205
+206
+207
+208
+209
+210
+211
+212
+213
+214
+215
+216
+217
+218
+219
+220
+221
+222
+223
+224
+225
+226
+227
+228
+229
+230
+231
+232
+233
+234
+235
+236
+237
+238
+239
+240
+241
+242
+243
+244
+245
+246
+247
+248
+249
+250
+251
+252
+253
+254
+255
+256
+257
+258
+259
+260
+261
+262
+263
+264
+265
+266
+267
+268
+269
+270
+271
+272
+273
+274
+275
+276
+277
+278
+279
+280
+281
+282
+283
+284
+285
+286
+287
+288
+289
+290
+291
+292
+293
+294
+295
+296
+297
+298
+299
+300
+301
+302
+303
+304
+305
+306
+307
+308
+309
+310
+311
+312
+313
+314
+315
+316
+317
+318
+319
+320
+321
+322
+323
+324
+325
+326
+327
+328
+329
+330
+331
+332
+333
+334
+335
+336
+337
+338
+339
+340
+341
+342
+343
+344
+345
+346
+347
+348
+349
+350
+351
+352
+353
+354
+355
+356
+357
+358
+359
+360
+361
+362
+363
+364
+365
+366
+367
+368
+369
+370
+371
+372
+373
+374
+375
+376
+[
+  {
+    "ID": 0,
+    "OtherID": "",
+    "DocNo": "",
+    "BusinessDate": "",
+    "OrderBy": "",
+    "Seller": "",
+    "SaleDepartment": "",
+    "DocumentType": "",
+    "TC": "",
+    "AC": "",
+    "ShipToSite": "",
+    "BillToSite": "",
+    "PayerCustomer": "",
+    "PayerToSite": "",
+    "BargainMode": 0,
+    "ShippingPort": "",
+    "AimPort": "",
+    "IsRollBack": true,
+    "AutoCreateSOM": true,
+    "AutoApproveSOM": true,
+    "DescFlexField": {
+      "PrivateDescSeg1": "",
+      "PrivateDescSeg2": "",
+      "PrivateDescSeg3": "",
+      "PrivateDescSeg4": "",
+      "PrivateDescSeg5": "",
+      "PrivateDescSeg6": "",
+      "PrivateDescSeg7": "",
+      "PrivateDescSeg8": "",
+      "PrivateDescSeg9": "",
+      "PrivateDescSeg10": "",
+      "PrivateDescSeg11": "",
+      "PrivateDescSeg12": "",
+      "PrivateDescSeg13": "",
+      "PrivateDescSeg14": "",
+      "PrivateDescSeg15": "",
+      "PrivateDescSeg16": "",
+      "PrivateDescSeg17": "",
+      "PrivateDescSeg18": "",
+      "PrivateDescSeg19": "",
+      "PrivateDescSeg20": "",
+      "PrivateDescSeg21": "",
+      "PrivateDescSeg22": "",
+      "PrivateDescSeg23": "",
+      "PrivateDescSeg24": "",
+      "PrivateDescSeg25": "",
+      "PrivateDescSeg26": "",
+      "PrivateDescSeg27": "",
+      "PrivateDescSeg28": "",
+      "PrivateDescSeg29": "",
+      "PrivateDescSeg30": "",
+      "PubDescSeg1": "",
+      "PubDescSeg2": "",
+      "PubDescSeg3": "",
+      "PubDescSeg4": "",
+      "PubDescSeg5": "",
+      "PubDescSeg6": "",
+      "PubDescSeg7": "",
+      "PubDescSeg8": "",
+      "PubDescSeg9": "",
+      "PubDescSeg10": "",
+      "PubDescSeg11": "",
+      "PubDescSeg12": "",
+      "PubDescSeg13": "",
+      "PubDescSeg14": "",
+      "PubDescSeg15": "",
+      "PubDescSeg16": "",
+      "PubDescSeg17": "",
+      "PubDescSeg18": "",
+      "PubDescSeg19": "",
+      "PubDescSeg20": "",
+      "PubDescSeg21": "",
+      "PubDescSeg22": "",
+      "PubDescSeg23": "",
+      "PubDescSeg24": "",
+      "PubDescSeg25": "",
+      "PubDescSeg26": "",
+      "PubDescSeg27": "",
+      "PubDescSeg28": "",
+      "PubDescSeg29": "",
+      "PubDescSeg30": "",
+      "PubDescSeg31": "",
+      "PubDescSeg32": "",
+      "PubDescSeg33": "",
+      "PubDescSeg34": "",
+      "PubDescSeg35": "",
+      "PubDescSeg36": "",
+      "PubDescSeg37": "",
+      "PubDescSeg38": "",
+      "PubDescSeg39": "",
+      "PubDescSeg40": "",
+      "PubDescSeg41": "",
+      "PubDescSeg42": "",
+      "PubDescSeg43": "",
+      "PubDescSeg44": "",
+      "PubDescSeg45": "",
+      "PubDescSeg46": "",
+      "PubDescSeg47": "",
+      "PubDescSeg48": "",
+      "PubDescSeg49": "",
+      "PubDescSeg50": ""
+    },
+    "SOLineDTOList": [
+      {
+        "ID": 0,
+        "DocLineNo": 0,
+        "DeleteFlag": true,
+        "BillToSite": "",
+        "CreditToSite": "",
+        "CustomerItemNo": "",
+        "CustomerItemName": "",
+        "ItemCode": "",
+        "ItemVersion": "",
+        "PriceList": "",
+        "FreeType": 0,
+        "FreeReason": 0,
+        "Grade": 0,
+        "Project": "",
+        "Task": "",
+        "Manufacturer": "",
+        "OrderByQtyTU": 0,
+        "OrderByQtyPU": 0,
+        "TU": "",
+        "PU": "",
+        "TBUToPBURate": 0,
+        "PriceCalField": "",
+        "OrderPriceTC": 0,
+        "FinallyPriceTC": 0,
+        "DiscountTC": 0,
+        "NetMoneyTC": 0,
+        "TaxMoneyTC": 0,
+        "TotalMoneyTC": 0,
+        "TaxSchedule": "",
+        "PriceSource": 0,
+        "BOMID": 0,
+        "BomOwner": "",
+        "ShipTogetherFlag": 0,
+        "TradePath": "",
+        "DescFlexField": {
+          "PrivateDescSeg1": "",
+          "PrivateDescSeg2": "",
+          "PrivateDescSeg3": "",
+          "PrivateDescSeg4": "",
+          "PrivateDescSeg5": "",
+          "PrivateDescSeg6": "",
+          "PrivateDescSeg7": "",
+          "PrivateDescSeg8": "",
+          "PrivateDescSeg9": "",
+          "PrivateDescSeg10": "",
+          "PrivateDescSeg11": "",
+          "PrivateDescSeg12": "",
+          "PrivateDescSeg13": "",
+          "PrivateDescSeg14": "",
+          "PrivateDescSeg15": "",
+          "PrivateDescSeg16": "",
+          "PrivateDescSeg17": "",
+          "PrivateDescSeg18": "",
+          "PrivateDescSeg19": "",
+          "PrivateDescSeg20": "",
+          "PrivateDescSeg21": "",
+          "PrivateDescSeg22": "",
+          "PrivateDescSeg23": "",
+          "PrivateDescSeg24": "",
+          "PrivateDescSeg25": "",
+          "PrivateDescSeg26": "",
+          "PrivateDescSeg27": "",
+          "PrivateDescSeg28": "",
+          "PrivateDescSeg29": "",
+          "PrivateDescSeg30": "",
+          "PubDescSeg1": "",
+          "PubDescSeg2": "",
+          "PubDescSeg3": "",
+          "PubDescSeg4": "",
+          "PubDescSeg5": "",
+          "PubDescSeg6": "",
+          "PubDescSeg7": "",
+          "PubDescSeg8": "",
+          "PubDescSeg9": "",
+          "PubDescSeg10": "",
+          "PubDescSeg11": "",
+          "PubDescSeg12": "",
+          "PubDescSeg13": "",
+          "PubDescSeg14": "",
+          "PubDescSeg15": "",
+          "PubDescSeg16": "",
+          "PubDescSeg17": "",
+          "PubDescSeg18": "",
+          "PubDescSeg19": "",
+          "PubDescSeg20": "",
+          "PubDescSeg21": "",
+          "PubDescSeg22": "",
+          "PubDescSeg23": "",
+          "PubDescSeg24": "",
+          "PubDescSeg25": "",
+          "PubDescSeg26": "",
+          "PubDescSeg27": "",
+          "PubDescSeg28": "",
+          "PubDescSeg29": "",
+          "PubDescSeg30": "",
+          "PubDescSeg31": "",
+          "PubDescSeg32": "",
+          "PubDescSeg33": "",
+          "PubDescSeg34": "",
+          "PubDescSeg35": "",
+          "PubDescSeg36": "",
+          "PubDescSeg37": "",
+          "PubDescSeg38": "",
+          "PubDescSeg39": "",
+          "PubDescSeg40": "",
+          "PubDescSeg41": "",
+          "PubDescSeg42": "",
+          "PubDescSeg43": "",
+          "PubDescSeg44": "",
+          "PubDescSeg45": "",
+          "PubDescSeg46": "",
+          "PubDescSeg47": "",
+          "PubDescSeg48": "",
+          "PubDescSeg49": "",
+          "PubDescSeg50": ""
+        },
+        "SOShiplineDTOList": [
+          {
+            "ID": 0,
+            "DocSubLineNo": 0,
+            "DeleteFlag": true,
+            "TradePath": "",
+            "ItemCode": "",
+            "Project": "",
+            "Task": "",
+            "Manufacturer": "",
+            "OuterStraightFlag": true,
+            "Lot": "",
+            "Seiban": 0,
+            "SeibanCode": "",
+            "RequireDate": "",
+            "DeliveryDate": "",
+            "PlanDate": "",
+            "AffirmShipDate": "",
+            "SupplySource": 0,
+            "DemandTransformType": 0,
+            "SupplyOrg": "",
+            "ProvideSupplier": "",
+            "ShiperOrg": "",
+            "Wh": "",
+            "DemandType": 0,
+            "IsMRPRequire": true,
+            "PlanOrg": "",
+            "ShipPlanQtyTU": 0,
+            "ShipPlanQtyPU": 0,
+            "TU": "",
+            "PU": "",
+            "TUBaseToPUBaseRate": 0,
+            "DescFlexField": {
+              "PrivateDescSeg1": "",
+              "PrivateDescSeg2": "",
+              "PrivateDescSeg3": "",
+              "PrivateDescSeg4": "",
+              "PrivateDescSeg5": "",
+              "PrivateDescSeg6": "",
+              "PrivateDescSeg7": "",
+              "PrivateDescSeg8": "",
+              "PrivateDescSeg9": "",
+              "PrivateDescSeg10": "",
+              "PrivateDescSeg11": "",
+              "PrivateDescSeg12": "",
+              "PrivateDescSeg13": "",
+              "PrivateDescSeg14": "",
+              "PrivateDescSeg15": "",
+              "PrivateDescSeg16": "",
+              "PrivateDescSeg17": "",
+              "PrivateDescSeg18": "",
+              "PrivateDescSeg19": "",
+              "PrivateDescSeg20": "",
+              "PrivateDescSeg21": "",
+              "PrivateDescSeg22": "",
+              "PrivateDescSeg23": "",
+              "PrivateDescSeg24": "",
+              "PrivateDescSeg25": "",
+              "PrivateDescSeg26": "",
+              "PrivateDescSeg27": "",
+              "PrivateDescSeg28": "",
+              "PrivateDescSeg29": "",
+              "PrivateDescSeg30": "",
+              "PubDescSeg1": "",
+              "PubDescSeg2": "",
+              "PubDescSeg3": "",
+              "PubDescSeg4": "",
+              "PubDescSeg5": "",
+              "PubDescSeg6": "",
+              "PubDescSeg7": "",
+              "PubDescSeg8": "",
+              "PubDescSeg9": "",
+              "PubDescSeg10": "",
+              "PubDescSeg11": "",
+              "PubDescSeg12": "",
+              "PubDescSeg13": "",
+              "PubDescSeg14": "",
+              "PubDescSeg15": "",
+              "PubDescSeg16": "",
+              "PubDescSeg17": "",
+              "PubDescSeg18": "",
+              "PubDescSeg19": "",
+              "PubDescSeg20": "",
+              "PubDescSeg21": "",
+              "PubDescSeg22": "",
+              "PubDescSeg23": "",
+              "PubDescSeg24": "",
+              "PubDescSeg25": "",
+              "PubDescSeg26": "",
+              "PubDescSeg27": "",
+              "PubDescSeg28": "",
+              "PubDescSeg29": "",
+              "PubDescSeg30": "",
+              "PubDescSeg31": "",
+              "PubDescSeg32": "",
+              "PubDescSeg33": "",
+              "PubDescSeg34": "",
+              "PubDescSeg35": "",
+              "PubDescSeg36": "",
+              "PubDescSeg37": "",
+              "PubDescSeg38": "",
+              "PubDescSeg39": "",
+              "PubDescSeg40": "",
+              "PubDescSeg41": "",
+              "PubDescSeg42": "",
+              "PubDescSeg43": "",
+              "PubDescSeg44": "",
+              "PubDescSeg45": "",
+              "PubDescSeg46": "",
+              "PubDescSeg47": "",
+              "PubDescSeg48": "",
+              "PubDescSeg49": "",
+              "PubDescSeg50": ""
+            },
+            "Memo": "",
+            "ShipToSite": "",
+            "ShipMode": 0,
+            "ProjectOutID": 0
+          }
+        ],
+        "Memo": "",
+        "MemoFor": "",
+        "Seiban": 0,
+        "SeibanCode": "",
+        "SupplyOrg": "",
+        "ShipToSite": "",
+        "RecTermCode": "",
+        "SrcDocType": 0,
+        "SrcDocNo": "",
+        "SrcDocLineNo": "",
+        "SrcDocSubLineNo": "",
+        "SrcDocLineID": 0
+      }
+    ],
+    "IsPriceIncludeTax": true,
+    "Memo": "",
+    "MemoFor": "",
+    "ContextDTO": {
+      "EntCode": "",
+      "OrgCode": "",
+      "UserCode": "",
+      "UserPwd": "",
+      "CultureName": "",
+      "OrgID": 0,
+      "UserID": 0,
+      "UserClientID": ""
+    },
+    "IsPeriodBeginSO": true,
+    "ConfirmTermCode": "",
+    "IsFillDoc": true,
+    "TradePath": "",
+    "ModifyReason": ""
+  }
+]
+请求参数
+参数名称
+	
+参数说明
+	
+请求类型
+	
+是否必须
+	
+数据类型
+	
+schema
+
+soDTOList	soDTOList	body	true	
+array
+	UFIDA.U9.ISV.SM.RestSV.Model.SCM.SM.SO.SODTORData
+ID	ID (该属性可为空,但有默认值)		false	
+integer
+	
+OtherID	OtherID \n第三方传入ID		false	
+string
+	
+DocNo	单据编码 (该属性可为空,且无默认值)		false	
+string
+	
+BusinessDate	单据日期 (该属性可为空,且无默认值)		false	
+string
+	
+OrderBy	客户编码 (该属性不可为空,且无默认值)		true	
+string
+	
+Seller	业务员编码 (该属性可为空,且无默认值)		false	
+string
+	
+SaleDepartment	部门编码 (该属性可为空,且无默认值)		false	
+string
+	
+DocumentType	单据类型编码 (该属性不可为空,且无默认值)		true	
+string
+	
+TC	交易币编码 (该属性可为空,且无默认值)		false	
+string
+	
+AC	核币编码 (该属性可为空,且无默认值)		false	
+string
+	
+ShipToSite	收货位置编码 (该属性可为空,且无默认值)		false	
+string
+	
+BillToSite	立账位置编码 (该属性可为空,且无默认值)		false	
+string
+	
+PayerCustomer	付款客户编码 (该属性可为空,且无默认值)		false	
+string
+	
+PayerToSite	付款位置编码 (该属性可为空,且无默认值)		false	
+string
+	
+BargainMode	成交方式 (该属性可为空,无默认值请传-1)		false	
+integer
+	
+ShippingPort	装运港(该属性可为空,且无默认值)		false	
+string
+	
+AimPort	目的港(该属性可为空,且无默认值)		false	
+string
+	
+IsRollBack	回滚		false	
+boolean
+	
+AutoCreateSOM	自动创建变更单		false	
+boolean
+	
+AutoApproveSOM	自动审核变更单		false	
+boolean
+	
+DescFlexField	实体扩展字段 (该属性可为空,且无默认值)		false	
+UFIDA.U9.ISV.PUB.RestSV.Model.Pub.DescFlexFieldRData
+	UFIDA.U9.ISV.PUB.RestSV.Model.Pub.DescFlexFieldRData
+PrivateDescSeg1			false	
+string
+	
+PrivateDescSeg2			false	
+string
+	
+PrivateDescSeg3			false	
+string
+	
+PrivateDescSeg4			false	
+string
+	
+PrivateDescSeg5			false	
+string
+	
+PrivateDescSeg6			false	
+string
+	
+PrivateDescSeg7			false	
+string
+	
+PrivateDescSeg8			false	
+string
+	
+PrivateDescSeg9			false	
+string
+	
+PrivateDescSeg10			false	
+string
+	
+PrivateDescSeg11			false	
+string
+	
+PrivateDescSeg12			false	
+string
+	
+PrivateDescSeg13			false	
+string
+	
+PrivateDescSeg14			false	
+string
+	
+PrivateDescSeg15			false	
+string
+	
+PrivateDescSeg16			false	
+string
+	
+PrivateDescSeg17			false	
+string
+	
+PrivateDescSeg18			false	
+string
+	
+PrivateDescSeg19			false	
+string
+	
+PrivateDescSeg20			false	
+string
+	
+PrivateDescSeg21			false	
+string
+	
+PrivateDescSeg22			false	
+string
+	
+PrivateDescSeg23			false	
+string
+	
+PrivateDescSeg24			false	
+string
+	
+PrivateDescSeg25			false	
+string
+	
+PrivateDescSeg26			false	
+string
+	
+PrivateDescSeg27			false	
+string
+	
+PrivateDescSeg28			false	
+string
+	
+PrivateDescSeg29			false	
+string
+	
+PrivateDescSeg30			false	
+string
+	
+PubDescSeg1			false	
+string
+	
+PubDescSeg2			false	
+string
+	
+PubDescSeg3			false	
+string
+	
+PubDescSeg4			false	
+string
+	
+PubDescSeg5			false	
+string
+	
+PubDescSeg6			false	
+string
+	
+PubDescSeg7			false	
+string
+	
+PubDescSeg8			false	
+string
+	
+PubDescSeg9			false	
+string
+	
+PubDescSeg10			false	
+string
+	
+PubDescSeg11			false	
+string
+	
+PubDescSeg12			false	
+string
+	
+PubDescSeg13			false	
+string
+	
+PubDescSeg14			false	
+string
+	
+PubDescSeg15			false	
+string
+	
+PubDescSeg16			false	
+string
+	
+PubDescSeg17			false	
+string
+	
+PubDescSeg18			false	
+string
+	
+PubDescSeg19			false	
+string
+	
+PubDescSeg20			false	
+string
+	
+PubDescSeg21			false	
+string
+	
+PubDescSeg22			false	
+string
+	
+PubDescSeg23			false	
+string
+	
+PubDescSeg24			false	
+string
+	
+PubDescSeg25			false	
+string
+	
+PubDescSeg26			false	
+string
+	
+PubDescSeg27			false	
+string
+	
+PubDescSeg28			false	
+string
+	
+PubDescSeg29			false	
+string
+	
+PubDescSeg30			false	
+string
+	
+PubDescSeg31			false	
+string
+	
+PubDescSeg32			false	
+string
+	
+PubDescSeg33			false	
+string
+	
+PubDescSeg34			false	
+string
+	
+PubDescSeg35			false	
+string
+	
+PubDescSeg36			false	
+string
+	
+PubDescSeg37			false	
+string
+	
+PubDescSeg38			false	
+string
+	
+PubDescSeg39			false	
+string
+	
+PubDescSeg40			false	
+string
+	
+PubDescSeg41			false	
+string
+	
+PubDescSeg42			false	
+string
+	
+PubDescSeg43			false	
+string
+	
+PubDescSeg44			false	
+string
+	
+PubDescSeg45			false	
+string
+	
+PubDescSeg46			false	
+string
+	
+PubDescSeg47			false	
+string
+	
+PubDescSeg48			false	
+string
+	
+PubDescSeg49			false	
+string
+	
+PubDescSeg50			false	
+string
+	
+SOLineDTOList	销售订单行(该属性不可为空,且无默认值)		false	
+array
+	UFIDA.U9.ISV.SM.RestSV.Model.SCM.SM.SO.SOLineDTORData
+ID	ID (该属性可为空,且无默认值)		false	
+integer
+	
+DocLineNo	行号 (该属性可为空,且无默认值)		false	
+integer
+	
+DeleteFlag	删除标识 (该属性为修改接口专用：传true删除行，传false修改行；修改需要传行号，新增行号传0)		false	
+boolean
+	
+BillToSite	立账位置编码 (该属性可为空,且无默认值)		false	
+string
+	
+CreditToSite	信用客户位置编码 (该属性可为空,且无默认值)		false	
+string
+	
+CustomerItemNo	客户料号 (该属性不可为空,且无默认值)		false	
+string
+	
+CustomerItemName	客户品名 (该属性不可为空,且无默认值)		false	
+string
+	
+ItemCode	料号 (该属性不可为空,且无默认值)		true	
+string
+	
+ItemVersion	料品版本 (该属性可为空,且无默认值)		false	
+string
+	
+PriceList	价表编码 (该属性可为空,且无默认值)		false	
+string
+	
+FreeType	免费品类型 (无默认值请传-1;赠品请传0；备损品请传1)		true	
+integer
+	
+FreeReason	免费品原因 (无默认值请传-1;请传免费品原因扩展枚举的整数值，而不是编码)		false	
+integer
+	
+Grade	等级 (默认-1，传入等级的场景要求计划行SOShiplineDTOList必须传入值)		false	
+integer
+	
+Project	项目编码 (该属性可为空,且无默认值)		false	
+string
+	
+Task	任务编码 (该属性可为空,且无默认值)		false	
+string
+	
+Manufacturer	厂牌编码 (该属性可为空,且无默认值)		false	
+string
+	
+OrderByQtyTU	销售数量 (该属性可为空,且无默认值)		false	
+number
+	
+OrderByQtyPU	计价数量 (该属性可为空,且无默认值)		false	
+number
+	
+TU	销售单位编码 (该属性可为空,且无默认值)		false	
+string
+	
+PU	计价单位编码 (该属性可为空,且无默认值)		false	
+string
+	
+TBUToPBURate	销售-计价 (该属性可为空,且无默认值)		false	
+number
+	
+PriceCalField	价格计算触发源 (该属性为修改服务专用：修改数量传“QtyPriceUOM”，修改单价传“FinallyPrice”，修改税额传“TotalTax”)		false	
+string
+	
+OrderPriceTC	定价 （该属性可为空,且无默认值）		false	
+number
+	
+FinallyPriceTC	最终价 （该属性可为空,且无默认值）		false	
+number
+	
+DiscountTC	折扣额 （该属性可为空,且无默认值）		false	
+number
+	
+NetMoneyTC	未税金额 (该属性可为空,且无默认值)		false	
+number
+	
+TaxMoneyTC	税额 (该属性可为空,且无默认值)		false	
+number
+	
+TotalMoneyTC	价税合计 (该属性可为空,且无默认值)		false	
+number
+	
+TaxSchedule	税组合编码 (该属性可为空,且无默认值)		false	
+string
+	
+PriceSource	价格来源 (0:取价表；1：手工定价（需要接口传入，手工定价时，以接口传入的定价和最终价为准）；2：部件；3：来源单据)		false	
+integer
+	
+BOMID	BOMID (该属性可为空,且无默认值)		false	
+integer
+	
+BomOwner	选配组织编码 (该属性可为空,且无默认值)		false	
+string
+	
+ShipTogetherFlag	成套收发货标志 (无默认值，请传-1（成套请传0）)		true	
+integer
+	
+TradePath	贸易路径编码 (该属性可为空,且无默认值)		false	
+string
+	
+DescFlexField	实体扩展字段 (该属性可为空,且无默认值)		false	
+UFIDA.U9.ISV.PUB.RestSV.Model.Pub.DescFlexFieldRData
+	UFIDA.U9.ISV.PUB.RestSV.Model.Pub.DescFlexFieldRData
+PrivateDescSeg1			false	
+string
+	
+PrivateDescSeg2			false	
+string
+	
+PrivateDescSeg3			false	
+string
+	
+PrivateDescSeg4			false	
+string
+	
+PrivateDescSeg5			false	
+string
+	
+PrivateDescSeg6			false	
+string
+	
+PrivateDescSeg7			false	
+string
+	
+PrivateDescSeg8			false	
+string
+	
+PrivateDescSeg9			false	
+string
+	
+PrivateDescSeg10			false	
+string
+	
+PrivateDescSeg11			false	
+string
+	
+PrivateDescSeg12			false	
+string
+	
+PrivateDescSeg13			false	
+string
+	
+PrivateDescSeg14			false	
+string
+	
+PrivateDescSeg15			false	
+string
+	
+PrivateDescSeg16			false	
+string
+	
+PrivateDescSeg17			false	
+string
+	
+PrivateDescSeg18			false	
+string
+	
+PrivateDescSeg19			false	
+string
+	
+PrivateDescSeg20			false	
+string
+	
+PrivateDescSeg21			false	
+string
+	
+PrivateDescSeg22			false	
+string
+	
+PrivateDescSeg23			false	
+string
+	
+PrivateDescSeg24			false	
+string
+	
+PrivateDescSeg25			false	
+string
+	
+PrivateDescSeg26			false	
+string
+	
+PrivateDescSeg27			false	
+string
+	
+PrivateDescSeg28			false	
+string
+	
+PrivateDescSeg29			false	
+string
+	
+PrivateDescSeg30			false	
+string
+	
+PubDescSeg1			false	
+string
+	
+PubDescSeg2			false	
+string
+	
+PubDescSeg3			false	
+string
+	
+PubDescSeg4			false	
+string
+	
+PubDescSeg5			false	
+string
+	
+PubDescSeg6			false	
+string
+	
+PubDescSeg7			false	
+string
+	
+PubDescSeg8			false	
+string
+	
+PubDescSeg9			false	
+string
+	
+PubDescSeg10			false	
+string
+	
+PubDescSeg11			false	
+string
+	
+PubDescSeg12			false	
+string
+	
+PubDescSeg13			false	
+string
+	
+PubDescSeg14			false	
+string
+	
+PubDescSeg15			false	
+string
+	
+PubDescSeg16			false	
+string
+	
+PubDescSeg17			false	
+string
+	
+PubDescSeg18			false	
+string
+	
+PubDescSeg19			false	
+string
+	
+PubDescSeg20			false	
+string
+	
+PubDescSeg21			false	
+string
+	
+PubDescSeg22			false	
+string
+	
+PubDescSeg23			false	
+string
+	
+PubDescSeg24			false	
+string
+	
+PubDescSeg25			false	
+string
+	
+PubDescSeg26			false	
+string
+	
+PubDescSeg27			false	
+string
+	
+PubDescSeg28			false	
+string
+	
+PubDescSeg29			false	
+string
+	
+PubDescSeg30			false	
+string
+	
+PubDescSeg31			false	
+string
+	
+PubDescSeg32			false	
+string
+	
+PubDescSeg33			false	
+string
+	
+PubDescSeg34			false	
+string
+	
+PubDescSeg35			false	
+string
+	
+PubDescSeg36			false	
+string
+	
+PubDescSeg37			false	
+string
+	
+PubDescSeg38			false	
+string
+	
+PubDescSeg39			false	
+string
+	
+PubDescSeg40			false	
+string
+	
+PubDescSeg41			false	
+string
+	
+PubDescSeg42			false	
+string
+	
+PubDescSeg43			false	
+string
+	
+PubDescSeg44			false	
+string
+	
+PubDescSeg45			false	
+string
+	
+PubDescSeg46			false	
+string
+	
+PubDescSeg47			false	
+string
+	
+PubDescSeg48			false	
+string
+	
+PubDescSeg49			false	
+string
+	
+PubDescSeg50			false	
+string
+	
+SOShiplineDTOList	销售订单计划行(该属性不可为空,且无默认值)		false	
+array
+	UFIDA.U9.ISV.SM.RestSV.Model.SCM.SM.SO.SOShiplineDTORData
+ID	ID (该属性可为空,且无默认值)		false	
+integer
+	
+DocSubLineNo	行号 (该属性可为空,且无默认值)		false	
+integer
+	
+DeleteFlag	删除标识 (该属性可为空,且无默认值)		false	
+boolean
+	
+TradePath	贸易路径编码 (该属性可为空,且无默认值)		false	
+string
+	
+ItemCode	料号 (该属性不可为空,且无默认值)		false	
+string
+	
+Project	项目编码 (该属性可为空,且无默认值)		false	
+string
+	
+Task	任务编码 (该属性可为空,且无默认值)		false	
+string
+	
+Manufacturer	厂牌编码 (该属性可为空,且无默认值)		false	
+string
+	
+OuterStraightFlag	外部直运 (该属性可为空,且无默认值)		false	
+boolean
+	
+Lot	批号 (该属性可为空,且无默认值)		false	
+string
+	
+Seiban	番号		false	
+integer
+	
+SeibanCode	番号编码 (该属性可为空,且无默认值)		false	
+string
+	
+RequireDate	交期 (该属性可为空,且无默认值)		false	
+string
+	
+DeliveryDate	承诺日期 (该属性可为空,且无默认值)		false	
+string
+	
+PlanDate	计划出货日 (该属性可为空,且无默认值)		false	
+string
+	
+AffirmShipDate	客户确认出货日 (该属性可为空,且无默认值)		false	
+string
+	
+SupplySource	供应来源 (该属性可为空,且无默认值)		false	
+integer
+	
+DemandTransformType	供应类型 (该属性可为空,且无默认值)		false	
+integer
+	
+SupplyOrg	供应组织编码 (该属性可为空,且无默认值)		false	
+string
+	
+ProvideSupplier	供货供应商编码 (该属性可为空,且无默认值)		false	
+string
+	
+ShiperOrg	货主组织编码 (该属性可为空,且无默认值)		false	
+string
+	
+Wh	存储地点编码 (该属性可为空,且无默认值)		false	
+string
+	
+DemandType	需求分类 (该属性可为空,且无默认值)		false	
+integer
+	
+IsMRPRequire	MRP需求 (该属性可为空,且无默认值)		false	
+boolean
+	
+PlanOrg	计划组织编码 (该属性可为空,且无默认值)		false	
+string
+	
+ShipPlanQtyTU	计划出货量（TU） (该属性可为空,且无默认值)		false	
+number
+	
+ShipPlanQtyPU	计划出货量（PU） (该属性可为空,且无默认值)		false	
+number
+	
+TU	销售单位编码 (该属性可为空,且无默认值)		false	
+string
+	
+PU	计价单位编码 (该属性可为空,且无默认值)		false	
+string
+	
+TUBaseToPUBaseRate	销售-计价 (该属性可为空,且无默认值)		false	
+number
+	
+DescFlexField	实体扩展字段 (该属性可为空,且无默认值)		false	
+UFIDA.U9.ISV.PUB.RestSV.Model.Pub.DescFlexFieldRData
+	UFIDA.U9.ISV.PUB.RestSV.Model.Pub.DescFlexFieldRData
+PrivateDescSeg1			false	
+string
+	
+PrivateDescSeg2			false	
+string
+	
+PrivateDescSeg3			false	
+string
+	
+PrivateDescSeg4			false	
+string
+	
+PrivateDescSeg5			false	
+string
+	
+PrivateDescSeg6			false	
+string
+	
+PrivateDescSeg7			false	
+string
+	
+PrivateDescSeg8			false	
+string
+	
+PrivateDescSeg9			false	
+string
+	
+PrivateDescSeg10			false	
+string
+	
+PrivateDescSeg11			false	
+string
+	
+PrivateDescSeg12			false	
+string
+	
+PrivateDescSeg13			false	
+string
+	
+PrivateDescSeg14			false	
+string
+	
+PrivateDescSeg15			false	
+string
+	
+PrivateDescSeg16			false	
+string
+	
+PrivateDescSeg17			false	
+string
+	
+PrivateDescSeg18			false	
+string
+	
+PrivateDescSeg19			false	
+string
+	
+PrivateDescSeg20			false	
+string
+	
+PrivateDescSeg21			false	
+string
+	
+PrivateDescSeg22			false	
+string
+	
+PrivateDescSeg23			false	
+string
+	
+PrivateDescSeg24			false	
+string
+	
+PrivateDescSeg25			false	
+string
+	
+PrivateDescSeg26			false	
+string
+	
+PrivateDescSeg27			false	
+string
+	
+PrivateDescSeg28			false	
+string
+	
+PrivateDescSeg29			false	
+string
+	
+PrivateDescSeg30			false	
+string
+	
+PubDescSeg1			false	
+string
+	
+PubDescSeg2			false	
+string
+	
+PubDescSeg3			false	
+string
+	
+PubDescSeg4			false	
+string
+	
+PubDescSeg5			false	
+string
+	
+PubDescSeg6			false	
+string
+	
+PubDescSeg7			false	
+string
+	
+PubDescSeg8			false	
+string
+	
+PubDescSeg9			false	
+string
+	
+PubDescSeg10			false	
+string
+	
+PubDescSeg11			false	
+string
+	
+PubDescSeg12			false	
+string
+	
+PubDescSeg13			false	
+string
+	
+PubDescSeg14			false	
+string
+	
+PubDescSeg15			false	
+string
+	
+PubDescSeg16			false	
+string
+	
+PubDescSeg17			false	
+string
+	
+PubDescSeg18			false	
+string
+	
+PubDescSeg19			false	
+string
+	
+PubDescSeg20			false	
+string
+	
+PubDescSeg21			false	
+string
+	
+PubDescSeg22			false	
+string
+	
+PubDescSeg23			false	
+string
+	
+PubDescSeg24			false	
+string
+	
+PubDescSeg25			false	
+string
+	
+PubDescSeg26			false	
+string
+	
+PubDescSeg27			false	
+string
+	
+PubDescSeg28			false	
+string
+	
+PubDescSeg29			false	
+string
+	
+PubDescSeg30			false	
+string
+	
+PubDescSeg31			false	
+string
+	
+PubDescSeg32			false	
+string
+	
+PubDescSeg33			false	
+string
+	
+PubDescSeg34			false	
+string
+	
+PubDescSeg35			false	
+string
+	
+PubDescSeg36			false	
+string
+	
+PubDescSeg37			false	
+string
+	
+PubDescSeg38			false	
+string
+	
+PubDescSeg39			false	
+string
+	
+PubDescSeg40			false	
+string
+	
+PubDescSeg41			false	
+string
+	
+PubDescSeg42			false	
+string
+	
+PubDescSeg43			false	
+string
+	
+PubDescSeg44			false	
+string
+	
+PubDescSeg45			false	
+string
+	
+PubDescSeg46			false	
+string
+	
+PubDescSeg47			false	
+string
+	
+PubDescSeg48			false	
+string
+	
+PubDescSeg49			false	
+string
+	
+PubDescSeg50			false	
+string
+	
+Memo	备注		false	
+string
+	
+ShipToSite	收获位置编码		false	
+string
+	
+ShipMode	出货方式 1：配送，2：自提		false	
+integer
+	
+ProjectOutID	项目产出ID (该属性可为空,且无默认值)		false	
+integer
+	
+Memo	备注		false	
+string
+	
+MemoFor	备注用途 售后：IsForAfterSold；客户：IsForCustomer；财务：IsForFinancial；仓库：IsForInv；生产：IsForManufacture；采购：IsForPurchase；研发：IsForRD；供应商：IsForSupplier\n使用逗号连接需要的Code即可。		false	
+string
+	
+Seiban	番号		false	
+integer
+	
+SeibanCode	番号编码 (该属性可为空,且无默认值)		false	
+string
+	
+SupplyOrg	供应组织编码 (该属性可为空,且无默认值)		false	
+string
+	
+ShipToSite	收获位置编码		false	
+string
+	
+RecTermCode	收款条件		false	
+string
+	
+SrcDocType	来源单据类别 (该属性可为空,但有默认值，默认手工创建。目前只支持来源报价单，销售合同，预测订单) 手工创建 Value:0 报价单 Value:1 销售合同 Value:2 预测订单 Value:10		false	
+integer
+	
+SrcDocNo	来源单号		false	
+string
+	
+SrcDocLineNo	来源行号		false	
+string
+	
+SrcDocSubLineNo	来源子行号		false	
+string
+	
+SrcDocLineID	来源单据行/子行ID (该属性可为空,但有默认值)		false	
+integer
+	
+IsPriceIncludeTax	是否价格含税		false	
+boolean
+	
+Memo	备注		false	
+string
+	
+MemoFor	备注用途 售后：IsForAfterSold；客户：IsForCustomer；财务：IsForFinancial；仓库：IsForInv；生产：IsForManufacture；采购：IsForPurchase；研发：IsForRD；供应商：IsForSupplier\n使用逗号连接需要的Code即可。		false	
+string
+	
+ContextDTO	上下文(该属性可为空,且无默认值)		false	
+UFIDA.U9.ISV.PUB.RestSV.Model.CBO.ContextDTOData
+	UFIDA.U9.ISV.PUB.RestSV.Model.CBO.ContextDTOData
+EntCode	企业编码		false	
+string
+	
+OrgCode	组织编码		false	
+string
+	
+UserCode	用户编码		false	
+string
+	
+UserPwd	用户密码		false	
+string
+	
+CultureName	语种		false	
+string
+	
+OrgID	组织ID		false	
+integer
+	
+UserID	用户ID		false	
+integer
+	
+UserClientID	用户IP		false	
+string
+	
+IsPeriodBeginSO	是否是期初订单		false	
+boolean
+	
+ConfirmTermCode	立账条件		false	
+string
+	
+IsFillDoc	是否补单		false	
+boolean
+	
+TradePath	贸易路径编码 (该属性可为空,且无默认值)		false	
+string
+	
+ModifyReason	调整原因 (该属性为修改接口专用,该属性可为空,且无默认值)		false	
+string
+	
+token	安全	header	true	
+string
+	
+响应状态
+状态码
+	
+说明
+	
+schema
+
+200	
+OK
+	UFSoft.UBF.MVC.Common.ApiResult[System.Collections.Generic.List[UFIDA.U9.ISV.PUB.RestSV.Model.Pub.ResultDTOData]]
+响应参数
+参数名称
+	
+参数说明
+	
+类型
+	
+schema
+
+ResCode	错误编码，0标识成功	integer(int32)	integer(int32)
+Success	是否成功	boolean	
+ResMsg	错误信息	string	
+Data	返回值	array	UFIDA.U9.ISV.PUB.RestSV.Model.Pub.ResultDTOData
+u9c_version		string	
+m_isSucess		boolean	
+m_otherID		string	
+m_iD		string	
+m_code		string	
+m_errorMsg		string	
+m_datas		string	
+Exception		string	
+响应示例
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+{
+    "ResCode": 0,
+错误编码，0标识成功
+    "ResMsg": "",
+错误信息
+    "Data": [
+返回值
+        {
+            "u9c_version": "",
+            "m_isSucess": true,
+            "m_otherID": "",
+            "m_iD": "",
+            "m_code": "",
+            "m_errorMsg": "",
+            "m_datas": ""
+        }
+    ],
+    "Exception": ""
+}
+Apache License 2.0 | Copyright  2019-Knife4j

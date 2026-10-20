@@ -1,0 +1,225 @@
+name: quote-system
+
+# QPO uses the existing dedicated ERP environment file for compatibility.
+# Standard development and deployment startup:
+#   docker compose --env-file erp.env up -d --build
+# If Flyway validation fails, run ./scripts/compose-up.ps1 for an earlier diagnostic check.
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: ${LOG_MAX_SIZE:-20m}
+    max-file: "${LOG_MAX_FILE:-5}"
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: quote-postgres
+    restart: unless-stopped
+    command:
+      - "postgres"
+      - "-c"
+      - "log_min_duration_statement=${POSTGRES_LOG_MIN_DURATION_STATEMENT_MS:-500}"
+      - "-c"
+      - "log_statement=none"
+      - "-c"
+      - "log_lock_waits=on"
+      - "-c"
+      - "deadlock_timeout=${POSTGRES_DEADLOCK_TIMEOUT:-1s}"
+      - "-c"
+      - "log_timezone=Asia/Shanghai"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in erp.env before starting}
+      TZ: Asia/Shanghai
+      PGTZ: Asia/Shanghai
+    ports:
+      - "${POSTGRES_BIND:-127.0.0.1}:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backups/postgres:/backups
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    logging: *default-logging
+    mem_limit: ${POSTGRES_MEM_LIMIT:-1g}
+    cpus: "${POSTGRES_CPUS:-1.0}"
+
+  backend:
+    image: qpo-backend:${QPO_IMAGE_TAG:-latest}
+    build:
+      context: ./quote-backend
+    container_name: quote-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SERVER_PORT: 8080
+      DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-postgres}
+      DB_USERNAME: ${POSTGRES_USER:-postgres}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in erp.env before starting}
+      POSTGRES_DATACENTER_RO_PASSWORD: ${POSTGRES_DATACENTER_RO_PASSWORD:?Set POSTGRES_DATACENTER_RO_PASSWORD in erp.env before starting}
+      DB_POOL_MAX_SIZE: ${DB_POOL_MAX_SIZE:-15}
+      DB_POOL_MIN_IDLE: ${DB_POOL_MIN_IDLE:-3}
+      DB_POOL_CONNECTION_TIMEOUT_MS: ${DB_POOL_CONNECTION_TIMEOUT_MS:-3000}
+      DB_POOL_IDLE_TIMEOUT_MS: ${DB_POOL_IDLE_TIMEOUT_MS:-600000}
+      DB_POOL_MAX_LIFETIME_MS: ${DB_POOL_MAX_LIFETIME_MS:-1800000}
+      DB_POOL_VALIDATION_TIMEOUT_MS: ${DB_POOL_VALIDATION_TIMEOUT_MS:-3000}
+      ERP_UPLOAD_DIR: /data/uploads/
+      ERP_BACKUP_DIR: /data/backups/
+      # File storage strategy defaults to LOCAL. MINIO values are used when a MinIO config is initialized or tested.
+      ERP_FILE_STORAGE_TYPE: ${ERP_FILE_STORAGE_TYPE:-LOCAL}
+      ERP_MINIO_ENDPOINT: ${ERP_MINIO_ENDPOINT:-}
+      ERP_MINIO_BUCKET: ${ERP_MINIO_BUCKET:-}
+      ERP_MINIO_ACCESS_KEY: ${ERP_MINIO_ACCESS_KEY:-}
+      ERP_MINIO_SECRET_KEY: ${ERP_MINIO_SECRET_KEY:-}
+      ERP_MINIO_REGION: ${ERP_MINIO_REGION:-us-east-1}
+      ERP_MINIO_PATH_STYLE: ${ERP_MINIO_PATH_STYLE:-true}
+      ERP_CONFIG_SECRET_KEY: ${ERP_CONFIG_SECRET_KEY:-}
+      ERP_CORS_ALLOWED_ORIGINS: ${ERP_CORS_ALLOWED_ORIGINS:-http://localhost:8088,http://127.0.0.1:8088}
+      ERP_AUTH_ENABLED: true
+      ERP_JWT_SECRET: ${ERP_JWT_SECRET:?Set ERP_JWT_SECRET in erp.env before starting}
+      ERP_JWT_TTL_MINUTES: ${ERP_JWT_TTL_MINUTES:-720}
+      # Data Center SSO login fallback. Active DB config from System Config > Data Center Login has priority.
+      # Keep ERP_AUTH_DATA_CENTER_SSO_SHARED_SECRET empty unless emergency fallback is required.
+      ERP_AUTH_DATA_CENTER_SSO_ENABLED: ${ERP_AUTH_DATA_CENTER_SSO_ENABLED:-true}
+      ERP_AUTH_DATA_CENTER_SSO_APP_CODE: ${ERP_AUTH_DATA_CENTER_SSO_APP_CODE:-QPO}
+      ERP_AUTH_DATA_CENTER_SSO_SHARED_SECRET: ${ERP_AUTH_DATA_CENTER_SSO_SHARED_SECRET:-}
+      ERP_AUTH_DATA_CENTER_SSO_TIMESTAMP_SKEW_SECONDS: ${ERP_AUTH_DATA_CENTER_SSO_TIMESTAMP_SKEW_SECONDS:-120}
+      ERP_AUTH_DATA_CENTER_SSO_NONCE_TTL_MINUTES: ${ERP_AUTH_DATA_CENTER_SSO_NONCE_TTL_MINUTES:-10}
+      ERP_AUTH_DATA_CENTER_SSO_DEFAULT_REDIRECT: ${ERP_AUTH_DATA_CENTER_SSO_DEFAULT_REDIRECT:-/dashboard}
+      ERP_AUTH_DATA_CENTER_SSO_ALLOWED_REDIRECT_PREFIXES: ${ERP_AUTH_DATA_CENTER_SSO_ALLOWED_REDIRECT_PREFIXES:-/,/dashboard,/orders}
+      # Legacy APS compatibility. Backend uses this only for /api/aps/source token validation.
+      # APS_ERP_* stays in env files for old local bridge tools and is not injected here.
+      ERP_APS_SOURCE_TOKEN: ${ERP_APS_SOURCE_TOKEN:-}
+      # Data Center outbound gateway configuration. This is the primary MES/WMS/U9 route.
+      ERP_DATA_CENTER_ENABLED: ${ERP_DATA_CENTER_ENABLED:-true}
+      ERP_DATA_CENTER_BASE_URL: ${ERP_DATA_CENTER_BASE_URL:-http://192.168.70.250:8080}
+      ERP_DATA_CENTER_TOKEN_URL: ${ERP_DATA_CENTER_TOKEN_URL:-http://192.168.70.250:8080/realms/api-platform/protocol/openid-connect/token}
+      ERP_DATA_CENTER_CLIENT_ID: ${ERP_DATA_CENTER_CLIENT_ID:-app_8ed28b2a1faf4a0b}
+      ERP_DATA_CENTER_CLIENT_SECRET: ${ERP_DATA_CENTER_CLIENT_SECRET:-}
+      ERP_DATA_CENTER_GRANT_TYPE: ${ERP_DATA_CENTER_GRANT_TYPE:-client_credentials}
+      ERP_DATA_CENTER_CONNECT_TIMEOUT_MS: ${ERP_DATA_CENTER_CONNECT_TIMEOUT_MS:-5000}
+      ERP_DATA_CENTER_READ_TIMEOUT_MS: ${ERP_DATA_CENTER_READ_TIMEOUT_MS:-60000}
+      ERP_DATA_CENTER_TOKEN_EXPIRE_SKEW_SECONDS: ${ERP_DATA_CENTER_TOKEN_EXPIRE_SKEW_SECONDS:-60}
+      ERP_DATA_CENTER_MES_MATERIAL_PATH: ${ERP_DATA_CENTER_MES_MATERIAL_PATH:-/api/v1/mes/openapi/material-preparation/create}
+      ERP_DATA_CENTER_WMS_ALLOCATION_PATH: ${ERP_DATA_CENTER_WMS_ALLOCATION_PATH:-}
+      ERP_DATA_CENTER_U9_SALES_ORDER_SYNC_PATH: ${ERP_DATA_CENTER_U9_SALES_ORDER_SYNC_PATH:-}
+      ERP_DATA_CENTER_U9_COMMON_ENTITY_QUERY_PATH: ${ERP_DATA_CENTER_U9_COMMON_ENTITY_QUERY_PATH:-}
+      ERP_DATA_CENTER_MES_PRODUCTION_DISPATCH_PATH: ${ERP_DATA_CENTER_MES_PRODUCTION_DISPATCH_PATH:-/api/v1/mes/openapi/demand/create}
+      ERP_DATA_CENTER_MES_STOCK_PICKING_ORDER_CREATE_PATH: ${ERP_DATA_CENTER_MES_STOCK_PICKING_ORDER_CREATE_PATH:-/api/v1/mes/openapi/production-order/create}
+      # Deprecated direct integration fallback configuration.
+      # Backend still receives ERP_MES/ERP_U9 for local development and emergency fallback
+      # when Data Center is not configured or deliberately disabled. WMS is data-center only.
+      # MES material-number sync fallback configuration.
+      ERP_MES_BASE_URL: ${ERP_MES_BASE_URL:-}
+      ERP_MES_AUTH_TOKEN: ${ERP_MES_AUTH_TOKEN:-}
+      ERP_MES_MATERIAL_PATH: ${ERP_MES_MATERIAL_PATH:-/api/mes/materials/resolve}
+      ERP_MES_PRODUCTION_PATH: ${ERP_MES_PRODUCTION_PATH:-/api/mes/production/submit}
+      ERP_MES_TIMEOUT_MS: ${ERP_MES_TIMEOUT_MS:-60000}
+      ERP_MES_CALLBACK_TOKEN: ${ERP_MES_CALLBACK_TOKEN:-}
+      ERP_MES_CALLBACK_TOKEN_ENABLED: ${ERP_MES_CALLBACK_TOKEN_ENABLED:-true}
+      # U9 sales order sync fallback configuration.
+      ERP_U9_BASE_URL: ${ERP_U9_BASE_URL:-}
+      ERP_U9_USER_CODE: ${ERP_U9_USER_CODE:-}
+      ERP_U9_ENT_CODE: ${ERP_U9_ENT_CODE:-}
+      ERP_U9_ORG_CODE: ${ERP_U9_ORG_CODE:-}
+      ERP_U9_CLIENT_ID: ${ERP_U9_CLIENT_ID:-}
+      ERP_U9_CLIENT_SECRET: ${ERP_U9_CLIENT_SECRET:-}
+      ERP_U9_CONNECT_TIMEOUT_MS: ${ERP_U9_CONNECT_TIMEOUT_MS:-5000}
+      ERP_U9_READ_TIMEOUT_MS: ${ERP_U9_READ_TIMEOUT_MS:-30000}
+      ERP_U9_CUSTOMER_SYNC_ENABLED: ${ERP_U9_CUSTOMER_SYNC_ENABLED:-false}
+      ERP_U9_CUSTOMER_SYNC_STARTUP_DELAY_MS: ${ERP_U9_CUSTOMER_SYNC_STARTUP_DELAY_MS:-30000}
+      ERP_U9_CUSTOMER_SYNC_FIXED_DELAY_MS: ${ERP_U9_CUSTOMER_SYNC_FIXED_DELAY_MS:-1800000}
+      ERP_U9_CUSTOMER_SYNC_CHECK_MS: ${ERP_U9_CUSTOMER_SYNC_CHECK_MS:-60000}
+      # Shared async executor for exports, MES sync, and WMS allocation.
+      ERP_TASK_CORE_POOL_SIZE: ${ERP_TASK_CORE_POOL_SIZE:-2}
+      ERP_TASK_MAX_POOL_SIZE: ${ERP_TASK_MAX_POOL_SIZE:-4}
+      ERP_TASK_QUEUE_CAPACITY: ${ERP_TASK_QUEUE_CAPACITY:-50}
+      ERP_TASK_OUTPUT_DIR: ${ERP_TASK_OUTPUT_DIR:-/data/backups/tasks/}
+      FLYWAY_ENABLED: true
+      SQL_INIT_MODE: never
+      MYBATIS_LOG_IMPL: org.apache.ibatis.logging.nologging.NoLoggingImpl
+      LOG_FILE_DIR: ${LOG_FILE_DIR:-/data/backups/logs/backend}
+      LOG_FILE_MAX_SIZE: ${LOG_FILE_MAX_SIZE:-50MB}
+      LOG_FILE_MAX_HISTORY: ${LOG_FILE_MAX_HISTORY:-30}
+      LOG_LEVEL_ROOT: ${LOG_LEVEL_ROOT:-INFO}
+      LOG_LEVEL_APP: ${LOG_LEVEL_APP:-INFO}
+      TZ: Asia/Shanghai
+      JAVA_TOOL_OPTIONS: -Duser.timezone=Asia/Shanghai
+    volumes:
+      - uploads_data:/data/uploads
+      - backups_data:/data/backups
+    ports:
+      - "${BACKEND_BIND:-127.0.0.1}:${BACKEND_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/api/health >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 40s
+    logging: *default-logging
+    mem_limit: ${BACKEND_MEM_LIMIT:-1g}
+    cpus: "${BACKEND_CPUS:-1.0}"
+    security_opt:
+      - no-new-privileges:true
+
+  frontend:
+    image: qpo-frontend:${QPO_IMAGE_TAG:-latest}
+    build:
+      context: ./quote-frontend
+      args:
+        VITE_API_BASE_URL: ""
+    container_name: quote-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${FRONTEND_BIND:-127.0.0.1}:${FRONTEND_PORT:-8088}:80"
+    volumes:
+      - uploads_data:/data/uploads:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    logging: *default-logging
+    mem_limit: ${FRONTEND_MEM_LIMIT:-256m}
+    cpus: "${FRONTEND_CPUS:-0.5}"
+    security_opt:
+      - no-new-privileges:true
+
+  minio:
+    image: ${MINIO_IMAGE:-minio/minio:latest}
+    container_name: quote-minio
+    profiles:
+      - minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-qpo_minio_admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-}
+      TZ: Asia/Shanghai
+    ports:
+      - "${MINIO_BIND:-127.0.0.1}:${MINIO_API_PORT:-9000}:9000"
+      - "${MINIO_BIND:-127.0.0.1}:${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - minio_data:/data
+    logging: *default-logging
+    mem_limit: ${MINIO_MEM_LIMIT:-512m}
+    cpus: "${MINIO_CPUS:-0.5}"
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  postgres_data:
+  uploads_data:
+  backups_data:
+  minio_data:

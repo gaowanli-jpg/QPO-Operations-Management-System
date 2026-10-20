@@ -1,0 +1,93 @@
+import { describe, expect, test } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const currentDir = dirname(fileURLToPath(import.meta.url))
+const readSource = (...segments) => readFileSync(resolve(currentDir, ...segments), 'utf8')
+
+const systemConfigApi = readSource('services', 'systemConfigApi.js')
+const inboundPanel = readSource('components', 'system-config', 'SystemInboundCallbackConfigPanel.vue')
+const outboundPanel = readSource('components', 'system-config', 'SystemIntegrationConfigPanel.vue')
+
+describe('system inbound callback config frontend stage 7', () => {
+  test('defines unified token and generic inbound interface config API methods', () => {
+    expect(systemConfigApi).toContain("export const listInboundCallbackConfigs = () => request('/api/system/inbound-callback-configs')")
+    expect(systemConfigApi).toContain("export const getOpenApiTokenStatus = () => request('/api/system/inbound-callback-configs/open-api-token')")
+    expect(systemConfigApi).toContain("export const rotateOpenApiToken = () => request('/api/system/inbound-callback-configs/open-api-token', {")
+    expect(systemConfigApi).toContain('export const getInboundCallbackConfig = (interfaceCode) =>')
+    expect(systemConfigApi).toContain('request(`/api/system/inbound-callback-configs/${interfaceCode}`)')
+    expect(systemConfigApi).toContain('export const saveInboundCallbackConfig = (interfaceCode, payload) =>')
+    expect(systemConfigApi).toContain('request(`/api/system/inbound-callback-configs/${interfaceCode}`, {')
+    expect(systemConfigApi).toContain("method: 'PUT'")
+    expect(systemConfigApi).toContain('export const validateInboundCallbackConfig = (interfaceCode) => request(`/api/system/inbound-callback-configs/${interfaceCode}/validate`, {')
+    expect(systemConfigApi).not.toContain('rotateMesMaterialCallbackToken')
+    expect(systemConfigApi).not.toContain('/mes-material-callback/token')
+  })
+
+  test('renders unified token manager in the inbound toolbar', () => {
+    expect(inboundPanel).toContain('system-inbound-callback-config-panel')
+    expect(inboundPanel).toContain('system-inbound-callback-toolbar')
+    expect(inboundPanel).toContain('system-inbound-open-api-token-card')
+    expect(inboundPanel).toContain('openApiTokenStatus')
+    expect(inboundPanel).toContain('loadOpenApiTokenStatus')
+    expect(inboundPanel).toContain('handleRotateOpenApiToken')
+    expect(inboundPanel).toContain('QPO_OPEN_API_TOKEN')
+    expect(inboundPanel).toContain('统一 token 状态')
+    expect(inboundPanel).toContain('生成 token')
+    expect(inboundPanel).toContain('轮换 token')
+    expect(inboundPanel).toContain("v-permission=\"'system:config:inbound:token-rotate'\"")
+    expect(inboundPanel).toContain(':loading="isPending(inboundActionKeys.rotateOpenApiToken)"')
+  })
+
+  test('renders inbound interface metadata with unified auth mode', () => {
+    expect(inboundPanel).toContain('system-inbound-callback-table-surface')
+    expect(inboundPanel).toContain('<el-table')
+    expect(inboundPanel).toContain(':data="inboundConfigs"')
+    expect(inboundPanel).toContain('接口名称')
+    expect(inboundPanel).toContain('来源系统')
+    expect(inboundPanel).toContain('接口路径')
+    expect(inboundPanel).toContain('接口状态')
+    expect(inboundPanel).toContain('认证方式')
+    expect(inboundPanel).toContain('最近校验')
+    expect(inboundPanel).toContain('authMode')
+    expect(inboundPanel).toContain('QPO_OPEN_API_TOKEN')
+    expect(inboundPanel).toContain('MES_MATERIAL_CALLBACK')
+    expect(inboundPanel).toContain('SALES_ORDER_SYNC_QUERY')
+    expect(inboundPanel).toContain('/api/integrations/mes/material-callback')
+    expect(inboundPanel).toContain('/api/integrations/sales-orders')
+    expect(inboundPanel).toContain('CONFIGURABLE_INBOUND_CALLBACK_CODES')
+    expect(inboundPanel).not.toContain("configSource: 'BUILT_IN'")
+    expect(inboundPanel).not.toContain("BUILT_IN: '内置元数据'")
+    expect(inboundPanel).not.toContain('clientSecret')
+    expect(inboundPanel).not.toContain('allocationPath')
+    expect(outboundPanel).not.toContain('MES 回调 token')
+  })
+
+  test('keeps edit drawer focused on interface metadata instead of row-level token operations', () => {
+    expect(inboundPanel).toContain('el-drawer')
+    expect(inboundPanel).toContain('editDrawerVisible')
+    expect(inboundPanel).toContain('编辑入站接口')
+    expect(inboundPanel).toContain('openEditDrawer(row)')
+    expect(inboundPanel).toContain('selectedConfig')
+    expect(inboundPanel).toContain('QPO 访问基础地址')
+    expect(inboundPanel).toContain('接口启用')
+    expect(inboundPanel).toContain('备注')
+    expect(inboundPanel).toContain('保存配置')
+    expect(inboundPanel).toContain('校验配置')
+    expect(inboundPanel).toContain('saveInboundCallbackConfig')
+    expect(inboundPanel).toContain('validateInboundCallbackConfig')
+    expect(inboundPanel).not.toContain('rotateMesMaterialCallbackToken')
+    expect(inboundPanel).not.toContain('selectedConfig.tokenConfigured ?')
+  })
+
+  test('shows generated unified token only in one-time dialog and never persists plaintext', () => {
+    expect(inboundPanel).toContain('tokenDialogVisible')
+    expect(inboundPanel).toContain('plainToken')
+    expect(inboundPanel).toContain('token 只展示一次')
+    expect(inboundPanel).toContain('关闭后无法再次查看')
+    expect(inboundPanel).toContain('rotateOpenApiToken')
+    expect(inboundPanel).not.toContain('localStorage')
+    expect(inboundPanel).not.toContain('sessionStorage')
+  })
+})

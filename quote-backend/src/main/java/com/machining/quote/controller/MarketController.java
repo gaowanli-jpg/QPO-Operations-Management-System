@@ -1,0 +1,926 @@
+package com.machining.quote.controller;
+
+import com.alibaba.excel.EasyExcel;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.machining.quote.config.RequirePermission;
+import com.machining.quote.domain.QuoteStatusWorkflow;
+import com.machining.quote.dto.CustomerOptionDTO;
+import com.machining.quote.dto.DeliveryGenerateReq;
+import com.machining.quote.dto.DeliveryBatchResultDTO;
+import com.machining.quote.dto.PageResult;
+import com.machining.quote.dto.ProcessSheetDTO;
+import com.machining.quote.dto.ReleaseItemBatchQueryReq;
+import com.machining.quote.dto.ReleaseItemFieldUpdateReq;
+import com.machining.quote.dto.ReleaseItemOrderFieldUpdateReq;
+import com.machining.quote.dto.ReleaseItemVersionUpdateReq;
+import com.machining.quote.dto.ReleaseOrderSource;
+import com.machining.quote.dto.ReleaseSourceType;
+import com.machining.quote.dto.RfqReleaseAppendSalesOrderReq;
+import com.machining.quote.dto.RfqExcelDTO;
+import com.machining.quote.dto.SalesOrderU9SyncOrderRow;
+import com.machining.quote.entity.CustomerMaster;
+import com.machining.quote.entity.ItemQuoteVersion;
+import com.machining.quote.entity.OrderDeliveryTicket;
+import com.machining.quote.entity.OrderRfq;
+import com.machining.quote.mapper.CustomerMasterMapper;
+import com.machining.quote.mapper.ItemQuoteVersionMapper;
+import com.machining.quote.mapper.OrderRfqMapper;
+import com.machining.quote.service.AuditService;
+import com.machining.quote.service.BusinessFileService;
+import com.machining.quote.service.BusinessFileService.StoredBusinessFile;
+import com.machining.quote.service.DataScopeService;
+import com.machining.quote.service.DeliveryService;
+import com.machining.quote.service.ExcelExportService;
+import com.machining.quote.service.ImportTemplateExportService;
+import com.machining.quote.service.InternalTargetLeadTimeService;
+import com.machining.quote.service.OrderManagementService;
+import com.machining.quote.service.PartSelectionImportService;
+import com.machining.quote.service.QuoteTemplateExportService;
+import com.machining.quote.service.RfqReleaseAppendSalesOrderService;
+import com.machining.quote.service.RfqNumberService;
+import com.machining.quote.util.DrawingPartNoResolver;
+import jakarta.servlet.http.HttpServletResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+@RestController
+@RequestMapping("/api/market")
+public class MarketController {
+    private static final Logger log = LoggerFactory.getLogger(MarketController.class);
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+
+    @Autowired
+    private DeliveryService deliveryService;
+
+    @Autowired
+    private RfqReleaseAppendSalesOrderService rfqReleaseAppendSalesOrderService;
+
+    @Autowired
+    private InternalTargetLeadTimeService internalTargetLeadTimeService;
+    @Autowired
+    private PartSelectionImportService partSelectionImportService = new PartSelectionImportService();
+
+    @Autowired
+    private ExcelExportService excelExportService;
+
+    @Autowired
+    private ImportTemplateExportService importTemplateExportService;
+
+    @Autowired
+    private QuoteTemplateExportService quoteTemplateExportService;
+
+    @Autowired
+    private OrderRfqMapper orderRfqMapper;
+
+    @Autowired
+    private OrderManagementService orderManagementService;
+
+    @Autowired
+    private ItemQuoteVersionMapper itemQuoteVersionMapper;
+
+    @Autowired
+    private CustomerMasterMapper customerMasterMapper;
+
+    @Autowired
+    private BusinessFileService businessFileService;
+
+    @Autowired
+    private RfqNumberService rfqNumberService;
+
+    @Autowired
+    private AuditService auditService;
+    @Autowired(required = false)
+    private DataScopeService dataScopeService;
+
+    @GetMapping("/rfq/customers")
+    @RequirePermission("market:rfq:customer-select")
+    public PageResult<CustomerOptionDTO> listRfqCustomers(
+            @RequestParam(value = "field", required = false) String field,
+            @RequestParam(value = "keyword", required = false) String keyword,
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
+        return orderManagementService.pageCustomerOptions(field, keyword, page, pageSize);
+    }
+
+    @GetMapping("/quote-process/customers")
+    @RequirePermission("market:quote-process:customer-select")
+    public PageResult<CustomerOptionDTO> listQuoteProcessCustomers(
+            @RequestParam(value = "field", required = false) String field,
+            @RequestParam(value = "keyword", required = false) String keyword,
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
+        return orderManagementService.pageCustomerOptions(field, keyword, page, pageSize);
+    }
+
+    @GetMapping("/quote-process/orders")
+    @RequirePermission("market:quote-process:order-select")
+    public PageResult<OrderRfq> listQuoteProcessOrders(
+            @RequestParam(value = "customerCode", required = false) String customerCode,
+            @RequestParam(value = "customerName", required = false) String customerName,
+            @RequestParam(value = "keyword", required = false) String keyword,
+            @RequestParam(value = "status", required = false) String status,
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
+        return orderManagementService.listQuoteProcessCandidateOrders(customerCode, customerName, keyword, status, page, pageSize);
+    }
+
+    @GetMapping("/quote-process/supplemental-drawing/orders")
+    @RequirePermission("market:quote-process:order-select")
+    public PageResult<OrderRfq> listQuoteProcessSupplementalOrders(
+            @RequestParam(value = "customerCode", required = false) String customerCode,
+            @RequestParam(value = "customerName", required = false) String customerName,
+            @RequestParam(value = "keyword", required = false) String keyword,
+            @RequestParam(value = "status", required = false) String status,
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
+        return orderManagementService.listQuoteProcessSupplementalCandidateOrders(customerCode, customerName, keyword, status, page, pageSize);
+    }
+
+    @GetMapping("/release/customers")
+    @RequirePermission("market:release:customer-select")
+    public PageResult<CustomerOptionDTO> listReleaseCustomers(
+            @RequestParam(value = "field", required = false) String field,
+            @RequestParam(value = "keyword", required = false) String keyword,
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
+        return orderManagementService.pageCustomerOptions(field, keyword, page, pageSize);
+    }
+
+    @GetMapping("/release/orders")
+    @RequirePermission("market:release:order-select")
+    public PageResult<Map<String, Object>> listReleaseOrders(
+            @RequestParam(value = "customerCode", required = false) String customerCode,
+            @RequestParam(value = "customerName", required = false) String customerName,
+            @RequestParam(value = "keyword", required = false) String keyword,
+            @RequestParam(value = "status", required = false) String status,
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
+        return orderManagementService.listReleaseOrderSources(customerCode, customerName, keyword, status, page, pageSize);
+    }
+
+    @GetMapping("/release/append-target-sales-orders")
+    @RequirePermission("market:release:order-select")
+    public PageResult<SalesOrderU9SyncOrderRow> listReleaseAppendTargetSalesOrders(
+            @RequestParam(value = "customerCode", required = false) String customerCode,
+            @RequestParam(value = "customerName", required = false) String customerName,
+            @RequestParam(value = "keyword", required = false) String keyword,
+            @RequestParam(value = "status", required = false) String status,
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
+        return rfqReleaseAppendSalesOrderService.listAppendTargetSalesOrders(
+                customerCode, customerName, keyword, status, page, pageSize);
+    }
+
+    @GetMapping("/tickets/{rfqId}")
+    @RequirePermission("market:release:view")
+    public PageResult<OrderDeliveryTicket> listDeliveryTickets(
+            @PathVariable Integer rfqId,
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
+        return deliveryService.pageTickets(rfqId, page, pageSize);
+    }
+
+    @GetMapping("/process-sheets/{rfqId}")
+    @RequirePermission("market:release:view")
+    public PageResult<ProcessSheetDTO> listProcessSheets(
+            @PathVariable Integer rfqId,
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
+        return deliveryService.pageProcessSheets(rfqId, page, pageSize);
+    }
+
+    @GetMapping("/export/tickets/{rfqId}")
+    @RequirePermission("market:release:view")
+    public void exportDeliveryTickets(@PathVariable Integer rfqId, HttpServletResponse response) throws IOException {
+        excelExportService.exportDeliveryTickets(rfqId, response);
+    }
+
+    @GetMapping("/export/process-sheets/{rfqId}")
+    @RequirePermission("market:release:view")
+    public void exportProcessSheets(@PathVariable Integer rfqId, HttpServletResponse response) throws IOException {
+        excelExportService.exportProcessSheets(rfqId, response);
+    }
+
+    @GetMapping("/export/quote/{rfqId}")
+    @RequirePermission("market:quote-process:export")
+    public void exportQuoteSheet(@PathVariable Integer rfqId, HttpServletResponse response) throws IOException {
+        excelExportService.exportQuoteSheet(rfqId, response);
+    }
+
+    @GetMapping("/export/quote/optimized/{rfqId}")
+    @RequirePermission("market:quote-process:export")
+    public void exportOptimizedQuoteSheet(@PathVariable Integer rfqId, HttpServletResponse response) throws IOException {
+        excelExportService.exportOptimizedQuoteSheet(rfqId, response);
+    }
+
+    @GetMapping("/export/quote/simple/{rfqId}")
+    @RequirePermission("market:quote-process:export")
+    public void exportSimpleQuoteSheet(@PathVariable Integer rfqId, HttpServletResponse response) throws IOException {
+        excelExportService.exportSimpleQuoteSheet(rfqId, response);
+    }
+
+    @GetMapping("/export/quote/template/detail/{rfqId}")
+    @RequirePermission("market:quote-process:export")
+    public void exportTemplateQuoteDetail(@PathVariable Integer rfqId, HttpServletResponse response) throws IOException {
+        quoteTemplateExportService.exportTemplateQuoteDetail(rfqId, response);
+    }
+
+    @GetMapping("/export/quote/template/detail/optimized/{rfqId}")
+    @RequirePermission("market:quote-process:export")
+    public void exportOptimizedTemplateQuoteDetail(@PathVariable Integer rfqId, HttpServletResponse response) throws IOException {
+        quoteTemplateExportService.exportOptimizedTemplateQuoteDetail(rfqId, response);
+    }
+
+    @GetMapping("/export/quote/template/simple/{rfqId}")
+    @RequirePermission("market:quote-process:export")
+    public void exportTemplateQuoteSimple(@PathVariable Integer rfqId, HttpServletResponse response) throws IOException {
+        quoteTemplateExportService.exportTemplateQuoteSimple(rfqId, response);
+    }
+
+    @GetMapping("/import-rfq/template")
+    @RequirePermission("market:rfq:import")
+    public void exportRfqImportTemplate(HttpServletResponse response) throws IOException {
+        importTemplateExportService.exportRfqImportTemplate(response);
+    }
+
+    @PostMapping("/generate-ticket")
+    @RequirePermission("market:release:create")
+    public DeliveryBatchResultDTO generateDeliveryTicket(@RequestBody DeliveryGenerateReq req) {
+        return deliveryService.generateRfqReleaseBatch(req);
+    }
+
+    @PostMapping("/release/append-to-sales-order")
+    @RequirePermission("market:release:create")
+    public DeliveryBatchResultDTO appendReleaseToSalesOrder(@RequestBody RfqReleaseAppendSalesOrderReq req) {
+        return deliveryService.appendRfqReleaseToSalesOrder(req);
+    }
+
+    @GetMapping("/release/summary/{rfqId}")
+    @RequirePermission("market:release:view")
+    public Map<String, Object> getReleaseSummary(@PathVariable Integer rfqId) {
+        return internalTargetLeadTimeService.releaseSummary(rfqId);
+    }
+
+    @GetMapping("/release/items/{rfqId}")
+    @RequirePermission("market:release:view")
+    public PageResult<Map<String, Object>> listReleaseItems(
+            @PathVariable Integer rfqId,
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize,
+            @RequestParam(value = "keyword", required = false) String keyword,
+            @RequestParam(value = "status", required = false) String status,
+            @RequestParam(value = "remainingOnly", required = false) Boolean remainingOnly) {
+        return internalTargetLeadTimeService.pageItemRows(rfqId, page, pageSize, keyword, status, remainingOnly);
+    }
+
+    @PostMapping("/release/items/batch")
+    @RequirePermission("market:release:view")
+    public PageResult<Map<String, Object>> listReleaseItemsBatch(@RequestBody ReleaseItemBatchQueryReq req) {
+        requireRfqOnlySources(req == null ? null : req.getSources());
+        return internalTargetLeadTimeService.pageItemRowsBatch(req);
+    }
+
+    @PostMapping("/release/items/{itemId}/version")
+    @RequirePermission("market:release:create")
+    public Map<String, Object> updateReleaseItemVersion(
+            @PathVariable Integer itemId,
+            @RequestBody ReleaseItemVersionUpdateReq req) {
+        return internalTargetLeadTimeService.updateReleaseItemVersion(itemId, req);
+    }
+
+    @PostMapping("/release/items/{itemId}/fields")
+    @RequirePermission("market:release:create")
+    public Map<String, Object> updateReleaseItemFields(
+            @PathVariable Long itemId,
+            @RequestBody ReleaseItemFieldUpdateReq req) {
+        if (req != null && req.getSourceType() == ReleaseSourceType.SALES_ORDER) {
+            throw new RuntimeException("议价提单只支持 RFQ 询价订单，销售订单由导入流程自动生成提单");
+        }
+        return internalTargetLeadTimeService.updateReleaseItemFields(itemId, req);
+    }
+
+    @PostMapping("/release/items/{itemId}/order-fields")
+    @RequirePermission("market:release:create")
+    public Map<String, Object> updateReleaseItemOrderFields(
+            @PathVariable Integer itemId,
+            @RequestBody ReleaseItemOrderFieldUpdateReq req) {
+        return internalTargetLeadTimeService.updateReleaseItemOrderFields(itemId, req);
+    }
+
+    @PostMapping(value = "/release/drawings/replace", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @RequirePermission("market:release:create")
+    public Map<String, Object> replaceReleaseDrawings(
+            @RequestParam(value = "sources", required = false) String sourcesJson,
+            @RequestParam(value = "rfqIds", required = false) String rfqIdsJson,
+            @RequestParam(value = "drawings", required = false) List<MultipartFile> drawings,
+            @RequestParam(value = "versionDrawings", required = false) List<MultipartFile> versionDrawings) {
+        List<ReleaseOrderSource> sources = parseReleaseSources(sourcesJson, rfqIdsJson);
+        requireRfqOnlySources(sources);
+        return internalTargetLeadTimeService.replaceReleaseDrawings(
+                sources,
+                drawings,
+                versionDrawings);
+    }
+
+    @GetMapping("/release/tickets/{rfqId}")
+    @RequirePermission("market:release:view")
+    public PageResult<OrderDeliveryTicket> listReleaseTickets(
+            @PathVariable Integer rfqId,
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
+        return deliveryService.pageTickets(rfqId, page, pageSize);
+    }
+
+    @GetMapping("/release/process-sheets/{rfqId}")
+    @RequirePermission("market:release:view")
+    public PageResult<ProcessSheetDTO> listReleaseProcessSheets(
+            @PathVariable Integer rfqId,
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
+        return deliveryService.pageProcessSheets(rfqId, page, pageSize);
+    }
+
+    @PostMapping("/release/parse-part-selection/{rfqId}")
+    @RequirePermission("market:release:create")
+    public Map<String, Object> parsePartSelectionForOrder(
+            @PathVariable Integer rfqId,
+            @RequestParam("excelFile") MultipartFile excelFile) {
+        return internalTargetLeadTimeService.matchPartSelection(rfqId, partSelectionImportService.readPartSelectionRows(excelFile));
+    }
+
+    @PostMapping("/release/parse-part-selection/batch")
+    @RequirePermission("market:release:create")
+    public Map<String, Object> parsePartSelectionForOrders(
+            @RequestParam("excelFile") MultipartFile excelFile,
+            @RequestParam(value = "rfqIds", required = false) String rfqIdsJson,
+            @RequestParam(value = "sources", required = false) String sourcesJson) {
+        List<ReleaseOrderSource> sources = parseReleaseSources(sourcesJson, rfqIdsJson);
+        requireRfqOnlySources(sources);
+        return internalTargetLeadTimeService.matchPartSelectionBatch(
+                sources,
+                partSelectionImportService.readPartSelectionRows(excelFile));
+    }
+
+    @PostMapping("/parse-part-selection")
+    @RequirePermission("market:release:create")
+    public Map<String, Object> parsePartSelection(@RequestParam("excelFile") MultipartFile excelFile) {
+        List<Map<String, String>> items = partSelectionImportService.readPartSelectionRows(excelFile);
+        Map<String, Object> result = new HashMap<>();
+        result.put("success", true);
+        result.put("count", items.size());
+        result.put("data", items);
+        return result;
+    }
+
+    private List<Map<String, String>> readPartSelectionRows(MultipartFile excelFile) {
+        try {
+            List<Map<Integer, String>> rows = EasyExcel.read(excelFile.getInputStream())
+                    .headRowNumber(0)
+                    .sheet()
+                    .doReadSync();
+
+            int partNoColumn = -1;
+            int versionColumn = -1;
+            int rfqNoColumn = -1;
+            int headerRowIndex = -1;
+            int maxScanRows = Math.min(rows.size(), 20);
+            for (int rowIndex = 0; rowIndex < maxScanRows; rowIndex++) {
+                Map<Integer, String> row = rows.get(rowIndex);
+                int currentPartNoColumn = -1;
+                int currentVersionColumn = -1;
+                int currentRfqNoColumn = -1;
+                for (Map.Entry<Integer, String> cell : row.entrySet()) {
+                    String header = normalizeHeader(cell.getValue());
+                    if (isRfqNoHeader(header)) {
+                        currentRfqNoColumn = cell.getKey();
+                    }
+                    if ("图号".equals(header)) {
+                        currentPartNoColumn = cell.getKey();
+                    } else if ("版本".equals(header)) {
+                        currentVersionColumn = cell.getKey();
+                    }
+                }
+                if (currentPartNoColumn >= 0 && currentVersionColumn >= 0) {
+                    partNoColumn = currentPartNoColumn;
+                    versionColumn = currentVersionColumn;
+                    rfqNoColumn = currentRfqNoColumn;
+                    headerRowIndex = rowIndex;
+                    break;
+                }
+            }
+
+            if (partNoColumn < 0 || versionColumn < 0) {
+                throw new IllegalArgumentException("导入表格必须包含表头：图号、版本");
+            }
+
+            List<Map<String, String>> items = new ArrayList<>();
+            Set<String> seenKeys = new HashSet<>();
+            for (int rowIndex = headerRowIndex + 1; rowIndex < rows.size(); rowIndex++) {
+                Map<Integer, String> row = rows.get(rowIndex);
+                String partNo = cellText(row.get(partNoColumn));
+                String normalizedPartNo = normalizePartNo(partNo);
+                if (normalizedPartNo.isEmpty()) {
+                    continue;
+                }
+
+                String normalizedVersion = normalizeVersion(row.get(versionColumn));
+                String rfqNo = rfqNoColumn >= 0 ? cellText(row.get(rfqNoColumn)) : "";
+                String normalizedRfqNo = normalizeRfqNo(rfqNo);
+                String key = normalizedRfqNo + "||" + normalizedPartNo + "||" + normalizedVersion;
+                if (!seenKeys.add(key)) {
+                    continue;
+                }
+
+                Map<String, String> item = new LinkedHashMap<>();
+                item.put("rfqNo", rfqNo);
+                item.put("partNo", partNo);
+                item.put("version", normalizedVersion);
+                item.put("normalizedRfqNo", normalizedRfqNo);
+                item.put("normalizedPartNo", normalizedPartNo);
+                item.put("normalizedVersion", normalizedVersion);
+                items.add(item);
+            }
+
+            return items;
+        } catch (IllegalArgumentException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new RuntimeException("导入表格选定解析失败：" + e.getMessage(), e);
+        }
+    }
+
+    public Map<String, Object> importRfq(
+            @RequestParam("customerName") String customerName,
+            @RequestParam("excelFile") MultipartFile excelFile,
+            @RequestParam(value = "drawings", required = false) List<MultipartFile> drawings) {
+        return importRfq(null, null, customerName, excelFile, drawings, null, null, null);
+    }
+
+    public Map<String, Object> importRfq(
+            String customerName,
+            MultipartFile excelFile,
+            List<MultipartFile> drawings,
+            List<MultipartFile> versionDrawings) {
+        return importRfq(null, null, customerName, excelFile, drawings, versionDrawings, null, null);
+    }
+
+    public Map<String, Object> importRfq(
+            String customerCode,
+            String customerShortName,
+            String customerName,
+            MultipartFile excelFile,
+            List<MultipartFile> drawings,
+            List<MultipartFile> versionDrawings) {
+        return importRfq(customerCode, customerShortName, customerName, excelFile, drawings, versionDrawings, null, null);
+    }
+
+    @PostMapping("/import-rfq")
+    @RequirePermission("market:rfq:import")
+    @Transactional
+    public Map<String, Object> importRfq(
+            @RequestParam(value = "customerCode", required = false) String customerCode,
+            @RequestParam(value = "customerShortName", required = false) String customerShortName,
+            @RequestParam("customerName") String customerName,
+            @RequestParam("excelFile") MultipartFile excelFile,
+            @RequestParam(value = "drawings", required = false) List<MultipartFile> drawings,
+            @RequestParam(value = "versionDrawings", required = false) List<MultipartFile> versionDrawings,
+            @RequestParam(value = "drawingFolderFiles", required = false) List<MultipartFile> drawingFolderFiles,
+            @RequestParam(value = "drawingFolderName", required = false) String drawingFolderName) {
+        CustomerMaster customer = requireEnabledU9Customer(customerCode);
+        String resolvedCustomerCode = cleanText(customer.getCustomerCode());
+        String resolvedCustomerShortName = cleanText(customer.getCustomerShortName());
+        String resolvedCustomerName = cleanText(customer.getCustomerName());
+        Map<String, Object> result = new HashMap<>();
+        long startedAt = System.currentTimeMillis();
+        String autoRfqNo = null;
+        Integer generatedRfqId = null;
+
+        try {
+            autoRfqNo = rfqNumberService.nextRfqNo();
+            log.info("RFQ import started customerCode={} customerName={} rfqNo={} excelFileName={} drawingFileCount={}",
+                    resolvedCustomerCode,
+                    resolvedCustomerName,
+                    autoRfqNo,
+                    excelFile == null ? "" : excelFile.getOriginalFilename(),
+                    drawings == null ? 0 : drawings.size());
+
+            List<RfqExcelDTO> excelDataList = EasyExcel.read(excelFile.getInputStream())
+                    .head(RfqExcelDTO.class)
+                    .sheet()
+                    .doReadSync();
+            Set<String> excelPartNos = new HashSet<>();
+            Set<DrawingPartNoResolver.DrawingIdentity> excelPartNoVersions = new HashSet<>();
+            for (RfqExcelDTO item : excelDataList) {
+                String safePartNo = normalizePartNo(item.getPartNo());
+                if (!safePartNo.isEmpty()) {
+                    excelPartNos.add(safePartNo);
+                    String safeVersion = normalizeVersion(item.getVersion());
+                    if (!safeVersion.isEmpty()) {
+                        excelPartNoVersions.add(new DrawingPartNoResolver.DrawingIdentity(safePartNo, safeVersion));
+                    }
+                }
+            }
+            log.info("RFQ import parsed excel rfqNo={} itemCount={}", autoRfqNo, excelDataList.size());
+
+            Map<String, DrawingFileInfo> drawingMap = new LinkedHashMap<>();
+            Map<String, DrawingFileInfo> versionDrawingMap = new LinkedHashMap<>();
+            List<DrawingFileInfo> uploadedDrawings = new ArrayList<>();
+            int versionUploadedDrawingCount = 0;
+            boolean drawingFolderMode = hasFiles(drawingFolderFiles);
+            if (!drawingFolderMode && drawings != null && !drawings.isEmpty()) {
+                OrderRfq pathOrder = new OrderRfq();
+                pathOrder.setCustomerCode(resolvedCustomerCode);
+                pathOrder.setCustomerShortName(resolvedCustomerShortName);
+                pathOrder.setCustomerName(resolvedCustomerName);
+                pathOrder.setRfqNo(autoRfqNo);
+
+                for (MultipartFile drawing : drawings) {
+                    String originalFilename = drawing.getOriginalFilename();
+                    if (originalFilename != null && originalFilename.toLowerCase().endsWith(".pdf")) {
+
+                        String cleanFileName = originalFilename.replaceAll(".*[\\\\/]", "");
+
+                        String partNoFromFileName = DrawingPartNoResolver.extractPartNo(cleanFileName, excelPartNos);
+
+                        log.debug("RFQ import drawing parsed rfqNo={} fileName={} partNo={}",
+                                autoRfqNo, cleanFileName, partNoFromFileName);
+
+                        StoredBusinessFile storedFile = businessFileService.saveDrawing(
+                                pathOrder, drawing, "RFQ_IMPORT_DRAWING", autoRfqNo);
+                        String fileUrl = storedFile.publicPath();
+                        DrawingFileInfo drawingFileInfo = new DrawingFileInfo(partNoFromFileName, "", cleanFileName, fileUrl, false);
+                        uploadedDrawings.add(drawingFileInfo);
+                        drawingMap.put(partNoFromFileName, drawingFileInfo);
+                    }
+                }
+            }
+            if (!drawingFolderMode && versionDrawings != null && !versionDrawings.isEmpty()) {
+                OrderRfq pathOrder = new OrderRfq();
+                pathOrder.setCustomerCode(resolvedCustomerCode);
+                pathOrder.setCustomerShortName(resolvedCustomerShortName);
+                pathOrder.setCustomerName(resolvedCustomerName);
+                pathOrder.setRfqNo(autoRfqNo);
+
+                for (MultipartFile drawing : versionDrawings) {
+                    String originalFilename = drawing.getOriginalFilename();
+                    if (originalFilename != null && originalFilename.toLowerCase().endsWith(".pdf")) {
+                        String cleanFileName = originalFilename.replaceAll(".*[\\\\/]", "");
+                        DrawingPartNoResolver.DrawingIdentity identity =
+                                DrawingPartNoResolver.extractPartNoVersion(cleanFileName, excelPartNoVersions);
+                        StoredBusinessFile storedFile = businessFileService.saveDrawing(
+                                pathOrder, drawing, "RFQ_IMPORT_DRAWING", autoRfqNo);
+                        String fileUrl = storedFile.publicPath();
+                        String partNo = identity == null
+                                ? DrawingPartNoResolver.extractPartNo(cleanFileName, excelPartNos)
+                                : identity.partNo();
+                        String version = identity == null ? "" : identity.version();
+                        DrawingFileInfo drawingFileInfo = new DrawingFileInfo(
+                                partNo, version, cleanFileName, fileUrl, true);
+                        uploadedDrawings.add(drawingFileInfo);
+                        versionUploadedDrawingCount++;
+                        if (identity != null) {
+                            versionDrawingMap.put(itemKey(identity.partNo(), identity.version()), drawingFileInfo);
+                        }
+                    }
+                }
+            }
+
+            log.info("RFQ import matching started rfqNo={} itemCount={} uploadedDrawingCount={}",
+                    autoRfqNo, excelDataList.size(), uploadedDrawings.size());
+
+            OrderRfq newOrder = new OrderRfq();
+            newOrder.setRfqNo(autoRfqNo);
+            newOrder.setCustomerCode(resolvedCustomerCode);
+            newOrder.setCustomerShortName(resolvedCustomerShortName);
+            newOrder.setCustomerName(resolvedCustomerName);
+            newOrder.setStatus(QuoteStatusWorkflow.UNPRICED);
+            if (dataScopeService != null) {
+                dataScopeService.assignCurrentOwnership(newOrder);
+            }
+            orderRfqMapper.insert(newOrder);
+            generatedRfqId = newOrder.getId();
+            BusinessFileService.DrawingFolderSaveResult drawingFolder = null;
+            if (drawingFolderMode) {
+                drawingFolder = businessFileService.saveDrawingFolderFiles(
+                        "RFQ",
+                        String.valueOf(generatedRfqId),
+                        drawingFolderName,
+                        drawingFolderFiles,
+                        "RFQ_IMPORT_DRAWING_FOLDER",
+                        String.valueOf(generatedRfqId));
+                newOrder.setDrawingFolderUrl(drawingFolder.folderUrl());
+                newOrder.setDrawingFolderName(drawingFolder.folderName());
+                newOrder.setDrawingFolderFileCount(drawingFolder.fileCount());
+                if (orderRfqMapper.updateById(newOrder) <= 0) {
+                    throw new RuntimeException("询价订单附件文件夹保存失败，请刷新后重试");
+                }
+            }
+            log.info("RFQ import order saved rfqId={} rfqNo={} customerCode={} customerName={}",
+                    generatedRfqId, autoRfqNo, resolvedCustomerCode, resolvedCustomerName);
+
+            Set<String> matchedDrawingPartNos = new HashSet<>();
+            Set<String> matchedVersionDrawingKeys = new HashSet<>();
+            List<Map<String, Object>> missingDrawingItems = new ArrayList<>();
+            int matchedItemCount = 0;
+
+            for (RfqExcelDTO item : excelDataList) {
+                String originalPartNo = item.getPartNo();
+                String safePartNo = normalizePartNo(originalPartNo);
+                String safeVersion = normalizeVersion(item.getVersion());
+                if (!safePartNo.isEmpty()) {
+                    excelPartNos.add(safePartNo);
+                }
+
+                String partVersionKey = itemKey(safePartNo, safeVersion);
+                DrawingFileInfo matchedDrawing = null;
+                String matchedDrawingUrl;
+                if (drawingFolder != null) {
+                    matchedDrawingUrl = drawingFolder.folderUrl();
+                } else {
+                    matchedDrawing = versionDrawingMap.get(partVersionKey);
+                    if (matchedDrawing == null) {
+                        matchedDrawing = drawingMap.get(safePartNo);
+                    }
+                    matchedDrawingUrl = matchedDrawing == null ? null : matchedDrawing.url();
+                }
+
+                ItemQuoteVersion dbItem = new ItemQuoteVersion();
+                dbItem.setRfqId(generatedRfqId);
+                dbItem.setPartNo(originalPartNo);
+                dbItem.setDescription(item.getDescription());
+                dbItem.setQty(item.getQty());
+                dbItem.setMaterialName(item.getMaterialName());
+                dbItem.setSurfaceTreatment(item.getSurfaceTreatment());
+                dbItem.setVersion(normalizeVersion(item.getVersion()));
+                dbItem.setUnit(item.getUnit());
+                dbItem.setLeadTime(item.getLeadTime());
+                dbItem.setRemark(item.getRemark());
+                dbItem.setStatus(QuoteStatusWorkflow.UNPRICED);
+
+                if (matchedDrawingUrl != null) {
+                    dbItem.setDrawingUrl(matchedDrawingUrl);
+                    matchedItemCount++;
+                    matchedDrawingPartNos.add(safePartNo);
+                    if (matchedDrawing != null && matchedDrawing.versionSpecific()) {
+                        matchedVersionDrawingKeys.add(partVersionKey);
+                    }
+                    log.debug("RFQ import item drawing matched rfqId={} partNo={} drawingMode={}",
+                            generatedRfqId, safePartNo, drawingFolder == null ? "file" : "folder");
+                } else {
+                    missingDrawingItems.add(buildMissingDrawingItem(item, safePartNo));
+                    log.debug("RFQ import item drawing missing rfqId={} partNo={}",
+                            generatedRfqId, safePartNo);
+                }
+
+                itemQuoteVersionMapper.insert(dbItem);
+            }
+
+            List<Map<String, String>> unmatchedDrawings = new ArrayList<>();
+            for (DrawingFileInfo drawing : uploadedDrawings) {
+                boolean unmatched = drawing.versionSpecific()
+                        ? !excelPartNoVersions.contains(new DrawingPartNoResolver.DrawingIdentity(drawing.partNo(), drawing.version()))
+                        : !excelPartNos.contains(drawing.partNo());
+                if (unmatched) {
+                    Map<String, String> unmatchedDrawing = new LinkedHashMap<>();
+                    unmatchedDrawing.put("partNo", drawing.partNo());
+                    if (!drawing.version().isBlank()) {
+                        unmatchedDrawing.put("version", drawing.version());
+                    }
+                    unmatchedDrawing.put("fileName", drawing.originalFilename());
+                    unmatchedDrawings.add(unmatchedDrawing);
+                }
+            }
+
+            Map<String, Object> drawingReport = new LinkedHashMap<>();
+            drawingReport.put("totalItemCount", excelDataList.size());
+            drawingReport.put("uploadedDrawingCount", drawingFolder == null ? uploadedDrawings.size() : drawingFolder.fileCount());
+            drawingReport.put("matchedItemCount", matchedItemCount);
+            drawingReport.put("matchedDrawingCount", drawingFolder == null ? matchedDrawingPartNos.size() : matchedItemCount);
+            drawingReport.put("versionUploadedDrawingCount", drawingFolder == null ? versionUploadedDrawingCount : 0);
+            drawingReport.put("versionMatchedDrawingCount", drawingFolder == null ? matchedVersionDrawingKeys.size() : 0);
+            drawingReport.put("drawingMatchModes", drawingFolder == null
+                    ? drawingMatchModes(uploadedDrawings.size(), versionUploadedDrawingCount)
+                    : Map.of("folder", drawingFolder.fileCount(), "partNo", 0, "partNoVersion", 0));
+            drawingReport.put("missingDrawingCount", missingDrawingItems.size());
+            drawingReport.put("unmatchedDrawingCount", unmatchedDrawings.size());
+            drawingReport.put("missingItems", missingDrawingItems);
+            drawingReport.put("unmatchedDrawings", unmatchedDrawings);
+            if (drawingFolder != null) {
+                drawingReport.put("drawingFolderMode", true);
+                drawingReport.put("drawingFolderFileCount", drawingFolder.fileCount());
+            }
+            log.info("RFQ import matching completed rfqId={} rfqNo={} matchedDrawingCount={} missingDrawingCount={} unmatchedDrawingCount={}",
+                    generatedRfqId,
+                    autoRfqNo,
+                    matchedDrawingPartNos.size(),
+                    missingDrawingItems.size(),
+                    unmatchedDrawings.size());
+            if (!missingDrawingItems.isEmpty() || !unmatchedDrawings.isEmpty()) {
+                log.warn("RFQ import completed with drawing warnings rfqId={} rfqNo={} missingDrawingCount={} unmatchedDrawingCount={}",
+                        generatedRfqId, autoRfqNo, missingDrawingItems.size(), unmatchedDrawings.size());
+            }
+
+            result.put("success", true);
+            result.put("message", "已成功为您生成询价单！<br><b>单号：</b><span style='color:#409EFF'>" + autoRfqNo + "</span>");
+            result.put("drawingReport", drawingReport);
+            recordRfqImportAudit(resolvedCustomerCode, resolvedCustomerName, autoRfqNo, generatedRfqId, excelDataList.size(), drawingReport);
+            log.info("RFQ import completed rfqId={} rfqNo={} customerCode={} customerName={} itemCount={} matchedDrawingCount={} missingDrawingCount={} unmatchedDrawingCount={} durationMs={}",
+                    generatedRfqId,
+                    autoRfqNo,
+                    resolvedCustomerCode,
+                    resolvedCustomerName,
+                    excelDataList.size(),
+                    matchedDrawingPartNos.size(),
+                    missingDrawingItems.size(),
+                    unmatchedDrawings.size(),
+                    System.currentTimeMillis() - startedAt);
+            return result;
+
+        } catch (Exception e) {
+            log.error("RFQ import failed customerCode={} customerName={} rfqNo={} rfqId={} durationMs={}",
+                    resolvedCustomerCode, resolvedCustomerName, autoRfqNo, generatedRfqId, System.currentTimeMillis() - startedAt, e);
+            throw new RuntimeException("服务器处理失败：" + e.getMessage(), e);
+        }
+    }
+
+    private CustomerMaster requireEnabledU9Customer(String customerCode) {
+        String code = cleanText(customerCode);
+        if (code == null) {
+            throw new RuntimeException("customerCode is required for RFQ import");
+        }
+        CustomerMaster customer = customerMasterMapper.selectEnabledByCode(code);
+        if (customer == null || Boolean.FALSE.equals(customer.getEnabled())) {
+            throw new RuntimeException("U9 customer is disabled or not found: " + code);
+        }
+        if (cleanText(customer.getCustomerCode()) == null || cleanText(customer.getCustomerName()) == null) {
+            throw new RuntimeException("U9 customer snapshot is incomplete: " + code);
+        }
+        return customer;
+    }
+
+    private String cleanText(String value) {
+        return value == null || value.trim().isEmpty() ? null : value.trim();
+    }
+
+    private String normalizePartNo(String partNo) {
+        return DrawingPartNoResolver.normalizePartNo(partNo);
+    }
+
+    private void recordRfqImportAudit(
+            String customerCode,
+            String customerName,
+            String rfqNo,
+            Integer rfqId,
+            int itemCount,
+            Map<String, Object> drawingReport) {
+        if (auditService == null) {
+            return;
+        }
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("customerCode", customerCode);
+        summary.put("customerName", customerName);
+        summary.put("rfqNo", rfqNo);
+        summary.put("rfqId", rfqId);
+        summary.put("itemCount", itemCount);
+        summary.put("uploadedDrawingCount", drawingReport.get("uploadedDrawingCount"));
+        summary.put("versionUploadedDrawingCount", drawingReport.get("versionUploadedDrawingCount"));
+        summary.put("matchedItemCount", drawingReport.get("matchedItemCount"));
+        summary.put("versionMatchedDrawingCount", drawingReport.get("versionMatchedDrawingCount"));
+        summary.put("drawingMatchModes", drawingReport.getOrDefault(
+                "drawingMatchModes",
+                drawingMatchModes(
+                        intValue(drawingReport.get("uploadedDrawingCount")),
+                        intValue(drawingReport.get("versionUploadedDrawingCount")))));
+        summary.put("missingDrawingCount", drawingReport.get("missingDrawingCount"));
+        summary.put("unmatchedDrawingCount", drawingReport.get("unmatchedDrawingCount"));
+        summary.put("drawingFolderMode", drawingReport.get("drawingFolderMode"));
+        summary.put("drawingFolderFileCount", drawingReport.get("drawingFolderFileCount"));
+        auditService.record(
+                "RFQ_IMPORT",
+                "order_rfq",
+                rfqId,
+                null,
+                summary,
+                "MARKET",
+                "SUCCESS",
+                "RFQ_IMPORT " + customerName + " " + rfqNo + " itemCount=" + itemCount,
+                null
+        );
+    }
+
+    private String normalizeHeader(String value) {
+        return value == null ? "" : value.replaceAll("\\s+", "").trim();
+    }
+
+    private Map<String, Integer> drawingMatchModes(int uploadedDrawingCount, int versionUploadedDrawingCount) {
+        return Map.of(
+                "partNo", Math.max(0, uploadedDrawingCount - versionUploadedDrawingCount),
+                "partNoVersion", Math.max(0, versionUploadedDrawingCount)
+        );
+    }
+
+    private boolean hasFiles(List<MultipartFile> files) {
+        return files != null && !files.isEmpty();
+    }
+
+    private int intValue(Object value) {
+        return value instanceof Number number ? number.intValue() : 0;
+    }
+
+    private boolean isRfqNoHeader(String header) {
+        String normalized = header == null ? "" : header.trim().toUpperCase();
+        return "RFQ号".equals(normalized) || "RFQNO".equals(normalized) || "RFQ".equals(normalized);
+    }
+
+    private String cellText(String value) {
+        return value == null ? "" : value.trim();
+    }
+
+    private Map<String, Object> buildMissingDrawingItem(RfqExcelDTO item, String normalizedPartNo) {
+        Map<String, Object> missingItem = new LinkedHashMap<>();
+        String partNo = item.getPartNo();
+        missingItem.put("partNo", partNo == null || partNo.isBlank() ? normalizedPartNo : partNo.trim());
+        missingItem.put("version", normalizeVersion(item.getVersion()));
+        missingItem.put("description", item.getDescription());
+        missingItem.put("qty", item.getQty());
+        return missingItem;
+    }
+
+    private record DrawingFileInfo(
+            String partNo,
+            String version,
+            String originalFilename,
+            String url,
+            boolean versionSpecific) {
+    }
+
+    private String normalizeVersion(String version) {
+        String normalized = version == null ? "" : version.trim().toUpperCase();
+        return normalized;
+    }
+
+    private String itemKey(String partNo, String version) {
+        return normalizePartNo(partNo) + "||" + normalizeVersion(version);
+    }
+
+    private String normalizeRfqNo(String rfqNo) {
+        return rfqNo == null ? "" : rfqNo.trim().toUpperCase();
+    }
+
+    private List<Integer> parseRfqIds(String rfqIdsJson) {
+        if (rfqIdsJson == null || rfqIdsJson.isBlank()) {
+            return List.of();
+        }
+        try {
+            return OBJECT_MAPPER.readValue(rfqIdsJson, new TypeReference<List<Integer>>() {
+            });
+        } catch (Exception e) {
+            throw new IllegalArgumentException("rfqIds must be a JSON integer array", e);
+        }
+    }
+
+    private List<ReleaseOrderSource> parseReleaseSources(String sourcesJson, String rfqIdsJson) {
+        if (sourcesJson != null && !sourcesJson.isBlank()) {
+            try {
+                return OBJECT_MAPPER.readValue(sourcesJson, new TypeReference<List<ReleaseOrderSource>>() {
+                });
+            } catch (Exception e) {
+                throw new IllegalArgumentException("sources must be a JSON release source array", e);
+            }
+        }
+        return parseRfqIds(rfqIdsJson).stream()
+                .map(ReleaseOrderSource::rfq)
+                .toList();
+    }
+
+    private void requireRfqOnlySources(List<ReleaseOrderSource> sources) {
+        if (sources != null && sources.stream()
+                .anyMatch(source -> source != null && source.getSourceType() == ReleaseSourceType.SALES_ORDER)) {
+            throw new RuntimeException("议价提单只支持 RFQ 询价订单，销售订单由导入流程自动生成提单");
+        }
+    }
+
+    private static <T> PageResult<T> page(List<T> allRows, Integer page, Integer pageSize) {
+        List<T> rows = allRows == null ? List.of() : allRows;
+        int safePage = page == null || page < 1 ? 1 : page;
+        int safePageSize = pageSize == null || pageSize < 1 ? 50 : Math.min(pageSize, 100);
+        int fromIndex = (int) Math.min((long) (safePage - 1) * safePageSize, rows.size());
+        int toIndex = Math.min(fromIndex + safePageSize, rows.size());
+        return PageResult.of(rows.subList(fromIndex, toIndex), rows.size(), safePage, safePageSize);
+    }
+}

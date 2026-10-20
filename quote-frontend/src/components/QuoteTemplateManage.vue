@@ -1,0 +1,300 @@
+<template>
+  <div class="erp-page template-page">
+    <header class="erp-page-header template-page-header">
+      <div>
+        <h1 class="erp-page-title">报价模板</h1>
+        <p class="erp-page-description">维护市场部客户模板报价单，全系统共用一份 .xlsx 模板。</p>
+      </div>
+      <div class="erp-page-actions template-page-actions">
+        <el-button :icon="Refresh" plain :loading="loading" @click="loadStatus">刷新状态</el-button>
+      </div>
+    </header>
+
+    <section class="erp-toolbar template-toolbar">
+      <div class="erp-toolbar-group">
+        <strong>模板配置</strong>
+        <span class="template-toolbar-note">查看当前模板状态，或上传新的 .xlsx 文件替换全局模板。</span>
+      </div>
+    </section>
+
+    <section class="erp-table-surface template-workspace">
+      <div class="erp-table-body">
+        <el-row :gutter="16">
+          <el-col :span="10">
+            <div class="erp-surface template-panel">
+              <div class="erp-section-title template-section-title">当前模板</div>
+              <el-descriptions :column="1" border>
+                <el-descriptions-item label="状态">
+                  <el-tag :type="templateStatus.exists ? 'success' : 'warning'">
+                    {{ templateStatus.exists ? '已上传' : '未上传' }}
+                  </el-tag>
+                </el-descriptions-item>
+                <el-descriptions-item label="文件名">
+                  {{ templateStatus.fileName || '-' }}
+                </el-descriptions-item>
+                <el-descriptions-item label="更新时间">
+                  {{ formatDateTime(templateStatus.updatedAt) }}
+                </el-descriptions-item>
+                <el-descriptions-item label="大小">
+                  {{ formatSize(templateStatus.size) }}
+                </el-descriptions-item>
+                <el-descriptions-item label="表头校验行">
+                  第 {{ templateStatus.headerRowNumber }} 行
+                </el-descriptions-item>
+              </el-descriptions>
+              <el-form class="template-config-form" label-position="top">
+                <el-form-item label="表头校验行">
+                  <div class="template-config-row">
+                    <el-input-number v-model="templateConfig.headerRowNumber" :min="2" :step="1" controls-position="right" />
+                    <el-button
+                      v-permission="'market:template:upload'"
+                      type="primary"
+                      plain
+                      :loading="isPending(quoteTemplateActionKeys.saveConfig)"
+                      :disabled="isPending(quoteTemplateActionKeys.saveConfig)"
+                      @click="saveTemplateConfig"
+                    >
+                      保存配置
+                    </el-button>
+                  </div>
+                </el-form-item>
+              </el-form>
+              <p class="template-config-note">
+                默认两行表头结构：第 {{ templateStatus.groupHeaderRowNumber }} 行为分组表头，第 {{ templateStatus.headerRowNumber }} 行用于字段校验，第 {{ templateStatus.detailStartRowNumber }} 行开始写入零件明细。
+              </p>
+            </div>
+          </el-col>
+
+          <el-col :span="14">
+            <div class="erp-surface template-panel">
+              <div class="erp-section-title template-section-title">上传并替换模板</div>
+              <el-alert
+                :title="`模板第 ${templateStatus.headerRowNumber} 行必须包含：序号、图号、物料描述、图纸状态、材料名称、表面处理、版本、数量、单位、含税单价、含税总价、交货周期、备注。`"
+                type="info"
+                show-icon
+                :closable="false"
+                class="template-alert"
+              />
+              <div class="erp-upload-surface template-upload-surface">
+                <el-upload v-permission="'market:template:upload'"
+                  ref="uploadRef"
+                  drag
+                  :auto-upload="false"
+                  :limit="1"
+                  accept=".xlsx"
+                  :on-change="handleFileChange"
+                  :on-remove="handleFileRemove"
+                  :on-exceed="handleExceed"
+                >
+                  <el-icon class="upload-icon"><UploadFilled /></el-icon>
+                  <div class="el-upload__text">拖入 .xlsx 模板，或点击选择文件</div>
+                  <template #tip>
+                    <div class="el-upload__tip">上传成功后会立即替换当前全局报价单模板。</div>
+                  </template>
+                </el-upload>
+              </div>
+              <div class="erp-dialog-footer template-actions">
+                <el-button v-permission="'market:template:upload'" type="primary" :disabled="!selectedFile || isPending(quoteTemplateActionKeys.upload)" :loading="isPending(quoteTemplateActionKeys.upload)" @click="uploadTemplate">
+                  上传并替换模板
+                </el-button>
+              </div>
+            </div>
+          </el-col>
+        </el-row>
+      </div>
+    </section>
+  </div>
+</template>
+<script setup>
+import { onMounted, reactive, ref } from 'vue'
+import { ElMessage } from 'element-plus'
+import { Refresh, UploadFilled } from '@element-plus/icons-vue'
+import { getQuoteTemplate, saveQuoteTemplate, updateQuoteTemplateConfig } from '../services/adminApi'
+import { usePendingAction } from '../composables/usePendingAction'
+
+const loading = ref(false)
+const uploadRef = ref()
+const selectedFile = ref(null)
+const { isPending, runAction } = usePendingAction()
+
+const quoteTemplateActionKeys = {
+  saveConfig: 'market:template:config-save',
+  upload: 'market:template:upload'
+}
+const templateStatus = reactive({
+  exists: false,
+  fileName: '',
+  updatedAt: '',
+  size: 0,
+  headerRowNumber: 8,
+  groupHeaderRowNumber: 7,
+  detailStartRowNumber: 9
+})
+const templateConfig = reactive({
+  headerRowNumber: 8
+})
+
+const loadStatus = async () => {
+  loading.value = true
+  try {
+    const response = await getQuoteTemplate()
+    Object.assign(templateStatus, {
+      exists: !!response?.exists,
+      fileName: response?.fileName || '',
+      updatedAt: response?.updatedAt || '',
+      size: response?.size || 0,
+      headerRowNumber: Number(response?.headerRowNumber || 8),
+      groupHeaderRowNumber: Number(response?.groupHeaderRowNumber || 7),
+      detailStartRowNumber: Number(response?.detailStartRowNumber || 9)
+    })
+    templateConfig.headerRowNumber = templateStatus.headerRowNumber
+  } catch (error) {
+    ElMessage.error(error.response?.data?.message || '报价单模板状态加载失败。')
+  } finally {
+    loading.value = false
+  }
+}
+
+const handleFileChange = (file) => {
+  const name = file?.name || ''
+  if (!name.toLowerCase().endsWith('.xlsx')) {
+    ElMessage.warning('只能上传 .xlsx 模板文件。')
+    uploadRef.value?.clearFiles()
+    selectedFile.value = null
+    return
+  }
+  selectedFile.value = file.raw
+}
+
+const handleFileRemove = () => {
+  selectedFile.value = null
+}
+
+const handleExceed = (files) => {
+  uploadRef.value?.clearFiles()
+  const file = files?.[0]
+  if (file) {
+    uploadRef.value?.handleStart(file)
+  }
+}
+
+const saveTemplateConfig = async () => {
+  const headerRowNumber = Number(templateConfig.headerRowNumber)
+  if (!Number.isInteger(headerRowNumber) || headerRowNumber < 2) {
+    ElMessage.warning('表头校验行必须大于等于 2。')
+    return
+  }
+  return runAction(quoteTemplateActionKeys.saveConfig, async () => {
+    try {
+      const response = await updateQuoteTemplateConfig({ headerRowNumber })
+      ElMessage.success(response.message || '报价单模板配置已保存。')
+      await loadStatus()
+    } catch (error) {
+      ElMessage.error(error.response?.data?.message || '报价单模板配置保存失败。')
+    }
+  })
+}
+
+const uploadTemplate = async () => {
+  if (!selectedFile.value) {
+    ElMessage.warning('请先选择 .xlsx 模板。')
+    return
+  }
+  const formData = new FormData()
+  formData.append('templateFile', selectedFile.value)
+  return runAction(quoteTemplateActionKeys.upload, async () => {
+    try {
+      const response = await saveQuoteTemplate(formData)
+      ElMessage.success(response.message || '报价单模板已更新。')
+      selectedFile.value = null
+      uploadRef.value?.clearFiles()
+      await loadStatus()
+    } catch (error) {
+      ElMessage.error(error.response?.data?.message || '报价单模板上传失败。')
+    }
+  })
+}
+
+const formatDateTime = (value) => {
+  if (!value) return '-'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return date.toLocaleString()
+}
+
+const formatSize = (value) => {
+  const size = Number(value || 0)
+  if (!size) return '-'
+  if (size < 1024) return `${size} B`
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
+  return `${(size / 1024 / 1024).toFixed(1)} MB`
+}
+
+onMounted(loadStatus)
+</script>
+
+<style scoped>
+.template-toolbar-note {
+  color: var(--erp-text-secondary);
+  font-size: var(--erp-font-size-sm);
+}
+
+.template-workspace .erp-table-body {
+  padding: var(--erp-space-4);
+}
+
+.template-panel {
+  min-height: 280px;
+  padding: var(--erp-space-4);
+}
+
+.template-section-title {
+  margin-bottom: var(--erp-space-3);
+}
+
+.template-config-form {
+  margin-top: var(--erp-space-4);
+}
+
+.template-config-row {
+  display: flex;
+  align-items: center;
+  gap: var(--erp-space-3);
+}
+
+.template-config-note {
+  color: var(--erp-text-secondary);
+  font-size: var(--erp-font-size-sm);
+  line-height: 1.6;
+  margin: 0;
+}
+
+.template-alert {
+  margin-bottom: var(--erp-space-3);
+}
+
+.template-upload-surface {
+  padding: var(--erp-space-3);
+}
+
+.upload-icon {
+  color: var(--erp-primary);
+  font-size: 42px;
+}
+
+.template-actions {
+  margin-top: var(--erp-space-3);
+}
+
+@media (max-width: 980px) {
+  .template-page :deep(.el-row) {
+    display: block;
+  }
+
+  .template-page :deep(.el-col) {
+    max-width: 100%;
+    width: 100%;
+    margin-bottom: var(--erp-space-3);
+  }
+}
+</style>

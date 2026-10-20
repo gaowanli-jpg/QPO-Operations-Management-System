@@ -1,0 +1,162 @@
+import { beforeEach, describe, expect, test, vi } from 'vitest'
+import { downloadFile, request } from '../api'
+import * as engineerApi from './engineerApi'
+
+vi.mock('../api', () => ({
+  downloadFile: vi.fn(),
+  request: vi.fn()
+}))
+
+beforeEach(() => {
+  downloadFile.mockReset()
+  request.mockReset()
+})
+
+describe('engineerApi', () => {
+  test('saveOrderConfig posts normalized config by order id', async () => {
+    const config = { materialName: '45#', processRoute: [{ processName: 'CNC1' }] }
+
+    await engineerApi.saveOrderConfig(12, config)
+
+    expect(request).toHaveBeenCalledWith('/api/engineer/order-config/12', {
+      method: 'POST',
+      data: config
+    })
+  })
+
+  test('getRepeatAnalysis loads repeat analysis by rfq id', async () => {
+    await engineerApi.getRepeatAnalysis(12)
+
+    expect(request).toHaveBeenCalledWith('/api/engineer/repeat-analysis/12')
+  })
+
+  test('listSetupOrders forwards engineer setup order picker params', async () => {
+    const params = { customerName: 'ACME', status: 'UNPRICED' }
+
+    await engineerApi.listSetupOrders(params)
+
+    expect(request).toHaveBeenCalledWith('/api/engineer/setup/orders', { params })
+  })
+
+  test('listSupplementalPricingOrders forwards supplemental drawing order picker params', async () => {
+    const params = { customerName: 'ACME', status: '已生成提单', page: 1, pageSize: 20 }
+
+    await engineerApi.listSupplementalPricingOrders(params)
+
+    expect(request).toHaveBeenCalledWith('/api/engineer/pricing/supplemental-drawing/orders', { params })
+  })
+
+  test('getSetupSummary loads engineer setup order summary by rfq id', async () => {
+    await engineerApi.getSetupSummary(12)
+
+    expect(request).toHaveBeenCalledWith('/api/engineer/setup/summary/12')
+  })
+
+  test('getPricingSummary loads pricing workspace summary by rfq id', async () => {
+    await engineerApi.getPricingSummary(12)
+
+    expect(request).toHaveBeenCalledWith('/api/engineer/pricing/summary/12')
+  })
+
+  test('listPricingItems forwards server-side item paging params', async () => {
+    const params = { page: 2, pageSize: 50, keyword: 'PN-001', status: '已核价' }
+
+    await engineerApi.listPricingItems(12, params)
+
+    expect(request).toHaveBeenCalledWith('/api/engineer/pricing/items/12', { params })
+  })
+
+  test('listAssemblyChildCandidates forwards server-side child picker params', async () => {
+    const params = { parentItemId: 34, page: 2, pageSize: 20, keyword: 'CHILD' }
+
+    await engineerApi.listAssemblyChildCandidates(12, params)
+
+    expect(request).toHaveBeenCalledWith('/api/engineer/pricing/assembly-child-candidates/12', { params })
+  })
+
+  test('pagePricingMaterialOptions forwards remote material picker params', async () => {
+    const params = { keyword: '45#', page: 2, pageSize: 50, categoryName: 'U9原材料' }
+
+    await engineerApi.pagePricingMaterialOptions(params)
+
+    expect(request).toHaveBeenCalledWith('/api/engineer/pricing/options/materials', { params })
+  })
+
+  test('listPricingMaterialU9CategoryNames loads U9 categories for material picker filters', async () => {
+    const params = { materialTypeCodes: 'MATERIAL,RAW_MATERIAL' }
+
+    await engineerApi.listPricingMaterialU9CategoryNames(params)
+
+    expect(request).toHaveBeenCalledWith('/api/engineer/pricing/options/material-u9-category-names', { params })
+  })
+
+  test('pagePricingProcessOptions forwards remote process picker params', async () => {
+    const params = { keyword: 'CNC', page: 3, pageSize: 100, sourceType: 'extra', feeItemIds: '5,6' }
+
+    await engineerApi.pagePricingProcessOptions(params)
+
+    expect(request).toHaveBeenCalledWith('/api/engineer/pricing/options/processes', { params })
+  })
+
+  test('listPricingProcessArrangementTree loads read-only process arrangement tree for pricing picker', async () => {
+    await engineerApi.listPricingProcessArrangementTree()
+
+    expect(request).toHaveBeenCalledWith('/api/engineer/pricing/options/process-arrangement/tree')
+  })
+
+  test('applyRepeatQuotes posts repeat quote application by order id', async () => {
+    await engineerApi.applyRepeatQuotes(12)
+
+    expect(request).toHaveBeenCalledWith('/api/engineer/apply-repeat-quotes/12', {
+      method: 'POST'
+    })
+  })
+
+  test('completeOrderQuote posts completion by rfq id', async () => {
+    await engineerApi.completeOrderQuote(12)
+
+    expect(request).toHaveBeenCalledWith('/api/engineer/complete-order/12', {
+      method: 'POST'
+    })
+  })
+
+  test('completeSupplementalDrawingQuote posts supplemental completion by rfq id', async () => {
+    await engineerApi.completeSupplementalDrawingQuote(12)
+
+    expect(request).toHaveBeenCalledWith('/api/engineer/pricing/supplemental-drawing/complete-order/12', {
+      method: 'POST'
+    })
+  })
+
+  test('listAssemblyRelations loads assembly children by item id', async () => {
+    await engineerApi.listAssemblyRelations(34)
+
+    expect(request).toHaveBeenCalledWith('/api/engineer/assembly-relations/34')
+  })
+
+  test('submitQuote posts quote payload', async () => {
+    const payload = { itemId: 34, quoteMode: 'NORMAL' }
+
+    await engineerApi.submitQuote(payload)
+
+    expect(request).toHaveBeenCalledWith('/api/engineer/submit-quote', {
+      method: 'POST',
+      data: payload
+    })
+  })
+
+  test('savePricingItemRemark updates only the pricing item remark', async () => {
+    await engineerApi.savePricingItemRemark(34, 'needs deburring')
+
+    expect(request).toHaveBeenCalledWith('/api/engineer/pricing/items/34/remark', {
+      method: 'PUT',
+      data: { remark: 'needs deburring' }
+    })
+  })
+
+  test('downloadPricingSheet downloads engineering pricing sheet by rfq id', async () => {
+    await engineerApi.downloadPricingSheet(12)
+
+    expect(downloadFile).toHaveBeenCalledWith('/api/engineer/pricing/export-sheet/12', 'pricing-sheet-12.xlsx')
+  })
+})

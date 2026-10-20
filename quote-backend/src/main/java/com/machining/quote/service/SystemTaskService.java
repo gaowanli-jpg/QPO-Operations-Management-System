@@ -1,0 +1,486 @@
+package com.machining.quote.service;
+
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.machining.quote.config.AuthContext;
+import com.machining.quote.entity.OrderDeliveryTicket;
+import com.machining.quote.entity.OrderDeliveryTicketAllocation;
+import com.machining.quote.entity.SystemTask;
+import com.machining.quote.mapper.OrderDeliveryTicketAllocationMapper;
+import com.machining.quote.mapper.OrderDeliveryTicketMapper;
+import com.machining.quote.mapper.SystemTaskMapper;
+import com.machining.quote.service.mes.MesProductionDispatchService;
+import com.machining.quote.service.mes.LockedItemStockPickingOrderService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
+import org.springframework.stereotype.Service;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Supplier;
+
+@Service
+public class SystemTaskService {
+    private static final Logger log = LoggerFactory.getLogger(SystemTaskService.class);
+    private static final String STATUS_PENDING = "PENDING";
+    private static final String STATUS_RUNNING = "RUNNING";
+    private static final String STATUS_SUCCESS = "SUCCESS";
+    private static final String STATUS_FAILED = "FAILED";
+
+    @Autowired
+    private SystemTaskMapper taskMapper;
+    @Autowired
+    private OrderDeliveryTicketMapper ticketMapper;
+    @Autowired
+    private OrderDeliveryTicketAllocationMapper allocationMapper;
+    @Autowired
+    private EngineerService engineerService;
+    @Autowired
+    private ExcelExportService excelExportService;
+    @Autowired
+    private QuoteProcessService quoteProcessService;
+    @Autowired(required = false)
+    private MesProductionDispatchService mesProductionDispatchService;
+    @Autowired(required = false)
+    private LockedItemStockPickingOrderService lockedItemStockPickingOrderService;
+    @Autowired(required = false)
+    private DeliveryIntegrationBatchService deliveryIntegrationBatchService;
+    @Autowired(required = false)
+    private SalesOrderWmsAllocationService salesOrderWmsAllocationService;
+    @Autowired(required = false)
+    private SystemTaskGuardService taskGuardService;
+    @Autowired(required = false)
+    private SalesOrderChangeNoticeService salesOrderChangeNoticeService;
+    @Autowired
+    @Qualifier("systemTaskExecutor")
+    private ThreadPoolTaskExecutor taskExecutor;
+    @Autowired
+    private AuditService auditService;
+    @Autowired(required = false)
+    private DataScopeService dataScopeService;
+    @Value("${erp.task.output-dir}")
+    private String taskOutputDir;
+
+    public SystemTask submitRefreshQuotesTask(Integer rfqId) {
+        if (rfqId == null) {
+            throw new RuntimeException("璁㈠崟 ID 涓嶈兘涓虹┖");
+        }
+        assertOrderDataScope(rfqId);
+        assertNoActiveRefreshQuotesTask(rfqId);
+        Map<String, Object> request = new LinkedHashMap<>();
+        request.put("rfqId", rfqId);
+        SystemTask task = createTask("REFRESH_ORDER_QUOTES", request);
+        recordTaskSubmitAudit("QUOTE_REFRESH_TASK_SUBMIT", "ENGINEER", task, request);
+        taskExecutor.execute(() -> runTask(task.getId(), () -> engineerService.refreshOrderQuotes(rfqId)));
+        return taskMapper.selectById(task.getId());
+    }
+
+    public SystemTask submitQuoteExportTask(Integer rfqId, String exportType) {
+        if (rfqId == null) {
+            throw new RuntimeException("璁㈠崟 ID 涓嶈兘涓虹┖");
+        }
+        String safeExportType = normalizeQuoteExportType(exportType);
+        assertOrderDataScope(rfqId);
+        quoteProcessService.assertQuoteExportable(rfqId);
+        Map<String, Object> request = new LinkedHashMap<>();
+        request.put("rfqId", rfqId);
+        request.put("exportType", safeExportType);
+        SystemTask task = createTask("EXPORT_QUOTE", request);
+        recordTaskSubmitAudit("QUOTE_EXPORT_TASK_SUBMIT", "MARKET", task, request);
+        taskExecutor.execute(() -> runTask(task.getId(), () -> {
+            Path file;
+            try {
+                file = excelExportService.exportQuoteSheetFile(rfqId, taskOutputDirectory(), safeExportType);
+            } catch (Exception e) {
+                throw new RuntimeException("鎶ヤ环鍗曞鍑哄け璐ワ細" + e.getMessage(), e);
+            }
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("fileName", file.getFileName().toString());
+            result.put("exportType", safeExportType);
+            return new TaskRunResult(result, file.toAbsolutePath().normalize().toString());
+        }));
+        return taskMapper.selectById(task.getId());
+    }
+
+    public SystemTask submitMesMaterialBatchSyncTask(List<Integer> ticketIds) {
+        if (deliveryIntegrationBatchService == null) {
+            throw new RuntimeException("MES 鎵归噺鐗╂枡鍙峰悓姝ユ湇鍔′笉鍙敤");
+        }
+        List<Integer> normalizedTicketIds = deliveryIntegrationBatchService.normalizeTicketIds(ticketIds);
+        deliveryIntegrationBatchService.assertCanAccessTickets(normalizedTicketIds);
+        normalizedTicketIds = filterDiscardedTicketIds(normalizedTicketIds);
+        if (normalizedTicketIds.isEmpty()) {
+            throw new RuntimeException("所选已提零件均已废弃，不能提交 MES 物料号任务");
+        }
+        List<Integer> taskTicketIds = normalizedTicketIds;
+        Map<String, Object> request = new LinkedHashMap<>();
+        request.put("ticketIds", taskTicketIds);
+        request.put("ticketCount", taskTicketIds.size());
+        SystemTask task = createTask("MES_MATERIAL_BATCH_SYNC", request);
+        recordTaskSubmitAudit("DELIVERY_MES_MATERIAL_SYNC_SUBMIT", "DELIVERY", task, request);
+        log.info("MES material batch sync submitted taskId={} ticketCount={}", task.getId(), taskTicketIds.size());
+        taskExecutor.execute(() -> runTask(task.getId(), () -> deliveryIntegrationBatchService.syncMesMaterialBatch(taskTicketIds, task.getId())));
+        return taskMapper.selectById(task.getId());
+    }
+
+
+    public SystemTask submitWmsAllocationBatchTask(List<Integer> ticketIds) {
+        if (deliveryIntegrationBatchService == null) {
+            throw new RuntimeException("WMS 批量锁库服务不可用");
+        }
+        List<Integer> normalizedTicketIds = deliveryIntegrationBatchService.normalizeTicketIds(ticketIds);
+        deliveryIntegrationBatchService.assertCanAccessTickets(normalizedTicketIds);
+        normalizedTicketIds = filterDiscardedTicketIds(normalizedTicketIds);
+        if (normalizedTicketIds.isEmpty()) {
+            throw new RuntimeException("所选已提零件均已废弃，不能提交 WMS 锁库任务");
+        }
+        List<Integer> taskTicketIds = normalizedTicketIds;
+        Map<String, Object> request = new LinkedHashMap<>();
+        request.put("ticketIds", taskTicketIds);
+        request.put("ticketCount", taskTicketIds.size());
+        SystemTask task = createTask("WMS_ALLOCATION_BATCH", request);
+        recordTaskSubmitAudit("DELIVERY_WMS_ALLOCATION_SUBMIT", "DELIVERY", task, request);
+        log.info("WMS allocation batch submitted taskId={} ticketCount={}", task.getId(), taskTicketIds.size());
+        taskExecutor.execute(() -> runTask(task.getId(), () -> deliveryIntegrationBatchService.allocateWmsBatch(taskTicketIds, task.getId())));
+        return taskMapper.selectById(task.getId());
+    }
+
+    public SystemTask submitSalesOrderWmsAllocationTask(Long salesOrderId) {
+        return submitSalesOrderWmsAllocationTask(salesOrderId, null);
+    }
+
+    public SystemTask submitSalesOrderWmsAllocationTask(Long salesOrderId, List<Integer> requestedAllocationIds) {
+        if (deliveryIntegrationBatchService == null) {
+            throw new RuntimeException("WMS allocation service is unavailable");
+        }
+        if (salesOrderWmsAllocationService == null) {
+            throw new RuntimeException("Sales order WMS allocation service is unavailable");
+        }
+        salesOrderWmsAllocationService.assertCanAccessSalesOrder(salesOrderId);
+        boolean selectedMode = requestedAllocationIds != null && !requestedAllocationIds.isEmpty();
+        List<Integer> allAllocationIds = selectedMode
+                ? salesOrderWmsAllocationService.resolveSelectedAllocationIds(salesOrderId, requestedAllocationIds)
+                : salesOrderWmsAllocationService.resolveAllocationIds(salesOrderId);
+        List<Integer> eligibleAllocationIds = selectedMode
+                ? salesOrderWmsAllocationService.resolveEligibleAllocationIds(salesOrderId, requestedAllocationIds)
+                : salesOrderWmsAllocationService.resolveEligibleAllocationIds(salesOrderId);
+        if (eligibleAllocationIds.isEmpty()) {
+            throw new RuntimeException(selectedMode
+                    ? "所选零件没有可获取库存信息的待产 Allocation"
+                    : "当前销售订单没有可获取库存信息的零件");
+        }
+        List<Integer> taskAllocationIds = allAllocationIds;
+        Map<String, Object> request = new LinkedHashMap<>();
+        request.put("salesOrderId", salesOrderId);
+        request.put("allocationIds", taskAllocationIds);
+        request.put("allocationCount", taskAllocationIds.size());
+        request.put("eligibleAllocationCount", eligibleAllocationIds.size());
+        request.put("selectionMode", selectedMode ? "SELECTED" : "ORDER");
+        request.put("requestedAllocationCount", selectedMode ? requestedAllocationIds.size() : taskAllocationIds.size());
+        SystemTask task = createTask("WMS_ALLOCATION_BATCH", request);
+        Map<String, Object> auditSummary = new LinkedHashMap<>();
+        auditSummary.put("salesOrderId", salesOrderId);
+        auditSummary.put("allocationCount", taskAllocationIds.size());
+        auditSummary.put("eligibleAllocationCount", eligibleAllocationIds.size());
+        auditSummary.put("selectionMode", selectedMode ? "SELECTED" : "ORDER");
+        auditSummary.put("requestedAllocationCount", selectedMode ? requestedAllocationIds.size() : taskAllocationIds.size());
+        recordTaskSubmitAudit("SALES_ORDER_WMS_ALLOCATION_SUBMIT", "MARKET", task, auditSummary);
+        log.info("Sales order WMS allocation submitted taskId={} salesOrderId={} allocationCount={}",
+                task.getId(), salesOrderId, taskAllocationIds.size());
+        taskExecutor.execute(() -> runTask(task.getId(),
+                () -> deliveryIntegrationBatchService.allocateWmsAllocationBatch(taskAllocationIds, task.getId())));
+        return taskMapper.selectById(task.getId());
+    }
+
+    public SystemTask submitMesProductionBatchTask(List<Integer> allocationIds) {
+        if (mesProductionDispatchService == null) {
+            throw new RuntimeException("MES production dispatch service is unavailable");
+        }
+        List<Integer> normalizedAllocationIds = mesProductionDispatchService.normalizeAllocationIds(allocationIds);
+        mesProductionDispatchService.assertCanAccessAllocations(normalizedAllocationIds);
+        normalizedAllocationIds = filterDiscardedAllocationIds(normalizedAllocationIds);
+        if (normalizedAllocationIds.isEmpty()) {
+            throw new RuntimeException("所选待产零件均已废弃，不能提交 MES 生产任务");
+        }
+        List<Integer> taskAllocationIds = normalizedAllocationIds;
+        Map<String, Object> request = new LinkedHashMap<>();
+        request.put("allocationIds", taskAllocationIds);
+        request.put("allocationCount", taskAllocationIds.size());
+        SystemTask task = createTask("MES_PRODUCTION_DISPATCH", request);
+        recordTaskSubmitAudit("PRODUCTION_ITEM_MES_PRODUCTION_SUBMIT", "DELIVERY", task, request);
+        log.info("MES production dispatch submitted taskId={} allocationCount={}",
+                task.getId(), taskAllocationIds.size());
+        taskExecutor.execute(() -> runTask(task.getId(),
+                () -> mesProductionDispatchService.dispatchBatch(taskAllocationIds, task.getId())));
+        return taskMapper.selectById(task.getId());
+    }
+
+    public SystemTask submitLockedStockPickingOrderBatchTask(List<Integer> allocationIds) {
+        if (lockedItemStockPickingOrderService == null) {
+            throw new RuntimeException("MES 提库存工单下发服务不可用");
+        }
+        List<Integer> normalizedAllocationIds = lockedItemStockPickingOrderService.normalizeAllocationIds(allocationIds);
+        lockedItemStockPickingOrderService.assertCanAccessAllocations(normalizedAllocationIds);
+        normalizedAllocationIds = filterDiscardedAllocationIds(normalizedAllocationIds);
+        if (normalizedAllocationIds.isEmpty()) {
+            throw new RuntimeException("所选锁库零件均已废弃，不能提交提库存工单任务");
+        }
+        List<Integer> taskAllocationIds = normalizedAllocationIds;
+        Map<String, Object> request = new LinkedHashMap<>();
+        request.put("allocationIds", taskAllocationIds);
+        request.put("allocationCount", taskAllocationIds.size());
+        SystemTask task = createTask("LOCKED_ITEM_STOCK_PICKING_ORDER", request);
+        recordTaskSubmitAudit("LOCKED_ITEM_STOCK_PICKING_SUBMIT", "DELIVERY", task, request);
+        log.info("Locked item stock picking order submitted taskId={} allocationCount={}",
+                task.getId(), taskAllocationIds.size());
+        taskExecutor.execute(() -> runTask(task.getId(),
+                () -> lockedItemStockPickingOrderService.dispatchBatch(taskAllocationIds, task.getId())));
+        return taskMapper.selectById(task.getId());
+    }
+
+    public SystemTask submitSalesOrderChangeNoticeTask(List<String> noticeIds) {
+        if (salesOrderChangeNoticeService == null) {
+            throw new RuntimeException("销售变更通知服务不可用");
+        }
+        List<String> normalizedNoticeIds = noticeIds == null ? List.of() : noticeIds.stream()
+                .filter(java.util.Objects::nonNull)
+                .map(String::trim)
+                .filter(value -> !value.isEmpty())
+                .distinct()
+                .toList();
+        if (normalizedNoticeIds.isEmpty()) {
+            throw new RuntimeException("请选择需要发送的销售变更通知");
+        }
+        if (normalizedNoticeIds.size() > 1000) {
+            throw new RuntimeException("一次最多发送 1000 条销售变更通知");
+        }
+        List<String> claimedNoticeIds = salesOrderChangeNoticeService.claimManual(normalizedNoticeIds);
+        return submitSalesOrderChangeNoticeTaskClaimed(claimedNoticeIds);
+    }
+
+    public SystemTask submitSalesOrderChangeNoticeTaskClaimed(List<String> claimedNoticeIds) {
+        if (salesOrderChangeNoticeService == null) {
+            throw new RuntimeException("销售变更通知服务不可用");
+        }
+        List<String> normalizedNoticeIds = claimedNoticeIds == null ? List.of() : claimedNoticeIds.stream()
+                .filter(java.util.Objects::nonNull)
+                .map(String::trim)
+                .filter(value -> !value.isEmpty())
+                .distinct()
+                .toList();
+        if (normalizedNoticeIds.isEmpty()) {
+            throw new RuntimeException("没有已认领的销售变更通知");
+        }
+        Map<String, Object> request = new LinkedHashMap<>();
+        request.put("noticeCount", normalizedNoticeIds.size());
+        request.put("noticeIds", normalizedNoticeIds);
+        try {
+            SystemTask task = createTask("MES_SALES_ORDER_CHANGE_NOTICE", request);
+            recordTaskSubmitAudit("SALES_ORDER_CHANGE_NOTICE_SEND_SUBMIT", "CHANGE", task,
+                    Map.of("noticeCount", normalizedNoticeIds.size()));
+            taskExecutor.execute(() -> runTask(task.getId(),
+                    () -> salesOrderChangeNoticeService.sendClaimed(normalizedNoticeIds, task.getId())));
+            return taskMapper.selectById(task.getId());
+        } catch (RuntimeException error) {
+            salesOrderChangeNoticeService.markSubmissionFailed(normalizedNoticeIds, error.getMessage());
+            throw error;
+        }
+    }
+
+    private String normalizeQuoteExportType(String exportType) {
+        String safeType = exportType == null || exportType.trim().isEmpty() ? "DETAIL" : exportType.trim().toUpperCase();
+        if ("DETAIL".equals(safeType) || "SIMPLE".equals(safeType)) {
+            return safeType;
+        }
+        throw new RuntimeException("\u4e0d\u652f\u6301\u7684\u62a5\u4ef7\u5355\u5bfc\u51fa\u7c7b\u578b\uff1a" + safeType);
+    }
+
+    public SystemTask getTask(Long taskId) {
+        if (taskId == null) {
+            throw new RuntimeException("浠诲姟 ID 涓嶈兘涓虹┖");
+        }
+        SystemTask task = taskMapper.selectById(taskId);
+        if (task == null) {
+            throw new RuntimeException("任务不存在");
+        }
+        return task;
+    }
+
+    public Path getTaskFile(Long taskId) {
+        SystemTask task = getTask(taskId);
+        if (task.getFilePath() == null || task.getFilePath().trim().isEmpty()) {
+            throw new RuntimeException("璇ヤ换鍔℃病鏈夊彲涓嬭浇鏂囦欢");
+        }
+        Path baseDir = taskOutputDirectory();
+        Path file = Path.of(task.getFilePath()).toAbsolutePath().normalize();
+        if (!file.startsWith(baseDir) || !Files.exists(file) || !Files.isRegularFile(file)) {
+            throw new RuntimeException("任务文件不存在或路径不合法");
+        }
+        return file;
+    }
+
+    public List<SystemTask> recentTasks(String taskType, Integer limit) {
+        QueryWrapper<SystemTask> qw = new QueryWrapper<>();
+        if (taskType != null && !taskType.trim().isEmpty()) {
+            qw.eq("task_type", taskType.trim());
+        }
+        int safeLimit = limit == null || limit < 1 ? 20 : Math.min(limit, 100);
+        qw.orderByDesc("id").last("LIMIT " + safeLimit);
+        return taskMapper.selectList(qw);
+    }
+
+    private void assertOrderDataScope(Integer rfqId) {
+        if (dataScopeService != null) {
+            dataScopeService.assertCanAccessOrder(rfqId, null);
+        }
+    }
+
+    private void assertNoActiveRefreshQuotesTask(Integer rfqId) {
+        if (taskGuardService != null) {
+            taskGuardService.assertNoActiveRefreshQuotesTask(rfqId);
+        }
+    }
+
+    public List<Integer> filterDiscardedTicketIds(List<Integer> ticketIds) {
+        return ticketIds.stream()
+                .filter(ticketId -> {
+                    OrderDeliveryTicket ticket = ticketMapper.selectById(ticketId);
+                    return ticket == null || !Boolean.TRUE.equals(ticket.getDiscarded());
+                })
+                .toList();
+    }
+
+    public List<Integer> filterDiscardedAllocationIds(List<Integer> allocationIds) {
+        Map<Integer, OrderDeliveryTicketAllocation> allocationsById = new LinkedHashMap<>();
+        allocationMapper.selectBatchIds(allocationIds)
+                .forEach(allocation -> allocationsById.put(allocation.getId(), allocation));
+        return allocationIds.stream()
+                .filter(allocationId -> {
+                    OrderDeliveryTicketAllocation allocation = allocationsById.get(allocationId);
+                    return allocation == null || !Boolean.TRUE.equals(allocation.getDiscarded());
+                })
+                .toList();
+    }
+
+    private SystemTask createTask(String taskType, Object requestJson) {
+        AuthContext.SessionUser current = AuthContext.get();
+        SystemTask task = new SystemTask();
+        task.setTaskType(taskType);
+        task.setStatus(STATUS_PENDING);
+        task.setProgress(0);
+        task.setTotal(1);
+        task.setRequestJson(requestJson);
+        task.setCreatedBy(current == null ? null : current.username());
+        task.setCreatedAt(LocalDateTime.now());
+        taskMapper.insert(task);
+        log.info("System task submitted taskId={} taskType={} request={}",
+                task.getId(), task.getTaskType(), safeRequestSummary(requestJson));
+        return task;
+    }
+
+    private void recordTaskSubmitAudit(String action, String module, SystemTask task, Map<String, Object> request) {
+        if (auditService == null) {
+            return;
+        }
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("taskId", task.getId());
+        summary.put("taskType", task.getTaskType());
+        summary.put("status", task.getStatus());
+        summary.put("request", request);
+        auditService.record(
+                action,
+                "system_task",
+                task.getId(),
+                null,
+                summary,
+                module,
+                "SUCCESS",
+                action + " taskId=" + task.getId(),
+                null
+        );
+    }
+
+    private void runTask(Long taskId, Supplier<Object> work) {
+        SystemTask task = taskMapper.selectById(taskId);
+        String taskType = task == null ? "" : task.getTaskType();
+        long startedAt = System.currentTimeMillis();
+        log.info("System task started taskId={} taskType={}", taskId, taskType);
+        try {
+            markRunning(taskId);
+            Object result = work.get();
+            String filePath = null;
+            if (result instanceof TaskRunResult taskResult) {
+                filePath = taskResult.filePath();
+                markSuccess(taskId, taskResult.resultJson(), filePath);
+            } else {
+                markSuccess(taskId, result, null);
+            }
+            log.info("System task completed taskId={} taskType={} durationMs={} filePath={}",
+                    taskId, taskType, System.currentTimeMillis() - startedAt, filePath);
+        } catch (Throwable error) {
+            log.error("System task failed taskId={} taskType={} durationMs={}",
+                    taskId, taskType, System.currentTimeMillis() - startedAt, error);
+            markFailed(taskId, error);
+        }
+    }
+
+    private void markRunning(Long taskId) {
+        SystemTask update = new SystemTask();
+        update.setId(taskId);
+        update.setStatus(STATUS_RUNNING);
+        update.setStartedAt(LocalDateTime.now());
+        taskMapper.updateById(update);
+    }
+
+    private void markSuccess(Long taskId, Object resultJson, String filePath) {
+        SystemTask update = new SystemTask();
+        update.setId(taskId);
+        update.setStatus(STATUS_SUCCESS);
+        update.setProgress(1);
+        update.setTotal(1);
+        update.setResultJson(resultJson);
+        update.setFilePath(filePath);
+        update.setFinishedAt(LocalDateTime.now());
+        taskMapper.updateById(update);
+    }
+
+    private void markFailed(Long taskId, Throwable error) {
+        SystemTask update = new SystemTask();
+        update.setId(taskId);
+        update.setStatus(STATUS_FAILED);
+        update.setErrorMessage(error.getMessage() == null ? error.getClass().getSimpleName() : error.getMessage());
+        update.setFinishedAt(LocalDateTime.now());
+        taskMapper.updateById(update);
+    }
+
+    private Path taskOutputDirectory() {
+        return Path.of(taskOutputDir).toAbsolutePath().normalize();
+    }
+
+    private Object safeRequestSummary(Object requestJson) {
+        if (requestJson instanceof Map<?, ?> rawMap) {
+            Map<String, Object> summary = new LinkedHashMap<>();
+            rawMap.forEach((key, value) -> summary.put(String.valueOf(key), safeValue(value)));
+            return summary;
+        }
+        return safeValue(requestJson);
+    }
+
+    private Object safeValue(Object value) {
+        if (value == null || value instanceof Number || value instanceof Boolean) {
+            return value;
+        }
+        String text = String.valueOf(value);
+        return text.length() <= 120 ? text : text.substring(0, 120) + "...";
+    }
+
+    private record TaskRunResult(Object resultJson, String filePath) {
+    }
+}

@@ -1,0 +1,43 @@
+# 销售订单与 Allocation 关联及数量联动开发文档
+
+## 1. 关联模型
+
+`sales_order_item.allocation_id` 指向 `order_delivery_ticket_allocation.id`，并通过部分唯一索引保证一个 allocation 只对应一条销售订单零件行。`allocation_type` 镜像 allocation 的拆行类型：
+
+- `PRODUCTION_REQUIRED`：待产。
+- `IN_STOCK_LOCK`：锁已入库。
+- `IN_PRODUCTION_LOCK`：锁在产。
+
+物料号确认后立即创建或复用全量待产 allocation，并绑定原销售订单零件。重复回调、去重跟随和任务恢复都走同一幂等入口。
+
+## 2. WMS 拆行
+
+WMS 成功应用时，原销售订单零件行继续代表待产 allocation；锁已入库和锁在产 allocation 按正数量各追加一条普通销售订单零件行，并追加到销售订单末尾。库存完全覆盖时，待产行不删除，`sales_order_item.qty` 与 allocation 数量均为 `0`。池子和仪表盘过滤零数量行，销售订单详情与锁库拆行保留零数量行。
+
+WMS 重试、恢复和重复应用按 `allocation_id` 查找已有销售订单行，不能重复追加。WMS 应用阶段校验原始拆分数量守恒；之后人工调整某一行只同步该行，不自动改分配的其他行，也不重写已生成的 WMS/MES 请求快照。
+
+## 3. 数量编辑
+
+销售订单详情保存销售订单零件数量时，同事务更新关联 allocation。新 WMS 流程仍以有效 `PRODUCTION_REQUIRED` Allocation 作为操作对象，但请求数量读取关联 `sales_order_item.qty`，不再把 Allocation 冗余数量当作当前业务来源；无论 WMS 是否已执行，都不为 WMS 目的同步修改来源提单数量。WMS 请求快照保存 Allocation ID、销售订单零件 ID、行号、物料号和请求时数量；请求处理中禁止编辑对应数量，历史请求快照不随之后编辑改写。
+
+锁库拆行页面的“拆分数量”只读显示关联 `sales_order_item.qty`，不再提供数量编辑或保存按钮。数量统一在销售订单零件明细页面修改，修改后锁库拆行页面刷新即可显示最新数量；人工初次拆行仍使用独立的 `/allocation-splits/manual` 接口。
+
+销售订单零件数量修改仍记录 `SALES_ORDER_ALLOCATION_QTY_UPDATE` 审计动作，包含订单、销售订单行、allocation、旧数量和新数量；锁库拆行页面本身不再产生数量保存审计。
+
+## 4. 历史数据
+
+Flyway `V58__sales_order_item_allocation_link.sql` 追加字段、约束和索引，并按销售订单零件、提单和 allocation 回填关联。直销订单同一源零件对应多个提单时先拆成提单行；历史锁库 / 在产 allocation 追加销售订单零件行。完全锁库但缺少待产行时补建零数量待产 allocation，不改动 V1、V2 或其他已执行迁移。
+
+## 5. WMS 请求来源
+
+销售订单锁库拆行页仅对该订单关联销售订单零件、数量大于 `0` 的 `PRODUCTION_REQUIRED` Allocation 发起 WMS 请求。请求数量读取 `sales_order_item.qty`，快照保存请求时的销售订单零件字段，结果恢复以快照和销售订单零件一致性校验为准；提单 ID 仅保留来源追溯。V59 为快照增加 `allocation_id`，活动请求按 Allocation 互斥；同一来源提单下的不同 Allocation 可以进入同一批次。历史 `allocation_id IS NULL` 快照仍使用原提单唯一性和恢复逻辑。
+
+## 6. 物料号成功前的销售订单数量编辑限制
+
+销售订单详情中，只有 `sales_order_item.allocation_id` 已关联 Allocation 的零件行才允许修改数量。物料号尚未成功并建立 Allocation 关联时，详情数量输入框禁用；后端零件保存接口同样拒绝数量变更。表格数据替换预览会跳过未关联 Allocation 零件行的数量字段，同一行其他有效字段仍可确认。关联建立后，数量编辑同步更新对应 Allocation；WMS 活动请求期间仍按既有并发保护拒绝编辑。该规则只限制数量，不影响其他零件字段。
+
+## 7. 新 Allocation 的写入边界
+
+从物料号获取成功开始，新建的 Allocation 只保存关系、拆分类型、拆分来源、父子关系、废弃状态以及 MES、WMS、提库存工单的流程状态和任务追踪信息。当前零件业务字段和数量不再复制写入 Allocation，包括物料号、图号、版本、项目号、客户订单号、材料、工艺、描述、备注、重量、交期、`process_route`、`material_data`、`qty` 和 `ticket_qty`。
+
+WMS 或人工拆分产生的新 Allocation 同样不写入这些冗余快照；拆分数量通过关联销售订单零件行写入，待产、锁库和后续下发读取 `sales_order_item` 的当前数量及业务字段。Allocation 表中保留的旧字段只用于历史数据兼容和必要的旧数据回退，V61 允许新行的 `qty` 为空，不删除既有字段和历史值。

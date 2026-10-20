@@ -1,0 +1,391 @@
+package com.machining.quote;
+
+import com.machining.quote.config.AuthContext;
+import com.machining.quote.config.AuthInterceptor;
+import com.machining.quote.config.RequirePermission;
+import com.machining.quote.dto.PermissionInfoDTO;
+import com.machining.quote.service.AuthService;
+import com.machining.quote.service.PermissionService;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.web.method.HandlerMethod;
+
+import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+import java.util.stream.Stream;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+class PermissionControllerGuardCharacterizationTest {
+    private static final Path MAIN_JAVA = Path.of("src", "main", "java");
+    private static final Path CONTROLLER_DIR = Path.of("src", "main", "java", "com", "machining", "quote", "controller");
+
+    @AfterEach
+    void tearDown() {
+        AuthContext.clear();
+    }
+
+    @Test
+    void controllersUsePermissionPointAnnotationsInsteadOfRoleAnnotations() throws Exception {
+        assertThat(Path.of("src", "main", "java", "com", "machining", "quote", "config", "RequirePermission.java"))
+                .exists();
+
+        try (Stream<Path> files = Files.walk(CONTROLLER_DIR)) {
+            List<Path> offenders = files
+                    .filter(path -> path.toString().endsWith("Controller.java"))
+                    .filter(this::containsRequireRole)
+                    .toList();
+
+            assertThat(offenders)
+                    .as("Stage 5 should migrate controller interface guards from roles to permission points")
+                    .isEmpty();
+        }
+    }
+
+    @Test
+    void legacyRequireRoleAnnotationIsRemovedFromMainCode() throws Exception {
+        assertThat(MAIN_JAVA.resolve(Path.of("com", "machining", "quote", "config", "RequireRole.java")))
+                .doesNotExist();
+
+        try (Stream<Path> files = Files.walk(MAIN_JAVA)) {
+            List<Path> offenders = files
+                    .filter(path -> path.toString().endsWith(".java"))
+                    .filter(path -> source(path).contains("RequireRole"))
+                    .toList();
+
+            assertThat(offenders)
+                    .as("Production code should not retain role-annotation compatibility")
+                    .isEmpty();
+        }
+    }
+
+    @Test
+    void authInterceptorUsesPermissionInfoOnlyForAuthorizationBypass() throws Exception {
+        String interceptor = source(MAIN_JAVA.resolve(Path.of("com", "machining", "quote", "config", "AuthInterceptor.java")));
+
+        assertThat(interceptor)
+                .doesNotContain("resolveRequireRole")
+                .doesNotContain("hasRole(")
+                .doesNotContain("\"ADMIN\".equalsIgnoreCase")
+                .contains("info.isSuperAdmin()")
+                .contains("info.getPermissions()");
+    }
+
+    @Test
+    void migratedControllerSourcesContainRepresentativePermissionPoints() throws Exception {
+        String market = source("MarketController.java");
+        String engineer = source("EngineerController.java");
+        String dict = source("DictController.java");
+        String processMaster = source("ProcessMasterController.java");
+        String quoteProcess = source("QuoteProcessController.java");
+        String order = source("OrderManagementController.java");
+        String salesOrderManage = source("SalesOrderManageController.java");
+        String admin = source("AdminController.java");
+        String users = source("SystemUserController.java");
+        String roles = source("SystemRoleController.java");
+        String audit = source("AuditLogController.java");
+        String internalLeadTime = source("InternalTargetLeadTimeController.java");
+        String systemTask = source("SystemTaskController.java");
+        String apsSource = source("aps/ApsSourceController.java");
+
+        assertThat(market)
+                .contains("@RequirePermission(\"market:rfq:import\")")
+                .contains("@RequirePermission(\"market:rfq:customer-select\")")
+                .contains("@RequirePermission(\"market:quote-process:customer-select\")")
+                .contains("@RequirePermission(\"market:quote-process:order-select\")")
+                .contains("@RequirePermission(\"market:release:customer-select\")")
+                .contains("@RequirePermission(\"market:release:order-select\")")
+                .contains("@RequirePermission(\"market:release:view\")")
+                .contains("@RequirePermission(\"market:release:create\")")
+                .contains("@RequirePermission(\"market:quote-process:export\")")
+                .doesNotContain("common:order:select")
+                .doesNotContain("common:customer:select");
+        assertThat(engineer)
+                .contains("@RequirePermission(\"engineer:setup:customer-select\")")
+                .contains("@RequirePermission(\"engineer:setup:order-select\")")
+                .contains("@RequirePermission(\"engineer:setup:view\")")
+                .contains("@RequirePermission(\"engineer:pricing:view\")")
+                .contains("@RequirePermission(\"engineer:pricing:save-item\")")
+                .contains("@RequirePermission(\"engineer:pricing:refresh\")")
+                .contains("@RequirePermission(\"engineer:pricing:export-sheet\")")
+                .contains("@RequirePermission(\"engineer:setup:save-config\")");
+        assertThat(dict)
+                .contains("@RequirePermission(\"engineer:dict:view\")")
+                .contains("@RequirePermission(\"engineer:dict:material-manage\")")
+                .contains("@RequirePermission(\"engineer:dict:fee-manage\")")
+                .contains("@GetMapping(\"/pricing-markup-fees\")")
+                .contains("@PostMapping(\"/pricing-markup-fees\")")
+                .contains("@PutMapping(\"/pricing-markup-fees/{id}\")")
+                .contains("@DeleteMapping(\"/pricing-markup-fees/{id}\")")
+                .doesNotContain(
+                        "@GetMapping(\"/markup-fees\")",
+                        "@PostMapping(\"/markup-fees\")",
+                        "@PutMapping(\"/markup-fees/{id}\")",
+                        "@DeleteMapping(\"/markup-fees/{id}\")",
+                        "@GetMapping(\"/assembly-markup-fees\")",
+                        "@PostMapping(\"/assembly-markup-fees\")",
+                        "@PutMapping(\"/assembly-markup-fees/{id}\")",
+                        "@DeleteMapping(\"/assembly-markup-fees/{id}\")");
+        assertThat(processMaster)
+                .contains("@RequirePermission(\"engineer:dict:view\")")
+                .contains("@RequirePermission(\"engineer:dict:process-manage\")");
+        assertThat(quoteProcess)
+                .contains("@RequirePermission(\"market:quote-process:view\")")
+                .contains("@RequirePermission(\"market:quote-process:update-lead-time\")")
+                .contains("@RequirePermission(\"market:quote-process:save-quote\")")
+                .contains("@PostMapping(\"/lead-time/batch-update\")")
+                .contains("@PostMapping(value = \"/{rfqId}/lead-time-replacement/preview\"")
+                .contains("@PostMapping(value = \"/{rfqId}/lead-time-replacement/confirm\"")
+                .doesNotContain("market:quote-process:lead-time-replacement")
+                .doesNotContain("market:quote-process:batch-save-lead-time");
+        assertThat(order)
+                .contains("@RequirePermission(\"market:order:view\")")
+                .contains("@RequirePermission(\"market:order:customer-select\")")
+                .contains("@RequirePermission(\"market:order:supplement-drawing\")")
+                .contains("@RequirePermission(\"market:order:rollback-quoted\")")
+                .contains("@RequirePermission(\"market:order:rollback-priced\")")
+                .contains("@RequirePermission(\"market:order:discard\")")
+                .contains("@RequirePermission(\"market:order:restore\")")
+                .doesNotContain("@RequirePermission(\"market:history-order:customer-select\")")
+                .doesNotContain("@RequirePermission(\"market:order:delete\")")
+                .doesNotContain("common:order:select")
+                .doesNotContain("common:customer:select");
+        assertThat(salesOrderManage)
+                .contains("@RequirePermission(\"market:sales-order:view\")")
+                .contains("@RequirePermission(\"market:sales-order:customer-select\")")
+                .contains("@RequirePermission(\"market:sales-order:supplement-drawing\")")
+                .contains("@RequirePermission(\"market:sales-order:production-task-notice-export\")")
+                .contains("@RequirePermission(\"market:sales-order:update\")")
+                .contains("@PutMapping(\"/orders/{salesOrderId}\")")
+                .contains("@PostMapping(\"/orders/{salesOrderId}/items/batch\")")
+                .contains("/orders/{salesOrderId}/items/data-replacement/preview")
+                .contains("/orders/{salesOrderId}/items/data-replacement/confirm")
+                .doesNotContain("change:sales-order:update");
+        assertThat(salesOrderManage)
+                .contains("@PostMapping(\"/orders/{salesOrderId}/u9-resync-reset\")")
+                .contains("@RequirePermission(\"market:u9-sync:submit\")");
+        assertThat(admin)
+                .contains("@RequirePermission(\"system:user:view\")")
+                .contains("@RequirePermission(\"market:template:view\")")
+                .contains("@RequirePermission(\"market:template:upload\")");
+        assertThat(users)
+                .contains("@RequirePermission(\"system:user:view\")")
+                .contains("@RequirePermission(\"system:user:create\")")
+                .contains("@RequirePermission(\"system:user:update\")")
+                .contains("@RequirePermission(\"system:user:reset-password\")")
+                .contains("@RequirePermission(\"system:user:disable\")")
+                .contains("@RequirePermission(\"system:user:delete\")");
+        assertThat(roles)
+                .contains("@RequirePermission(\"system:role:view\")")
+                .contains("@RequirePermission(\"system:role:assign-permission\")")
+                .contains("@RequirePermission(\"system:role:assign-data-scope\")");
+        assertThat(audit)
+                .contains("@RequirePermission(\"system:audit:view\")")
+                .contains("@RequirePermission(\"system:audit:export\")")
+                .contains("@RequirePermission(\"system:audit:retention\")");
+        assertThat(internalLeadTime)
+                .contains("@RequirePermission(\"market:release:view\")")
+                .contains("@RequirePermission(\"market:release:create\")");
+        assertThat(systemTask)
+                .contains("@RequirePermission(\"engineer:pricing:refresh\")")
+                .contains("@RequirePermission(\"market:quote-process:export\")")
+                .contains("@RequirePermission(\"common:task:view\")");
+        assertThat(apsSource)
+                .contains("@RequirePermission(\"common:task:view\")");
+    }
+
+    @Test
+    void autoMesMaterialTriggerDoesNotIntroduceAssignablePermissionPoint() throws Exception {
+        String autoTriggerService = source(MAIN_JAVA.resolve(Path.of(
+                "com", "machining", "quote", "service", "DeliveryAutoMesMaterialSyncService.java")));
+        String orderDelivery = source("OrderDeliveryController.java");
+        String permissionService = source(MAIN_JAVA.resolve(Path.of(
+                "com", "machining", "quote", "service", "PermissionService.java")));
+
+        assertThat(autoTriggerService)
+                .as("Automatic trigger is system-side behavior and must not require a new user permission")
+                .doesNotContain("@RequirePermission");
+        assertThat(orderDelivery)
+                .as("Manual delivered-item MES material sync remains the protected user entry point")
+                .contains(
+                        "@RequirePermission(\"market:delivered-item:mes-sync\")",
+                        "submitMesMaterialBatchSyncTask");
+        assertThat(permissionService)
+                .contains("\"market:delivered-item:mes-sync\"")
+                .doesNotContain(
+                        "market:delivered-item:auto-mes-sync",
+                        "market:release:mes-sync",
+                        "market:sales-order:mes-sync",
+                        "auto:mes",
+                        "AUTO_MES");
+    }
+
+    @Test
+    void supplementalDrawingWorkflowReusesExistingPermissionPoints() throws Exception {
+        String permissionDoc = Files.readString(Path.of("..", "docs", "QPO权限用户体系", "02-权限点清单与现有角色映射.md"), StandardCharsets.UTF_8);
+        String engineer = source("EngineerController.java");
+        String market = source("MarketController.java");
+        String quoteProcess = source("QuoteProcessController.java");
+        String internalLeadTime = source("InternalTargetLeadTimeController.java");
+
+        assertThat(permissionDoc)
+                .contains("补图待核价入口复用 `engineer:pricing:view`、`engineer:pricing:save-item` 和 `engineer:pricing:complete-order`，不新增权限点。")
+                .contains("补充报价待确认入口复用 `market:quote-process:view`、`market:quote-process:order-select`、`market:quote-process:update-lead-time` 和 `market:quote-process:save-quote`，不新增权限点。")
+                .contains("补图零件追加议价提单复用 `market:release:create`，不新增权限点。");
+        assertThat(engineer)
+                .contains("@RequirePermission(\"engineer:pricing:view\")")
+                .contains("@RequirePermission(\"engineer:pricing:complete-order\")")
+                .doesNotContain("engineer:pricing:supplemental");
+        assertThat(market)
+                .contains("@RequirePermission(\"market:quote-process:order-select\")")
+                .contains("@RequirePermission(\"market:release:create\")")
+                .doesNotContain("market:quote-process:supplemental");
+        assertThat(quoteProcess)
+                .contains("@RequirePermission(\"market:quote-process:save-quote\")")
+                .doesNotContain("market:quote-process:supplemental");
+        assertThat(internalLeadTime)
+                .contains("@RequirePermission(\"market:release:create\")")
+                .doesNotContain("market:release:supplemental");
+    }
+
+    @Test
+    void extraFeeProcessWriteEndpointsUseProcessManagePermission() throws Exception {
+        String dict = source("DictController.java");
+
+        assertExtraFeeWriteGuard(dict, "@PostMapping(\"/extra-fee-items\")", "createExtraFeeItem");
+        assertExtraFeeWriteGuard(dict, "@PutMapping(\"/extra-fee-items/{id}\")", "updateExtraFeeItem");
+        assertExtraFeeWriteGuard(dict, "@DeleteMapping(\"/extra-fee-items/{id}\")", "deleteExtraFeeItem");
+    }
+
+    @Test
+    void interceptorRejectsAuthenticatedUserWhenPermissionIsMissing() throws Exception {
+        AuthInterceptor interceptor = interceptor(permissionInfo(false, "market:rfq:view"));
+        MockHttpServletRequest request = request();
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        boolean allowed = interceptor.preHandle(request, response, handler("importRfq"));
+
+        assertThat(allowed).isFalse();
+        assertThat(response.getStatus()).isEqualTo(403);
+        assertThat(AuthContext.get()).isNull();
+    }
+
+    @Test
+    void interceptorAllowsAuthenticatedUserWhenPermissionIsPresent() throws Exception {
+        AuthInterceptor interceptor = interceptor(permissionInfo(false, "market:rfq:import"));
+        MockHttpServletRequest request = request();
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        boolean allowed = interceptor.preHandle(request, response, handler("importRfq"));
+
+        assertThat(allowed).isTrue();
+        assertThat(response.getStatus()).isEqualTo(200);
+        assertThat(AuthContext.get()).isNotNull();
+    }
+
+    @Test
+    void interceptorRejectsOrderStatusActionWhenPermissionIsMissing() throws Exception {
+        AuthInterceptor interceptor = interceptor(permissionInfo(false, "market:order:view"));
+        MockHttpServletRequest request = request();
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        boolean allowed = interceptor.preHandle(request, response, handler("discardOrder"));
+
+        assertThat(allowed).isFalse();
+        assertThat(response.getStatus()).isEqualTo(403);
+    }
+
+    @Test
+    void interceptorKeepsSuperAdminBypassForPermissionGuards() throws Exception {
+        AuthInterceptor interceptor = interceptor(permissionInfo(true));
+        MockHttpServletRequest request = request();
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        boolean allowed = interceptor.preHandle(request, response, handler("importRfq"));
+
+        assertThat(allowed).isTrue();
+        assertThat(response.getStatus()).isEqualTo(200);
+    }
+
+    private AuthInterceptor interceptor(PermissionInfoDTO permissionInfo) {
+        AuthService authService = mock(AuthService.class);
+        PermissionService permissionService = mock(PermissionService.class);
+        AuthContext.SessionUser user = new AuthContext.SessionUser(7, "market", "Market", "MARKET");
+        when(authService.findByToken("token")).thenReturn(user);
+        when(permissionService.getPermissionInfo(7, "MARKET")).thenReturn(permissionInfo);
+
+        AuthInterceptor interceptor = new AuthInterceptor();
+        ReflectionTestUtils.setField(interceptor, "authEnabled", true);
+        ReflectionTestUtils.setField(interceptor, "authService", authService);
+        ReflectionTestUtils.setField(interceptor, "permissionService", permissionService);
+        return interceptor;
+    }
+
+    private PermissionInfoDTO permissionInfo(boolean superAdmin, String... permissions) {
+        PermissionInfoDTO info = new PermissionInfoDTO();
+        info.setSuperAdmin(superAdmin);
+        info.setPermissions(List.of(permissions));
+        info.setRoles(superAdmin ? List.of("SUPER_ADMIN") : List.of("MARKET_USER"));
+        return info;
+    }
+
+    private MockHttpServletRequest request() {
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/market/import-rfq");
+        request.addHeader("Authorization", "Bearer token");
+        return request;
+    }
+
+    private HandlerMethod handler(String methodName) throws NoSuchMethodException {
+        Method method = SecuredController.class.getMethod(methodName);
+        return new HandlerMethod(new SecuredController(), method);
+    }
+
+    private boolean containsRequireRole(Path path) {
+        try {
+            return Files.readString(path, StandardCharsets.UTF_8).contains("RequireRole");
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    private String source(String fileName) throws Exception {
+        return Files.readString(CONTROLLER_DIR.resolve(fileName), StandardCharsets.UTF_8);
+    }
+
+    private String source(Path path) {
+        try {
+            return Files.readString(path, StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    private void assertExtraFeeWriteGuard(String source, String mapping, String methodName) {
+        int mappingIndex = source.indexOf(mapping);
+        assertThat(mappingIndex).as(mapping + " exists").isGreaterThanOrEqualTo(0);
+        int methodIndex = source.indexOf(methodName, mappingIndex);
+        assertThat(methodIndex).as(methodName + " follows " + mapping).isGreaterThan(mappingIndex);
+        String guardSection = source.substring(mappingIndex, methodIndex);
+        assertThat(guardSection)
+                .contains("@RequirePermission(\"engineer:dict:process-manage\")")
+                .doesNotContain("@RequirePermission(\"engineer:dict:fee-manage\")");
+    }
+
+    static class SecuredController {
+        @RequirePermission("market:rfq:import")
+        public void importRfq() {
+        }
+
+        @RequirePermission("market:order:discard")
+        public void discardOrder() {
+        }
+    }
+}

@@ -1,0 +1,894 @@
+package com.machining.quote.service;
+
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
+import com.machining.quote.dto.MaterialCommonImportPreviewResp;
+import com.machining.quote.dto.MaterialCommonUpdateReq;
+import com.machining.quote.dto.MaterialCommonUpdateResp;
+import com.machining.quote.dto.MaterialMasterDTO;
+import com.machining.quote.dto.MaterialMasterSaveReq;
+import com.machining.quote.dto.MaterialPriceSpecDTO;
+import com.machining.quote.dto.MaterialTypeDTO;
+import com.machining.quote.dto.MaterialTypeSaveReq;
+import com.machining.quote.dto.PageResult;
+import com.machining.quote.entity.DictMaterial;
+import com.machining.quote.entity.DictMaterialPriceSpec;
+import com.machining.quote.entity.DictMaterialType;
+import com.machining.quote.mapper.DictMaterialMapper;
+import com.machining.quote.mapper.DictMaterialPriceSpecMapper;
+import com.machining.quote.mapper.DictMaterialTypeMapper;
+import org.apache.poi.ss.usermodel.DataFormatter;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.ss.usermodel.WorkbookFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
+import com.machining.quote.util.MaterialPriceSpecSupport;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+
+@Service
+public class MaterialMasterService {
+    private static final String SOURCE_LOCAL = "LOCAL";
+    private static final String SOURCE_MES = "MES";
+    private static final String COMMON_SCOPE_ALL = "ALL";
+    private static final String COMMON_SCOPE_COMMON = "COMMON";
+    private static final String COMMON_SCOPE_UNCOMMON = "UNCOMMON";
+    private static final int MATERIAL_IMPORT_SAMPLE_LIMIT = 20;
+
+    @Autowired
+    private DictMaterialMapper materialMapper;
+    @Autowired
+    private DictMaterialPriceSpecMapper materialPriceSpecMapper;
+    @Autowired
+    private DictMaterialTypeMapper materialTypeMapper;
+    @Autowired
+    private AuditService auditService;
+
+    public List<MaterialTypeDTO> listMaterialTypes(Boolean enabledOnly) {
+        QueryWrapper<DictMaterialType> query = new QueryWrapper<>();
+        if (Boolean.TRUE.equals(enabledOnly)) {
+            query.eq("enabled", true);
+        }
+        query.orderByAsc("sort_no").orderByAsc("id");
+        return materialTypeMapper.selectList(query).stream().map(this::toTypeDTO).toList();
+    }
+
+    public List<MaterialMasterDTO> listMaterials(Boolean enabledOnly) {
+        QueryWrapper<DictMaterial> query = new QueryWrapper<>();
+        applyMaterialFilters(query, enabledOnly, null, null, List.of(), null);
+        query.orderByAsc("material_type_id").orderByAsc("sort_no").orderByAsc("id");
+        List<DictMaterial> materials = materialMapper.selectList(query);
+        return toMaterialDTOs(materials);
+    }
+
+    public PageResult<MaterialMasterDTO> pageMaterials(Boolean enabledOnly, String keyword, Integer page, Integer pageSize) {
+        return pageMaterials(enabledOnly, keyword, page, pageSize, null, null, null);
+    }
+
+    public PageResult<MaterialMasterDTO> pageMaterials(Boolean enabledOnly, String keyword, Integer page, Integer pageSize,
+                                                       String commonScope, String materialTypeCodes, String categoryName) {
+        int safePage = normalizePage(page);
+        int safePageSize = normalizePageSize(pageSize);
+        QueryWrapper<DictMaterial> query = new QueryWrapper<>();
+        applyMaterialFilters(query, enabledOnly, keyword, commonScope, parseMaterialTypeCodes(materialTypeCodes), categoryName);
+        Long total = materialMapper.selectCount(query);
+        if (total == null || total == 0) {
+            return PageResult.of(List.of(), 0, safePage, safePageSize);
+        }
+        query.orderByAsc("material_type_id").orderByAsc("sort_no").orderByAsc("id");
+        query.last("LIMIT " + safePageSize + " OFFSET " + ((safePage - 1L) * safePageSize));
+        return PageResult.of(toMaterialDTOs(materialMapper.selectList(query)), total, safePage, safePageSize);
+    }
+
+    public List<String> listMaterialU9CategoryNames(String commonScope, String materialTypeCodes) {
+        QueryWrapper<DictMaterial> query = new QueryWrapper<>();
+        query.select("DISTINCT category_name")
+                .eq("enabled", true)
+                .isNotNull("category_name")
+                .apply("TRIM(category_name) <> ''");
+        Boolean commonMaterial = commonMaterialFilter(commonScope);
+        if (commonMaterial != null) {
+            query.eq("common_material", commonMaterial);
+        }
+        applyMaterialTypeFilter(query, parseMaterialTypeCodes(materialTypeCodes));
+        query.orderByAsc("category_name");
+        return materialMapper.selectObjs(query).stream()
+                .filter(Objects::nonNull)
+                .map(Object::toString)
+                .map(String::trim)
+                .filter(this::hasText)
+                .distinct()
+                .toList();
+    }
+
+    private List<MaterialMasterDTO> toMaterialDTOs(List<DictMaterial> materials) {
+        if (materials.isEmpty()) {
+            return List.of();
+        }
+        List<Long> typeIds = materials.stream()
+                .map(DictMaterial::getMaterialTypeId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        Map<Long, DictMaterialType> typeById = typeIds.isEmpty()
+                ? Map.of()
+                : materialTypeMapper.selectBatchIds(typeIds).stream()
+                .collect(Collectors.toMap(DictMaterialType::getId, Function.identity(), (left, right) -> left));
+        Map<Long, List<MaterialPriceSpecDTO>> specsByMaterialId = loadPriceSpecsByMaterialIds(
+                materials.stream().map(DictMaterial::getId).filter(Objects::nonNull).toList());
+        return materials.stream()
+                .map(material -> toMaterialDTO(material, typeById.get(material.getMaterialTypeId()), specsByMaterialId.get(material.getId())))
+                .toList();
+    }
+
+    private Map<Long, List<MaterialPriceSpecDTO>> loadPriceSpecsByMaterialIds(List<Long> materialIds) {
+        if (materialIds == null || materialIds.isEmpty()) {
+            return Map.of();
+        }
+        QueryWrapper<DictMaterialPriceSpec> query = new QueryWrapper<>();
+        query.in("material_id", materialIds).orderByAsc("material_id").orderByAsc("sort_no").orderByAsc("id");
+        return MaterialPriceSpecSupport.groupDtosByMaterialId(materialIds, materialPriceSpecMapper.selectList(query));
+    }
+
+    private List<MaterialPriceSpecDTO> loadPriceSpecsByMaterialId(Long materialId) {
+        if (materialId == null) {
+            return MaterialPriceSpecSupport.normalizeDtos(List.of());
+        }
+        return loadPriceSpecsByMaterialIds(List.of(materialId)).getOrDefault(
+                materialId,
+                MaterialPriceSpecSupport.normalizeDtos(List.of()));
+    }
+
+    private void applyMaterialFilters(QueryWrapper<DictMaterial> query, Boolean enabledOnly, String keyword,
+                                      String commonScope, List<String> materialTypeCodes, String categoryName) {
+        if (Boolean.TRUE.equals(enabledOnly)) {
+            query.eq("enabled", true);
+        }
+        Boolean commonMaterial = commonMaterialFilter(commonScope);
+        if (commonMaterial != null) {
+            query.eq("common_material", commonMaterial);
+        }
+        applyMaterialTypeFilter(query, materialTypeCodes);
+        String safeCategoryName = optional(categoryName);
+        if (!safeCategoryName.isBlank()) {
+            query.eq("category_name", safeCategoryName);
+        }
+        if (!hasText(keyword)) {
+            return;
+        }
+        String pattern = "%" + keyword.trim().toLowerCase(Locale.ROOT) + "%";
+        query.and(wrapper -> wrapper
+                .apply("LOWER(material_code) LIKE {0}", pattern)
+                .or()
+                .apply("LOWER(material_name) LIKE {0}", pattern)
+                .or()
+                .apply("LOWER(category_name) LIKE {0}", pattern)
+                .or()
+                .apply("LOWER(remarks) LIKE {0}", pattern)
+                .or()
+                .apply("EXISTS (SELECT 1 FROM dict_material_type mt WHERE mt.id = dict_material.material_type_id AND (LOWER(mt.type_code) LIKE {0} OR LOWER(mt.type_name) LIKE {0}))", pattern));
+    }
+
+    private void applyMaterialTypeFilter(QueryWrapper<DictMaterial> query, List<String> materialTypeCodes) {
+        if (materialTypeCodes == null || materialTypeCodes.isEmpty()) {
+            return;
+        }
+        query.inSql("material_type_id", "SELECT id FROM dict_material_type WHERE UPPER(type_code) IN (" + quotedSqlList(materialTypeCodes) + ")");
+    }
+
+    private Boolean commonMaterialFilter(String commonScope) {
+        String normalized = optional(commonScope).toUpperCase(Locale.ROOT);
+        if (normalized.isBlank() || COMMON_SCOPE_ALL.equals(normalized)) {
+            return null;
+        }
+        if (COMMON_SCOPE_COMMON.equals(normalized)) {
+            return true;
+        }
+        if (COMMON_SCOPE_UNCOMMON.equals(normalized)) {
+            return false;
+        }
+        throw new IllegalArgumentException("commonScope 只支持 ALL / COMMON / UNCOMMON");
+    }
+
+    private List<String> parseMaterialTypeCodes(String value) {
+        if (!hasText(value)) {
+            return List.of();
+        }
+        return List.of(value.split(",")).stream()
+                .map(this::optional)
+                .filter(this::hasText)
+                .map(code -> code.toUpperCase(Locale.ROOT))
+                .distinct()
+                .toList();
+    }
+
+    private List<Long> normalizeMaterialIds(List<Long> materialIds) {
+        if (materialIds == null || materialIds.isEmpty()) {
+            return List.of();
+        }
+        return materialIds.stream()
+                .filter(Objects::nonNull)
+                .filter(id -> id > 0)
+                .distinct()
+                .toList();
+    }
+
+    private List<String> materialCodeSamples(List<DictMaterial> materials) {
+        if (materials == null || materials.isEmpty()) {
+            return List.of();
+        }
+        return materials.stream()
+                .map(DictMaterial::getMaterialCode)
+                .map(this::optional)
+                .filter(this::hasText)
+                .limit(MATERIAL_IMPORT_SAMPLE_LIMIT)
+                .toList();
+    }
+
+    private List<ImportedMaterialCode> readImportedMaterialCodes(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException("物料号导入表不能为空");
+        }
+        try (InputStream input = file.getInputStream(); Workbook workbook = WorkbookFactory.create(input)) {
+            if (workbook.getNumberOfSheets() == 0) {
+                throw new IllegalArgumentException("物料号导入表不能为空");
+            }
+            org.apache.poi.ss.usermodel.Sheet sheet = workbook.getSheetAt(0);
+            Row headerRow = sheet.getRow(sheet.getFirstRowNum());
+            DataFormatter formatter = new DataFormatter();
+            String header = headerRow == null ? "" : optional(formatter.formatCellValue(headerRow.getCell(0)));
+            if (!"物料号".equals(header)) {
+                throw new IllegalArgumentException("导入表第一列表头必须为物料号");
+            }
+
+            List<ImportedMaterialCode> rows = new ArrayList<>();
+            Set<String> seen = new HashSet<>();
+            for (int rowIndex = sheet.getFirstRowNum() + 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
+                Row row = sheet.getRow(rowIndex);
+                if (row == null) {
+                    continue;
+                }
+                String materialCode = optional(formatter.formatCellValue(row.getCell(0)));
+                if (materialCode.isBlank()) {
+                    continue;
+                }
+                String lookupCode = materialCode.toUpperCase(Locale.ROOT);
+                boolean duplicate = !seen.add(lookupCode);
+                rows.add(new ImportedMaterialCode(rowIndex + 1, materialCode, lookupCode, duplicate));
+            }
+            return rows;
+        } catch (IOException ex) {
+            throw new IllegalArgumentException("物料号导入表读取失败", ex);
+        } catch (RuntimeException ex) {
+            if (ex instanceof IllegalArgumentException) {
+                throw ex;
+            }
+            throw new IllegalArgumentException("物料号导入表读取失败", ex);
+        }
+    }
+
+    private Map<String, DictMaterial> loadMaterialsByLookupCodes(List<String> lookupCodes) {
+        List<String> codes = lookupCodes == null ? List.of() : lookupCodes.stream()
+                .map(this::optional)
+                .filter(this::hasText)
+                .map(code -> code.toUpperCase(Locale.ROOT))
+                .distinct()
+                .toList();
+        if (codes.isEmpty()) {
+            return Map.of();
+        }
+        QueryWrapper<DictMaterial> query = new QueryWrapper<>();
+        query.apply("UPPER(TRIM(material_code)) IN (" + applyPlaceholders(codes.size()) + ")", codes.toArray(new Object[0]));
+        return materialMapper.selectList(query).stream()
+                .filter(material -> material.getMaterialCode() != null)
+                .collect(Collectors.toMap(
+                        material -> material.getMaterialCode().trim().toUpperCase(Locale.ROOT),
+                        Function.identity(),
+                        (left, right) -> left,
+                        LinkedHashMap::new));
+    }
+
+    private String applyPlaceholders(int size) {
+        List<String> placeholders = new ArrayList<>();
+        for (int index = 0; index < size; index++) {
+            placeholders.add("{" + index + "}");
+        }
+        return String.join(", ", placeholders);
+    }
+
+    private String quotedSqlList(List<String> values) {
+        return values.stream()
+                .map(value -> "'" + value.replace("'", "''") + "'")
+                .collect(Collectors.joining(","));
+    }
+
+    private record ImportedMaterialCode(Integer rowNo, String materialCode, String lookupCode, boolean duplicate) {
+    }
+
+    @Transactional
+    public MaterialTypeDTO saveMaterialType(Long id, MaterialTypeSaveReq req) {
+        DictMaterialType before = id == null ? null : requireMaterialType(id);
+        DictMaterialType entity = normalizeMaterialType(req, before);
+        entity.setId(id);
+        ensureMaterialTypeCodeUnique(entity.getTypeCode(), id);
+        ensureMaterialTypeNameUnique(entity.getTypeName(), id);
+        LocalDateTime now = LocalDateTime.now();
+        entity.setUpdatedAt(now);
+        if (id == null) {
+            entity.setCreatedAt(now);
+            materialTypeMapper.insert(entity);
+            auditService.record(
+                    "DICT_MATERIAL_TYPE_CREATE",
+                    "dict_material_type",
+                    entity.getId(),
+                    null,
+                    materialTypeAuditSummary(entity)
+            );
+        } else {
+            materialTypeMapper.updateById(entity);
+            auditService.record(
+                    "DICT_MATERIAL_TYPE_UPDATE",
+                    "dict_material_type",
+                    id,
+                    materialTypeAuditSummary(before),
+                    materialTypeAuditSummary(entity)
+            );
+        }
+        return toTypeDTO(entity);
+    }
+
+    @Transactional
+    public void deleteMaterialType(Long id) {
+        DictMaterialType before = requireMaterialType(id);
+        QueryWrapper<DictMaterial> query = new QueryWrapper<>();
+        query.eq("material_type_id", id);
+        Long references = materialMapper.selectCount(query);
+        if (references != null && references > 0) {
+            DictMaterialType disabled = copyType(before);
+            disabled.setEnabled(false);
+            disabled.setUpdatedAt(LocalDateTime.now());
+            materialTypeMapper.updateById(disabled);
+            auditService.record(
+                    "DICT_MATERIAL_TYPE_DISABLE",
+                    "dict_material_type",
+                    id,
+                    materialTypeAuditSummary(before),
+                    materialTypeAuditSummary(disabled)
+            );
+            return;
+        }
+        materialTypeMapper.deleteById(id);
+        auditService.record(
+                "DICT_MATERIAL_TYPE_DELETE",
+                "dict_material_type",
+                id,
+                materialTypeAuditSummary(before),
+                null
+        );
+    }
+
+    @Transactional
+    public MaterialMasterDTO saveMaterial(Long id, MaterialMasterSaveReq req) {
+        DictMaterial before = id == null ? null : requireMaterial(id);
+        List<MaterialPriceSpecDTO> beforeSpecs = before == null ? MaterialPriceSpecSupport.normalizeDtos(List.of()) : loadPriceSpecsByMaterialId(before.getId());
+        List<MaterialPriceSpecDTO> normalizedSpecs = MaterialPriceSpecSupport.normalizeDtos(req == null ? null : req.getPriceSpecs());
+        validateMesMaterialIdentityUnchanged(before, req);
+        DictMaterial entity = normalizeMaterial(req, before);
+        entity.setId(id);
+        DictMaterialType type = requireEnabledMaterialType(entity.getMaterialTypeId());
+        ensureMaterialCodeUnique(entity.getMaterialCode(), id);
+        LocalDateTime now = LocalDateTime.now();
+        entity.setUpdatedAt(now);
+        List<String> changedSpecCodes = changedSpecCodes(beforeSpecs, normalizedSpecs);
+        if (id == null) {
+            entity.setCreatedAt(now);
+            materialMapper.insert(entity);
+            replaceMaterialPriceSpecs(entity.getId(), normalizedSpecs, now);
+            auditService.record(
+                    "DICT_MATERIAL_CREATE",
+                    "dict_material",
+                    entity.getId(),
+                    null,
+                    materialAuditSummary(entity, type, normalizedSpecs, changedSpecCodes)
+            );
+        } else {
+            DictMaterialType beforeType = before.getMaterialTypeId() == null ? null : materialTypeMapper.selectById(before.getMaterialTypeId());
+            materialMapper.updateById(entity);
+            replaceMaterialPriceSpecs(entity.getId(), normalizedSpecs, now);
+            auditService.record(
+                    "DICT_MATERIAL_UPDATE",
+                    "dict_material",
+                    id,
+                    materialAuditSummary(before, beforeType, beforeSpecs, null),
+                    materialAuditSummary(entity, type, normalizedSpecs, changedSpecCodes)
+            );
+        }
+        return toMaterialDTO(entity, type, normalizedSpecs);
+    }
+
+    private void replaceMaterialPriceSpecs(Long materialId, List<MaterialPriceSpecDTO> specs, LocalDateTime now) {
+        if (materialId == null) {
+            throw new IllegalArgumentException("材料 ID 不能为空");
+        }
+        QueryWrapper<DictMaterialPriceSpec> delete = new QueryWrapper<>();
+        delete.eq("material_id", materialId);
+        materialPriceSpecMapper.delete(delete);
+        for (DictMaterialPriceSpec spec : MaterialPriceSpecSupport.toEntities(materialId, specs, now)) {
+            materialPriceSpecMapper.insert(spec);
+        }
+    }
+
+    @Transactional
+    public void deleteMaterial(Long id) {
+        DictMaterial before = requireMaterial(id);
+        if (isMesSource(before.getSourceType())) {
+            throw new IllegalArgumentException("MES material cannot be deleted manually; sync MES master data instead");
+        }
+        DictMaterialType type = before.getMaterialTypeId() == null ? null : materialTypeMapper.selectById(before.getMaterialTypeId());
+        DictMaterial disabled = copyMaterial(before);
+        disabled.setEnabled(false);
+        disabled.setUpdatedAt(LocalDateTime.now());
+        materialMapper.updateById(disabled);
+        auditService.record(
+                "DICT_MATERIAL_DISABLE",
+                "dict_material",
+                id,
+                materialAuditSummary(before, type),
+                materialAuditSummary(disabled, type)
+        );
+    }
+
+    @Transactional
+    public MaterialCommonUpdateResp updateMaterialCommonStatus(MaterialCommonUpdateReq req) {
+        List<Long> materialIds = normalizeMaterialIds(req == null ? null : req.getMaterialIds());
+        if (materialIds.isEmpty()) {
+            throw new IllegalArgumentException("请选择要维护的材料");
+        }
+        Boolean commonMaterial = req.getCommonMaterial();
+        if (commonMaterial == null) {
+            throw new IllegalArgumentException("请选择常用材料状态");
+        }
+
+        List<DictMaterial> matched = materialMapper.selectBatchIds(materialIds);
+        List<Long> matchedIds = matched == null ? List.of() : matched.stream()
+                .map(DictMaterial::getId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+
+        int updatedCount = 0;
+        if (!matchedIds.isEmpty()) {
+            UpdateWrapper<DictMaterial> update = new UpdateWrapper<>();
+            update.in("id", matchedIds)
+                    .set("common_material", commonMaterial)
+                    .set("updated_at", LocalDateTime.now());
+            updatedCount = materialMapper.update(null, update);
+        }
+
+        MaterialCommonUpdateResp resp = new MaterialCommonUpdateResp();
+        resp.setCommonMaterial(commonMaterial);
+        resp.setRequestedCount(materialIds.size());
+        resp.setMatchedCount(matchedIds.size());
+        resp.setUpdatedCount(updatedCount);
+        resp.setMaterialCodeSamples(materialCodeSamples(matched));
+
+        auditService.record(
+                "DICT_MATERIAL_UPDATE",
+                "dict_material",
+                "common-material-batch",
+                null,
+                Map.of(
+                        "commonMaterial", commonMaterial,
+                        "requestedCount", resp.getRequestedCount(),
+                        "matchedCount", resp.getMatchedCount(),
+                        "updatedCount", resp.getUpdatedCount(),
+                        "materialCodeSamples", resp.getMaterialCodeSamples()
+                )
+        );
+        return resp;
+    }
+
+    public MaterialCommonImportPreviewResp previewCommonMaterialImport(MultipartFile file) {
+        List<ImportedMaterialCode> importedCodes = readImportedMaterialCodes(file);
+        if (importedCodes.isEmpty()) {
+            throw new IllegalArgumentException("物料号导入表不能为空");
+        }
+        List<String> lookupCodes = importedCodes.stream()
+                .filter(row -> !row.duplicate())
+                .map(ImportedMaterialCode::lookupCode)
+                .distinct()
+                .toList();
+        Map<String, DictMaterial> materialByLookupCode = loadMaterialsByLookupCodes(lookupCodes);
+
+        MaterialCommonImportPreviewResp resp = new MaterialCommonImportPreviewResp();
+        resp.setUploadedCount(importedCodes.size());
+        List<Long> matchedMaterialIds = new ArrayList<>();
+        int matchedCount = 0;
+        int alreadyCommonCount = 0;
+        int notFoundCount = 0;
+        int duplicateCount = 0;
+        for (ImportedMaterialCode imported : importedCodes) {
+            MaterialCommonImportPreviewResp.Row row = new MaterialCommonImportPreviewResp.Row();
+            row.setRowNo(imported.rowNo());
+            row.setMaterialCode(imported.materialCode());
+            if (imported.duplicate()) {
+                duplicateCount++;
+                row.setStatus("DUPLICATE");
+                row.setMessage("导入表内物料号重复，确认时只处理首次出现的物料号");
+                resp.getRows().add(row);
+                continue;
+            }
+            DictMaterial material = materialByLookupCode.get(imported.lookupCode());
+            if (material == null) {
+                notFoundCount++;
+                row.setStatus("NOT_FOUND");
+                row.setMessage("QPO 材料库中未找到该物料号");
+                resp.getRows().add(row);
+                continue;
+            }
+            matchedCount++;
+            row.setMaterialId(material.getId());
+            row.setMaterialName(material.getMaterialName());
+            row.setCommonMaterial(Boolean.TRUE.equals(material.getCommonMaterial()));
+            if (Boolean.TRUE.equals(material.getCommonMaterial())) {
+                alreadyCommonCount++;
+                row.setStatus("ALREADY_COMMON");
+                row.setMessage("已是常用材料");
+            } else {
+                row.setStatus("MATCHED");
+                row.setMessage("可设为常用材料");
+            }
+            if (material.getId() != null && !matchedMaterialIds.contains(material.getId())) {
+                matchedMaterialIds.add(material.getId());
+            }
+            resp.getRows().add(row);
+        }
+        resp.setMatchedCount(matchedCount);
+        resp.setAlreadyCommonCount(alreadyCommonCount);
+        resp.setNotFoundCount(notFoundCount);
+        resp.setDuplicateCount(duplicateCount);
+        resp.setMatchedMaterialIds(matchedMaterialIds);
+        return resp;
+    }
+
+    private DictMaterialType normalizeMaterialType(MaterialTypeSaveReq req, DictMaterialType before) {
+        if (req == null) {
+            throw new IllegalArgumentException("材料类型请求不能为空");
+        }
+        DictMaterialType entity = new DictMaterialType();
+        entity.setTypeCode(upper(required(req.getTypeCode(), "材料类型编码"), "材料类型编码", 64));
+        entity.setTypeName(limit(required(req.getTypeName(), "材料类型名称"), "材料类型名称", 120));
+        entity.setRemarks(limit(optional(req.getRemarks()), "备注", 500));
+        entity.setEnabled(req.getEnabled() == null ? before == null || Boolean.TRUE.equals(before.getEnabled()) : req.getEnabled());
+        entity.setSortNo(req.getSortNo() == null ? before == null ? 0 : Objects.requireNonNullElse(before.getSortNo(), 0) : req.getSortNo());
+        return entity;
+    }
+
+    private DictMaterial normalizeMaterial(MaterialMasterSaveReq req, DictMaterial before) {
+        if (req == null) {
+            throw new IllegalArgumentException("材料请求不能为空");
+        }
+        DictMaterial entity = new DictMaterial();
+        entity.setMaterialCode(limit(required(req.getMaterialCode(), "材料编码"), "材料编码", 80));
+        entity.setMaterialName(limit(required(req.getMaterialName(), "材料名称"), "材料名称", 100));
+        if (req.getMaterialTypeId() == null) {
+            throw new IllegalArgumentException("材料类型不能为空");
+        }
+        entity.setMaterialTypeId(req.getMaterialTypeId());
+        entity.setMaterialCategory(limit(optional(req.getMaterialCategory()), "材质分类", 80));
+        entity.setCategoryName(before == null ? limit(optional(req.getCategoryName()), "U9类别", 120) : before.getCategoryName());
+        entity.setDensity(nonNegative(req.getDensity(), "默认密度"));
+        entity.setRemarks(optional(req.getRemarks()));
+        copyMesSourceFields(entity, before);
+        entity.setCommonMaterial(req.getCommonMaterial() == null
+                ? before == null ? false : Boolean.TRUE.equals(before.getCommonMaterial())
+                : req.getCommonMaterial());
+        entity.setEnabled(req.getEnabled() == null ? before == null || Boolean.TRUE.equals(before.getEnabled()) : req.getEnabled());
+        entity.setSortNo(req.getSortNo() == null ? before == null ? 0 : Objects.requireNonNullElse(before.getSortNo(), 0) : req.getSortNo());
+        return entity;
+    }
+
+    private void validateMesMaterialIdentityUnchanged(DictMaterial before, MaterialMasterSaveReq req) {
+        if (before == null || !isMesSource(before.getSourceType()) || req == null) {
+            return;
+        }
+        if (!Objects.equals(optional(before.getMaterialCode()), optional(req.getMaterialCode()))
+                || !Objects.equals(optional(before.getMaterialName()), optional(req.getMaterialName()))
+                || !Objects.equals(before.getMaterialTypeId(), req.getMaterialTypeId())
+                || !Objects.equals(optional(before.getMaterialCategory()), optional(req.getMaterialCategory()))) {
+            throw new IllegalArgumentException("MES material identity fields are read-only in QPO; update MES and sync again");
+        }
+    }
+
+    private void copyMesSourceFields(DictMaterial target, DictMaterial before) {
+        if (before == null) {
+            target.setSourceType(SOURCE_LOCAL);
+            return;
+        }
+        target.setSourceType(isBlank(before.getSourceType()) ? SOURCE_LOCAL : before.getSourceType());
+        target.setMesExternalId(before.getMesExternalId());
+        target.setMesMaterialType(before.getMesMaterialType());
+        target.setMesPurchaseType(before.getMesPurchaseType());
+        target.setMesProductionType(before.getMesProductionType());
+        target.setMesDocNum(before.getMesDocNum());
+        target.setMesStandard(before.getMesStandard());
+        target.setMesWeight(before.getMesWeight());
+        target.setMesDensityRaw(before.getMesDensityRaw());
+        target.setCategoryName(before.getCategoryName());
+        target.setMesSyncedAt(before.getMesSyncedAt());
+    }
+
+    private DictMaterialType requireMaterialType(Long id) {
+        if (id == null) {
+            throw new IllegalArgumentException("材料类型 ID 不能为空");
+        }
+        DictMaterialType type = materialTypeMapper.selectById(id);
+        if (type == null) {
+            throw new IllegalArgumentException("材料类型不存在");
+        }
+        return type;
+    }
+
+    private DictMaterialType requireEnabledMaterialType(Long id) {
+        DictMaterialType type = requireMaterialType(id);
+        if (!Boolean.TRUE.equals(type.getEnabled())) {
+            throw new IllegalArgumentException("材料类型已停用，不能用于新材料");
+        }
+        return type;
+    }
+
+    private DictMaterial requireMaterial(Long id) {
+        if (id == null) {
+            throw new IllegalArgumentException("材料 ID 不能为空");
+        }
+        DictMaterial material = materialMapper.selectById(id);
+        if (material == null) {
+            throw new IllegalArgumentException("材料不存在");
+        }
+        return material;
+    }
+
+    private void ensureMaterialTypeCodeUnique(String typeCode, Long id) {
+        QueryWrapper<DictMaterialType> query = new QueryWrapper<>();
+        query.eq("type_code", typeCode);
+        if (id != null) {
+            query.ne("id", id);
+        }
+        Long count = materialTypeMapper.selectCount(query);
+        if (count != null && count > 0) {
+            throw new IllegalArgumentException("材料类型编码已存在");
+        }
+    }
+
+    private void ensureMaterialTypeNameUnique(String typeName, Long id) {
+        QueryWrapper<DictMaterialType> query = new QueryWrapper<>();
+        query.eq("type_name", typeName);
+        if (id != null) {
+            query.ne("id", id);
+        }
+        Long count = materialTypeMapper.selectCount(query);
+        if (count != null && count > 0) {
+            throw new IllegalArgumentException("材料类型名称已存在");
+        }
+    }
+
+    private void ensureMaterialCodeUnique(String materialCode, Long id) {
+        QueryWrapper<DictMaterial> query = new QueryWrapper<>();
+        query.apply("UPPER(material_code) = {0}", materialCode.toUpperCase(Locale.ROOT));
+        if (id != null) {
+            query.ne("id", id);
+        }
+        Long count = materialMapper.selectCount(query);
+        if (count != null && count > 0) {
+            throw new IllegalArgumentException("材料编码已存在");
+        }
+    }
+
+    private MaterialTypeDTO toTypeDTO(DictMaterialType entity) {
+        MaterialTypeDTO dto = new MaterialTypeDTO();
+        dto.setId(entity.getId());
+        dto.setTypeCode(entity.getTypeCode());
+        dto.setTypeName(entity.getTypeName());
+        dto.setRemarks(entity.getRemarks());
+        dto.setEnabled(entity.getEnabled());
+        dto.setSortNo(entity.getSortNo());
+        dto.setCreatedAt(entity.getCreatedAt());
+        dto.setUpdatedAt(entity.getUpdatedAt());
+        return dto;
+    }
+
+    private MaterialMasterDTO toMaterialDTO(DictMaterial material, DictMaterialType type) {
+        return toMaterialDTO(material, type, loadPriceSpecsByMaterialId(material.getId()));
+    }
+
+    private MaterialMasterDTO toMaterialDTO(DictMaterial material, DictMaterialType type, List<MaterialPriceSpecDTO> priceSpecs) {
+        MaterialMasterDTO dto = new MaterialMasterDTO();
+        dto.setId(material.getId());
+        dto.setMaterialCode(material.getMaterialCode());
+        dto.setMaterialName(material.getMaterialName());
+        dto.setMaterialTypeId(material.getMaterialTypeId());
+        dto.setMaterialTypeCode(type == null ? null : type.getTypeCode());
+        dto.setMaterialTypeName(type == null ? null : type.getTypeName());
+        dto.setMaterialCategory(material.getMaterialCategory());
+        dto.setCategoryName(material.getCategoryName());
+        dto.setDensity(material.getDensity());
+        dto.setPriceSpecs(MaterialPriceSpecSupport.normalizeDtos(priceSpecs));
+        dto.setRemarks(material.getRemarks());
+        dto.setSourceType(material.getSourceType() == null || material.getSourceType().isBlank() ? SOURCE_LOCAL : material.getSourceType());
+        dto.setMesExternalId(material.getMesExternalId());
+        dto.setMesMaterialType(material.getMesMaterialType());
+        dto.setMesPurchaseType(material.getMesPurchaseType());
+        dto.setMesProductionType(material.getMesProductionType());
+        dto.setMesDocNum(material.getMesDocNum());
+        dto.setMesStandard(material.getMesStandard());
+        dto.setMesWeight(material.getMesWeight());
+        dto.setMesDensityRaw(material.getMesDensityRaw());
+        dto.setMesSyncedAt(material.getMesSyncedAt());
+        dto.setCommonMaterial(Boolean.TRUE.equals(material.getCommonMaterial()));
+        dto.setEnabled(material.getEnabled());
+        dto.setSortNo(material.getSortNo());
+        dto.setCreatedAt(material.getCreatedAt());
+        dto.setUpdatedAt(material.getUpdatedAt());
+        return dto;
+    }
+
+    private Map<String, Object> materialTypeAuditSummary(DictMaterialType type) {
+        if (type == null) {
+            return null;
+        }
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("id", type.getId());
+        summary.put("typeCode", type.getTypeCode());
+        summary.put("typeName", type.getTypeName());
+        summary.put("enabled", type.getEnabled());
+        return summary;
+    }
+
+    private Map<String, Object> materialAuditSummary(DictMaterial material, DictMaterialType type) {
+        return materialAuditSummary(material, type, null, null);
+    }
+
+    private Map<String, Object> materialAuditSummary(
+            DictMaterial material,
+            DictMaterialType type,
+            List<MaterialPriceSpecDTO> priceSpecs,
+            List<String> changedSpecCodes) {
+        if (material == null) {
+            return null;
+        }
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("id", material.getId());
+        summary.put("materialCode", material.getMaterialCode());
+        summary.put("materialName", material.getMaterialName());
+        summary.put("materialTypeId", material.getMaterialTypeId());
+        summary.put("materialTypeCode", type == null ? null : type.getTypeCode());
+        summary.put("materialTypeName", type == null ? null : type.getTypeName());
+        summary.put("materialCategory", material.getMaterialCategory());
+        summary.put("categoryName", material.getCategoryName());
+        summary.put("commonMaterial", Boolean.TRUE.equals(material.getCommonMaterial()));
+        summary.put("enabled", material.getEnabled());
+        if (changedSpecCodes != null && !changedSpecCodes.isEmpty()) {
+            summary.put("changedSpecCodes", changedSpecCodes);
+        }
+        return summary;
+    }
+
+    private List<String> changedSpecCodes(List<MaterialPriceSpecDTO> beforeSpecs, List<MaterialPriceSpecDTO> afterSpecs) {
+        Map<String, MaterialPriceSpecDTO> beforeByCode = MaterialPriceSpecSupport.normalizeDtos(beforeSpecs).stream()
+                .collect(Collectors.toMap(MaterialPriceSpecDTO::getSpecCode, Function.identity(), (left, right) -> left, LinkedHashMap::new));
+        return MaterialPriceSpecSupport.normalizeDtos(afterSpecs).stream()
+                .filter(after -> !MaterialPriceSpecSupport.pricesEqual(beforeByCode.get(after.getSpecCode()), after))
+                .map(MaterialPriceSpecDTO::getSpecCode)
+                .toList();
+    }
+
+    private DictMaterialType copyType(DictMaterialType source) {
+        DictMaterialType target = new DictMaterialType();
+        target.setId(source.getId());
+        target.setTypeCode(source.getTypeCode());
+        target.setTypeName(source.getTypeName());
+        target.setRemarks(source.getRemarks());
+        target.setEnabled(source.getEnabled());
+        target.setSortNo(source.getSortNo());
+        target.setCreatedAt(source.getCreatedAt());
+        target.setUpdatedAt(source.getUpdatedAt());
+        return target;
+    }
+
+    private DictMaterial copyMaterial(DictMaterial source) {
+        DictMaterial target = new DictMaterial();
+        target.setId(source.getId());
+        target.setMaterialCode(source.getMaterialCode());
+        target.setMaterialName(source.getMaterialName());
+        target.setMaterialTypeId(source.getMaterialTypeId());
+        target.setMaterialCategory(source.getMaterialCategory());
+        target.setCategoryName(source.getCategoryName());
+        target.setDensity(source.getDensity());
+        target.setRemarks(source.getRemarks());
+        target.setSourceType(source.getSourceType());
+        target.setMesExternalId(source.getMesExternalId());
+        target.setMesMaterialType(source.getMesMaterialType());
+        target.setMesPurchaseType(source.getMesPurchaseType());
+        target.setMesProductionType(source.getMesProductionType());
+        target.setMesDocNum(source.getMesDocNum());
+        target.setMesStandard(source.getMesStandard());
+        target.setMesWeight(source.getMesWeight());
+        target.setMesDensityRaw(source.getMesDensityRaw());
+        target.setMesSyncedAt(source.getMesSyncedAt());
+        target.setCommonMaterial(Boolean.TRUE.equals(source.getCommonMaterial()));
+        target.setEnabled(source.getEnabled());
+        target.setSortNo(source.getSortNo());
+        target.setCreatedAt(source.getCreatedAt());
+        target.setUpdatedAt(source.getUpdatedAt());
+        return target;
+    }
+
+    private String required(String value, String label) {
+        String trimmed = optional(value);
+        if (trimmed.isBlank()) {
+            throw new IllegalArgumentException(label + "不能为空");
+        }
+        return trimmed;
+    }
+
+    private String optional(String value) {
+        return value == null ? "" : value.trim();
+    }
+
+    private int normalizePage(Integer page) {
+        return page == null || page < 1 ? 1 : page;
+    }
+
+    private int normalizePageSize(Integer pageSize) {
+        if (pageSize == null || pageSize < 1) {
+            return 20;
+        }
+        return Math.min(pageSize, 100);
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.trim().isEmpty();
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.isBlank();
+    }
+
+    private boolean isMesSource(String value) {
+        return SOURCE_MES.equalsIgnoreCase(optional(value));
+    }
+
+    private String limit(String value, String label, int maxLength) {
+        if (value != null && value.length() > maxLength) {
+            throw new IllegalArgumentException(label + "长度不能超过 " + maxLength + " 个字符");
+        }
+        return value;
+    }
+
+    private String upper(String value, String label, int maxLength) {
+        return limit(value, label, maxLength).toUpperCase(Locale.ROOT);
+    }
+
+    private Double nonNegative(Double value, String label) {
+        if (value != null && value < 0) {
+            throw new IllegalArgumentException(label + "不能小于 0");
+        }
+        return value;
+    }
+
+}

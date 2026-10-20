@@ -1,0 +1,131 @@
+# MES 工艺/材料主数据同步说明
+
+> 2026-08-29 材料规格级价格重构补充：QPO 材料单价已从材料顶层板/棒/管三价升级为材料下三套规格价格，每套规格维护统一价、板材价、棒材价、管材价。MES 仍不提供材料价格；MES 同步只维护材料基础身份、MES 类型、MES 密度和追踪字段，新建材料时 QPO 自动补齐三条空规格价格，更新已有材料时不覆盖 QPO 具体密度和规格价格。
+
+> 2026-08-27 MES 主数据同步删除口径收口：QPO 通过数据中心只读获取 MES 工艺类型和材料分页数据，同步到现有材料工艺字典。QPO 不删除材料费用、材料类型、工艺大类、具体工艺四个页签，也不删除 `dict_material`、`dict_material_type`、`dict_process_category`、`dict_process_detail` 四张字典表结构；同步时，MES 返回但状态为停用的材料/工艺大类在 QPO 置为停用，MES 本次全量不再返回的 MES 来源材料/工艺大类在 QPO 硬删除，工艺大类硬删除前先删除其下具体工艺。
+
+> 2026-08-13 定时同步策略补充：材料费用页签“从 MES 同步材料”旁新增“定时同步策略”，工艺大类页签“从 MES 同步工艺”旁新增“定时同步策略”。两套策略分别保存 `MES_MATERIAL` 和 `MES_PROCESS_TYPE`，默认关闭；后台巡检到点后复用现有同步服务，不覆盖 QPO 材料单价和具体密度，不改变 MES 生产下发 payload 合同。
+
+> 2026-08-27 异步提交补充：手动同步接口保持原 POST 路径，但只负责提交后台同步批次并立即返回 `submitted`、`alreadyRunning`、`syncRunId` 和 `status`；页面通过状态查询接口轮询 `mes_master_data_sync_run`，同步完成后再刷新材料/工艺列表。
+
+## 1. 总体口径
+
+MES 主数据同步用于让 QPO 报价和后续 MES 下发使用 MES 编码体系，但 QPO 仍然保留本地核价治理能力：
+
+- MES 工艺类型进入 QPO 工艺大类；MES `code` 写入 QPO `processCode`，MES `name` 写入 QPO `categoryName`，MES `hourPrice` 写入 QPO 小时单价。
+- QPO 为 MES 工艺大类保留或创建默认具体工艺；下发 MES 生产时 `detailName` 转为 `processName`。
+- MES 材料进入 QPO 材料字典；MES `code` 写入 QPO `materialCode` / 后续报价快照 `engineeringMaterialCode`。
+- MES 无材料单价，QPO 继续维护材料规格价格。材料规格有效单价缺失时禁止完成核价，不能按 0 元/kg 静默计算。
+- MES 来源字段只维护主数据身份、类型、MES 密度和追踪信息；QPO 本地继续维护一个具体密度、三套规格价格、必要例外、排序和备注。
+- MES 返回且状态映射为停用时，只更新 QPO 启停状态并计入 `disabledCount`；MES 返回正常状态时可重新启用该 MES 来源记录。
+- MES 全量同步成功但不再返回某个 MES 来源材料或工艺大类时，QPO 删除该材料或工艺大类并计入 `deletedCount`；工艺大类删除前先删除其下 `dict_process_detail` 具体工艺，`LOCAL` 来源记录不受影响。
+- MES 返回空有效数据视为同步失败，不执行缺失删除，避免 MES 异常或接口配置错误导致 QPO 字典被误清理。
+
+## 2. 数据中心 endpoint
+
+QPO 后端通过数据中心获取 MES 主数据，两个 endpoint 都是只读 GET，`targetSystem = MES`，timeout 不低于 `60000ms`。
+
+| endpointCode | 方法 | 默认 path | 用途 |
+| --- | --- | --- | --- |
+| `MES_PROCESS_TYPE_LIST` | GET | `/api/v1/mes/openapi/process-type/list` | 获取 MES 工艺类型列表。 |
+| `MES_MATERIAL_PAGE` | GET | `/api/v1/mes/openapi/material/page` | 分页获取 MES 材料主数据。 |
+
+fallback 环境变量：
+
+```env
+ERP_DATA_CENTER_MES_PROCESS_TYPE_LIST_PATH=/api/v1/mes/openapi/process-type/list
+ERP_DATA_CENTER_MES_MATERIAL_PAGE_PATH=/api/v1/mes/openapi/material/page
+```
+
+材料分页固定 `pageSize=200`，首轮请求为 `pageNo=1&pageSize=200`；同步不传 `materialType` 过滤，确保 `MATERIAL / PRODUCT / SEMI` 等 MES 全部材料类型进入 QPO 字典。
+
+## 3. QPO 手动同步入口
+
+用户入口位于 **工程 > 材料工艺**：
+
+- 材料费用页签：按钮“从 MES 同步材料”。
+- 工艺大类页签：按钮“从 MES 同步工艺”。
+- 同步确认弹窗提示：MES 会更新基础信息和 MES 密度，不覆盖 QPO 具体密度和材料规格价格。
+
+后端 API：
+
+| API | 权限 | 审计动作 |
+| --- | --- | --- |
+| `POST /api/dict/process-categories/sync-mes` | `engineer:dict:process-manage` | `DICT_PROCESS_MES_SYNC` |
+| `POST /api/dict/materials/sync-mes` | `engineer:dict:material-manage` | `DICT_MATERIAL_MES_SYNC` |
+| `GET /api/dict/process-categories/sync-runs/latest` | `engineer:dict:process-manage` | 无，状态查询。 |
+| `GET /api/dict/process-categories/sync-runs/{syncRunId}` | `engineer:dict:process-manage` | 无，状态查询。 |
+| `GET /api/dict/materials/sync-runs/latest` | `engineer:dict:material-manage` | 无，状态查询。 |
+| `GET /api/dict/materials/sync-runs/{syncRunId}` | `engineer:dict:material-manage` | 无，状态查询。 |
+
+手动 POST 是异步提交，不等待 MES 拉取和入库完成。提交响应包含 `success`、`submitted`、`alreadyRunning`、`syncRunId`、`syncType`、`status`、`message`；如果同类同步已有 `RUNNING` 批次，返回 `alreadyRunning=true` 和该批次 `syncRunId`，不重复创建后台任务。
+
+同步运行记录写入 `mes_master_data_sync_run`，记录 `syncRunId`、同步类型、状态、抓取数、有效数、无效数、重复数、upsert 数、`disabledCount`、`deletedCount`、执行人和脱敏消息。页面或运维排查时以 `syncRunId` 状态查询为准，状态为 `SUCCESS` 后刷新列表，状态为 `FAILED` 时展示脱敏失败原因。
+
+## 3.1 QPO 定时同步策略
+
+用户入口同样位于 **工程 > 材料工艺**：
+
+- 材料费用页签：“从 MES 同步材料”旁的“定时同步策略”按钮，维护 `MES_MATERIAL` 定时策略。
+- 工艺大类页签：“从 MES 同步工艺”旁的“定时同步策略”按钮，维护 `MES_PROCESS_TYPE` 定时策略。
+- 策略默认关闭；`FIXED_DELAY` 维持原间隔模式，启动后首次执行默认延迟 30 秒，同步完成后再次执行默认间隔 30 分钟；`DAILY_TIME` 表示每天固定本地时间执行一次，默认 `dailyRunTime=02:00:00`，按 `Asia/Shanghai` 计算自然日。
+
+后端 API：
+
+| API | 权限 | 审计动作 |
+| --- | --- | --- |
+| `GET /api/dict/materials/sync-schedule` | `engineer:dict:material-manage` | 无，仅读取策略。 |
+| `PUT /api/dict/materials/sync-schedule` | `engineer:dict:material-manage` | `DICT_MES_MASTER_DATA_SYNC_SCHEDULE_UPDATE` |
+| `GET /api/dict/process-categories/sync-schedule` | `engineer:dict:process-manage` | 无，仅读取策略。 |
+| `PUT /api/dict/process-categories/sync-schedule` | `engineer:dict:process-manage` | `DICT_MES_MASTER_DATA_SYNC_SCHEDULE_UPDATE` |
+
+策略保存到 `mes_master_data_sync_schedule_config`，核心字段包含 `scheduleMode`、`dailyRunTime`、`startupDelayMs`、`fixedDelayMs`。环境变量 `erp.mes.master-data-sync.enabled/startup-delay-ms/fixed-delay-ms/check-ms` 只作为配置缺失时的兜底默认值；运行时以数据库策略为准。定时同步到点后也走异步提交，写入 `mes_master_data_sync_run` 批次记录；保存策略只记录启停、模式、时间/间隔和上次状态安全摘要，后台巡检、读取策略和未到点跳过不写操作日志。
+
+## 4. 字段映射
+
+### 4.1 工艺
+
+| MES 字段 | QPO 字段 | 说明 |
+| --- | --- | --- |
+| `id` | `dict_process_category.mes_external_id` | MES 外部主键。 |
+| `code` | `dict_process_category.process_code` | 后续 MES 下发 `processTypeCode`。 |
+| `name` | `dict_process_category.category_name` | 工艺大类名称；默认具体工艺 `detailName` 也使用该名称。 |
+| `hourPrice` | `dict_process_category.hourly_rate` | QPO 工时核价小时价。 |
+| 当前时间 | `dict_process_category.mes_synced_at` | 最近同步时间。 |
+
+### 4.2 材料
+
+| MES 字段 | QPO 字段 | 说明 |
+| --- | --- | --- |
+| `id` | `dict_material.mes_external_id` | MES 外部主键。 |
+| `code` | `dict_material.material_code` | 后续报价快照 `engineeringMaterialCode`，MES BOM `itemCode`。 |
+| `name` | `dict_material.material_name` | 材料名称。 |
+| `materialType` | `dict_material.mes_material_type` / `dict_material_type.type_code` | 自动确保材料类型存在。 |
+| `standard` | `dict_material.mes_standard` | MES 规格。 |
+| `docNum` | `dict_material.mes_doc_num` | MES 图号/资料号。 |
+| `weight` | `dict_material.mes_weight` | MES 原始重量字段，仅作追踪。 |
+| `density` | `dict_material.mes_density_raw` | MES 返回单位为 `g/cm³`；同步入库前乘以 `1000` 转为 `kg/m³` 兜底值。字段名保留历史兼容，不覆盖 QPO 人工维护的具体密度。 |
+| 当前时间 | `dict_material.mes_synced_at` | 最近同步时间。 |
+
+## 5. MES 生产下发合同
+
+主数据同步只影响 QPO 字典和报价快照，不改变 MES 生产下发 DTO 字段名称。下发 payload 仍满足：
+
+- `processRoute[].processTypeCode = QPO processCode = MES code`
+- `processRoute[].processName = QPO detailName`
+- `bom[].itemCode = QPO engineeringMaterialCode = MES material code`
+- `bom[].quantity = QPO materialGrossWeight kg`
+
+因此，只要报价阶段选择的是 MES 同步后的材料编码和工艺编码，QPO 系统自己生成的提单、锁库和待产数据就会沿快照字段进入 MES 下发 payload。
+
+## 6. 真实链路验收
+
+普通回归可以执行真实数据中心读取 MES 工艺/材料并同步一轮；真实写 MES 仍使用独立显式开关，不在普通回归中自动执行。推荐顺序：
+
+1. 检查数据中心连接配置和两个 GET endpoint 是否启用。
+2. 手动触发“从 MES 同步工艺”和“从 MES 同步材料”。
+3. 在材料工艺页面确认来源、MES 类型、同步时间和单价状态。
+4. 对缺失材料单价的材料补齐 QPO 本地单价后再完成核价。
+5. 如需真实写 MES，使用独立显式开关执行生产下发验收脚本。
+
+安全要求：文档、操作日志和文件日志不记录完整请求、完整响应、token、Authorization、Cookie 或 client_secret。

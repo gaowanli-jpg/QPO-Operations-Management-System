@@ -1,0 +1,8 @@
+target
+.git
+.idea
+.mvn
+.env
+*.log
+uploads
+logs
