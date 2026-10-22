@@ -173,6 +173,8 @@ class MesMaterialSyncContractCharacterizationTest extends MesMaterialSyncTestSup
         MesMaterialResolveReq.Item item = new MesMaterialResolveReq.Item();
         item.setDrawingNo("P-100");
         item.setDrawingVersion("A");
+        item.setMaterial("Aluminum 6061");
+        item.setName("Precision bracket");
         item.setDrawingUrls(List.of("http://qpo.local/p100.pdf"));
         item.setRemark("Rush");
         item.setCustomerRequirements("材料名称：Bracket\n表面处理：Anodized");
@@ -184,6 +186,8 @@ class MesMaterialSyncContractCharacterizationTest extends MesMaterialSyncTestSup
         assertThat(payload.path("items")).hasSize(1);
         assertThat(payload.path("items").get(0).path("drawingNo").asText()).isEqualTo("P-100");
         assertThat(payload.path("items").get(0).path("drawingVersion").asText()).isEqualTo("A");
+        assertThat(payload.path("items").get(0).path("material").asText()).isEqualTo("Aluminum 6061");
+        assertThat(payload.path("items").get(0).path("name").asText()).isEqualTo("Precision bracket");
         assertThat(payload.path("items").get(0).has("drawingUrls")).isFalse();
         assertThat(payload.path("items").get(0).path("remark").asText()).isEqualTo("Rush");
         assertThat(payload.path("items").get(0).path("customerRequirements").asText())

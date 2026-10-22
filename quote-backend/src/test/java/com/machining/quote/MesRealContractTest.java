@@ -40,6 +40,8 @@ class MesRealContractTest {
         MesMaterialResolveReq.Item first = new MesMaterialResolveReq.Item();
         first.setDrawingNo("QPO-MES-E2E-P001");
         first.setDrawingVersion("A");
+        first.setMaterial("6061 aluminum");
+        first.setName("Precision mounting plate");
         first.setRemark("QPO MES E2E material preparation");
         first.setCustomerRequirements(MesCustomerRequirementsAssembler.assemble(
                 "  精密安装板\r\n二级  ",
@@ -59,6 +61,8 @@ class MesRealContractTest {
         assertThat(items(payload).get(0))
                 .containsEntry("drawingNo", "QPO-MES-E2E-P001")
                 .containsEntry("drawingVersion", "A")
+                .containsEntry("material", "6061 aluminum")
+                .containsEntry("name", "Precision mounting plate")
                 .containsEntry("remark", "QPO MES E2E material preparation")
                 .containsEntry("customerRequirements", "材料名称：精密安装板\n二级\n表面处理：本色阳极氧化")
                 .doesNotContainKeys("ticketId", "sourceType", "sourceOrderId", "sourceItemId", "rfqId", "itemId", "standard");

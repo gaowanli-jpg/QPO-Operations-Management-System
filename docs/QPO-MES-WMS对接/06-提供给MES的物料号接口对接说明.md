@@ -101,6 +101,8 @@ Authorization: Bearer {DATA_CENTER_ACCESS_TOKEN}
     {
       "drawingNo": "P-1001",
       "drawingVersion": "A",
+      "material": "6061铝合金",
+      "name": "精密安装板",
       "drawingUrls": [
         "http://192.168.70.21:8088/uploads/drawings/xxx.pdf"
       ],
@@ -121,6 +123,8 @@ Authorization: Bearer {DATA_CENTER_ACCESS_TOKEN}
 | `items` | array | 否 | 零件明细数组。QPO 当前统一通过批量接口发送；单条请求也是 `items` 数组长度为 1 的批量请求。 |
 | `items[].drawingNo` | string | 否 | 图号，QPO 调用前会校验非空。 |
 | `items[].drawingVersion` | string | 可能为空字符串 | 版本，QPO 无版本时传空字符串。 |
+| `items[].material` | string | 可能为空 | 材质/材料名称，来自提单行的 `materialName`；空值时省略。 |
+| `items[].name` | string | 可能为空 | 物料描述，来自提单行的 `description`；空值时省略。 |
 | `items[].drawingUrls` | string array | 否 | 图纸绝对 URL 数组；当前每个已提零件通常传 1 个图纸 URL。 |
 | `items[].remark` | string | 可能为空 | 零件备注，来自议价提单 / 已提零件行的备注字段。 |
 

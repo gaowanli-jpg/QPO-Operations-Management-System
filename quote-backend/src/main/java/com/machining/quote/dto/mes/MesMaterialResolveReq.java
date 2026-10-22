@@ -32,6 +32,8 @@ public class MesMaterialResolveReq {
     public static class Item {
         private String drawingNo;
         private String drawingVersion;
+        private String material;
+        private String name;
         @Deprecated
         @JsonIgnore
         private List<String> drawingUrls;

@@ -788,6 +788,8 @@ public class MesMaterialSyncService {
         MesMaterialResolveReq.Item item = new MesMaterialResolveReq.Item();
         item.setDrawingNo(drawingNo.trim());
         item.setDrawingVersion(drawingVersion);
+        item.setMaterial(trimToNull(ticket.getMaterialName()));
+        item.setName(trimToNull(ticket.getDescription()));
         item.setRemark(trimToNull(ticket.getRemark()));
         item.setCustomerRequirements(MesCustomerRequirementsAssembler.assemble(
                 ticket.getMaterialName(),
@@ -1298,6 +1300,8 @@ public class MesMaterialSyncService {
         MesMaterialResolveReq.Item item = new MesMaterialResolveReq.Item();
         item.setDrawingNo(required(ticket.getPartNo(), "图号不能为空"));
         item.setDrawingVersion(ticket.getVersion() == null ? "" : ticket.getVersion());
+        item.setMaterial(trimToNull(ticket.getMaterialName()));
+        item.setName(trimToNull(ticket.getDescription()));
         item.setRemark(trimToNull(ticket.getRemark()));
         item.setCustomerRequirements(MesCustomerRequirementsAssembler.assemble(
                 ticket.getMaterialName(),

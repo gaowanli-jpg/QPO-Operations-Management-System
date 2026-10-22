@@ -103,10 +103,14 @@ class MesMaterialSyncServiceTest extends MesMaterialSyncTestSupport {
         assertThat(req.getItems()).hasSize(1);
         assertThat(req.getItems().get(0).getDrawingNo()).isEqualTo("P-100");
         assertThat(req.getItems().get(0).getDrawingVersion()).isEqualTo("A");
+        assertThat(req.getItems().get(0).getMaterial()).isEqualTo("Material note");
+        assertThat(req.getItems().get(0).getName()).isEqualTo("Part description");
         assertThat(serialize(req).path("items").get(0).has("drawingUrls")).isFalse();
         assertThat(req.getItems().get(0).getRemark()).isEqualTo("release remark");
         assertThat(req.getItems().get(0).getCustomerRequirements())
                 .isEqualTo("材料名称：Material note\n表面处理：Anodized");
+        assertThat(serialize(req).path("items").get(0).path("material").asText()).isEqualTo("Material note");
+        assertThat(serialize(req).path("items").get(0).path("name").asText()).isEqualTo("Part description");
         ArgumentCaptor<OrderDeliveryTicketMesRequest> requestCaptor = ArgumentCaptor.forClass(OrderDeliveryTicketMesRequest.class);
         verify(mesRequestMapper).insert(requestCaptor.capture());
         assertThat(requestCaptor.getValue().getMesRequestId()).isEqualTo(req.getMesRequestId());
