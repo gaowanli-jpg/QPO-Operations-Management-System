@@ -13,7 +13,7 @@
 
 本文档描述 QPO 待产零件模块通过数据中心向 MES 下发待生产零件的接口。该接口只处理 WMS 锁库后仍需生产的待产 allocation 行，不替代 MES 物料号获取接口，也不处理库存锁定结果回传。
 
-- 用户入口：待产零件页面手动选择一条或多条待生产行，点击“下发MES生产”。
+- 用户入口：待产零件页面手动选择一条或多条待生产行，点击“下发MES生产”；或由“定时下发策略”配置的每日定时任务在系统级全量下发（见第 8 节）。
 - QPO 后端触发接口：`POST /api/order-delivery/production-items/mes-production`。
 - 数据中心功能接口：`MES_PRODUCTION_DISPATCH`，由数据中心转发到 MES 生产接口。
 - 只下发 `PRODUCTION_REQUIRED`，即 `allocationType = PRODUCTION_REQUIRED` 的待产 allocation 行。
@@ -179,3 +179,27 @@ QPO 处理规则：
 - 不得记录 token、Authorization header。
 - 不得记录完整请求体或完整响应体。
 - 日志只记录 `allocationId`、`ticketId`、`requestId`、`sourceType`、`sourceOrderId`、`sourceItemId`、`productionQty`、`ticketQty`、`externalId`、`durationMs` 等摘要字段。
+
+## 8. 每日定时自动下发（对数据中心的影响）
+
+待产零件模块提供每日定时自动下发能力，配置入口为待产零件页面顶部“定时下发策略”按钮，权限 `market:production-item:mes-production-schedule`。
+
+**对数据中心的唯一影响是：调用时点由“人点按钮”变成“每天固定时间自动发起”，请求体、字段合同、鉴权方式、响应体语义和失败判定全部不变。** 数据中心不需要新增接口、字段或环境变量。
+
+调度口径：
+
+- 默认每天 17:00 触发（页面可改时间，精度到分钟），一天最多自动执行一次，跨实例通过配置表 `production_item_auto_dispatch_config.last_run_date` 的条件更新认领，不会重复触发。
+- 下发范围是执行时点上所有满足条件的待下发 `PRODUCTION_REQUIRED` 行，含历史积压；**不设每日总量上限，不把未处理完的行顺延到第二天**。
+- 只控制单批瞬时负载：默认单批 200 行、批间隔 3000ms，串行执行且跑在独立线程池（`productionAutoDispatchExecutor`，core=1/max=1），不挤占人工手动下发和 MES 物料号同步的线程。
+- 每个批次内部仍按 `customerCode | customerName | internalProjectNo | saleOrderNo` 分组，一个分组一次 HTTP 请求，因此**对数据中心的请求数由销售订单数决定，不由行数决定**。调小单批行数不会减少请求数，只是把请求摊开在更长时间里。
+- 候选行排序为 `sourceOrderId ASC, deliveryDate ASC NULLS LAST, id ASC`，让同一销售订单的行连续落进同一批次，避免切批把同一订单拆成多次请求。
+- `mes_production_status = FAILED` 的行不自动重发，需人工在列表筛选“下发失败”后手动处理；`include_failed` 默认关闭。
+- 连续 3 个批次全部失败（成功数和跳过数都为 0）会熔断中止当天任务并标记 `FAILED`，避免在数据中心或 MES 故障时反复打满下游。
+- 执行结果（总行数 / 成功 / 失败 / 跳过 / 轮次 / 耗时 / 任务ID）回写配置表并在页面展示；实际下发任务仍按原方式记录为 `system_task`，`createdBy = SYSTEM`。
+- 断点续跑：逐行回写 `SUCCESS / FAILED`，进程重启后再次触发只会捞剩余的 `PENDING` 行，无需游标。
+
+运维排查入口：
+
+- 接口：`GET/PUT /api/order-delivery/production-items/auto-dispatch/config`、`POST /api/order-delivery/production-items/auto-dispatch/run-now`。
+- 环境变量：`ERP_PRODUCTION_AUTO_DISPATCH_CHECK_MS`（轮询间隔，默认 60000）、`ERP_PRODUCTION_AUTO_DISPATCH_QUEUE_CAPACITY`（独立线程池队列，默认 4）。
+- 操作日志动作：`PRODUCTION_ITEM_MES_PRODUCTION_AUTO_SUBMIT`（提交定时下发任务）、`PRODUCTION_ITEM_AUTO_DISPATCH_CONFIG_UPDATE`（修改策略）。

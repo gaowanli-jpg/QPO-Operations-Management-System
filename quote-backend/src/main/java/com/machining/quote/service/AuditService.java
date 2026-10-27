@@ -460,6 +460,8 @@ public class AuditService {
             case "DELIVERED_ITEM_DISCARD" -> "废弃已提零件";
             case "DELIVERED_ITEM_RESTORE" -> "恢复已提零件";
             case "PRODUCTION_ITEM_MES_PRODUCTION_SUBMIT", "LOCKED_ITEM_MES_PRODUCTION_SUBMIT" -> "提交MES生产下发";
+            case "PRODUCTION_ITEM_MES_PRODUCTION_AUTO_SUBMIT" -> "提交待产零件定时下发";
+            case "PRODUCTION_ITEM_AUTO_DISPATCH_CONFIG_UPDATE" -> "更新待产零件定时下发策略";
             case "PRODUCTION_ITEM_MES_PRODUCTION_SUCCESS", "LOCKED_ITEM_MES_PRODUCTION_SUCCESS" -> "MES生产下发成功";
             case "PRODUCTION_ITEM_MES_PRODUCTION_FAILED", "LOCKED_ITEM_MES_PRODUCTION_FAILED" -> "MES生产下发失败";
             case "LOCKED_ITEM_STOCK_PICKING_SUBMIT" -> "提交提库存工单";

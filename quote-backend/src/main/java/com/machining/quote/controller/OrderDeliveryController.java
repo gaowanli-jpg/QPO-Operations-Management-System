@@ -15,10 +15,14 @@ import com.machining.quote.dto.LockedItemPageDTO;
 import com.machining.quote.dto.LockedItemQueryReq;
 import com.machining.quote.dto.LockedItemStockPickingBatchReq;
 import com.machining.quote.dto.PageResult;
+import com.machining.quote.dto.ProductionItemAutoDispatchConfigDTO;
+import com.machining.quote.dto.ProductionItemAutoDispatchConfigReq;
 import com.machining.quote.dto.ProductionItemQueryReq;
 import com.machining.quote.entity.SystemTask;
 import com.machining.quote.service.DeliveredItemService;
 import com.machining.quote.service.LockedItemService;
+import com.machining.quote.service.ProductionItemAutoDispatchConfigService;
+import com.machining.quote.service.ProductionItemAutoDispatchService;
 import com.machining.quote.service.ProductionItemService;
 import com.machining.quote.service.SystemTaskService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,6 +30,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -43,6 +48,10 @@ public class OrderDeliveryController {
     private LockedItemService lockedItemService;
     @Autowired
     private ProductionItemService productionItemService;
+    @Autowired
+    private ProductionItemAutoDispatchConfigService productionItemAutoDispatchConfigService;
+    @Autowired
+    private ProductionItemAutoDispatchService productionItemAutoDispatchService;
     @Autowired
     private SystemTaskService systemTaskService;
 
@@ -249,5 +258,24 @@ public class OrderDeliveryController {
     @RequirePermission("market:production-item:mes-production-submit")
     public SystemTask submitMesProduction(@RequestBody LockedItemMesProductionBatchReq req) {
         return systemTaskService.submitMesProductionBatchTask(req == null ? null : req.getAllocationIds());
+    }
+
+    @GetMapping("/production-items/auto-dispatch/config")
+    @RequirePermission("market:production-item:mes-production-schedule")
+    public ProductionItemAutoDispatchConfigDTO getAutoDispatchConfig() {
+        return productionItemAutoDispatchConfigService.getSetting();
+    }
+
+    @PutMapping("/production-items/auto-dispatch/config")
+    @RequirePermission("market:production-item:mes-production-schedule")
+    public ProductionItemAutoDispatchConfigDTO updateAutoDispatchConfig(
+            @RequestBody(required = false) ProductionItemAutoDispatchConfigReq req) {
+        return productionItemAutoDispatchConfigService.updateSetting(req);
+    }
+
+    @PostMapping("/production-items/auto-dispatch/run-now")
+    @RequirePermission("market:production-item:mes-production-schedule")
+    public SystemTask runAutoDispatchNow() {
+        return productionItemAutoDispatchService.submitRun(ProductionItemAutoDispatchService.TRIGGER_MANUAL);
     }
 }

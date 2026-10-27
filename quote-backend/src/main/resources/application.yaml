@@ -112,4 +112,10 @@ erp:
     max-pool-size: ${ERP_TASK_MAX_POOL_SIZE:4}
     queue-capacity: ${ERP_TASK_QUEUE_CAPACITY:50}
     output-dir: ${ERP_TASK_OUTPUT_DIR:D:/ERP_Files/tasks/}
+  # 待产零件每日定时自动下发 MES 生产。
+  # 调度判定（开关/时间/批大小）走 production_item_auto_dispatch_config 表，这里只配轮询间隔与线程池。
+  production-auto-dispatch:
+    check-ms: ${ERP_PRODUCTION_AUTO_DISPATCH_CHECK_MS:60000}
+    executor:
+      queue-capacity: ${ERP_PRODUCTION_AUTO_DISPATCH_QUEUE_CAPACITY:4}
 

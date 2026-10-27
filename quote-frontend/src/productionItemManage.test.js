@@ -143,3 +143,71 @@ describe('ProductionItemManage split workbench', () => {
     expect(pageSource).not.toContain(`selectedTicketDetail.${removedField}`)
   })
 })
+
+describe('ProductionItemManage daily auto dispatch policy', () => {
+  test('exposes the policy dialog from the active-view toolbar behind its own permission', () => {
+    expect(pageSource).toContain("const PRODUCTION_ITEM_AUTO_DISPATCH_SCHEDULE_PERMISSION = 'market:production-item:mes-production-schedule'")
+    expect(pageSource).toContain('v-permission="PRODUCTION_ITEM_AUTO_DISPATCH_SCHEDULE_PERMISSION"')
+    expect(pageSource).toContain('@click="openAutoDispatchDialog"')
+    expect(pageSource).toContain('定时下发策略')
+
+    const policyButtonIndex = pageSource.indexOf('v-permission="PRODUCTION_ITEM_AUTO_DISPATCH_SCHEDULE_PERMISSION"')
+    const submitButtonIndex = pageSource.indexOf('v-permission="PRODUCTION_ITEM_MES_PRODUCTION_SUBMIT_PERMISSION"')
+    expect(policyButtonIndex).toBeGreaterThanOrEqual(0)
+    expect(policyButtonIndex).toBeLessThan(submitButtonIndex)
+  })
+
+  test('wires all three policy endpoints through the production item api', () => {
+    expect(apiSource).toContain('getProductionItemAutoDispatchConfig')
+    expect(apiSource).toContain("request('/api/order-delivery/production-items/auto-dispatch/config')")
+    expect(apiSource).toContain('updateProductionItemAutoDispatchConfig')
+    expect(apiSource).toContain("method: 'PUT'")
+    expect(apiSource).toContain('runProductionItemAutoDispatchNow')
+    expect(apiSource).toContain("request('/api/order-delivery/production-items/auto-dispatch/run-now', {")
+
+    expect(pageSource).toContain('await getProductionItemAutoDispatchConfig()')
+    expect(pageSource).toContain('await updateProductionItemAutoDispatchConfig({')
+    expect(pageSource).toContain('await runProductionItemAutoDispatchNow()')
+  })
+
+  test('ships the agreed defaults: 17:00 daily, 200 rows per batch, 3000ms between batches', () => {
+    expect(pageSource).toContain("dailyRunTime: '17:00:00'")
+    expect(pageSource).toContain('batchSize: 200')
+    expect(pageSource).toContain('batchIntervalMs: 3000')
+    expect(pageSource).toContain('failureBreaker: 3')
+    expect(pageSource).toContain('maxRounds: 50')
+    expect(pageSource).toContain('warnDurationMs: 3600000')
+    expect(pageSource).toContain('enabled: false')
+    expect(pageSource).toContain('scheduleMode: \'DAILY_TIME\'')
+  })
+
+  test('limits only the batch size and never caps the daily total', () => {
+    expect(pageSource).toContain('当天所有待下发行会全部处理完，不做每日数量限制')
+    expect(pageSource).not.toContain('dailyMaxRows')
+    expect(pageSource).not.toContain('daily_max_rows')
+    expect(pageSource).not.toContain('每日上限')
+    expect(pageSource).not.toContain('顺延到第二天')
+    expect(pageSource).toContain('系统级全量下发，不受个人数据权限限制')
+  })
+
+  test('keeps advanced parameters collapsed until the operator asks for them', () => {
+    expect(pageSource).toContain('const autoDispatchAdvancedOpen = ref([])')
+    expect(pageSource).toContain('<el-collapse v-model="autoDispatchAdvancedOpen"')
+    expect(pageSource).toContain('<el-collapse-item title="高级参数" name="advanced">')
+    expect(pageSource).toContain('最大轮次')
+    expect(pageSource).toContain('慢执行告警')
+    expect(pageSource).toContain('仅防死循环')
+    expect(pageSource).toContain('只告警不中断')
+  })
+
+  test('reports the last run result and allows an immediate manual run', () => {
+    expect(pageSource).toContain('autoDispatchResultText')
+    expect(pageSource).toContain('autoDispatchStatusLabel')
+    expect(pageSource).toContain("NEVER: '未执行'")
+    expect(pageSource).toContain("PARTIAL: '部分失败'")
+    expect(pageSource).toContain('暂无执行记录')
+    expect(pageSource).toContain('@click="runAutoDispatchNow"')
+    expect(pageSource).toContain('立即执行一次')
+    expect(pageSource).toContain('await loadAutoDispatchConfig()')
+  })
+})

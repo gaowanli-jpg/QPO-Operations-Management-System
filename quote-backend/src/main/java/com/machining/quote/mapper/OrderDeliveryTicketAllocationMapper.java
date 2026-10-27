@@ -502,4 +502,54 @@ public interface OrderDeliveryTicketAllocationMapper extends BaseMapper<OrderDel
             </script>
             """)
     List<String> selectLockedItemCustomers(@Param(Constants.WRAPPER) Wrapper<LockedItemDTO> query);
+
+    /**
+     * 待产零件定时自动下发的候选行。
+     * 口径与 MesProductionDispatchService.skipReason 保持一致：
+     * 只取 PENDING（含状态为空）、未废弃、ACTIVE、直连销售订单行（sales_order_item.allocation_id = alloc.id）、
+     * 销售订单行数量大于 0 且物料号非空的待产行。
+     * 按 source_order_id 排序，使同一销售订单的行连续，切批时不跨订单。
+     * 不校验 internal_delivery_date：缺交期的行会被标记 FAILED 暴露在页面上，而不是被静默排除。
+     */
+    @Select("""
+            SELECT alloc.id
+            FROM order_delivery_ticket_allocation alloc
+            WHERE alloc.allocation_type = 'PRODUCTION_REQUIRED'
+              AND alloc.source_type = 'SALES_ORDER'
+              AND COALESCE(alloc.status, 'ACTIVE') = 'ACTIVE'
+              AND COALESCE(alloc.discarded, FALSE) = FALSE
+              AND COALESCE(NULLIF(TRIM(alloc.mes_production_status), ''), 'PENDING') = 'PENDING'
+              AND EXISTS (
+                  SELECT 1
+                  FROM sales_order_item item
+                  JOIN sales_order_header header ON header.id = item.sales_order_id
+                  WHERE item.allocation_id = alloc.id
+                    AND COALESCE(item.qty, 0) > 0
+                    AND item.material_no IS NOT NULL
+                    AND TRIM(item.material_no) <> ''
+              )
+            ORDER BY alloc.source_order_id ASC, alloc.delivery_date ASC NULLS LAST, alloc.id ASC
+            LIMIT #{limit}
+            """)
+    List<Integer> selectAutoDispatchCandidateIds(@Param("limit") int limit);
+
+    @Select("""
+            SELECT COUNT(*)
+            FROM order_delivery_ticket_allocation alloc
+            WHERE alloc.allocation_type = 'PRODUCTION_REQUIRED'
+              AND alloc.source_type = 'SALES_ORDER'
+              AND COALESCE(alloc.status, 'ACTIVE') = 'ACTIVE'
+              AND COALESCE(alloc.discarded, FALSE) = FALSE
+              AND COALESCE(NULLIF(TRIM(alloc.mes_production_status), ''), 'PENDING') = 'PENDING'
+              AND EXISTS (
+                  SELECT 1
+                  FROM sales_order_item item
+                  JOIN sales_order_header header ON header.id = item.sales_order_id
+                  WHERE item.allocation_id = alloc.id
+                    AND COALESCE(item.qty, 0) > 0
+                    AND item.material_no IS NOT NULL
+                    AND TRIM(item.material_no) <> ''
+              )
+            """)
+    long countAutoDispatchCandidates();
 }

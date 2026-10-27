@@ -38,6 +38,14 @@
 
         <div v-if="viewMode === 'ACTIVE'" class="erp-toolbar-group production-batch-actions">
           <el-button
+            v-permission="PRODUCTION_ITEM_AUTO_DISPATCH_SCHEDULE_PERMISSION"
+            plain
+            :loading="autoDispatchConfigLoading"
+            @click="openAutoDispatchDialog"
+          >
+            定时下发策略
+          </el-button>
+          <el-button
             v-permission="PRODUCTION_ITEM_MES_PRODUCTION_SUBMIT_PERMISSION"
             type="primary"
             plain
@@ -307,6 +315,114 @@
       </div>
     </el-drawer>
 
+    <el-dialog
+      v-model="autoDispatchDialogVisible"
+      title="待产零件定时下发策略"
+      width="640px"
+      destroy-on-close
+    >
+      <div v-loading="autoDispatchConfigLoading" class="auto-dispatch-panel">
+        <el-alert
+          class="auto-dispatch-alert"
+          type="info"
+          :closable="false"
+          show-icon
+          title="当天所有待下发行会全部处理完，不做每日数量限制；分批下发只为避免单批过重影响其他用户。"
+        />
+        <el-form label-width="150px" class="erp-dialog-form">
+          <el-form-item label="开启每日自动下发">
+            <el-switch v-model="autoDispatchForm.enabled" active-text="开启" inactive-text="关闭" />
+          </el-form-item>
+          <el-form-item label="每天执行时间">
+            <el-time-picker
+              v-model="autoDispatchForm.dailyRunTime"
+              value-format="HH:mm:ss"
+              format="HH:mm"
+              placeholder="选择时间"
+            />
+          </el-form-item>
+          <el-form-item label="单批行数">
+            <el-input-number
+              v-model="autoDispatchForm.batchSize"
+              :min="100"
+              :max="1000"
+              :step="50"
+              controls-position="right"
+            />
+            <span class="auto-dispatch-unit">行</span>
+          </el-form-item>
+          <el-form-item label="批间隔">
+            <el-input-number
+              v-model="autoDispatchForm.batchIntervalMs"
+              :min="1000"
+              :max="60000"
+              :step="1000"
+              controls-position="right"
+            />
+            <span class="auto-dispatch-unit">毫秒</span>
+          </el-form-item>
+          <el-form-item label="连续失败熔断">
+            <el-input-number
+              v-model="autoDispatchForm.failureBreaker"
+              :min="1"
+              :max="10"
+              controls-position="right"
+            />
+            <span class="auto-dispatch-unit">批</span>
+          </el-form-item>
+        </el-form>
+
+        <el-collapse v-model="autoDispatchAdvancedOpen" class="auto-dispatch-advanced">
+          <el-collapse-item title="高级参数" name="advanced">
+            <el-form label-width="150px" class="erp-dialog-form">
+              <el-form-item label="最大轮次">
+                <el-input-number
+                  v-model="autoDispatchForm.maxRounds"
+                  :min="1"
+                  :max="500"
+                  controls-position="right"
+                />
+                <span class="auto-dispatch-unit">轮（仅防死循环）</span>
+              </el-form-item>
+              <el-form-item label="慢执行告警">
+                <el-input-number
+                  v-model="autoDispatchWarnMinutes"
+                  :min="1"
+                  :max="480"
+                  controls-position="right"
+                />
+                <span class="auto-dispatch-unit">分钟（只告警不中断）</span>
+              </el-form-item>
+            </el-form>
+          </el-collapse-item>
+        </el-collapse>
+
+        <el-descriptions :column="1" size="small" border class="auto-dispatch-status">
+          <el-descriptions-item label="上次执行">{{ formatAutoDispatchTime(autoDispatchForm.lastRunAt) }}</el-descriptions-item>
+          <el-descriptions-item label="执行状态">{{ autoDispatchStatusLabel(autoDispatchForm.lastStatus) }}</el-descriptions-item>
+          <el-descriptions-item label="执行结果">{{ autoDispatchResultText }}</el-descriptions-item>
+          <el-descriptions-item label="任务ID">{{ autoDispatchForm.lastTaskId || '-' }}</el-descriptions-item>
+        </el-descriptions>
+        <p class="auto-dispatch-hint">
+          系统级全量下发，不受个人数据权限限制。下发失败的行不会自动重发，请在列表中筛选「下发失败」后手动处理。
+        </p>
+      </div>
+      <template #footer>
+        <div class="auto-dispatch-footer">
+          <el-button :disabled="autoDispatchActionPending" @click="runAutoDispatchNow">立即执行一次</el-button>
+          <el-button :disabled="autoDispatchActionPending" @click="autoDispatchDialogVisible = false">取消</el-button>
+          <el-button
+            type="primary"
+            :loading="autoDispatchActionPending"
+            :disabled="autoDispatchConfigLoading"
+            @click="saveAutoDispatchConfig"
+          >
+            保存
+          </el-button>
+        </div>
+      </template>
+    </el-dialog>
+
     <CustomerPickerDialog
       v-model="customerPickerVisible"
       :current-customer="filters.customerName"
@@ -329,16 +445,20 @@ import {
   discardProductionItem,
   getDeliveredItem,
   getDeliveryIntegrationTask,
+  getProductionItemAutoDispatchConfig,
   listProductionItems,
   listTicketAllocations,
   restoreProductionItem,
-  submitMesProductionDispatchBatch
+  runProductionItemAutoDispatchNow,
+  submitMesProductionDispatchBatch,
+  updateProductionItemAutoDispatchConfig
 } from '../services/deliveredItemApi'
 import { usePendingAction } from '../composables/usePendingAction'
 import { formatProcessRouteSnapshot } from '../utils/processRouteFormatter'
 
 const PRODUCTION_ITEM_VIEW_PERMISSION = 'market:production-item:view'
 const PRODUCTION_ITEM_MES_PRODUCTION_SUBMIT_PERMISSION = 'market:production-item:mes-production-submit'
+const PRODUCTION_ITEM_AUTO_DISPATCH_SCHEDULE_PERMISSION = 'market:production-item:mes-production-schedule'
 const MAX_MES_PRODUCTION_BATCH_SIZE = 1000
 const PRODUCTION_ITEM_DISCARD_PERMISSION = 'market:production-item:discard'
 const PRODUCTION_ITEM_RESTORE_PERMISSION = 'market:production-item:restore'
@@ -398,6 +518,151 @@ const advancedFiltersVisible = ref(false)
 const mesProductionResult = ref(null)
 const viewMode = ref('ACTIVE')
 const isDiscardedView = computed(() => viewMode.value === 'DISCARDED')
+
+const autoDispatchDialogVisible = ref(false)
+const autoDispatchConfigLoading = ref(false)
+const autoDispatchActionPending = ref(false)
+const autoDispatchAdvancedOpen = ref([])
+const autoDispatchForm = reactive({
+  enabled: false,
+  dailyRunTime: '17:00:00',
+  batchSize: 200,
+  batchIntervalMs: 3000,
+  maxRounds: 50,
+  warnDurationMs: 3600000,
+  failureBreaker: 3,
+  lastRunAt: null,
+  lastStatus: 'NEVER',
+  lastTaskId: null,
+  lastTotal: null,
+  lastSuccess: null,
+  lastFailed: null,
+  lastSkipped: null,
+  lastRounds: null,
+  lastDurationMs: null
+})
+
+const autoDispatchWarnMinutes = computed({
+  get: () => Math.max(1, Math.round((autoDispatchForm.warnDurationMs || 3600000) / 60000)),
+  set: (value) => {
+    autoDispatchForm.warnDurationMs = Math.max(1, Number(value) || 60) * 60000
+  }
+})
+
+const autoDispatchStatusLabels = {
+  NEVER: '未执行',
+  SUCCESS: '成功',
+  PARTIAL: '部分失败',
+  FAILED: '失败',
+  RUNNING: '执行中'
+}
+
+const autoDispatchStatusLabel = (value) => {
+  const key = String(value || 'NEVER').toUpperCase()
+  return autoDispatchStatusLabels[key] || value || '-'
+}
+
+const autoDispatchResultText = computed(() => {
+  if (autoDispatchForm.lastStatus === 'NEVER' || autoDispatchForm.lastTotal === null) {
+    return '暂无执行记录'
+  }
+  const parts = [
+    `总 ${autoDispatchForm.lastTotal} 行`,
+    `成功 ${autoDispatchForm.lastSuccess ?? 0}`,
+    `失败 ${autoDispatchForm.lastFailed ?? 0}`,
+    `跳过 ${autoDispatchForm.lastSkipped ?? 0}`,
+    `共 ${autoDispatchForm.lastRounds ?? 0} 轮`
+  ]
+  if (autoDispatchForm.lastDurationMs) {
+    parts.push(`耗时 ${Math.max(1, Math.round(autoDispatchForm.lastDurationMs / 1000))} 秒`)
+  }
+  return parts.join(' / ')
+})
+
+const applyAutoDispatchConfig = (config) => {
+  if (!config) return
+  Object.assign(autoDispatchForm, {
+    enabled: Boolean(config.enabled),
+    dailyRunTime: config.dailyRunTime || '17:00:00',
+    batchSize: config.batchSize ?? 200,
+    batchIntervalMs: config.batchIntervalMs ?? 3000,
+    maxRounds: config.maxRounds ?? 50,
+    warnDurationMs: config.warnDurationMs ?? 3600000,
+    failureBreaker: config.failureBreaker ?? 3,
+    lastRunAt: config.lastRunAt || null,
+    lastStatus: config.lastStatus || 'NEVER',
+    lastTaskId: config.lastTaskId || null,
+    lastTotal: config.lastTotal ?? null,
+    lastSuccess: config.lastSuccess ?? null,
+    lastFailed: config.lastFailed ?? null,
+    lastSkipped: config.lastSkipped ?? null,
+    lastRounds: config.lastRounds ?? null,
+    lastDurationMs: config.lastDurationMs ?? null
+  })
+}
+
+const loadAutoDispatchConfig = async () => {
+  autoDispatchConfigLoading.value = true
+  try {
+    const config = await getProductionItemAutoDispatchConfig()
+    applyAutoDispatchConfig(config)
+  } catch (error) {
+    ElMessage.error(error?.message || '定时下发策略加载失败')
+  } finally {
+    autoDispatchConfigLoading.value = false
+  }
+}
+
+const openAutoDispatchDialog = async () => {
+  autoDispatchDialogVisible.value = true
+  await loadAutoDispatchConfig()
+}
+
+const saveAutoDispatchConfig = async () => {
+  autoDispatchActionPending.value = true
+  try {
+    const config = await updateProductionItemAutoDispatchConfig({
+      enabled: autoDispatchForm.enabled,
+      scheduleMode: 'DAILY_TIME',
+      dailyRunTime: autoDispatchForm.dailyRunTime || '17:00:00',
+      batchSize: autoDispatchForm.batchSize,
+      batchIntervalMs: autoDispatchForm.batchIntervalMs,
+      maxRounds: autoDispatchForm.maxRounds,
+      warnDurationMs: autoDispatchForm.warnDurationMs,
+      failureBreaker: autoDispatchForm.failureBreaker
+    })
+    applyAutoDispatchConfig(config)
+    ElMessage.success('定时下发策略已保存')
+  } catch (error) {
+    ElMessage.error(error?.message || '定时下发策略保存失败')
+  } finally {
+    autoDispatchActionPending.value = false
+  }
+}
+
+const runAutoDispatchNow = async () => {
+  try {
+    await ElMessageBox.confirm(
+      '立即执行一次定时下发？会对当前所有待下发行发起 MES 生产下发。',
+      '立即执行',
+      { confirmButtonText: '确认执行', cancelButtonText: '取消', type: 'warning' }
+    )
+  } catch {
+    return
+  }
+  autoDispatchActionPending.value = true
+  try {
+    const task = await runProductionItemAutoDispatchNow()
+    const taskId = taskIdOf(task)
+    ElMessage.success(taskId ? `定时下发任务已提交，任务ID：${taskId}` : '定时下发任务已提交')
+    await loadAutoDispatchConfig()
+    await loadItems()
+  } catch (error) {
+    ElMessage.error(error?.message || '定时下发提交失败')
+  } finally {
+    autoDispatchActionPending.value = false
+  }
+}
 
 watch([page, pageSize], () => loadItems())
 watch(() => route.query.ticketId, () => loadItems())
@@ -1188,5 +1453,42 @@ onMounted(() => {
   .mes-production-result-message {
     white-space: normal;
   }
+}
+
+.auto-dispatch-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.auto-dispatch-alert {
+  margin-bottom: 4px;
+}
+
+.auto-dispatch-unit {
+  margin-left: 8px;
+  font-size: 12px;
+  color: var(--erp-text-secondary, #909399);
+}
+
+.auto-dispatch-advanced {
+  border-top: none;
+}
+
+.auto-dispatch-status {
+  margin-top: 4px;
+}
+
+.auto-dispatch-hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--erp-text-secondary, #909399);
+}
+
+.auto-dispatch-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 </style>

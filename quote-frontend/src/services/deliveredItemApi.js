@@ -91,3 +91,17 @@ export const submitMesProductionDispatchBatch = (allocationIds = []) => request(
 })
 
 export const getDeliveryIntegrationTask = (taskId) => request(`/api/tasks/${taskId}`)
+
+export const getProductionItemAutoDispatchConfig = () =>
+  request('/api/order-delivery/production-items/auto-dispatch/config')
+
+export const updateProductionItemAutoDispatchConfig = (payload = {}) =>
+  request('/api/order-delivery/production-items/auto-dispatch/config', {
+    method: 'PUT',
+    data: payload
+  })
+
+export const runProductionItemAutoDispatchNow = () =>
+  request('/api/order-delivery/production-items/auto-dispatch/run-now', {
+    method: 'POST'
+  })
