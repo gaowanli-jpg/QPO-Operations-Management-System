@@ -357,6 +357,30 @@ class LockedItemQueryTest {
                 );
     }
 
+    @Test
+    void lockedItemResultsExposeAllocationCreationTimeBetweenMaterialNoAndItemType() throws IOException {
+        assertThat(read(LOCKED_ITEM_DTO))
+                .as("locked item DTO must carry the allocation creation time")
+                .contains("private LocalDateTime createdAt;");
+        assertThat(read(ALLOCATION_MAPPER))
+                .as("locked item query must select the allocation creation time")
+                .contains("alloc.created_at");
+
+        String page = read(LOCKED_ITEM_PAGE);
+        int materialNoIndex = page.indexOf("prop=\"materialNo\" label=\"物料号\"");
+        int createdAtIndex = page.indexOf("prop=\"createdAt\" label=\"创建时间\"");
+        int itemTypeIndex = page.indexOf("prop=\"itemType\" label=\"零件类型\"");
+        assertThat(materialNoIndex).isGreaterThanOrEqualTo(0);
+        assertThat(itemTypeIndex).isGreaterThanOrEqualTo(0);
+        assertThat(createdAtIndex)
+                .as("创建时间 column must sit between 物料号 and 零件类型")
+                .isGreaterThan(materialNoIndex)
+                .isLessThan(itemTypeIndex);
+        assertThat(page)
+                .as("creation time column must render the allocation createdAt value")
+                .contains("prop=\"createdAt\" label=\"创建时间\"", "formatDateTime(row.createdAt)");
+    }
+
     private String read(Path path) throws IOException {
         assertThat(Files.exists(path))
                 .as("%s should exist", path)

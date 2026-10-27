@@ -167,6 +167,7 @@ describe('LockedItemManage guardrails', () => {
       '图号',
       '版本',
       '物料号',
+      '创建时间',
       '零件类型',
       '分配类型',
       '提库存状态',
@@ -202,6 +203,12 @@ describe('LockedItemManage guardrails', () => {
     for (const helper of ['formatMaterialCode', 'formatMaterialType', 'formatMaterialName', 'formatMaterialShape', 'formatWeight', 'formatProcessRoute']) {
       expect(pageSource).toContain(helper)
     }
+  })
+
+  test('shows allocation creation time between material number and item type', () => {
+    expect(pageSource).toContain(
+      'prop="createdAt" label="创建时间" width="160" show-overflow-tooltip>\n            <template #default="{ row }">{{ formatDateTime(row.createdAt) }}</template>'
+    )
   })
 
   test('does not expose removed customer demand snapshot beside locked item remarks', () => {
