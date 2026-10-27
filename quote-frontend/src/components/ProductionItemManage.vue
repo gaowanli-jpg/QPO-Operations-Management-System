@@ -643,7 +643,8 @@ const materialNoRefreshReasonOptions = [
 const viewMode = ref('ACTIVE')
 const isDiscardedView = computed(() => viewMode.value === 'DISCARDED')
 
-const autoDispatchDialogVisible = ref(false)const autoDispatchConfigLoading = ref(false)
+const autoDispatchDialogVisible = ref(false)
+const autoDispatchConfigLoading = ref(false)
 const autoDispatchActionPending = ref(false)
 const autoDispatchAdvancedOpen = ref([])
 const autoDispatchForm = reactive({
