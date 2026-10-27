@@ -88,29 +88,37 @@ image_exists() {
   docker image inspect "$1" >/dev/null 2>&1
 }
 
+image_short_id() {
+  local id
+  id="$(docker image inspect "$1" --format '{{.Id}}' 2>/dev/null || true)"
+  if [[ -z "$id" ]]; then
+    printf '%s' "-"
+    return
+  fi
+  id="${id#sha256:}"
+  printf '%s' "${id:0:12}"
+}
+
 ensure_image_available() {
   local image="$1"
-  if [[ "$SKIP_DEPENDENCY_PULL" == "true" ]]; then
-    if ! image_exists "$image"; then
-      echo "Docker image is required but not available locally: $image" >&2
-      exit 1
-    fi
-    echo "Using local dependency image: $image"
+
+  # Local first: offline build hosts cannot reach Docker Hub. Reuse an existing
+  # local copy instead of waiting for a pull timeout on every run.
+  if image_exists "$image"; then
+    echo "Using local image: $image ($(image_short_id "$image"))"
     return
+  fi
+
+  if [[ "$SKIP_DEPENDENCY_PULL" == "true" ]]; then
+    echo "Docker image is required but not available locally: $image" >&2
+    exit 1
   fi
 
   echo "+ docker pull $image"
-  if docker pull "$image"; then
-    return
+  if ! docker pull "$image"; then
+    echo "Failed to pull required Docker image and no local copy exists: $image" >&2
+    exit 1
   fi
-
-  if image_exists "$image"; then
-    echo "Warning: failed to pull $image, using the local copy instead." >&2
-    return
-  fi
-
-  echo "Failed to pull required Docker image and no local copy exists: $image" >&2
-  exit 1
 }
 
 if [[ -z "$IMAGE_TAG" ]]; then

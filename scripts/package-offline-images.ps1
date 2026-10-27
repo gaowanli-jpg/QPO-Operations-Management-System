@@ -25,27 +25,35 @@ function Test-DockerImageExists([string]$Image) {
     return $LASTEXITCODE -eq 0
 }
 
+function Get-DockerImageShortId([string]$Image) {
+    $id = & docker image inspect $Image --format '{{.Id}}' 2>$null
+    if ([string]::IsNullOrWhiteSpace($id)) {
+        return "-"
+    }
+    $id = $id.Trim() -replace '^sha256:', ''
+    if ($id.Length -gt 12) {
+        return $id.Substring(0, 12)
+    }
+    return $id
+}
+
 function Ensure-DockerImageAvailable([string]$Image) {
-    if ($SkipDependencyPull) {
-        if (-not (Test-DockerImageExists $Image)) {
-            throw "Docker image is required but not available locally: $Image"
-        }
-        Write-Host "Using local dependency image: $Image"
+    # Local first: offline build hosts cannot reach Docker Hub. Reuse an existing
+    # local copy instead of waiting for a pull timeout on every run.
+    if (Test-DockerImageExists $Image) {
+        Write-Host "Using local image: $Image ($(Get-DockerImageShortId $Image))"
         return
+    }
+
+    if ($SkipDependencyPull) {
+        throw "Docker image is required but not available locally: $Image"
     }
 
     Write-Host "+ docker pull $Image"
     & docker pull $Image
-    if ($LASTEXITCODE -eq 0) {
-        return
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to pull required Docker image and no local copy exists: $Image"
     }
-
-    if (Test-DockerImageExists $Image) {
-        Write-Warning "Failed to pull $Image, using the local copy instead."
-        return
-    }
-
-    throw "Failed to pull required Docker image and no local copy exists: $Image"
 }
 
 function Sanitize-ImageTag([string]$Tag) {
