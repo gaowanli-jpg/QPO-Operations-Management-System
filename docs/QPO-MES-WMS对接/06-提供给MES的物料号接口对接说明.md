@@ -12,6 +12,8 @@
 
 > 当前实现收口说明：QPO 后端默认启用数据中心链路，`MesMaterialClient` 会优先调用数据中心 `MES_MATERIAL_RESOLVE` endpoint；只有关闭数据中心或本地运行未接入数据中心 client 时，才使用 MES 激活出站配置，且无 active DB 配置时继续回落到 `ERP_MES_*` 环境变量。
 
+> 2026-10-27 字段口径收口说明：材料与材料描述**已在 2026-10-22 提交中实现**，字段名固定为 `items[].material`（材料）和 `items[].name`（材料描述），本次不新增 `materialDescription` 等任何同义字段。表面处理仍只通过 `items[].customerRequirements` 的 `表面处理：` 行下发，不新增独立字段。本文档补齐 `customerRequirements` 字段行与「MES 取用口径 ↔ 请求字段 ↔ QPO 页面列 ↔ 数据库字段」对照表，并更正 `items[].drawingUrls` 已停止发送的过期说明。
+
 ## 1. 对接结论
 
 - 默认调用方向：QPO -> 数据中心 -> MES。
@@ -20,7 +22,8 @@
 - 数据中心 endpoint：`MES_MATERIAL_RESOLVE`，默认方法 `POST`，请求适配器 `MES_MATERIAL_V1`，响应适配器 `MES_MATERIAL_RESPONSE_V1`。
 - 返回方式：MES 可以在同一次 HTTP 请求的响应体中同步返回物料号，也可以返回已受理并后续回调。
 - 回调要求：MES response 必须原样带回 QPO 请求中的 `bizId`；后续回调 QPO 时，数据中心取该值填入 QPO 回调字段 `mesRequestId`。同图号版本去重场景下，MES 仍只回调主请求 ID。
-- 文件访问：QPO 会在 `items[].drawingUrls` 传图纸绝对 URL，如果 MES 需要下载图纸，MES 服务器必须能在内网访问该 URL。
+- 文件访问：`items[].drawingUrls` 已停止发送，MES 不要再按该字段取图纸；如确需图纸，请与 QPO 另行约定按 `drawingNo + drawingVersion` 获取。
+- 字段口径：材料取 `items[].material`，材料描述取 `items[].name`，表面处理目前只出现在 `items[].customerRequirements` 的 `表面处理：` 行中。
 
 简单理解：
 
@@ -68,7 +71,7 @@ ERP_MES_TIMEOUT_MS=60000
 ERP_PUBLIC_BASE_URL=http://192.168.70.21:8088
 ```
 
-`ERP_PUBLIC_BASE_URL` 用于生成图纸的绝对访问地址。如果 MES 要下载 `items[].drawingUrls` 中的图纸，这个地址必须是 MES 能访问到的内网地址。
+`ERP_PUBLIC_BASE_URL` 仍用于 QPO 内部生成文件/图纸的绝对访问地址（其他模块在用）；但物料号请求已不再下发 `items[].drawingUrls`，因此该变量不影响本接口的报文内容。
 
 > 注意：数据中心链路启用时，物料号获取出站调用不读取 `ERP_MES_BASE_URL` / `ERP_MES_AUTH_TOKEN`；这些变量只保留给直连兜底和本地开发。
 
@@ -102,11 +105,9 @@ Authorization: Bearer {DATA_CENTER_ACCESS_TOKEN}
       "drawingNo": "P-1001",
       "drawingVersion": "A",
       "material": "6061铝合金",
-      "name": "精密安装板",
-      "drawingUrls": [
-        "http://192.168.70.21:8088/uploads/drawings/xxx.pdf"
-      ],
-      "remark": "备注"
+      "name": "精密安装板 10×200×300",
+      "remark": "备注",
+      "customerRequirements": "材料名称：6061铝合金\n表面处理：本色阳极氧化"
     }
   ]
 }
@@ -123,10 +124,20 @@ Authorization: Bearer {DATA_CENTER_ACCESS_TOKEN}
 | `items` | array | 否 | 零件明细数组。QPO 当前统一通过批量接口发送；单条请求也是 `items` 数组长度为 1 的批量请求。 |
 | `items[].drawingNo` | string | 否 | 图号，QPO 调用前会校验非空。 |
 | `items[].drawingVersion` | string | 可能为空字符串 | 版本，QPO 无版本时传空字符串。 |
-| `items[].material` | string | 可能为空 | 材质/材料名称，来自提单行的 `materialName`；空值时省略。 |
-| `items[].name` | string | 可能为空 | 物料描述，来自提单行的 `description`；空值时省略。 |
-| `items[].drawingUrls` | string array | 否 | 图纸绝对 URL 数组；当前每个已提零件通常传 1 个图纸 URL。 |
+| `items[].material` | string | 可能为空 | 材料。对应 QPO 已提零件页面「材料」列的客户侧材料字段 `order_delivery_ticket.material_name`；空值时整个 key 省略。 |
+| `items[].name` | string | 可能为空 | 材料描述。对应 QPO 已提零件页面「材料描述」列，取 `order_delivery_ticket.description`；空值时整个 key 省略。**该字段沿用历史命名 `name`，不再新增 `materialDescription` 等同义字段。** |
 | `items[].remark` | string | 可能为空 | 零件备注，来自议价提单 / 已提零件行的备注字段。 |
+| `items[].customerRequirements` | string | 可能为空 | 客户需求摘要，由 `材料名称` 和 `表面处理` 按固定格式拼接：`材料名称：{material_name}\n表面处理：{surface_treatment}`，只输出非空项、材料在前表面处理在后。**表面处理目前只通过本字段下发，没有独立字段**；两项都为空时整个 key 省略。 |
+
+字段与已提零件页面的对照：
+
+| MES 取用口径 | 请求字段 | QPO 页面列 | 数据库字段 |
+| --- | --- | --- | --- |
+| 材料 | `items[].material` | 材料 | `order_delivery_ticket.material_name` |
+| 材料描述 | `items[].name` | 材料描述 | `order_delivery_ticket.description` |
+| 表面处理 | `items[].customerRequirements`（解析 `表面处理：` 行） | 表面处理 | `order_delivery_ticket.surface_treatment` |
+
+> `items[].drawingUrls` 已不再发送（DTO 上为 `@JsonIgnore`）。MES 如需图纸，请按 `drawingNo + drawingVersion` 通过既有图纸查询能力获取，不要再按本字段取。
 
 QPO 不再向 MES 传 `ticketId`、`sourceType`、`rfqId`、`orderNo`、`rfqNo`、`sourceOrderId`、`sourceItemId`。这些字段属于 QPO 内部定位或展示字段；外部请求和回调定位依赖 QPO 生成的批量请求 ID（出站请求字段名为 `bizId`，QPO 回调字段名为 `mesRequestId`）以及批次行里的 `drawingNo + drawingVersion`。QPO 会在内部批次表和行级请求流水中维护这些映射，并根据 QPO 内部来源字段自行判断是否需要回写销售订单零件，不需要 MES 或数据中心感知。
 

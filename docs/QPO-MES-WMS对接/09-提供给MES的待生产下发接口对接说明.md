@@ -112,7 +112,6 @@ QPO 向数据中心发送的生产需求请求使用批量外层结构。Allocat
 | `items[].productCode` | 是 | 关联销售订单零件行当前物料号。 |
 | `items[].partNo` | 否 | 关联销售订单零件行当前图号。 |
 | `items[].version` | 否 | 关联销售订单零件行当前版本。 |
-| `items[].materialShape` | 否 | 材料形态，来源于材料快照 `materialData.shape`；示例为 `板材 / 棒材 / 管材`。 |
 | `items[].manufacturingProcessType` | 否 | 关联销售订单零件行当前制造加工类型。 |
 | `items[].demandQty` | 是 | 关联销售订单零件行当前数量。 |
 | `items[].makeQty` | 是 | 本次 MES 生产数量，与 `demandQty` 相同。 |
@@ -123,6 +122,8 @@ QPO 向数据中心发送的生产需求请求使用批量外层结构。Allocat
 | `items[].customerRequirements` | 否 | 由当前材料名称和表面处理拼接。 |
 | `items[].bom` | 否 | 工程材料编码和毛重生成的 BOM 摘要。 |
 | `items[].processRoute` | 否 | 当前销售订单零件行的结构化工艺路线。 |
+
+> 本接口不单独下发 `items[].materialShape`、材料名称（`material_name`）和材料描述（`description`）：这三项在 `MesProductionDispatchReq` 中均为 QPO 内部字段（`@JsonIgnore`），不会进入请求体。材料与表面处理信息通过 `items[].customerRequirements` 提供，工程材料编码与毛重通过 `items[].bom` 提供。已提零件「获取物料号」接口另有独立的 `items[].material` / `items[].name` 字段，两条接口的字段名不要混用。
 
 数量口径：
 
