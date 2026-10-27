@@ -81,6 +81,37 @@ class ProductionItemAutoDispatchServiceTest {
     }
 
     @Test
+    void tripsFailureBreakerWhenRoundsOnlySkipWithoutProgress() {
+        Fixture fixture = fixture(config(50, 1, 3));
+        when(fixture.allocationMapper.selectAutoDispatchCandidateIds(anyInt()))
+                .thenReturn(List.of(1, 2));
+        when(fixture.dispatchService.dispatchBatch(anyList(), anyLong()))
+                .thenReturn(batchResult(0, 0, 2, 0));
+
+        fixture.service.submitRun(ProductionItemAutoDispatchService.TRIGGER_SCHEDULED);
+
+        // 跳过不回写 mes_production_status，候选每轮都会重新返回同一批行；
+        // 没有成功行就必须按"无进展"熔断，否则会空转到 maxRounds 并挡住后面的可下发行。
+        verify(fixture.dispatchService, times(3)).dispatchBatch(anyList(), anyLong());
+        verify(fixture.configService).updateResult(eq(1L), eq("FAILED"), any(), any(ProductionItemAutoDispatchResult.class));
+    }
+
+    @Test
+    void keepsRunningWhenEachRoundStillDispatchesAtLeastOneRow() {
+        Fixture fixture = fixture(config(50, 1, 3));
+        when(fixture.allocationMapper.selectAutoDispatchCandidateIds(anyInt()))
+                .thenReturn(List.of(1, 2), List.of(3, 4), List.of());
+        when(fixture.dispatchService.dispatchBatch(anyList(), anyLong()))
+                .thenReturn(batchResult(1, 0, 1, 0));
+
+        fixture.service.submitRun(ProductionItemAutoDispatchService.TRIGGER_SCHEDULED);
+
+        // 每轮都有成功行时，跳过行不应触发熔断
+        verify(fixture.dispatchService, times(2)).dispatchBatch(anyList(), anyLong());
+        verify(fixture.configService).updateResult(eq(1L), eq("SUCCESS"), any(), any(ProductionItemAutoDispatchResult.class));
+    }
+
+    @Test
     void resetsFailureStreakWhenARoundSucceeds() {
         Fixture fixture = fixture(config(10, 1, 3));
         when(fixture.allocationMapper.selectAutoDispatchCandidateIds(anyInt()))

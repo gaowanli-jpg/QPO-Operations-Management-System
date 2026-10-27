@@ -505,10 +505,13 @@ public interface OrderDeliveryTicketAllocationMapper extends BaseMapper<OrderDel
 
     /**
      * 待产零件定时自动下发的候选行。
-     * 口径与 MesProductionDispatchService.skipReason 保持一致：
+     * 口径与 MesProductionDispatchService.skipReason / SalesOrderAllocationContextLoader 保持一致：
      * 只取 PENDING（含状态为空）、未废弃、ACTIVE、直连销售订单行（sales_order_item.allocation_id = alloc.id）、
+     * 销售订单行归属订单与 allocation.source_order_id 一致（source_order_id 为空时不做该限制）、
      * 销售订单行数量大于 0 且物料号非空的待产行。
-     * 按 source_order_id 排序，使同一销售订单的行连续，切批时不跨订单。
+     * 这里校验 sales_order_id 是为了避免把"关联到别的销售订单"的错位行选进来：
+     * 这类行会被上下文加载器判为 error 并整批跳过，而跳过不回写状态，会一直占住候选窗口。
+     * 按 source_order_id 排序，使同一销售订单的行尽量连续，减少同一订单被拆到两批的概率。
      * 不校验 internal_delivery_date：缺交期的行会被标记 FAILED 暴露在页面上，而不是被静默排除。
      */
     @Select("""
@@ -524,6 +527,7 @@ public interface OrderDeliveryTicketAllocationMapper extends BaseMapper<OrderDel
                   FROM sales_order_item item
                   JOIN sales_order_header header ON header.id = item.sales_order_id
                   WHERE item.allocation_id = alloc.id
+                    AND (alloc.source_order_id IS NULL OR item.sales_order_id = alloc.source_order_id)
                     AND COALESCE(item.qty, 0) > 0
                     AND item.material_no IS NOT NULL
                     AND TRIM(item.material_no) <> ''
@@ -546,6 +550,7 @@ public interface OrderDeliveryTicketAllocationMapper extends BaseMapper<OrderDel
                   FROM sales_order_item item
                   JOIN sales_order_header header ON header.id = item.sales_order_id
                   WHERE item.allocation_id = alloc.id
+                    AND (alloc.source_order_id IS NULL OR item.sales_order_id = alloc.source_order_id)
                     AND COALESCE(item.qty, 0) > 0
                     AND item.material_no IS NOT NULL
                     AND TRIM(item.material_no) <> ''

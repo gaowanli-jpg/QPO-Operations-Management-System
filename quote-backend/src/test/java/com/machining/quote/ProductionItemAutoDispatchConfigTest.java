@@ -197,6 +197,26 @@ class ProductionItemAutoDispatchConfigTest {
         assertThat(sql).contains("DEFAULT FALSE");
     }
 
+    @Test
+    void candidateQueriesShareTheSameSkipReasonAlignedPredicate() throws Exception {
+        String mapper = Files.readString(Path.of(
+                "src/main/java/com/machining/quote/mapper/OrderDeliveryTicketAllocationMapper.java"));
+
+        // 关联到别的销售订单的错位行会被上下文加载器判为 error 并整批跳过，跳过又不回写状态，
+        // 一旦被选进候选就会一直占住候选窗口，所以候选查询必须在 SQL 层就排除它们。
+        assertThat(mapper)
+                .as("候选行查询必须排除关联到其他销售订单的错位行")
+                .contains("AND (alloc.source_order_id IS NULL OR item.sales_order_id = alloc.source_order_id)");
+
+        // 列表查询和剩余数统计必须同一口径，否则 remaining 与实际候选不一致，状态会被误判。
+        long predicateCount = mapper.lines()
+                .filter(line -> line.contains("item.sales_order_id = alloc.source_order_id"))
+                .count();
+        assertThat(predicateCount)
+                .as("selectAutoDispatchCandidateIds 与 countAutoDispatchCandidates 必须共用同一口径")
+                .isEqualTo(2);
+    }
+
     private ProductionItemAutoDispatchConfigReq reqWithBatchSize(int batchSize) {
         ProductionItemAutoDispatchConfigReq req = new ProductionItemAutoDispatchConfigReq();
         req.setBatchSize(batchSize);

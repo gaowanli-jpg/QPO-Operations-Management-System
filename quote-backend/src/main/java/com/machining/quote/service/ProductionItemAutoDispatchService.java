@@ -177,12 +177,15 @@ public class ProductionItemAutoDispatchService {
                     taskId, rounds, candidateIds.size(), roundSuccess, roundFailed, roundSkipped,
                     System.currentTimeMillis() - roundStartedAt);
 
-            if (roundSuccess == 0 && roundSkipped == 0) {
+            // 判定"本批没有任何进展"只看成功数：被跳过的行不会回写 mes_production_status，
+            // 候选查询下一轮仍会返回它们，若把跳过也算进展，纯跳过批次会一直空转到 maxRounds，
+            // 并且因为排序固定会永远挡住排在后面的可下发行业。
+            if (roundSuccess == 0) {
                 consecutiveFailedRounds++;
                 if (consecutiveFailedRounds >= failureBreaker) {
                     breakerTripped = true;
-                    log.error("Production auto dispatch aborted taskId={} reason=failure breaker failedRounds={}",
-                            taskId, consecutiveFailedRounds);
+                    log.error("Production auto dispatch aborted taskId={} reason=failure breaker roundsWithoutSuccess={} lastRoundSize={} lastRoundSkipped={}",
+                            taskId, consecutiveFailedRounds, candidateIds.size(), roundSkipped);
                     break;
                 }
             } else {

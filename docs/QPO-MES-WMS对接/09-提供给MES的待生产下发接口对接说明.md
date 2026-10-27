@@ -193,9 +193,10 @@ QPO 处理规则：
 - 下发范围是执行时点上所有满足条件的待下发 `PRODUCTION_REQUIRED` 行，含历史积压；**不设每日总量上限，不把未处理完的行顺延到第二天**。
 - 只控制单批瞬时负载：默认单批 200 行、批间隔 3000ms，串行执行且跑在独立线程池（`productionAutoDispatchExecutor`，core=1/max=1），不挤占人工手动下发和 MES 物料号同步的线程。
 - 每个批次内部仍按 `customerCode | customerName | internalProjectNo | saleOrderNo` 分组，一个分组一次 HTTP 请求，因此**对数据中心的请求数由销售订单数决定，不由行数决定**。调小单批行数不会减少请求数，只是把请求摊开在更长时间里。
-- 候选行排序为 `sourceOrderId ASC, deliveryDate ASC NULLS LAST, id ASC`，让同一销售订单的行连续落进同一批次，避免切批把同一订单拆成多次请求。
-- `mes_production_status = FAILED` 的行不自动重发，需人工在列表筛选“下发失败”后手动处理；`include_failed` 默认关闭。
-- 连续 3 个批次全部失败（成功数和跳过数都为 0）会熔断中止当天任务并标记 `FAILED`，避免在数据中心或 MES 故障时反复打满下游。
+- 候选行排序为 `sourceOrderId ASC, deliveryDate ASC NULLS LAST, id ASC`，让同一销售订单的行尽量连续落进同一批次，减少同一订单被拆成多次请求的概率（批次边界仍可能落在订单中间，只是概率被压到最低）。
+- `mes_production_status = FAILED` 的行不自动重发，需人工在列表筛选“下发失败”后手动处理；`include_failed` 为预留字段，当前未实现自动重发。
+- 连续 3 个批次**没有任何一行下发成功**（整批失败或整批被跳过都算）会熔断中止当天任务并标记 `FAILED`，避免在数据中心或 MES 故障、以及存在无法下发的脏数据时反复打满下游、空转占住候选窗口。
+- 被跳过的行不会回写 `mes_production_status`（保持 `PENDING`），因此跳过原因需要看文件日志的 `MES production dispatch skipped allocationId=... reason=...`；这类行不会自动消失，需要人工修正数据后重新触发。
 - 执行结果（总行数 / 成功 / 失败 / 跳过 / 轮次 / 耗时 / 任务ID）回写配置表并在页面展示；实际下发任务仍按原方式记录为 `system_task`，`createdBy = SYSTEM`。
 - 断点续跑：逐行回写 `SUCCESS / FAILED`，进程重启后再次触发只会捞剩余的 `PENDING` 行，无需游标。
 

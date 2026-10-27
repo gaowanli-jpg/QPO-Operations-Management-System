@@ -431,7 +431,7 @@ Production auto dispatch round started taskId={} round={} size={}
 Production auto dispatch round finished taskId={} round={} success={} failed={} skipped={} durationMs={}
 Production auto dispatch finished taskId={} rounds={} total={} success={} failed={} skipped={} remaining={} durationMs={}
 Production auto dispatch slow run taskId={} durationMs={} thresholdMs={}
-Production auto dispatch aborted taskId={} reason={} failedRounds={}
+Production auto dispatch aborted taskId={} reason={} roundsWithoutSuccess={} lastRoundSize={} lastRoundSkipped={}
 ```
 
 禁止：token、Authorization、完整请求体、完整响应体。
@@ -524,9 +524,11 @@ Production auto dispatch aborted taskId={} reason={} failedRounds={}
 
 前端改动：`services/deliveredItemApi.js`（三个方法）、`components/ProductionItemManage.vue`（顶部“定时下发策略”按钮 + 640px 策略弹窗 + 高级参数折叠 + 上次执行状态）。
 
-测试：后端 `ProductionItemAutoDispatchConfigTest`(9)、`ProductionItemAutoDispatchServiceTest`(10)、`ProductionItemAutoDispatchSchedulerTest`(5) 共 24 例全绿；前端 `productionItemManage.test.js` 新增 6 例，全量 161 文件 / 847 例全绿；`vite build` 通过。
+测试：后端 `ProductionItemAutoDispatchConfigTest`(10)、`ProductionItemAutoDispatchServiceTest`(12)、`ProductionItemAutoDispatchSchedulerTest`(5) 共 27 例全绿；前端 `productionItemManage.test.js` 新增 6 例，全量 161 文件 / 847 例全绿；`vite build` 通过。
 
-与规划的两处偏差（已按实现修正本文件）：
+与规划的四处偏差（已按实现修正本文件）：
 
 1. **一个执行只落一条系统任务**，不是每轮一条——轮次信息写进 `resultJson` 和配置表 `last_rounds`，避免 50 轮刷 50 条任务。
 2. 候选 SQL 用 `EXISTS` 子查询校验 `sales_order_item.qty > 0 AND material_no` 非空，对齐 `MesProductionDispatchService.skipReason` 的真实口径；不校验 `ticket_qty`（该条件只在 legacy `dispatchOne` 路径生效）。
+3. **熔断判定从“连续 N 批全失败”改为“连续 N 批没有任何一行成功”**（2026-10-27 部署前核验修正）。原判定要求 `成功数=0 且 跳过数=0`，但 `dispatchBatch` 对被跳过的行**不回写 `mes_production_status`**，候选 SQL 下一轮仍会返回它们；加上候选排序固定，恒跳过行会永远排在前面，导致每轮 `成功=0 / 跳过=N` 却永不熔断，一路空转到 `max_rounds=50`，并把排在后面的可下发行全部挡住。修正后纯跳过批次也计入无进展，最坏 3 轮（约 10 秒）收手并标 `FAILED`。
+4. 候选 SQL 的 `EXISTS` 追加 `(alloc.source_order_id IS NULL OR item.sales_order_id = alloc.source_order_id)`，把“关联到别的销售订单”的错位行在 SQL 层就排除——这类行会被 `SalesOrderAllocationContextLoader` 判为 error 并整批跳过，属于第 3 条里最容易出现的恒跳过来源。`source_order_id` 为空时不加该限制，避免误伤通过 `allocation_id` 直连的合法行。
