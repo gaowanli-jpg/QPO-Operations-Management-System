@@ -102,6 +102,14 @@ function Copy-PackageFile([string]$RelativePath, [string]$DestinationDirectory) 
     Copy-Item -LiteralPath $source -Destination (Join-Path $DestinationDirectory (Split-Path -Leaf $RelativePath)) -Force
 }
 
+function Write-Utf8NoBom([string]$Path, [string]$Content) {
+    # Set-Content -Encoding UTF8 on Windows PowerShell 5.1 prepends a BOM.
+    # A BOM breaks the Linux side: grep '^QPO_IMAGE_TAG=' misses the first line
+    # and `. qpo-image.env` fails with "command not found".
+    $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+    [System.IO.File]::WriteAllText($Path, $Content, $utf8NoBom)
+}
+
 $ImageTag = Sanitize-ImageTag $(if ([string]::IsNullOrWhiteSpace($ImageTag)) { Resolve-DefaultImageTag } else { $ImageTag })
 
 if ([string]::IsNullOrWhiteSpace($OutputDir)) {
@@ -148,12 +156,13 @@ Copy-PackageFile "scripts/load-offline-images.sh" $scriptsOutputDir
 Copy-PackageFile "scripts/backup-qpo.sh" $scriptsOutputDir
 Copy-PackageFile "scripts/restore-qpo.sh" $scriptsOutputDir
 
-@"
-QPO_IMAGE_TAG=$ImageTag
-QPO_BACKEND_IMAGE=$backendImage
-QPO_FRONTEND_IMAGE=$frontendImage
-QPO_IMAGE_ARCHIVE=$(Split-Path -Leaf $archivePath)
-"@ | Set-Content -Encoding UTF8 -Path (Join-Path $OutputDir "qpo-image.env")
+$imageEnvLines = @(
+    "QPO_IMAGE_TAG=$ImageTag"
+    "QPO_BACKEND_IMAGE=$backendImage"
+    "QPO_FRONTEND_IMAGE=$frontendImage"
+    "QPO_IMAGE_ARCHIVE=$(Split-Path -Leaf $archivePath)"
+)
+Write-Utf8NoBom (Join-Path $OutputDir "qpo-image.env") (($imageEnvLines -join "`n") + "`n")
 
 $manifest = [ordered]@{
     imageTag = $ImageTag
@@ -162,7 +171,7 @@ $manifest = [ordered]@{
     images = $images
     includeMinio = [bool]$IncludeMinio
 }
-$manifest | ConvertTo-Json -Depth 4 | Set-Content -Encoding UTF8 -Path (Join-Path $OutputDir "qpo-offline-package-manifest.json")
+Write-Utf8NoBom (Join-Path $OutputDir "qpo-offline-package-manifest.json") (($manifest | ConvertTo-Json -Depth 4) + "`n")
 
 Write-Host "Offline image package created: $OutputDir"
 Write-Host "Image archive: $archivePath"

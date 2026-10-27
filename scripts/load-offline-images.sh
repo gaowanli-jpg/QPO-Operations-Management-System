@@ -56,7 +56,9 @@ run_checked() {
 read_packaged_image_tag() {
   local image_env_path="$PROJECT_ROOT/qpo-image.env"
   if [[ -f "$image_env_path" ]]; then
-    grep -E '^QPO_IMAGE_TAG=' "$image_env_path" | head -n 1 | cut -d '=' -f 2- || true
+    # Strip a UTF-8 BOM and CR so packages built by older Windows PowerShell
+    # (Set-Content -Encoding UTF8 always prepends a BOM) still parse here.
+    tr -d '\357\273\277\r' < "$image_env_path" | grep -E '^QPO_IMAGE_TAG=' | head -n 1 | cut -d '=' -f 2- || true
   fi
 }
 
