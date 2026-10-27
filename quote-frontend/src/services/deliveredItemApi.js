@@ -90,6 +90,12 @@ export const submitMesProductionDispatchBatch = (allocationIds = []) => request(
   data: { allocationIds }
 })
 
+export const refreshProductionItemMaterialNo = (allocationIds = [], reason = '') =>
+  request('/api/order-delivery/production-items/material-no-refresh', {
+    method: 'POST',
+    data: { allocationIds, reason }
+  })
+
 export const getDeliveryIntegrationTask = (taskId) => request(`/api/tasks/${taskId}`)
 
 export const getProductionItemAutoDispatchConfig = () =>

@@ -211,3 +211,54 @@ describe('ProductionItemManage daily auto dispatch policy', () => {
     expect(pageSource).toContain('await loadAutoDispatchConfig()')
   })
 })
+
+describe('Production item material no refresh (exception repair)', () => {
+  test('places the refresh button between the schedule policy and the MES dispatch button', () => {
+    const scheduleIndex = pageSource.indexOf('v-permission="PRODUCTION_ITEM_AUTO_DISPATCH_SCHEDULE_PERMISSION"')
+    const refreshIndex = pageSource.indexOf('v-permission="PRODUCTION_ITEM_MATERIAL_NO_REFRESH_PERMISSION"')
+    const dispatchIndex = pageSource.indexOf('v-permission="PRODUCTION_ITEM_MES_PRODUCTION_SUBMIT_PERMISSION"')
+
+    expect(scheduleIndex).toBeGreaterThanOrEqual(0)
+    expect(refreshIndex).toBeGreaterThan(scheduleIndex)
+    expect(refreshIndex).toBeLessThan(dispatchIndex)
+    expect(pageSource).toContain("const PRODUCTION_ITEM_MATERIAL_NO_REFRESH_PERMISSION = 'market:production-item:material-no-refresh'")
+  })
+
+  test('exposes a row level refresh entry for active production rows only', () => {
+    expect(pageSource).toContain('@click="openMaterialNoRefreshDialog(row)"')
+    expect(pageSource).toContain('@click="openMaterialNoRefreshDialog()"')
+    expect(pageSource).toContain('刷新料号')
+  })
+
+  test('requires a reason before submitting and forces a note for the catch-all option', () => {
+    expect(pageSource).toContain('materialNoRefreshReasonOptions')
+    expect(pageSource).toContain("'MES 删除旧料号并重新建号'")
+    expect(pageSource).toContain("'料号填写错误后已更正'")
+    expect(pageSource).toContain("'其他'")
+    expect(pageSource).toContain('请选择刷新原因。')
+    expect(pageSource).toContain('选择「其他」时必须填写补充说明。')
+    expect(pageSource).toContain(':disabled="!materialNoRefreshForm.reasonType"')
+  })
+
+  test('explains the overwrite risk and the MES side preconditions', () => {
+    expect(pageSource).toContain('该操作会覆盖 QPO 已确认的物料号')
+    expect(pageSource).toContain('系统会按图号+版本调用 MES 物料解析接口')
+    expect(pageSource).toContain('已成功下发 MES 或存在在途下发请求的行会被拦截')
+    expect(pageSource).toContain('所选行均已下发成功或存在在途下发请求，不能刷新料号。')
+  })
+
+  test('submits through the dedicated material no refresh endpoint', () => {
+    expect(apiSource).toContain('refreshProductionItemMaterialNo')
+    expect(apiSource).toContain("request('/api/order-delivery/production-items/material-no-refresh'")
+    expect(pageSource).toContain('refreshProductionItemMaterialNo(allocationIds, reason)')
+    expect(pageSource).toContain('const reason = note ? `${materialNoRefreshForm.reasonType}：${note}` : materialNoRefreshForm.reasonType')
+  })
+
+  test('renders the old to new material number mapping in the result panel', () => {
+    expect(pageSource).toContain('刷新料号结果')
+    expect(pageSource).toContain('row.previousMaterialNo')
+    expect(pageSource).toContain('row.newMaterialNo')
+    expect(pageSource).toContain('materialNoRefreshStats')
+    expect(pageSource).toContain('刷新提单行')
+  })
+})

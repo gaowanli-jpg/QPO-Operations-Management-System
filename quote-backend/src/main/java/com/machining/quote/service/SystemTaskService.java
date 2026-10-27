@@ -10,6 +10,7 @@ import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.SystemTaskMapper;
 import com.machining.quote.service.mes.MesProductionDispatchService;
 import com.machining.quote.service.mes.LockedItemStockPickingOrderService;
+import com.machining.quote.service.mes.ProductionItemMaterialNoRefreshService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -48,6 +49,8 @@ public class SystemTaskService {
     private QuoteProcessService quoteProcessService;
     @Autowired(required = false)
     private MesProductionDispatchService mesProductionDispatchService;
+    @Autowired(required = false)
+    private ProductionItemMaterialNoRefreshService productionItemMaterialNoRefreshService;
     @Autowired(required = false)
     private LockedItemStockPickingOrderService lockedItemStockPickingOrderService;
     @Autowired(required = false)
@@ -219,6 +222,30 @@ public class SystemTaskService {
                 task.getId(), taskAllocationIds.size());
         taskExecutor.execute(() -> runTask(task.getId(),
                 () -> mesProductionDispatchService.dispatchBatch(taskAllocationIds, task.getId())));
+        return taskMapper.selectById(task.getId());
+    }
+
+    public SystemTask submitMaterialNoRefreshTask(List<Integer> allocationIds, String reason) {
+        if (productionItemMaterialNoRefreshService == null) {
+            throw new RuntimeException("刷新料号服务不可用");
+        }
+        List<Integer> normalizedAllocationIds = productionItemMaterialNoRefreshService.normalizeAllocationIds(allocationIds);
+        productionItemMaterialNoRefreshService.assertCanAccessAllocations(normalizedAllocationIds);
+        normalizedAllocationIds = filterDiscardedAllocationIds(normalizedAllocationIds);
+        if (normalizedAllocationIds.isEmpty()) {
+            throw new RuntimeException("所选待产零件均已废弃，不能刷新料号");
+        }
+        List<Integer> taskAllocationIds = normalizedAllocationIds;
+        Map<String, Object> request = new LinkedHashMap<>();
+        request.put("allocationIds", taskAllocationIds);
+        request.put("allocationCount", taskAllocationIds.size());
+        request.put("reason", reason == null ? null : reason.trim());
+        SystemTask task = createTask(ProductionItemMaterialNoRefreshService.TASK_TYPE, request);
+        recordTaskSubmitAudit("PRODUCTION_ITEM_MATERIAL_NO_REFRESH_SUBMIT", "DELIVERY", task, request);
+        log.info("MES material no refresh submitted taskId={} allocationCount={} reason={}",
+                task.getId(), taskAllocationIds.size(), reason);
+        taskExecutor.execute(() -> runTask(task.getId(),
+                () -> productionItemMaterialNoRefreshService.refreshBatch(taskAllocationIds, reason, task.getId())));
         return taskMapper.selectById(task.getId());
     }
 

@@ -822,3 +822,51 @@ npm run build
 - 文件日志可通过 requestId、taskId 和 mesRequestId 排查。
 - 权限树中可以独立授权“获取MES物料号”。
 - 不影响议价提单、订单管理、历史订单、报价处理主流程。
+
+## 14. 异常修复：刷新料号（2026-10-27 新增）
+
+### 14.1 背景
+
+正常流程在 MES 返回料号后把它写入 `order_delivery_ticket.material_no`、`sales_order_item.material_no`、`item_quote_version.material_no` 和 `order_delivery_ticket_allocation.material_no`，并把状态置为 `已确认`。此后有三处硬保护，任何一处都让料号无法刷新：
+
+1. `MesMaterialSyncService.assertCanStart`：`mes_sync_status=SUCCESS` 且料号非空时拒绝重新获取；
+2. `SourceItemMaterialNoSyncService.assertWritable`：已存在不同料号（尤其 `已确认`）时拒绝覆盖；
+3. `MesBatchStateService.lockProductionTickets`：生产下发要求 `mes_sync_status=SUCCESS` 且料号非空，重置状态会把下发一起堵住。
+
+当 MES 侧删除旧料号并重新建号（例如人工填错料号后被更正），QPO 保留的就是一个死号，生产下发会持续报「以下料号不存在：XXX」，且整批被 MES 拒绝。
+
+### 14.2 定位方法
+
+1. `mes_integration_batch`：按 `biz_id` 取 `status` / `response_message`；
+2. `mes_production_batch_item`：按 `line_request_id` 或 `batch_id` 取 QPO **实际发出的** `product_code`；
+3. 四表对账：`order_delivery_ticket.material_no`、`sales_order_item.material_no`、`item_quote_version.material_no`、`order_delivery_ticket_allocation.material_no`；
+4. 日志：`docker logs quote-backend | grep <bizId>`，失败行是 `MES production batch dispatch failed bizId=... status=FAILED`；成功调用只打 `status=200`，**不打响应体**，请求报文只在 `LOG_LEVEL_APP=DEBUG` 时输出。
+
+判定要点：如果三行显示的是同一句 MES 中文报错，说明是 MES 顶层 `success=false` 整批拒绝（QPO 把顶层 message 写给该批所有行）；如果是 `MES production response row failed for ...`，则是行级失败，真实原因没有落库（`MesProductionDispatchResp.Item` 无 message 字段）。
+
+### 14.3 刷新料号能力
+
+- 入口：待产零件页工具栏「刷新料号」（选中行批量）+ 行内「刷新料号」（单行）。
+- 权限：`market:production-item:material-no-refresh`（V67 新增，默认只授 `SUPER_ADMIN`、`MARKET_MANAGER`）。
+- 接口：`POST /api/order-delivery/production-items/material-no-refresh`，body `{ allocationIds, reason }`，异步任务 `MES_MATERIAL_NO_REFRESH`。
+- MES 调用：复用 `MES_MATERIAL_RESOLVE`（按 `partNo` + `version` 重新解析），**不新增 MES 接口**。
+- 前置拦截（后端强制，不依赖前端）：
+  - 提单行未废弃；
+  - 该提单下没有任何 allocation 处于 `SUCCESS`（已成功下发 MES）；
+  - 没有 `PROCESSING` / `SUBMITTING` / `RESULT_UNKNOWN`（在途请求）；
+  - 当前料号非空（空料号应走「批量获取物料号」）；
+  - `reason` 必填（≤200 字符）。
+- 写回：四张表统一覆盖为新料号，`material_no_status=已确认`，`material_no_source=MES_REFRESH`，`material_no_message` 记录「异常修复刷新料号：旧号 → 新号；原因：...」。
+- 幂等保护：MES 返回料号与当前一致时不写库并提示「料号未发生变化」。
+- 按提单去重：一个提单拆成多行 allocation 时只发一次 MES 请求，同一提单下的所有待产行一起刷新，避免新旧料号并存。
+- 不影响：`mes_production_status`（`FAILED` 本来就可重发）、`mes_production_batch_item` 历史记录。
+
+### 14.4 操作口径
+
+刷新成功后，需要回到待产零件页对失败行重新「下发MES生产」。已成功下发的行不允许刷新——否则 MES 工单里的料号会和 QPO 不一致，这种场景应走销售变更或让 MES 侧修正。
+
+### 14.5 测试
+
+- `ProductionItemMaterialNoRefreshServiceTest`（7 例）：覆盖成功刷新、按图号+版本组装请求、拒绝已成功下发、拒绝在途、料号未变化、同提单多行合并、原因必填。
+- `ProductionItemMaterialNoRefreshWriterTest`（4 例）：覆盖四表写回、RFQ 来源同时写 RFQ 与派生销售订单行、拒绝已成功下发、拒绝废弃提单。
+- `SalesOrderLinkedChangeNoticeMigrationTest`：全局迁移版本门禁已抬到 67。

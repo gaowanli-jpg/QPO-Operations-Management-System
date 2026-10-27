@@ -46,6 +46,16 @@
             定时下发策略
           </el-button>
           <el-button
+            v-permission="PRODUCTION_ITEM_MATERIAL_NO_REFRESH_PERMISSION"
+            type="warning"
+            plain
+            :disabled="selectedAllocationIds.length === 0 || isMaterialNoRefreshPending"
+            :loading="isMaterialNoRefreshPending"
+            @click="openMaterialNoRefreshDialog()"
+          >
+            刷新料号
+          </el-button>
+          <el-button
             v-permission="PRODUCTION_ITEM_MES_PRODUCTION_SUBMIT_PERMISSION"
             type="primary"
             plain
@@ -141,6 +151,41 @@
       </div>
     </section>
 
+    <section v-if="materialNoRefreshResult" class="erp-table-surface mes-production-result-surface">
+      <div class="erp-table-header mes-production-result-header">
+        <div>
+          <h3>刷新料号结果</h3>
+          <p>按图号+版本向 MES 重新解析料号并覆盖 QPO 已确认料号；已成功下发或结果待核对的行不会刷新。</p>
+        </div>
+        <div class="mes-production-result-actions">
+          <el-button text @click="materialNoRefreshResult = null">关闭结果</el-button>
+        </div>
+      </div>
+      <div class="mes-production-result-stats">
+        <div v-for="stat in materialNoRefreshStats" :key="stat.label" class="mes-production-result-stat">
+          <span>{{ stat.label }}</span>
+          <strong>{{ stat.value }}</strong>
+        </div>
+      </div>
+      <div v-if="materialNoRefreshRows.length" class="mes-production-result-details">
+        <div
+          v-for="row in materialNoRefreshRows"
+          :key="`material-refresh-${row.ticketId || row.message}`"
+          class="mes-production-result-row material-refresh-result-row"
+        >
+          <span>提单ID：{{ row.ticketId || '-' }}</span>
+          <span class="result-row-code">图号：{{ formatDash(row.partNo) }} / {{ formatDash(row.version) }}</span>
+          <span class="result-row-code">料号：{{ formatDash(row.previousMaterialNo) }} → {{ formatDash(row.newMaterialNo) }}</span>
+          <el-tag :type="row.status === 'SUCCESS' ? 'success' : 'danger'" size="small">
+            {{ row.status === 'SUCCESS' ? '成功' : '失败' }}
+          </el-tag>
+          <el-tooltip :content="row.message || '-'" placement="top">
+            <span class="mes-production-result-message">{{ row.message || '-' }}</span>
+          </el-tooltip>
+        </div>
+      </div>
+    </section>
+
     <section class="erp-table-surface production-table-surface">
       <div class="erp-table-body">
         <el-table
@@ -231,7 +276,7 @@
           <el-table-column v-if="viewMode === 'DISCARDED'" prop="discardedBy" label="废弃人" width="110" align="center" show-overflow-tooltip>
             <template #default="{ row }">{{ formatDash(row.discardedBy) }}</template>
           </el-table-column>
-          <el-table-column label="操作" width="180" align="center" fixed="right">
+          <el-table-column label="操作" width="264" align="center" fixed="right">
             <template #default="{ row }">
               <div class="erp-table-actions production-row-actions">
                 <el-button
@@ -242,6 +287,16 @@
                   @click="openTicketDetail(row)"
                 >
                   查看提单行
+                </el-button>
+                <el-button
+                  v-if="viewMode === 'ACTIVE'"
+                  v-permission="PRODUCTION_ITEM_MATERIAL_NO_REFRESH_PERMISSION"
+                  size="small"
+                  type="warning"
+                  plain
+                  @click="openMaterialNoRefreshDialog(row)"
+                >
+                  刷新料号
                 </el-button>
                 <el-button
                   v-if="viewMode === 'ACTIVE'"
@@ -423,6 +478,59 @@
       </template>
     </el-dialog>
 
+    <el-dialog
+      v-model="materialNoRefreshDialogVisible"
+      title="刷新料号（异常修复）"
+      width="560px"
+      destroy-on-close
+    >
+      <el-alert
+        class="material-refresh-alert"
+        type="warning"
+        :closable="false"
+        show-icon
+        title="该操作会覆盖 QPO 已确认的物料号，仅在 MES 侧料号已变更（删旧建新、填错后更正）时使用。"
+      />
+      <el-form label-width="110px" class="erp-dialog-form">
+        <el-form-item label="影响提单行">
+          <span>{{ materialNoRefreshTargetCount }} 条（按提单行去重，同一提单下的待产行一起刷新）</span>
+        </el-form-item>
+        <el-form-item label="刷新原因" required>
+          <el-select
+            v-model="materialNoRefreshForm.reasonType"
+            placeholder="请选择原因"
+            class="material-refresh-reason"
+          >
+            <el-option v-for="option in materialNoRefreshReasonOptions" :key="option" :label="option" :value="option" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="补充说明">
+          <el-input
+            v-model="materialNoRefreshForm.reasonNote"
+            type="textarea"
+            :rows="2"
+            maxlength="120"
+            show-word-limit
+            placeholder="选填；选择「其他」时必填，例如：MES 删除 CS2004010009 后重新建号为 CS2004010012"
+          />
+        </el-form-item>
+      </el-form>
+      <p class="material-refresh-hint">
+        系统会按图号+版本调用 MES 物料解析接口，返回料号与当前一致时不写库；已成功下发 MES 或存在在途下发请求的行会被拦截。
+      </p>
+      <template #footer>
+        <el-button :disabled="isMaterialNoRefreshPending" @click="materialNoRefreshDialogVisible = false">取消</el-button>
+        <el-button
+          type="primary"
+          :loading="isMaterialNoRefreshPending"
+          :disabled="!materialNoRefreshForm.reasonType"
+          @click="submitMaterialNoRefresh"
+        >
+          确认刷新
+        </el-button>
+      </template>
+    </el-dialog>
+
     <CustomerPickerDialog
       v-model="customerPickerVisible"
       :current-customer="filters.customerName"
@@ -448,6 +556,7 @@ import {
   getProductionItemAutoDispatchConfig,
   listProductionItems,
   listTicketAllocations,
+  refreshProductionItemMaterialNo,
   restoreProductionItem,
   runProductionItemAutoDispatchNow,
   submitMesProductionDispatchBatch,
@@ -459,6 +568,7 @@ import { formatProcessRouteSnapshot } from '../utils/processRouteFormatter'
 const PRODUCTION_ITEM_VIEW_PERMISSION = 'market:production-item:view'
 const PRODUCTION_ITEM_MES_PRODUCTION_SUBMIT_PERMISSION = 'market:production-item:mes-production-submit'
 const PRODUCTION_ITEM_AUTO_DISPATCH_SCHEDULE_PERMISSION = 'market:production-item:mes-production-schedule'
+const PRODUCTION_ITEM_MATERIAL_NO_REFRESH_PERMISSION = 'market:production-item:material-no-refresh'
 const MAX_MES_PRODUCTION_BATCH_SIZE = 1000
 const PRODUCTION_ITEM_DISCARD_PERMISSION = 'market:production-item:discard'
 const PRODUCTION_ITEM_RESTORE_PERMISSION = 'market:production-item:restore'
@@ -472,6 +582,7 @@ const productionActionKeys = {
   batchDiscard: () => 'production-item:discard:batch',
   batchRestore: () => 'production-item:restore:batch',
   mesProductionDispatch: () => 'production-item:mes-production:batch',
+  materialNoRefresh: () => 'production-item:material-no-refresh',
   mesProductionReconcile: (row) => `production-item:mes-production:reconcile:${row?.allocationId || row?.result?.requestId || 'unknown'}`
 }
 
@@ -516,11 +627,23 @@ const ticketDetailVisible = ref(false)
 const selectedTicketDetail = ref(null)
 const advancedFiltersVisible = ref(false)
 const mesProductionResult = ref(null)
+const materialNoRefreshResult = ref(null)
+const materialNoRefreshDialogVisible = ref(false)
+const materialNoRefreshTargetIds = ref([])
+const materialNoRefreshForm = reactive({
+  reasonType: '',
+  reasonNote: ''
+})
+const materialNoRefreshReasonOptions = [
+  'MES 删除旧料号并重新建号',
+  '料号填写错误后已更正',
+  'MES 料号主数据调整',
+  '其他'
+]
 const viewMode = ref('ACTIVE')
 const isDiscardedView = computed(() => viewMode.value === 'DISCARDED')
 
-const autoDispatchDialogVisible = ref(false)
-const autoDispatchConfigLoading = ref(false)
+const autoDispatchDialogVisible = ref(false)const autoDispatchConfigLoading = ref(false)
 const autoDispatchActionPending = ref(false)
 const autoDispatchAdvancedOpen = ref([])
 const autoDispatchForm = reactive({
@@ -968,10 +1091,74 @@ const handleMesProductionDispatch = async () => {
   })
 }
 
+const isMaterialNoRefreshPending = computed(() => isPending(productionActionKeys.materialNoRefresh()))
+
+const materialNoRefreshTargetCount = computed(() => {
+  const ticketIds = new Set(materialNoRefreshTargetIds.value.map(row => row.ticketId).filter(Boolean))
+  return ticketIds.size || materialNoRefreshTargetIds.value.length
+})
+
+const materialNoRefreshRows = computed(() => resultRowsOf(materialNoRefreshResult.value))
+
+const materialNoRefreshStats = computed(() => {
+  const result = materialNoRefreshResult.value || {}
+  return [
+    { label: '刷新提单行', value: numberCount(result.totalCount) || materialNoRefreshRows.value.length },
+    { label: '成功', value: numberCount(result.successCount) },
+    { label: '失败', value: numberCount(result.failedCount) }
+  ]
+})
+
+const openMaterialNoRefreshDialog = (row) => {
+  const rows = row ? [row] : (selectedRows.value || [])
+  const targets = rows.filter(item => item && item.id)
+  if (!targets.length) {
+    return ElMessage.warning('请先选择需要刷新料号的待产零件。')
+  }
+  const blockingStatuses = ['SUCCESS', 'PROCESSING', 'RESULT_UNKNOWN']
+  const blocked = targets.filter(item => blockingStatuses.includes(String(item.mesProductionStatus || '').toUpperCase()))
+  if (blocked.length === targets.length) {
+    return ElMessage.warning('所选行均已下发成功或存在在途下发请求，不能刷新料号。')
+  }
+  materialNoRefreshTargetIds.value = targets
+  materialNoRefreshForm.reasonType = ''
+  materialNoRefreshForm.reasonNote = ''
+  materialNoRefreshDialogVisible.value = true
+}
+
+const submitMaterialNoRefresh = () => {
+  if (!materialNoRefreshForm.reasonType) {
+    return ElMessage.warning('请选择刷新原因。')
+  }
+  const note = String(materialNoRefreshForm.reasonNote || '').trim()
+  if (materialNoRefreshForm.reasonType === '其他' && !note) {
+    return ElMessage.warning('选择「其他」时必须填写补充说明。')
+  }
+  const reason = note ? `${materialNoRefreshForm.reasonType}：${note}` : materialNoRefreshForm.reasonType
+  const allocationIds = materialNoRefreshTargetIds.value.map(item => item.id).filter(Boolean)
+  if (!allocationIds.length) {
+    return ElMessage.warning('没有可提交的待产零件。')
+  }
+  return runAction(productionActionKeys.materialNoRefresh(), async () => {
+    materialNoRefreshResult.value = null
+    try {
+      const task = await refreshProductionItemMaterialNo(allocationIds, reason)
+      const taskId = taskIdOf(task)
+      ElMessage.success(taskId ? `刷新料号任务已提交，任务ID：${taskId}` : '刷新料号任务已提交')
+      materialNoRefreshResult.value = mesProductionResultOf(task) || await waitMesProductionTaskResult(taskId)
+      materialNoRefreshDialogVisible.value = false
+      selectedRows.value = []
+      await loadItems()
+    } catch (error) {
+      console.error(error)
+      ElMessage.error(error.response?.data?.message || error.message || '刷新料号任务提交失败。')
+    }
+  })
+}
+
 const showAllItems = () => {
   router.push({ path: '/production-items' })
 }
-
 const openTicketDetail = async (row) => {
   if (!row?.ticketId) {
     ElMessage.warning('当前待产结果缺少提单ID，无法反查原始提单行。')
@@ -1484,6 +1671,26 @@ onMounted(() => {
   font-size: 12px;
   line-height: 1.6;
   color: var(--erp-text-secondary, #909399);
+}
+
+.material-refresh-alert {
+  margin-bottom: 12px;
+}
+
+.material-refresh-reason {
+  width: 100%;
+}
+
+.material-refresh-hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--erp-text-secondary, #909399);
+}
+
+.material-refresh-result-row {
+  grid-template-columns: minmax(96px, 0.8fr) minmax(180px, 1.2fr) minmax(220px, 1.6fr) auto minmax(240px, 2fr);
+  min-width: 820px;
 }
 
 .auto-dispatch-footer {

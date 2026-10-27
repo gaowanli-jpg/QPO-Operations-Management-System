@@ -464,6 +464,9 @@ public class AuditService {
             case "PRODUCTION_ITEM_AUTO_DISPATCH_CONFIG_UPDATE" -> "更新待产零件定时下发策略";
             case "PRODUCTION_ITEM_MES_PRODUCTION_SUCCESS", "LOCKED_ITEM_MES_PRODUCTION_SUCCESS" -> "MES生产下发成功";
             case "PRODUCTION_ITEM_MES_PRODUCTION_FAILED", "LOCKED_ITEM_MES_PRODUCTION_FAILED" -> "MES生产下发失败";
+            case "PRODUCTION_ITEM_MATERIAL_NO_REFRESH_SUBMIT" -> "提交刷新料号";
+            case "PRODUCTION_ITEM_MATERIAL_NO_REFRESH_SUCCESS" -> "刷新料号成功";
+            case "PRODUCTION_ITEM_MATERIAL_NO_REFRESH_FAILED" -> "刷新料号失败";
             case "LOCKED_ITEM_STOCK_PICKING_SUBMIT" -> "提交提库存工单";
             case "LOCKED_ITEM_STOCK_PICKING_SUCCESS" -> "提库存工单下发成功";
             case "LOCKED_ITEM_STOCK_PICKING_FAILED" -> "提库存工单下发失败";

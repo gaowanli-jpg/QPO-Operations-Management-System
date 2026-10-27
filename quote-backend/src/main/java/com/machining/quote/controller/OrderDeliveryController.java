@@ -17,6 +17,7 @@ import com.machining.quote.dto.LockedItemStockPickingBatchReq;
 import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.ProductionItemAutoDispatchConfigDTO;
 import com.machining.quote.dto.ProductionItemAutoDispatchConfigReq;
+import com.machining.quote.dto.ProductionItemMaterialNoRefreshReq;
 import com.machining.quote.dto.ProductionItemQueryReq;
 import com.machining.quote.entity.SystemTask;
 import com.machining.quote.service.DeliveredItemService;
@@ -258,6 +259,14 @@ public class OrderDeliveryController {
     @RequirePermission("market:production-item:mes-production-submit")
     public SystemTask submitMesProduction(@RequestBody LockedItemMesProductionBatchReq req) {
         return systemTaskService.submitMesProductionBatchTask(req == null ? null : req.getAllocationIds());
+    }
+
+    @PostMapping("/production-items/material-no-refresh")
+    @RequirePermission("market:production-item:material-no-refresh")
+    public SystemTask refreshMaterialNo(@RequestBody(required = false) ProductionItemMaterialNoRefreshReq req) {
+        return systemTaskService.submitMaterialNoRefreshTask(
+                req == null ? null : req.getAllocationIds(),
+                req == null ? null : req.getReason());
     }
 
     @GetMapping("/production-items/auto-dispatch/config")
