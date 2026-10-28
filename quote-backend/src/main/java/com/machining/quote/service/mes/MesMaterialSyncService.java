@@ -200,12 +200,13 @@ public class MesMaterialSyncService {
                 continue;
             }
             validateCurrentMaterialCallbackRequest(batchItem, request, ticket, row);
-            BatchCallbackDisposition disposition = disposition(batchItem, row);
+            BatchCallbackDisposition disposition = disposition(batchItem, row, ticket);
             if (disposition.duplicate()) {
                 duplicateCount++;
                 continue;
             }
-            applications.add(new MaterialBatchCallbackApplication(row, batchItem, request, ticket));
+            applications.add(new MaterialBatchCallbackApplication(
+                    row, batchItem, request, ticket, disposition.reviveFailed()));
             projectedStatuses.put(batchItem.getId(), row.success() ? STATUS_SUCCESS : STATUS_FAILED);
         }
 
@@ -393,7 +394,9 @@ public class MesMaterialSyncService {
         }
     }
 
-    private BatchCallbackDisposition disposition(MesMaterialBatchItem batchItem, MaterialBatchCallbackRow row) {
+    private BatchCallbackDisposition disposition(MesMaterialBatchItem batchItem,
+                                                 MaterialBatchCallbackRow row,
+                                                 OrderDeliveryTicket ticket) {
         String currentStatus = normalizeCallbackExistingStatus(batchItem.getStatus());
         String currentProductCode = normalizeMaterialNo(batchItem.getProductCode());
         if (STATUS_SUCCESS.equals(currentStatus)) {
@@ -406,7 +409,17 @@ public class MesMaterialSyncService {
             if (!row.success()) {
                 return BatchCallbackDisposition.duplicateResult();
             }
-            throw callbackError(HttpStatus.CONFLICT, "MES material callback cannot overwrite a failed terminal result");
+            // MES 是料号的权威来源。批次行先前被判 FAILED（超时、响应解析失败或 MES 当时拒绝），
+            // 但 MES 后续仍产出了料号并回调成功。执行到这里之前已校验：批次行属于本批次、
+            // 提单行尚未确认料号、lineRequestId 仍是当前请求且 taskNo 一致，因此不可能是旧请求
+            // 串行覆盖。允许成功回调纠正失败判定，否则该零件的料号再也拿不回来——重新解析会被
+            // MES 的「已存在物料准备任务」挡住，形成双向死锁。
+            String existingMaterialNo = normalizeMaterialNo(ticket == null ? null : ticket.getMaterialNo());
+            if (!isBlank(existingMaterialNo) && !existingMaterialNo.equals(row.productCode())) {
+                throw callbackError(HttpStatus.CONFLICT,
+                        "MES material callback productCode conflicts with existing ticket material number");
+            }
+            return BatchCallbackDisposition.reviveResult();
         }
         if (row.success() && !isBlank(currentProductCode) && !row.productCode().equals(currentProductCode)) {
             throw callbackError(HttpStatus.CONFLICT, "MES material callback productCode conflicts with existing row value");
@@ -443,6 +456,16 @@ public class MesMaterialSyncService {
                     STATUS_SUCCESS,
                     null,
                     sourceSyncResult);
+            if (application.reviveFailed()) {
+                recordCallbackAudit(
+                        "DELIVERY_MES_MATERIAL_CALLBACK_REVIVE",
+                        application.ticket(),
+                        application.request(),
+                        adapter,
+                        STATUS_SUCCESS,
+                        null,
+                        sourceSyncResult);
+            }
             return sourceSyncResult;
         }
         String failedMessage = isBlank(row.message()) ? "MES material callback failed" : row.message();
@@ -1196,16 +1219,21 @@ public class MesMaterialSyncService {
             MaterialBatchCallbackRow row,
             MesMaterialBatchItem batchItem,
             OrderDeliveryTicketMesRequest request,
-            OrderDeliveryTicket ticket) {
+            OrderDeliveryTicket ticket,
+            boolean reviveFailed) {
     }
 
-    private record BatchCallbackDisposition(boolean duplicate) {
+    private record BatchCallbackDisposition(boolean duplicate, boolean reviveFailed) {
         private static BatchCallbackDisposition applyResult() {
-            return new BatchCallbackDisposition(false);
+            return new BatchCallbackDisposition(false, false);
         }
 
         private static BatchCallbackDisposition duplicateResult() {
-            return new BatchCallbackDisposition(true);
+            return new BatchCallbackDisposition(true, false);
+        }
+
+        private static BatchCallbackDisposition reviveResult() {
+            return new BatchCallbackDisposition(false, true);
         }
     }
 

@@ -566,6 +566,7 @@ MES 物料号任务已提交，任务ID：{taskId}
 | `DELIVERY_MES_MATERIAL_CALLBACK_SUCCESS` | `DELIVERY` | `order_delivery_ticket` | MES 回调写回物料号成功。 |
 | `DELIVERY_MES_MATERIAL_CALLBACK_FAILED` | `DELIVERY` | `order_delivery_ticket` | MES 回调失败或业务拒绝。 |
 | `DELIVERY_MES_MATERIAL_CALLBACK_CONFLICT` | `DELIVERY` | `order_delivery_ticket` | MES 回调物料号与已确认值冲突。 |
+| `DELIVERY_MES_MATERIAL_CALLBACK_REVIVE` | `DELIVERY` | `order_delivery_ticket` | 批次行原为 `FAILED`，被 MES 成功回调纠正为 `SUCCESS`（2026-10-28 新增）。 |
 
 操作日志摘要：
 
