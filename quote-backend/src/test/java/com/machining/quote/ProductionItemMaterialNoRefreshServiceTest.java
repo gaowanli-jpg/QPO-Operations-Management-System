@@ -4,6 +4,7 @@ import com.machining.quote.dto.mes.MesMaterialResolveReq;
 import com.machining.quote.dto.mes.MesMaterialResolveResp;
 import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.OrderDeliveryTicketAllocation;
+import com.machining.quote.entity.OrderDeliveryTicketMesRequest;
 import com.machining.quote.entity.SalesOrderItem;
 import com.machining.quote.mapper.OrderDeliveryTicketAllocationMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
@@ -189,6 +190,37 @@ class ProductionItemMaterialNoRefreshServiceTest {
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("请填写刷新料号的原因");
         verify(mesMaterialClient, never()).resolveMaterial(any());
+    }
+
+    @Test
+    void refreshRecordsMesBusinessRejectionOnTheRequestRow() {
+        stubTicket(1, "CS-OLD-001");
+        when(allocationMapper.selectBatchIds(any())).thenReturn(List.of(allocation(11, 1, "PENDING")));
+        when(allocationMapper.selectByTicketId(1)).thenReturn(List.of(allocation(11, 1, "PENDING")));
+        when(salesOrderItemMapper.selectBySourceTicketIdForUpdate(1)).thenReturn(salesItem(101L, "CS-OLD-001"));
+        String mesMessage = "图号 DWG-001 版本 A 材质 用于法兰装调 已存在物料准备任务：MP202610270002";
+        when(mesMaterialClient.resolveMaterial(any())).thenAnswer(invocation -> {
+            MesMaterialResolveReq req = invocation.getArgument(0);
+            MesMaterialResolveResp response = new MesMaterialResolveResp();
+            response.setSuccess(false);
+            response.setMesRequestId(req.getBizId());
+            response.setMessage(mesMessage);
+            return response;
+        });
+
+        Map<String, Object> result = service().refreshBatch(List.of(11), "MES 删除旧料号并重新建号", 95L);
+
+        assertThat(result).containsEntry("successCount", 0).containsEntry("failedCount", 1);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> rows = (List<Map<String, Object>>) result.get("rows");
+        assertThat(String.valueOf(rows.get(0).get("message"))).isEqualTo(mesMessage);
+        verify(refreshWriter, never()).apply(any(), anyString(), anyString(), anyString(), any(), any());
+
+        ArgumentCaptor<OrderDeliveryTicketMesRequest> captor =
+                ArgumentCaptor.forClass(OrderDeliveryTicketMesRequest.class);
+        verify(mesRequestMapper, times(1)).update(captor.capture(), any());
+        assertThat(captor.getValue().getRequestStatus()).isEqualTo("FAILED");
+        assertThat(captor.getValue().getResponseMessage()).contains("已存在物料准备任务");
     }
 
     private ProductionItemMaterialNoRefreshService service() {

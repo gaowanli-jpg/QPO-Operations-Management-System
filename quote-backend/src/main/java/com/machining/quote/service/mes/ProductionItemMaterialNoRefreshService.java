@@ -188,7 +188,15 @@ public class ProductionItemMaterialNoRefreshService {
             updateMesRequest(bizId, STATUS_FAILED, null, null, safeMessage(error));
             throw error;
         }
-        validateResponse(resp, bizId);
+        try {
+            validateResponse(resp, bizId);
+        } catch (RuntimeException error) {
+            // MES 业务拒绝（success=false，如「已存在物料准备任务」）也必须落失败原因，
+            // 否则请求流水会永远停在 PROCESSING，事后无法从库里查到原因。
+            updateMesRequest(bizId, STATUS_FAILED, null,
+                    resp == null ? null : resp.getExternalTraceId(), safeMessage(error));
+            throw error;
+        }
         String newMaterialNo = trimToNull(resp.getMaterialNo());
         if (newMaterialNo == null) {
             String message = "MES 未返回料号";

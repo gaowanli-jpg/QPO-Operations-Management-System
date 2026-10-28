@@ -902,3 +902,31 @@ Data center call failed message=Error while extracting response for type
 
 `MesMaterialResolveRespDeserializationTest`（7 例，用严格默认 `ObjectMapper` 验证 DTO 自身容错）：未知字段、`data` 为 `[]`/`""`/`0`/缺失、字符串 `taskId`、正常响应、`materialNo` 回退 `items[0].productCode`。
 
+### 14.7 常见报错：已存在物料准备任务（2026-10-28 记录）
+
+**报错原文**（MES 原样透传，QPO 未加工）
+
+```
+图号 M007565-B 版本 B 材质 用于法兰装调 已存在物料准备任务：MP202610270002
+```
+
+**含义**：`MES_MATERIAL_RESOLVE` 不是查询接口，而是「创建物料准备任务」。同一 `图号 + 版本 + 材质` 只允许存在一个任务，第二次请求会被 MES 直接拒绝（`success=false`）。
+
+**对刷新料号的影响**：刷新按「图号 + 版本重新解析」实现，因此对该组合已经解析过的零件不生效——而这恰恰是它被设计出来要解决的场景（料号被删重建）。这是 MES 侧规则与本能力的固有冲突，不是 QPO 的 bug。
+
+**处理顺序**
+
+1. 先确认那个任务是不是 QPO 自己早先发起的：
+
+```sql
+SELECT id, ticket_id, mes_request_id, mes_external_task_id, request_status, material_no, requested_at
+FROM order_delivery_ticket_mes_request
+WHERE mes_external_task_id = 'MP202610270002';
+```
+
+2. 查得到 → 该零件早前已解析成功，原料号正是这个任务的产物。需 MES 侧作废/删除该任务，QPO 才能重新解析。
+3. 查不到 → 任务由 MES 侧其他入口创建，同样要 MES 侧先清理。
+4. MES 已建好新料号但无法通过解析取回时，当前版本没有手工填写入口，只能由 MES 确认新料号后人工修复。
+
+**排查提示**：失败原因同时写入两处——审计日志（动作「刷新料号失败」）和 `order_delivery_ticket_mes_request.response_message`。后者自 2026-10-28 起才对 `success=false` 生效；此前该分支漏写，请求会永远停在 `PROCESSING` 且 `response_message` 为空。
+
