@@ -345,16 +345,67 @@ class MesMaterialBatchCallbackWorkflowTest {
     }
 
     @Test
-    void staleBatchCallbackCannotOverwriteTicketWithNewerLineRequestId() {
+    void callbackForSupersededLineRequestIsAcceptedBecauseTicketHasNoMaterialNoYet() {
         Fixture fixture = fixture();
         when(fixture.batchMapper.selectOne(any(Wrapper.class))).thenReturn(batch("PARTIAL_PENDING"));
         when(fixture.batchItemMapper.selectList(any(Wrapper.class))).thenReturn(List.of(batchItem("CALLBACK_PENDING", null)));
         when(fixture.requestMapper.selectOne(any(Wrapper.class))).thenReturn(request("CALLBACK_PENDING"));
         when(fixture.ticketMapper.selectById(123)).thenReturn(ticket("CALLBACK_PENDING", null, "QPO-MATL-NEWER"));
+        when(fixture.salesOrderItemMapper.selectByIdForUpdate(5001L)).thenReturn(new SalesOrderItem());
 
-        assertThatThrownBy(() -> fixture.service.handleMaterialBatchCallback(batchCallback(successItem("MAT-NEW"))))
+        MesMaterialCallbackResp response = fixture.service.handleMaterialBatchCallback(batchCallback(successItem("MAT-NEW")));
+
+        assertThat(response.getSuccess()).isTrue();
+        assertThat(response.getCode()).isEqualTo(0);
+        assertThat(response.getData()).containsEntry("appliedCount", 1).containsEntry("duplicateCount", 0);
+
+        ArgumentCaptor<OrderDeliveryTicket> ticketCaptor = ArgumentCaptor.forClass(OrderDeliveryTicket.class);
+        verify(fixture.ticketMapper).updateById(ticketCaptor.capture());
+        assertThat(ticketCaptor.getValue().getMesSyncStatus()).isEqualTo("SUCCESS");
+        assertThat(ticketCaptor.getValue().getMaterialNo()).isEqualTo("MAT-NEW");
+        assertThat(ticketCaptor.getValue().getMesRequestId()).isEqualTo(LINE_ID);
+    }
+
+    @Test
+    void failedBatchItemAcceptsLateSuccessAfterTicketWasSupersededByRetry() {
+        Fixture fixture = fixture();
+        AuditService auditService = mock(AuditService.class);
+        ReflectionTestUtils.setField(fixture.service, "auditService", auditService);
+        when(fixture.batchMapper.selectOne(any(Wrapper.class))).thenReturn(batch("FAILED"));
+        when(fixture.batchItemMapper.selectList(any(Wrapper.class))).thenReturn(List.of(batchItem("FAILED", null)));
+        when(fixture.requestMapper.selectOne(any(Wrapper.class))).thenReturn(request("FAILED"));
+        when(fixture.ticketMapper.selectById(123)).thenReturn(ticket("FAILED", null, "QPO-MATL-RETRY"));
+        when(fixture.salesOrderItemMapper.selectByIdForUpdate(5001L)).thenReturn(new SalesOrderItem());
+
+        MesMaterialCallbackResp response = fixture.service.handleMaterialBatchCallback(batchCallback(successItem("MAT-NEW")));
+
+        assertThat(response.getSuccess()).isTrue();
+        assertThat(response.getData()).containsEntry("appliedCount", 1);
+
+        ArgumentCaptor<OrderDeliveryTicket> ticketCaptor = ArgumentCaptor.forClass(OrderDeliveryTicket.class);
+        verify(fixture.ticketMapper).updateById(ticketCaptor.capture());
+        assertThat(ticketCaptor.getValue().getMesSyncStatus()).isEqualTo("SUCCESS");
+        assertThat(ticketCaptor.getValue().getMaterialNo()).isEqualTo("MAT-NEW");
+
+        ArgumentCaptor<String> actionCaptor = ArgumentCaptor.forClass(String.class);
+        verify(auditService, atLeastOnce()).record(
+                actionCaptor.capture(), any(), any(), any(), any(), any(), any(), any(), any());
+        assertThat(actionCaptor.getAllValues()).contains("DELIVERY_MES_MATERIAL_CALLBACK_REVIVE");
+    }
+
+    @Test
+    void supersededLineRequestIsStillRejectedWhenTaskNoBelongsToAnotherMesTask() {
+        Fixture fixture = fixture();
+        MesMaterialCallbackReq.Item item = successItem("MAT-NEW");
+        item.setTaskNo("MP-OTHER-TASK");
+        when(fixture.batchMapper.selectOne(any(Wrapper.class))).thenReturn(batch("PARTIAL_PENDING"));
+        when(fixture.batchItemMapper.selectList(any(Wrapper.class))).thenReturn(List.of(batchItem("CALLBACK_PENDING", null)));
+        when(fixture.requestMapper.selectOne(any(Wrapper.class))).thenReturn(request("CALLBACK_PENDING"));
+        when(fixture.ticketMapper.selectById(123)).thenReturn(ticket("CALLBACK_PENDING", null, "QPO-MATL-NEWER"));
+
+        assertThatThrownBy(() -> fixture.service.handleMaterialBatchCallback(batchCallback(item)))
                 .isInstanceOf(MesMaterialCallbackException.class)
-                .satisfies(error -> assertThat(((MesMaterialCallbackException) error).getStatus()).isEqualTo(HttpStatus.CONFLICT));
+                .hasMessageContaining("taskNo mismatch");
 
         verify(fixture.batchItemMapper, never()).updateById(any());
         verify(fixture.ticketMapper, never()).updateById(any());

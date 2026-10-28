@@ -379,18 +379,35 @@ public class MesMaterialSyncService {
                 && !isBlank(ticket.getMaterialNo());
     }
 
+    /**
+     * 批次回调只校验「这条回调是否属于本批次行记录的那个 MES 任务」，不再比对 lineRequestId。
+     *
+     * 原实现要求 batchItem.lineRequestId == ticket.mesRequestId，但 mes_request_id 是提单上的单值字段：
+     * 同一张提单被重新下发（或重发失败）时会被新批次行的 lineRequestId 覆盖，于是旧批次的真实回调
+     * 会被判为 stale 永久拒绝。MES 对同一「图号+版本+材质」只允许一个物料准备任务，重发必然被拒，
+     * 一旦发生「A 失败 → 重发 B 被 MES 拒绝 → A 的成功回调到达」，料号就再也拿不回来。
+     *
+     * 执行到这里时 hasConfirmedMaterialNo(ticket) 已为 false，提单还没有确认料号，接受 MES 的料号
+     * 不存在「旧结果覆盖新结果」的风险；MES 是料号的权威来源。定位链条也已保证不会串行：
+     * 批次行必须属于本批次、请求流水必须指向本批次行、request.ticketId 必须等于 batchItem.ticketId。
+     *
+     * taskNo 校验保留：它才是「这条回调确实对应本行那个 MES 任务」的证据。
+     */
     private void validateCurrentMaterialCallbackRequest(
             MesMaterialBatchItem batchItem,
             OrderDeliveryTicketMesRequest request,
             OrderDeliveryTicket ticket,
             MaterialBatchCallbackRow row) {
-        String currentLineRequestId = trimToNull(ticket.getMesRequestId());
-        if (!batchItem.getLineRequestId().equals(currentLineRequestId)) {
-            throw callbackError(HttpStatus.CONFLICT, "Stale MES material callback cannot overwrite the current request");
-        }
         String savedTaskNo = firstNonBlank(batchItem.getMesTaskNo(), request.getMesExternalTaskId());
         if (!isBlank(savedTaskNo) && !savedTaskNo.equals(row.taskNo())) {
             throw callbackError(HttpStatus.CONFLICT, "MES material callback taskNo mismatch");
+        }
+        String currentLineRequestId = trimToNull(ticket.getMesRequestId());
+        if (currentLineRequestId != null && !currentLineRequestId.equals(batchItem.getLineRequestId())) {
+            log.info("MES material callback accepted for superseded line request batchItemId={} ticketId={} "
+                            + "batchLineRequestId={} currentTicketRequestId={} taskNo={} productCode={}",
+                    batchItem.getId(), ticket.getId(), batchItem.getLineRequestId(),
+                    currentLineRequestId, row.taskNo(), row.productCode());
         }
     }
 
@@ -410,9 +427,9 @@ public class MesMaterialSyncService {
                 return BatchCallbackDisposition.duplicateResult();
             }
             // MES 是料号的权威来源。批次行先前被判 FAILED（超时、响应解析失败或 MES 当时拒绝），
-            // 但 MES 后续仍产出了料号并回调成功。执行到这里之前已校验：批次行属于本批次、
-            // 提单行尚未确认料号、lineRequestId 仍是当前请求且 taskNo 一致，因此不可能是旧请求
-            // 串行覆盖。允许成功回调纠正失败判定，否则该零件的料号再也拿不回来——重新解析会被
+            // 但 MES 后续仍产出了料号并回调成功。执行到这里之前已校验：批次行属于本批次、本批次行属于
+            // 本提单、提单行尚未确认料号、taskNo 与本行记录的 MES 任务一致，因此不可能是别的任务的回调
+            // 串进来。允许成功回调纠正失败判定，否则该零件的料号再也拿不回来——重新解析会被
             // MES 的「已存在物料准备任务」挡住，形成双向死锁。
             String existingMaterialNo = normalizeMaterialNo(ticket == null ? null : ticket.getMaterialNo());
             if (!isBlank(existingMaterialNo) && !existingMaterialNo.equals(row.productCode())) {

@@ -158,7 +158,9 @@ Authorization: Bearer {QPO_OPEN_API_TOKEN}
 >
 > 原因：MES 的物料解析接口是「创建物料准备任务」而非查询，同一 `图号 + 版本 + 材质` 只允许一个任务。一旦 QPO 把行判成 `FAILED`（超时、响应解析失败、或 MES 当时拒绝），重新解析会被 MES 的「已存在物料准备任务」挡住，而成功回调又被拒收，料号就再也拿不回来。
 >
-> 允许纠正的前提（三者必须同时成立，由 QPO 校验）：批次行属于该批次；提单行尚未确认料号；`lineRequestId` 仍是提单行的当前 `mesRequestId` 且 `taskNo` 一致。因此不可能是旧请求串行覆盖。
+> 允许纠正的前提（由 QPO 校验）：批次行属于该批次、该批次行属于本提单；提单行尚未确认料号；`taskNo` 与本行记录的 MES 任务一致。
+>
+> **2026-10-28 起不再要求 `lineRequestId` 等于提单当前 `mesRequestId`。** `mes_request_id` 是提单上的单值字段，同一张提单被重新下发（或重发失败）时会被新批次行的 `lineRequestId` 覆盖，旧批次的真实回调会被判为「过期」而永久拒绝。执行到该校验时提单尚未确认料号，接受 MES 的料号不存在覆盖风险，且 MES 是料号的权威来源。命中这种「迟到但合法」的回调时会打一条 `MES material callback accepted for superseded line request` 日志，便于事后识别。
 >
 > 纠正时会额外记一条操作日志 `DELIVERY_MES_MATERIAL_CALLBACK_REVIVE`（「MES物料号回调纠正失败判定」），便于事后区分「正常回调」和「纠正回调」。
 
@@ -215,7 +217,7 @@ QPO 收到回调后按以下顺序处理：
 3. 按 `mesRequestId` 查询 `mes_integration_batch` 批次。
 4. 按每个 `items[].drawingNo + items[].drawingVersion` 匹配 `mes_material_batch_item` 批次行；无法匹配时响应体返回 `code=409`。
 5. 对匹配到的行加载其行级请求流水 `order_delivery_ticket_mes_request` 和提单行。
-6. 校验批次行、请求流水和提单行的归属关系。若提单行已是 `mes_sync_status=SUCCESS` 且 `material_no` 非空，则将该行作为已完成的幂等回调忽略：不再校验当前请求 ID、`taskNo` 或回调物料号是否与当前值相同，不更新任何业务记录，并按成功响应计入 `duplicateCount`。否则，校验当前 `order_delivery_ticket.mes_request_id` 仍等于批次行的 `lineRequestId`，并校验已保存的 `taskNo`；旧回调不能覆盖尚未完成的新请求。
+6. 校验批次行、请求流水和提单行的归属关系。若提单行已是 `mes_sync_status=SUCCESS` 且 `material_no` 非空，则将该行作为已完成的幂等回调忽略：不再校验当前请求 ID、`taskNo` 或回调物料号是否与当前值相同，不更新任何业务记录，并按成功响应计入 `duplicateCount`。否则，校验已保存的 `taskNo` 与回调一致；不再要求 `order_delivery_ticket.mes_request_id` 等于批次行的 `lineRequestId`（原因见第 5 节），提单尚未确认料号时以 MES 回调为准。
 7. 未完成零件的成功回调校验 `items[].productCode` 非空且长度不超过 100，并写回 `order_delivery_ticket.material_no`、`mes_sync_status=SUCCESS`、`mes_synced_at`、`mes_external_task_id`、`mes_callback_received_at` 和回调摘要。
 8. 未完成零件的失败回调写回 `mes_sync_status=FAILED`、失败摘要、外部任务号和完成时间。
 9. 对实际应用的回调行更新批次行、行级请求流水和批次汇总状态；幂等忽略的已完成行不产生业务数据写入。销售订单来源提单行还会同步回写 `sales_order_item.material_no` 与物料号确认字段。
@@ -253,9 +255,9 @@ MES 不需要：
 | 已知批次中的零件已 `SUCCESS` 且物料号非空，收到任意历史请求的成功或失败回调 | HTTP `200`，响应体 `success=true`、`code=0`、`appliedCount=0`，按已忽略行计入 `duplicateCount`；不比较回调物料号或 `taskNo`，不更新任何业务记录。 |
 | 相同 `mesRequestId + drawingNo + drawingVersion` 的重复回调，且提单行尚未完成 | 幂等返回成功，不重复写入数据。 |
 | 提单行尚未完成，当前回调物料号与已确认批次结果冲突 | HTTP `200`，响应体 `code=409`，拒绝覆盖已确认物料号。 |
-| 批次行已 `FAILED`，收到同一 `mesRequestId`、同一 `taskNo` 的成功回调 | HTTP `200`，响应体 `success=true`、`code=0`，按成功应用：批次行、提单行、请求流水一并转 `SUCCESS` 并写入物料号，另记 `DELIVERY_MES_MATERIAL_CALLBACK_REVIVE` 日志。前提是提单行尚未确认料号且 `lineRequestId` 仍是当前请求。 |
+| 批次行已 `FAILED`，收到同一 `mesRequestId`、同一 `taskNo` 的成功回调 | HTTP `200`，响应体 `success=true`、`code=0`，按成功应用：批次行、提单行、请求流水一并转 `SUCCESS` 并写入物料号，另记 `DELIVERY_MES_MATERIAL_CALLBACK_REVIVE` 日志。前提是提单行尚未确认料号。 |
 | 批次行已 `FAILED`，但提单行已写入另一个料号，回调带来不同料号 | HTTP `200`，响应体 `code=409`，不纠正，避免改掉已存在的料号。 |
-| 旧 `mesRequestId` 回调到当前已有新请求、但提单行尚未成功取得物料号 | 请求保持原状，HTTP `200`，响应体 `code=409`；旧回调不能覆盖新请求。 |
+| 同一批次行在其提单被新请求覆盖后回调成功，且提单行尚未取得物料号 | HTTP `200`，响应体 `success=true`、`code=0`，正常应用并写入物料号，同时打 `MES material callback accepted for superseded line request` 日志。不再因为提单 `mes_request_id` 已指向新请求而拒绝。 |
 | 销售订单零件已有不同且已确认物料号 | HTTP `200`，响应体 `code=409`，不覆盖销售订单主零件表。 |
 | 找不到 `mesRequestId` 对应批次 | HTTP `200`，响应体 `code=404`。 |
 | 缺少 `mesRequestId`、缺少 `items`、`items` 为空，或成功行缺少 `items[].productCode` | HTTP `200`，响应体 `code=400`。 |
