@@ -123,12 +123,12 @@ abstract class MesMaterialSyncTestSupport {
         response.setMessage(message);
         MesMaterialResolveResp.Data data = new MesMaterialResolveResp.Data();
         MesMaterialResolveResp.Item item = new MesMaterialResolveResp.Item();
-        item.setTaskId(2L);
+        item.setTaskId("2");
         item.setTaskNo(taskNo);
         item.setDrawingNo("P-100");
         item.setDrawingVersion("A");
         item.setStatus(status);
-        item.setProductId(productCode == null ? null : 20L);
+        item.setProductId(productCode == null ? null : "20");
         item.setProductCode(productCode);
         item.setProductName(productCode == null ? null : "业务演示成品");
         data.setItems(java.util.List.of(item));

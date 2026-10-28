@@ -284,7 +284,7 @@ class MesMaterialBatchOrchestrationServiceTest {
         item.setDrawingVersion(drawingVersion);
         item.setStatus(status);
         item.setProductCode(productCode);
-        item.setProductId(productCode == null ? null : 100L);
+        item.setProductId(productCode == null ? null : "100");
         item.setProductName(productCode == null ? null : "Material " + productCode);
         item.setTaskNo(taskNo);
         return item;

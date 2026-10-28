@@ -1,6 +1,7 @@
 package com.machining.quote.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
@@ -140,7 +141,7 @@ public class DataCenterIntegrationClient {
                     ? hasCause(e, HttpMessageNotReadableException.class)
                     ? "sales change notice response could not be parsed"
                     : "sales change notice integration call failed"
-                    : sanitize(e.getMessage(), token, config);
+                    : sanitize(describeFailure(e), token, config);
             DataCenterCallException.FailureCertainty certainty = salesChangeNotice
                     && hasCause(e, HttpMessageNotReadableException.class)
                     ? DataCenterCallException.FailureCertainty.RESULT_UNKNOWN
@@ -195,6 +196,7 @@ public class DataCenterIntegrationClient {
                 jsonConverter.setObjectMapper(JsonMapper.builder()
                         .addModule(new JavaTimeModule())
                         .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+                        .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
                         .build());
             }
         }
@@ -237,6 +239,44 @@ public class DataCenterIntegrationClient {
             if (type.isInstance(current)) return true;
         }
         return false;
+    }
+
+    /**
+     * 反序列化失败时 Spring 只给出 "Error while extracting response for type [...]"，
+     * 真正有用的信息（哪个字段不认、哪个值类型不对）在被包装的 cause 里。
+     * 这里把最深一层的 cause 摘要拼进来，否则线上只能看到一个没有信息量的报错。
+     */
+    private String describeFailure(RuntimeException error) {
+        String message = error == null ? null : error.getMessage();
+        if (error == null || !hasCause(error, HttpMessageNotReadableException.class)) {
+            return message;
+        }
+        String cause = deepestCauseMessage(error);
+        if (cause == null) {
+            return message;
+        }
+        String base = message == null ? "" : message;
+        return base + " | cause=" + abbreviate(cause, 300);
+    }
+
+    private String deepestCauseMessage(Throwable error) {
+        String last = null;
+        int guard = 0;
+        for (Throwable current = error; current != null && guard < 12; current = current.getCause(), guard++) {
+            String text = current.getMessage();
+            if (text != null && !text.trim().isEmpty()) {
+                last = text;
+            }
+        }
+        return last;
+    }
+
+    private String abbreviate(String value, int max) {
+        if (value == null) {
+            return null;
+        }
+        String text = value.replaceAll("\\s+", " ").trim();
+        return text.length() <= max ? text : text.substring(0, max) + "...";
     }
 
     private DataCenterCallException failure(String endpointCode,

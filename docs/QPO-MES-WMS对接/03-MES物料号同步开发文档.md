@@ -870,3 +870,35 @@ npm run build
 - `ProductionItemMaterialNoRefreshServiceTest`（7 例）：覆盖成功刷新、按图号+版本组装请求、拒绝已成功下发、拒绝在途、料号未变化、同提单多行合并、原因必填。
 - `ProductionItemMaterialNoRefreshWriterTest`（4 例）：覆盖四表写回、RFQ 来源同时写 RFQ 与派生销售订单行、拒绝已成功下发、拒绝废弃提单。
 - `SalesOrderLinkedChangeNoticeMigrationTest`：全局迁移版本门禁已抬到 67。
+
+### 14.6 常见报错：响应无法反序列化（2026-10-28 修复）
+
+**现象**
+
+```
+Data center call failed message=Error while extracting response for type
+[class com.machining.quote.dto.mes.MesMaterialResolveResp] and content type [application/json;charset=UTF-8]
+```
+
+**含义**：HTTP 状态是 2xx、返回的确实是 JSON，但响应体无法映射到 `MesMaterialResolveResp`。属于解析层失败，业务代码还没执行——和「料号不存在」「权限不足」这类业务失败不是一回事。
+
+**三类触发原因**（均已实测复现）
+
+| 原因 | 例子 | 旧行为 |
+| --- | --- | --- |
+| 响应里多出 DTO 未声明的字段 | `"traceId"`、`"timestamp"`、`"path"` | `UnrecognizedPropertyException` |
+| `data` 不是对象 | `"data": []`、`"data": ""`、`"data": 0` | `MismatchedInputException`，MES 的真实 msg 被埋掉 |
+| `items[].taskId` / `productId` 是字符串 | `"taskId": "T20261028001"` | `InvalidFormatException` |
+
+**修复内容**
+
+1. `DataCenterIntegrationClient.restTemplate` 关闭 `FAIL_ON_UNKNOWN_PROPERTIES`。原配置只 `disable(WRITE_DATES_AS_TIMESTAMPS)`，Jackson 默认严格模式，MES 加一个字段整条调用就失败——这是所有数据中心接口共用的客户端，影响面覆盖 U9/WMS/MES 全部对接。
+2. `MesMaterialResolveResp` 及 `Data`/`Item` 加 `@JsonIgnoreProperties(ignoreUnknown = true)`，不依赖调用方配置。
+3. `data` 改由 `LenientDataDeserializer` 处理：非对象一律降级为 `null`，让上层正常读到 `msg`，直接显示「以下料号不存在：xxx」这类 MES 原文。
+4. `Item.taskId` / `Item.productId` 由 `Long` 改 `String`。两处调用点本来就 `String.valueOf(...)` 落库，类型放宽不影响语义。
+5. 解析失败时把最深一层 cause 拼进错误信息（`| cause=Unrecognized field "traceId" ...`）。原来只有 Spring 的外层文案，线上完全无法定位。
+
+**回归**
+
+`MesMaterialResolveRespDeserializationTest`（7 例，用严格默认 `ObjectMapper` 验证 DTO 自身容错）：未知字段、`data` 为 `[]`/`""`/`0`/缺失、字符串 `taskId`、正常响应、`materialNo` 回退 `items[0].productCode`。
+
