@@ -112,7 +112,7 @@ public class MesMaterialSyncService {
         OrderDeliveryTicket ticket = loadTicket(ticketId);
         if (!mesRequestId.equals(trimToNull(ticket.getMesRequestId()))) {
             updateMesRequestFromCallback(mesRequestId, "STALE", null, externalTraceId, "旧 MES 回调已拒绝", false);
-            recordCallbackAudit("DELIVERY_MES_MATERIAL_CALLBACK_CONFLICT", ticket, request, req, STATUS_FAILED,
+            recordCallbackAudit("DELIVERY_MES_MATERIAL_CALLBACK_CONFLICT", ticket, refreshRequestSnapshot(request), req, STATUS_FAILED,
                     "旧 MES 回调不能覆盖当前请求");
             throw callbackError(HttpStatus.CONFLICT, "旧 MES 回调不能覆盖当前请求");
         }
@@ -123,7 +123,7 @@ public class MesMaterialSyncService {
             if (dedupService != null) {
                 dedupService.completeMasterFailed(mesRequestId, req.getMessage());
             }
-            recordCallbackAudit("DELIVERY_MES_MATERIAL_CALLBACK_FAILED", ticket, request, req, STATUS_FAILED, req.getMessage());
+            recordCallbackAudit("DELIVERY_MES_MATERIAL_CALLBACK_FAILED", ticket, refreshRequestSnapshot(request), req, STATUS_FAILED, req.getMessage());
             return callbackResponse(false, "MES 回调失败", mesRequestId, null);
         }
         if (isBlank(materialNo)) {
@@ -140,7 +140,7 @@ public class MesMaterialSyncService {
                 recordCallbackAudit(
                         "DELIVERY_MES_MATERIAL_CALLBACK_SUCCESS",
                         ticket,
-                        request,
+                        refreshRequestSnapshot(request),
                         req,
                         STATUS_SUCCESS,
                         null,
@@ -448,10 +448,13 @@ public class MesMaterialSyncService {
                 dedupService.completeMasterSuccess(
                         application.batchItem().getLineRequestId(), row.productCode(), row.message(), row.taskNo());
             }
+            // application.request() 是回调处理前加载的快照，requestStatus 仍是被纠正前的 FAILED。
+            // 审计要反映落库后的真实状态，否则每次排查都会误判成"回写失败"。
+            OrderDeliveryTicketMesRequest auditedRequest = refreshRequestSnapshot(application.request());
             recordCallbackAudit(
                     "DELIVERY_MES_MATERIAL_CALLBACK_SUCCESS",
                     application.ticket(),
-                    application.request(),
+                    auditedRequest,
                     adapter,
                     STATUS_SUCCESS,
                     null,
@@ -460,7 +463,7 @@ public class MesMaterialSyncService {
                 recordCallbackAudit(
                         "DELIVERY_MES_MATERIAL_CALLBACK_REVIVE",
                         application.ticket(),
-                        application.request(),
+                        auditedRequest,
                         adapter,
                         STATUS_SUCCESS,
                         null,
@@ -479,7 +482,7 @@ public class MesMaterialSyncService {
         recordCallbackAudit(
                 "DELIVERY_MES_MATERIAL_CALLBACK_FAILED",
                 application.ticket(),
-                application.request(),
+                refreshRequestSnapshot(application.request()),
                 adapter,
                 STATUS_FAILED,
                 failedMessage);
@@ -1531,6 +1534,19 @@ public class MesMaterialSyncService {
             throw callbackError(HttpStatus.NOT_FOUND, "MES 请求流水不存在");
         }
         return request;
+    }
+
+    /**
+     * 重新读取请求流水的当前状态。回调应用时先用 loadMesRequest 加载快照，随后才更新状态；
+     * 直接把旧快照写进审计会让 requestStatus 永远是回调前的值，看起来像"回写失败"。
+     * 这里按主键重查以绕开 MyBatis 一级缓存（selectById 与 selectOne 不是同一条 statement）。
+     */
+    private OrderDeliveryTicketMesRequest refreshRequestSnapshot(OrderDeliveryTicketMesRequest request) {
+        if (mesRequestMapper == null || request == null || request.getId() == null) {
+            return request;
+        }
+        OrderDeliveryTicketMesRequest refreshed = mesRequestMapper.selectById(request.getId());
+        return refreshed == null ? request : refreshed;
     }
 
     private void updateMesRequestFromCallback(
