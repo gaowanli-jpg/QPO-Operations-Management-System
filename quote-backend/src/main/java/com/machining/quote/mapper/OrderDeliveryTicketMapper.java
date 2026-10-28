@@ -161,7 +161,8 @@ public interface OrderDeliveryTicketMapper extends BaseMapper<OrderDeliveryTicke
                 ticket.restored_at,
                 ticket.restored_by,
                 ticket.restore_reason,
-                ticket.delivery_date
+                ticket.delivery_date,
+                ticket.created_at
             FROM order_delivery_ticket ticket
             LEFT JOIN order_rfq rfq ON rfq.id = ticket.rfq_id
             LEFT JOIN item_quote_version item ON item.id = ticket.item_id
@@ -279,7 +280,8 @@ public interface OrderDeliveryTicketMapper extends BaseMapper<OrderDeliveryTicke
                 ticket.restored_at,
                 ticket.restored_by,
                 ticket.restore_reason,
-                ticket.delivery_date
+                ticket.delivery_date,
+                ticket.created_at
             FROM order_delivery_ticket ticket
             LEFT JOIN order_rfq rfq ON rfq.id = ticket.rfq_id
             LEFT JOIN item_quote_version item ON item.id = ticket.item_id

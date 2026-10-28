@@ -66,4 +66,5 @@ public class DeliveredItemDTO {
     private LocalDateTime restoredAt;
     private Long restoredBy;
     private String restoreReason;
+    private LocalDateTime createdAt;
 }

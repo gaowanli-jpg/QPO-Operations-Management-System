@@ -76,4 +76,5 @@ public class OrderDeliveryTicket {
     private String restoreReason;
     private String discardSource;
     private Long discardSourceSalesOrderItemId;
+    private LocalDateTime createdAt;
 }

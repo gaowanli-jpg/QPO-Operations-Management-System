@@ -39,6 +39,7 @@ describe('DeliveredItemManage foundation page', () => {
       'label="图号"',
       'label="版本"',
       'label="物料号"',
+      'label="创建时间"',
       'label="零件类型"',
       'label="MES状态"',
       'label="WMS状态"',
@@ -65,6 +66,11 @@ describe('DeliveredItemManage foundation page', () => {
     const positions = labels.map(label => tableSource.indexOf(label))
     expect(positions.every(position => position >= 0)).toBe(true)
     expect(positions).toEqual([...positions].sort((a, b) => a - b))
+  })
+
+  test('shows the ticket creation time in the delivered item table', () => {
+    expect(source).toContain('prop="createdAt" label="创建时间"')
+    expect(source).toContain('formatDateTime(row.createdAt)')
   })
 
   test('does not expose removed customer demand snapshot beside delivered item remarks', () => {

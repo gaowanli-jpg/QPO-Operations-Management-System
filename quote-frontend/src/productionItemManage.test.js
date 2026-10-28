@@ -43,6 +43,11 @@ describe('ProductionItemManage split workbench', () => {
     expect(pageSource).toContain(':total="total"')
   })
 
+  test('shows the allocation creation time in the production item table', () => {
+    expect(pageSource).toContain('prop="createdAt" label="创建时间"')
+    expect(pageSource).toContain('formatDateTime(row.createdAt)')
+  })
+
   test('offers larger page sizes while keeping MES selection within the task limit', () => {
     expect(pageSource).toContain(':page-sizes="[20, 50, 100, 300, 500, 1000]"')
     expect(pageSource).toContain('const pageSize = ref(100)')

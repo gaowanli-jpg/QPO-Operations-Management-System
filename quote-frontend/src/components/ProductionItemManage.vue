@@ -209,6 +209,9 @@
           <el-table-column prop="materialNo" label="物料号" min-width="150" show-overflow-tooltip>
             <template #default="{ row }">{{ formatDash(row.materialNo) }}</template>
           </el-table-column>
+          <el-table-column prop="createdAt" label="创建时间" width="160" show-overflow-tooltip>
+            <template #default="{ row }">{{ formatDateTime(row.createdAt) }}</template>
+          </el-table-column>
           <el-table-column prop="itemType" label="零件类型" width="100" align="center" show-overflow-tooltip>
             <template #default="{ row }">{{ formatDash(row.itemType) }}</template>
           </el-table-column>
