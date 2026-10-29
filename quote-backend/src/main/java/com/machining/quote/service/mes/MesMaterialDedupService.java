@@ -28,6 +28,7 @@ public class MesMaterialDedupService {
     public static final String STATUS_CALLBACK_PENDING = "CALLBACK_PENDING";
     public static final String STATUS_SUCCESS = "SUCCESS";
     public static final String STATUS_FAILED = "FAILED";
+    public static final String STATUS_RESULT_UNKNOWN = "RESULT_UNKNOWN";
     public static final String ROLE_MASTER = "MASTER";
     public static final String ROLE_FOLLOWER = "FOLLOWER";
     public static final String RESULT_MASTER_CREATED = "MASTER_CREATED";
@@ -360,7 +361,7 @@ public class MesMaterialDedupService {
         QueryWrapper<OrderDeliveryTicketMesRequest> wrapper = new QueryWrapper<>();
         wrapper.eq("dedup_key", dedupKey)
                 .eq("request_role", ROLE_MASTER)
-                .in("request_status", STATUS_PROCESSING, STATUS_CALLBACK_PENDING)
+                .in("request_status", STATUS_PROCESSING, STATUS_CALLBACK_PENDING, "RESULT_UNKNOWN")
                 .orderByDesc("id")
                 .last("LIMIT 1");
         return mesRequestMapper.selectOne(wrapper);
@@ -372,6 +373,9 @@ public class MesMaterialDedupService {
             String dedupKey,
             OrderDeliveryTicketMesRequest activeMaster) {
         String masterStatus = normalizeStatus(activeMaster.getRequestStatus());
+        // waiter 表的历史约束只允许 WAITING/CALLBACK_PENDING/SUCCESS/FAILED；
+        // RESULT_UNKNOWN 要保留在 follower 提单行上，但 waiter 本身继续以 WAITING
+        // 活跃，待原 bizId 核对完成后再由主请求 fan-out 结束等待关系。
         String waiterStatus = STATUS_CALLBACK_PENDING.equals(masterStatus) ? STATUS_CALLBACK_PENDING : "WAITING";
         insertWaiter(ticket, dedupKey, activeMaster, waiterStatus);
         updateFollowerTicket(ticket, dedupKey, activeMaster, masterStatus);
@@ -467,7 +471,13 @@ public class MesMaterialDedupService {
             return STATUS_PROCESSING;
         }
         String status = value.trim().toUpperCase(Locale.ROOT);
-        return STATUS_CALLBACK_PENDING.equals(status) ? STATUS_CALLBACK_PENDING : STATUS_PROCESSING;
+        if (STATUS_CALLBACK_PENDING.equals(status)) {
+            return STATUS_CALLBACK_PENDING;
+        }
+        if (STATUS_RESULT_UNKNOWN.equals(status)) {
+            return STATUS_RESULT_UNKNOWN;
+        }
+        return STATUS_PROCESSING;
     }
 
     private String trimToNull(String value) {

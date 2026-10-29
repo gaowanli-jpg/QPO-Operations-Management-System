@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.machining.quote.controller.OrderDeliveryController;
 import com.machining.quote.dto.mes.MesMaterialResolveReq;
 import com.machining.quote.dto.mes.MesMaterialResolveResp;
+import com.machining.quote.dto.mes.MesMaterialCallbackReq;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.OrderDeliveryTicketMesRequest;
@@ -21,6 +22,7 @@ import com.machining.quote.service.AuditService;
 import com.machining.quote.service.SourceItemMaterialNoSyncService;
 import com.machining.quote.service.mes.MesMaterialClient;
 import com.machining.quote.service.mes.MesMaterialSyncService;
+import com.machining.quote.service.mes.ProductionItemMaterialNoRefreshService;
 import com.machining.quote.service.SystemTaskService;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -118,15 +120,15 @@ class MesMaterialSyncFailureGuardTest extends MesMaterialSyncTestSupport {
 
         ArgumentCaptor<OrderDeliveryTicket> failedCaptor = ArgumentCaptor.forClass(OrderDeliveryTicket.class);
         verify(ticketMapper).updateById(failedCaptor.capture());
-        assertThat(failedCaptor.getValue().getMesSyncStatus()).isEqualTo("FAILED");
+        assertThat(failedCaptor.getValue().getMesSyncStatus()).isEqualTo("RESULT_UNKNOWN");
         verify(auditService).record(
-                eq("DELIVERY_MES_MATERIAL_SYNC_FAILED"),
+                eq("DELIVERY_MES_MATERIAL_SYNC_RESULT_UNKNOWN"),
                 eq("order_delivery_ticket"),
                 eq(123),
                 isNull(),
                 any(),
                 eq("DELIVERY"),
-                eq("FAILED"),
+                eq("RESULT_UNKNOWN"),
                 contains("ticketId=123 taskId=9008"),
                 contains("请求ID")
         );
@@ -177,5 +179,51 @@ class MesMaterialSyncFailureGuardTest extends MesMaterialSyncTestSupport {
         verify(ticketMapper, never()).updateById(any());
         verify(ticketMapper, never()).update(any(OrderDeliveryTicket.class), any());
         verify(client, never()).resolveMaterial(any());
+    }
+
+    @Test
+    void lateCallbackDoesNotClearUnknownMaterialRefreshRequestAsStale() {
+        MesMaterialSyncService service = syncService();
+        OrderDeliveryTicketMapper ticketMapper = mock(OrderDeliveryTicketMapper.class);
+        OrderDeliveryTicketMesRequestMapper requestMapper = mock(OrderDeliveryTicketMesRequestMapper.class);
+        OrderRfqMapper orderMapper = mock(OrderRfqMapper.class);
+        ItemQuoteVersionMapper itemMapper = mock(ItemQuoteVersionMapper.class);
+        MesMaterialClient client = mock(MesMaterialClient.class);
+        AuditService auditService = mock(AuditService.class);
+        OrderDeliveryTicket ticket = ticket();
+        ticket.setMesSyncStatus("SUCCESS");
+        ticket.setMaterialNo("MAT-OLD");
+        ticket.setMesRequestId("MES-OLD-123");
+        when(ticketMapper.selectById(123)).thenReturn(ticket);
+        OrderDeliveryTicketMesRequest request = new OrderDeliveryTicketMesRequest();
+        request.setId(1234L);
+        request.setTicketId(123);
+        request.setMesRequestId("QPO-MATR-UNKNOWN");
+        request.setRequestStatus("RESULT_UNKNOWN");
+        request.setRequestMessage(ProductionItemMaterialNoRefreshService.REQUEST_MESSAGE_PREFIX + "原料号=MAT-OLD；原因=异常修复");
+        when(requestMapper.selectOne(any())).thenReturn(request);
+        wireSyncService(service, ticketMapper, orderMapper, itemMapper, client, auditService);
+        ReflectionTestUtils.setField(service, "mesRequestMapper", requestMapper);
+        MesMaterialCallbackReq callback = new MesMaterialCallbackReq();
+        callback.setMesRequestId("QPO-MATR-UNKNOWN");
+        callback.setStatus("SUCCESS");
+        callback.setMaterialNo("MAT-NEW");
+
+        assertThatThrownBy(() -> service.handleMaterialCallback(callback))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("原 bizId");
+
+        verify(requestMapper, never()).update(any(OrderDeliveryTicketMesRequest.class), any());
+        verify(ticketMapper, never()).updateById(any(OrderDeliveryTicket.class));
+        verify(auditService).record(
+                eq("DELIVERY_MES_MATERIAL_CALLBACK_CONFLICT"),
+                eq("order_delivery_ticket"),
+                eq(123),
+                isNull(),
+                any(),
+                eq("DELIVERY"),
+                eq("RESULT_UNKNOWN"),
+                contains("QPO-MATR-UNKNOWN"),
+                contains("不会自动覆盖"));
     }
 }

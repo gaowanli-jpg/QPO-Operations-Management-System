@@ -144,31 +144,42 @@ QPO 向数据中心发送的生产需求请求使用批量外层结构。Allocat
 
 ## 6. MES 响应体
 
-成功：
+MES 必须返回本次批次身份和每一条销售订单行的处理结果：
 
 ```json
 {
-  "success": true,
-  "requestId": "QPO-PROD-20260803-000001",
-  "externalId": "MES-PROD-00001",
-  "message": "accepted"
+  "code": "0",
+  "msg": "success",
+  "data": {
+    "bizId": "QPO-DEM-20261018-A1B2C3D4E5F6",
+    "items": [{
+      "id": "MES-TASK-ID-001",
+      "planNo": "PLAN-20261018-001",
+      "saleOrderNo": "SO-2026-001",
+      "saleOrderItemNo": "10",
+      "productCode": "MAT-001",
+      "status": "SUCCESS"
+    }]
+  }
 }
 ```
 
-失败：
+明确失败：
 
 ```json
 {
-  "success": false,
-  "requestId": "QPO-PROD-20260803-000001",
-  "message": "materialNo is invalid"
+  "code": "500",
+  "msg": "materialNo is invalid",
+  "data": {"bizId": "QPO-DEM-20261018-A1B2C3D4E5F6", "items": []}
 }
 ```
 
 QPO 处理规则：
 
-- `success=true` 判定下发成功，回写 `mes_production_status = SUCCESS`。
-- `success=false` 或 HTTP 非 2xx 判定下发失败，回写 `mes_production_status = FAILED` 和失败摘要。
+- `code` 数值严格为 0 且 `data.bizId` 与请求 `bizId` 一致时，按 `saleOrderNo + saleOrderItemNo` 唯一匹配响应行；如同时返回根级 `requestId`，它也必须与请求 ID 一致。
+- 行级 `status=SUCCESS` 且返回 `id` 时回写 `mes_production_status = SUCCESS`。
+- 行级明确失败状态（`FAILED` / `ERROR` / `REJECTED`）回写 `FAILED`。
+- `bizId` 缺失或不匹配、响应行缺失或重复、行级 `status` 缺失/无法识别、响应解析失败、读超时或连接中断均回写 `RESULT_UNKNOWN`，不得按 `productCode` 猜测，也不得换新 `bizId` 重试。
 - 已成功下发的 allocation 不允许重复创建 MES 生产任务。
 - 批量提交时，非 `PRODUCTION_REQUIRED` 行会被 QPO 跳过，不会调用 MES。
 

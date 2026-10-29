@@ -207,8 +207,16 @@ describe('LockedItemManage guardrails', () => {
 
   test('shows allocation creation time between material number and item type', () => {
     expect(pageSource).toContain(
-      'prop="createdAt" label="创建时间" width="160" show-overflow-tooltip>\n            <template #default="{ row }">{{ formatDateTime(row.createdAt) }}</template>'
+      'prop="createdAt" label="创建时间" width="160" show-overflow-tooltip sortable="custom" :sort-orders="SORT_ORDERS">\n            <template #default="{ row }">{{ formatDateTime(row.createdAt) }}</template>'
     )
+  })
+
+  test('sorts locked items by delivery date or creation time and allows 1000 rows per page', () => {
+    expect(pageSource).toContain('@sort-change="handleSortChange"')
+    expect(pageSource).toContain("const SORT_ORDERS = ['descending', 'ascending']")
+    expect(pageSource).toContain('prop="deliveryDate" label="交货日期" width="130" sortable="custom"')
+    expect(pageSource).toContain("params.sortOrder = sortState.order === 'ascending' ? 'ASC' : 'DESC'")
+    expect(pageSource).toContain(':page-sizes="[20, 50, 100, 300, 500, 1000]"')
   })
 
   test('does not expose removed customer demand snapshot beside locked item remarks', () => {

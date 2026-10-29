@@ -31,6 +31,7 @@ import java.util.Set;
 public class LockedItemService {
     private static final int TICKET_ALLOCATION_LIMIT = 1000;
     private static final Set<String> LOCKED_STOCK_TYPES = Set.of("IN_STOCK_LOCK", "IN_PRODUCTION_LOCK");
+    private static final Set<String> LIST_SORT_FIELDS = Set.of("deliveryDate", "createdAt", "discardedAt");
 
     @Autowired
     private OrderDeliveryTicketAllocationMapper allocationMapper;
@@ -46,7 +47,7 @@ public class LockedItemService {
     public LockedItemPageDTO listAllocations(LockedItemQueryReq req) {
         LockedItemQueryReq effectiveReq = req == null ? new LockedItemQueryReq() : req;
         int safePage = normalizePage(effectiveReq.getPage());
-        int safePageSize = normalizePageSize(effectiveReq.getPageSize());
+        int safePageSize = normalizeListPageSize(effectiveReq.getPageSize());
         QueryWrapper<LockedItemDTO> query = buildQuery(effectiveReq);
 
         long total = allocationMapper.countLockedItems(query);
@@ -54,7 +55,8 @@ public class LockedItemService {
             return LockedItemPageDTO.of(List.of(), 0, safePage, safePageSize);
         }
         List<LockedItemDTO> records = allocationMapper.selectLockedItems(
-                query, safePageSize, (safePage - 1L) * safePageSize);
+                query, safePageSize, (safePage - 1L) * safePageSize,
+                normalizeSortBy(effectiveReq.getSortBy()), isAscending(effectiveReq.getSortOrder()));
         return LockedItemPageDTO.of(records, total, safePage, safePageSize);
     }
 
@@ -65,7 +67,7 @@ public class LockedItemService {
         LockedItemQueryReq req = new LockedItemQueryReq();
         QueryWrapper<LockedItemDTO> query = buildQuery(req);
         query.eq("alloc.ticket_id", ticketId);
-        return allocationMapper.selectLockedItems(query, TICKET_ALLOCATION_LIMIT, 0);
+        return allocationMapper.selectLockedItems(query, TICKET_ALLOCATION_LIMIT, 0, null, false);
     }
 
     public List<String> listCustomers() {
@@ -416,6 +418,26 @@ public class LockedItemService {
             return 20;
         }
         return Math.min(pageSize, 100);
+    }
+
+    /** 列表分页与待产零件保持一致，最大单页 1000 行；客户下拉等辅助分页仍按 100 限制。 */
+    private int normalizeListPageSize(Integer pageSize) {
+        if (pageSize == null || pageSize < 1) {
+            return 20;
+        }
+        return Math.min(pageSize, 1000);
+    }
+
+    private String normalizeSortBy(String sortBy) {
+        if (sortBy == null) {
+            return null;
+        }
+        String normalized = sortBy.trim();
+        return LIST_SORT_FIELDS.contains(normalized) ? normalized : null;
+    }
+
+    private boolean isAscending(String sortOrder) {
+        return sortOrder != null && "ASC".equalsIgnoreCase(sortOrder.trim());
     }
 
     private <T> PageResult<T> pageRows(List<T> allRows, Integer page, Integer pageSize) {

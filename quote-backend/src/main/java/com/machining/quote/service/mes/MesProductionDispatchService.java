@@ -558,21 +558,28 @@ public class MesProductionDispatchService {
                 batch.getBizId(), taskId, plans.size(), allocationIds(plans));
         try {
             MesProductionDispatchResp response = mesProductionDispatchClient.dispatch(request);
-            if (response == null || !Boolean.TRUE.equals(response.getSuccess())) {
-                throw new RuntimeException(response == null || isBlank(response.getMessage())
+            if (response == null) {
+                throw new MesProductionResponseUnknownException("MES production dispatch returned an empty response");
+            }
+            if (!Boolean.TRUE.equals(response.getSuccess())) {
+                throw new RuntimeException(isBlank(response.getMessage())
                         ? "MES production dispatch failed"
                         : response.getMessage());
             }
             String responseBizId = response.getRequestId();
-            if (!isBlank(responseBizId) && !batch.getBizId().equals(responseBizId)) {
-                throw new RuntimeException("MES production dispatch response bizId does not match request bizId");
+            if (isBlank(responseBizId)) {
+                throw new MesProductionResponseUnknownException("MES production dispatch response bizId is blank");
+            }
+            if (!response.matchesRequestId(batch.getBizId())) {
+                throw new MesProductionResponseUnknownException("MES production dispatch response bizId does not match request bizId");
             }
             handleBatchResponse(batch, plans, batchItemByAllocationId, response, taskId, rowsByAllocationId);
             log.info("MES production batch dispatch responded bizId={} taskId={} itemCount={} durationMs={}",
                     batch.getBizId(), taskId, plans.size(), System.currentTimeMillis() - startedAt);
         } catch (RuntimeException error) {
             String message = safeMessage(error);
-            boolean resultUnknown = error instanceof DataCenterCallException dataCenterError
+            boolean resultUnknown = error instanceof MesProductionResponseUnknownException
+                    || error instanceof DataCenterCallException dataCenterError
                     && dataCenterError.getCertainty() == DataCenterCallException.FailureCertainty.RESULT_UNKNOWN;
             String rowStatus = resultUnknown ? STATUS_RESULT_UNKNOWN : STATUS_FAILED;
             for (ProductionDispatchPlan plan : plans) {
@@ -657,13 +664,25 @@ public class MesProductionDispatchService {
             MesProductionDispatchResp.Item responseItem = matches.get(0);
             if (!isSuccessStatus(responseItem.getStatus())) {
                 String message = "MES production response row failed for " + matchLabel;
-                markFailed(plan.allocation(), requestId, message);
-                updateProductionBatchItem(batchItem, STATUS_FAILED, responseItem, message);
+                boolean definiteFailure = isFailureStatus(responseItem.getStatus());
+                String rowStatus = definiteFailure ? STATUS_FAILED : STATUS_RESULT_UNKNOWN;
+                if (definiteFailure) {
+                    markFailed(plan.allocation(), requestId, message);
+                } else {
+                    message = "MES production response row has no recognized status for " + matchLabel;
+                    markResultUnknown(plan.allocation(), requestId, message);
+                }
+                updateProductionBatchItem(batchItem, rowStatus, responseItem, message);
                 Map<String, Object> result = withBizId(resultSummary(plan, requestId, null), batch.getBizId());
                 result.put("errorMessage", abbreviate(message));
-                rowsByAllocationId.put(plan.allocation().getId(), row(plan.allocation().getId(), STATUS_FAILED, message, result));
-                recordAudit("PRODUCTION_ITEM_MES_PRODUCTION_FAILED", plan.allocation(), taskId, result, message);
-                failedCount++;
+                rowsByAllocationId.put(plan.allocation().getId(), row(plan.allocation().getId(), rowStatus, message, result));
+                if (definiteFailure) {
+                    recordAudit("PRODUCTION_ITEM_MES_PRODUCTION_FAILED", plan.allocation(), taskId, result, message);
+                    failedCount++;
+                } else {
+                    recordAudit("PRODUCTION_ITEM_MES_PRODUCTION_RESULT_UNKNOWN", plan.allocation(), taskId, result, message);
+                    unknownCount++;
+                }
                 continue;
             }
             String externalId = responseExternalId(responseItem);
@@ -685,9 +704,9 @@ public class MesProductionDispatchService {
             recordAudit("PRODUCTION_ITEM_MES_PRODUCTION_SUCCESS", plan.allocation(), taskId, result, null);
             successCount++;
         }
-        String batchStatus = failedCount > 0
-                ? STATUS_FAILED
-                : unknownCount > 0 ? STATUS_RESULT_UNKNOWN : STATUS_SUCCESS;
+        String batchStatus = unknownCount > 0
+                ? STATUS_RESULT_UNKNOWN
+                : failedCount > 0 ? STATUS_FAILED : STATUS_SUCCESS;
         updateBatch(batch, batchStatus, responseCode(response), response.getMessage(), true);
     }
 
@@ -786,12 +805,33 @@ public class MesProductionDispatchService {
 
     private boolean isSuccessStatus(Object status) {
         if (status == null) {
-            return true;
+            return false;
         }
         if (status instanceof Number number) {
             return number.intValue() == 0;
         }
         return "0".equals(String.valueOf(status).trim()) || "SUCCESS".equalsIgnoreCase(String.valueOf(status).trim());
+    }
+
+    private boolean isFailureStatus(Object status) {
+        if (status == null) {
+            return false;
+        }
+        if (status instanceof Number number) {
+            return number.intValue() != 0;
+        }
+        String value = String.valueOf(status).trim();
+        if (value.matches("-?\\d+")) {
+            try {
+                return Integer.parseInt(value) != 0;
+            } catch (NumberFormatException ignored) {
+                return false;
+            }
+        }
+        return "FAILED".equalsIgnoreCase(value)
+                || "FAILURE".equalsIgnoreCase(value)
+                || "ERROR".equalsIgnoreCase(value)
+                || "REJECTED".equalsIgnoreCase(value);
     }
 
     private String responseExternalId(MesProductionDispatchResp.Item item) {
@@ -1610,5 +1650,11 @@ public class MesProductionDispatchService {
             String customerCode,
             String customerName,
             String internalProjectNo) {
+    }
+
+    private static final class MesProductionResponseUnknownException extends RuntimeException {
+        private MesProductionResponseUnknownException(String message) {
+            super(message);
+        }
     }
 }

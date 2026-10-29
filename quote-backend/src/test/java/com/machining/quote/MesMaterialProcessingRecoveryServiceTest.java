@@ -86,6 +86,31 @@ class MesMaterialProcessingRecoveryServiceTest {
         verify(fixture.sourceSyncService, never()).syncConfirmedMaterialNo(any(), any(), any());
     }
 
+    @Test
+    void restoresUnknownRequestAsUnknownAndNeverClosesItAsRetryableFailure() {
+        Fixture fixture = fixture();
+        OrderDeliveryTicket ticket = processingTicket(104, "MES-104");
+        OrderDeliveryTicketMesRequest request = request("MES-104", "RESULT_UNKNOWN", null, 9004L);
+        request.setResponseMessage("response parse failed after submit");
+        request.setMesExternalTaskId("MES-TASK-104");
+        when(fixture.requestMapper.selectOne(any(Wrapper.class))).thenReturn(request);
+
+        MesMaterialProcessingRecoveryService.RecoveryResult result =
+                fixture.service.recoverProcessing(ticket, 9100L);
+
+        assertThat(result.isHandled()).isTrue();
+        assertThat(result.getStatus()).isEqualTo("RESULT_UNKNOWN");
+        assertThat(result.getMessage()).contains("response parse failed");
+        ArgumentCaptor<OrderDeliveryTicket> ticketCaptor = ArgumentCaptor.forClass(OrderDeliveryTicket.class);
+        verify(fixture.ticketMapper).updateById(ticketCaptor.capture());
+        assertThat(ticketCaptor.getValue().getMesSyncStatus()).isEqualTo("RESULT_UNKNOWN");
+        assertThat(ticketCaptor.getValue().getMesRequestId()).isEqualTo("MES-104");
+        assertThat(ticketCaptor.getValue().getMesExternalTaskId()).isEqualTo("MES-TASK-104");
+        verify(fixture.requestMapper, never()).update(any(), any());
+        verify(fixture.waiterMapper, never()).update(any(), any());
+        verify(fixture.taskMapper, never()).selectById(any());
+    }
+
     private Fixture fixture() {
         Fixture fixture = new Fixture();
         fixture.service = new MesMaterialProcessingRecoveryService();

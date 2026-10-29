@@ -11,6 +11,7 @@ import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMesRequestMapper;
 import com.machining.quote.mapper.SalesOrderItemMapper;
 import com.machining.quote.service.AuditService;
+import com.machining.quote.service.DataCenterCallException;
 import com.machining.quote.service.mes.MesMaterialClient;
 import com.machining.quote.service.mes.MesProductionDispatchService;
 import com.machining.quote.service.mes.ProductionItemMaterialNoRefreshService;
@@ -33,6 +34,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.doThrow;
 
 class ProductionItemMaterialNoRefreshServiceTest {
 
@@ -221,6 +223,69 @@ class ProductionItemMaterialNoRefreshServiceTest {
         verify(mesRequestMapper, times(1)).update(captor.capture(), any());
         assertThat(captor.getValue().getRequestStatus()).isEqualTo("FAILED");
         assertThat(captor.getValue().getResponseMessage()).contains("已存在物料准备任务");
+    }
+
+    @Test
+    void refreshPreservesUnknownResultAndBlocksAnotherMesRequest() {
+        stubTicket(1, "CS-OLD-001");
+        when(allocationMapper.selectBatchIds(any())).thenReturn(List.of(allocation(11, 1, "PENDING")));
+        when(allocationMapper.selectByTicketId(1)).thenReturn(List.of(allocation(11, 1, "PENDING")));
+        when(salesOrderItemMapper.selectBySourceTicketIdForUpdate(1)).thenReturn(salesItem(101L, "CS-OLD-001"));
+        OrderDeliveryTicketMesRequest activeUnknown = new OrderDeliveryTicketMesRequest();
+        activeUnknown.setMesRequestId("QPO-MATR-ORIGINAL");
+        activeUnknown.setRequestStatus("RESULT_UNKNOWN");
+        when(mesRequestMapper.selectOne(any())).thenReturn(null, activeUnknown);
+        doThrow(new DataCenterCallException(
+                "MES_MATERIAL_RESOLVE",
+                DataCenterCallException.FailureCertainty.RESULT_UNKNOWN,
+                null,
+                "response could not be parsed",
+                null)).when(mesMaterialClient).resolveMaterial(any());
+
+        Map<String, Object> first = service().refreshBatch(List.of(11), "MES 已重建物料号", 96L);
+
+        assertThat(first).containsEntry("successCount", 0).containsEntry("failedCount", 0).containsEntry("unknownCount", 1);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> firstRows = (List<Map<String, Object>>) first.get("rows");
+        assertThat(firstRows.get(0))
+                .containsEntry("status", "RESULT_UNKNOWN")
+                .containsKey("bizId");
+        assertThat(String.valueOf(firstRows.get(0).get("bizId"))).startsWith("QPO-MATR-");
+
+        Map<String, Object> retry = service().refreshBatch(List.of(11), "再次尝试", 97L);
+
+        assertThat(retry).containsEntry("successCount", 0).containsEntry("failedCount", 1).containsEntry("unknownCount", 0);
+        verify(mesMaterialClient, times(1)).resolveMaterial(any());
+        ArgumentCaptor<OrderDeliveryTicketMesRequest> updateCaptor =
+                ArgumentCaptor.forClass(OrderDeliveryTicketMesRequest.class);
+        verify(mesRequestMapper).update(updateCaptor.capture(), any());
+        assertThat(updateCaptor.getValue().getRequestStatus()).isEqualTo("RESULT_UNKNOWN");
+        assertThat(updateCaptor.getValue().getResponseMessage()).contains("response could not be parsed");
+    }
+
+    @Test
+    void refreshMarksConflictingRootAndDataBizIdsAsUnknown() {
+        stubTicket(1, "CS-OLD-001");
+        when(allocationMapper.selectBatchIds(any())).thenReturn(List.of(allocation(11, 1, "PENDING")));
+        when(allocationMapper.selectByTicketId(1)).thenReturn(List.of(allocation(11, 1, "PENDING")));
+        when(salesOrderItemMapper.selectBySourceTicketIdForUpdate(1)).thenReturn(salesItem(101L, "CS-OLD-001"));
+        when(mesMaterialClient.resolveMaterial(any())).thenAnswer(invocation -> {
+            MesMaterialResolveReq req = invocation.getArgument(0);
+            MesMaterialResolveResp response = successResponse(req.getBizId(), "CS-NEW-002");
+            MesMaterialResolveResp.Data data = new MesMaterialResolveResp.Data();
+            data.setBizId("OTHER-BIZ-ID");
+            response.setData(data);
+            return response;
+        });
+
+        Map<String, Object> result = service().refreshBatch(List.of(11), "料号需要重新核对", 98L);
+
+        assertThat(result).containsEntry("successCount", 0).containsEntry("failedCount", 0).containsEntry("unknownCount", 1);
+        verify(refreshWriter, never()).apply(any(), anyString(), anyString(), anyString(), any(), any());
+        ArgumentCaptor<OrderDeliveryTicketMesRequest> updateCaptor =
+                ArgumentCaptor.forClass(OrderDeliveryTicketMesRequest.class);
+        verify(mesRequestMapper).update(updateCaptor.capture(), any());
+        assertThat(updateCaptor.getValue().getRequestStatus()).isEqualTo("RESULT_UNKNOWN");
     }
 
     private ProductionItemMaterialNoRefreshService service() {

@@ -69,6 +69,124 @@ class DataCenterClientFallbackTest {
     }
 
     @Test
+    void dataCenterMaterialResponseAcceptsSingleItemObjectAndNumericBooleanFlags() throws IOException {
+        HttpServer server = server(exchange -> respond(exchange, 200, """
+                {
+                  "success": 1,
+                  "callbackRequired": 0,
+                  "data": {
+                    "bizId": "MES-REQ-DC",
+                    "items": {
+                      "taskId": 2,
+                      "drawingNo": "P-100",
+                      "drawingVersion": "A",
+                      "status": "EXISTING_PRODUCT",
+                      "productCode": "MAT-DC-ONE"
+                    }
+                  }
+                }
+                """));
+        try {
+            SystemDataCenterEndpointConfigMapper mapper = mock(SystemDataCenterEndpointConfigMapper.class);
+            DataCenterConfigService configService = mock(DataCenterConfigService.class);
+            DataCenterTokenService tokenService = mock(DataCenterTokenService.class);
+            DataCenterIntegrationClient dataCenterClient = dataCenterClient(mapper, configService, tokenService);
+            SystemDataCenterConfig activeConfig = dataCenterConfig(baseUrl(server));
+            when(configService.activeConfig()).thenReturn(activeConfig);
+            when(tokenService.fetchAccessToken(activeConfig)).thenReturn("test-access-token");
+            when(mapper.selectOne(any(QueryWrapper.class))).thenReturn(endpoint(
+                    95L,
+                    DataCenterEndpointRegistry.MES_MATERIAL_RESOLVE,
+                    "MES",
+                    "/material/resolve",
+                    60000,
+                    "POST"
+            ));
+
+            MesMaterialResolveResp response = dataCenterClient.call(
+                    DataCenterEndpointRegistry.MES_MATERIAL_RESOLVE,
+                    mesMaterialReq(),
+                    MesMaterialResolveResp.class);
+
+            assertThat(response.getSuccess()).isTrue();
+            assertThat(response.getCallbackRequired()).isFalse();
+            assertThat(response.getMesRequestId()).isEqualTo("MES-REQ-DC");
+            assertThat(response.getData().getItems()).hasSize(1);
+            assertThat(response.getMaterialNo()).isEqualTo("MAT-DC-ONE");
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void malformedMesMaterialResponseIsResultUnknownInsteadOfSafeFailure() throws IOException {
+        HttpServer server = server(exchange -> respond(exchange, 200, "{\"code\":0,\"data\":{\"items\":["));
+        try {
+            SystemDataCenterEndpointConfigMapper mapper = mock(SystemDataCenterEndpointConfigMapper.class);
+            DataCenterConfigService configService = mock(DataCenterConfigService.class);
+            DataCenterTokenService tokenService = mock(DataCenterTokenService.class);
+            DataCenterIntegrationClient dataCenterClient = dataCenterClient(mapper, configService, tokenService);
+            SystemDataCenterConfig activeConfig = dataCenterConfig(baseUrl(server));
+            when(configService.activeConfig()).thenReturn(activeConfig);
+            when(tokenService.fetchAccessToken(activeConfig)).thenReturn("test-access-token");
+            when(mapper.selectOne(any(QueryWrapper.class))).thenReturn(endpoint(
+                    96L,
+                    DataCenterEndpointRegistry.MES_MATERIAL_RESOLVE,
+                    "MES",
+                    "/material/resolve",
+                    60000,
+                    "POST"
+            ));
+
+            assertThatThrownBy(() -> dataCenterClient.call(
+                    DataCenterEndpointRegistry.MES_MATERIAL_RESOLVE,
+                    mesMaterialReq(),
+                    MesMaterialResolveResp.class))
+                    .isInstanceOfSatisfying(DataCenterCallException.class, error -> {
+                        assertThat(error.getCertainty())
+                                .isEqualTo(DataCenterCallException.FailureCertainty.RESULT_UNKNOWN);
+                        assertThat(error.getMessage()).contains("Error while extracting response");
+                    });
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void mesMaterialServerErrorIsResultUnknownBecauseMesMayHaveAcceptedTheRequest() throws IOException {
+        HttpServer server = server(exchange -> respond(exchange, 500, "{\"msg\":\"upstream failed\"}"));
+        try {
+            SystemDataCenterEndpointConfigMapper mapper = mock(SystemDataCenterEndpointConfigMapper.class);
+            DataCenterConfigService configService = mock(DataCenterConfigService.class);
+            DataCenterTokenService tokenService = mock(DataCenterTokenService.class);
+            DataCenterIntegrationClient dataCenterClient = dataCenterClient(mapper, configService, tokenService);
+            SystemDataCenterConfig activeConfig = dataCenterConfig(baseUrl(server));
+            when(configService.activeConfig()).thenReturn(activeConfig);
+            when(tokenService.fetchAccessToken(activeConfig)).thenReturn("test-access-token");
+            when(mapper.selectOne(any(QueryWrapper.class))).thenReturn(endpoint(
+                    97L,
+                    DataCenterEndpointRegistry.MES_MATERIAL_RESOLVE,
+                    "MES",
+                    "/material/resolve",
+                    60000,
+                    "POST"
+            ));
+
+            assertThatThrownBy(() -> dataCenterClient.call(
+                    DataCenterEndpointRegistry.MES_MATERIAL_RESOLVE,
+                    mesMaterialReq(),
+                    MesMaterialResolveResp.class))
+                    .isInstanceOfSatisfying(DataCenterCallException.class, error -> {
+                        assertThat(error.getCertainty())
+                                .isEqualTo(DataCenterCallException.FailureCertainty.RESULT_UNKNOWN);
+                        assertThat(error.getHttpStatus()).isEqualTo(500);
+                    });
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
     void wmsReservationClientDefaultsToDataCenterEndpoint() {
         DataCenterIntegrationClient dataCenterClient = mock(DataCenterIntegrationClient.class);
         WmsSaleLadingReserveResp expected = new WmsSaleLadingReserveResp();

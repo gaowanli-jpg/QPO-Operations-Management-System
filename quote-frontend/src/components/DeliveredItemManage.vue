@@ -131,6 +131,7 @@
           v-loading="loading"
           empty-text="暂无未获取物料号的已提零件，物料号成功后请到待产零件模块处理。"
           @selection-change="handleSelectionChange"
+          @sort-change="handleSortChange"
         >
           <el-table-column type="selection" width="46" fixed align="center" />
           <el-table-column prop="id" label="提单ID" width="96" fixed align="center" show-overflow-tooltip />
@@ -141,7 +142,7 @@
           <el-table-column label="物料号" min-width="140" show-overflow-tooltip>
             <template #default="{ row }">{{ formatMaterialNo(row.materialNo) }}</template>
           </el-table-column>
-          <el-table-column prop="createdAt" label="创建时间" width="160" show-overflow-tooltip>
+          <el-table-column prop="createdAt" label="创建时间" width="160" show-overflow-tooltip sortable="custom" :sort-orders="SORT_ORDERS">
             <template #default="{ row }">{{ formatDateTime(row.createdAt) }}</template>
           </el-table-column>
           <el-table-column prop="itemType" label="零件类型" width="100" align="center" show-overflow-tooltip>
@@ -194,7 +195,7 @@
           <el-table-column label="工艺路线" min-width="220" show-overflow-tooltip>
             <template #default="{ row }">{{ formatProcessRoute(row.processRoute) }}</template>
           </el-table-column>
-          <el-table-column prop="deliveryDate" label="交货日期" width="120" />
+          <el-table-column prop="deliveryDate" label="交货日期" width="130" sortable="custom" :sort-orders="SORT_ORDERS" />
           <el-table-column prop="description" label="材料描述" min-width="160" show-overflow-tooltip>
             <template #default="{ row }">{{ row.description || '-' }}</template>
           </el-table-column>
@@ -207,7 +208,7 @@
           <el-table-column v-if="viewMode === 'DISCARDED'" prop="discardReason" label="废弃原因" min-width="180" show-overflow-tooltip>
             <template #default="{ row }">{{ row.discardReason || '-' }}</template>
           </el-table-column>
-          <el-table-column v-if="viewMode === 'DISCARDED'" prop="discardedAt" label="废弃时间" width="160" show-overflow-tooltip>
+          <el-table-column v-if="viewMode === 'DISCARDED'" prop="discardedAt" label="废弃时间" width="160" show-overflow-tooltip sortable="custom" :sort-orders="SORT_ORDERS">
             <template #default="{ row }">{{ formatDateTime(row.discardedAt) }}</template>
           </el-table-column>
           <el-table-column v-if="viewMode === 'DISCARDED'" prop="discardedBy" label="废弃人" width="110" align="center" show-overflow-tooltip>
@@ -278,7 +279,7 @@
         <el-pagination
           v-model:current-page="page"
           v-model:page-size="pageSize"
-          :page-sizes="[20, 50, 100]"
+          :page-sizes="[20, 50, 100, 300, 500, 1000]"
           layout="total, sizes, prev, pager, next, jumper"
           :pager-count="7"
           :total="total"
@@ -434,6 +435,9 @@ const loading = ref(false)
 const page = ref(1)
 const pageSize = ref(20)
 const total = ref(0)
+const SORT_ORDERS = ['descending', 'ascending']
+// 未点击表头时不传排序参数，保持后端默认顺序（id 倒序），点击后在正序/倒序之间切换。
+const sortState = reactive({ prop: '', order: '' })
 const detailVisible = ref(false)
 const selectedItem = ref(null)
 const customerPickerVisible = ref(false)
@@ -463,11 +467,23 @@ const buildParams = () => {
   if (dateFrom) params.dateFrom = dateFrom
   if (dateTo) params.dateTo = dateTo
   params.discarded = viewMode.value === 'DISCARDED'
+  if (sortState.prop) {
+    params.sortBy = sortState.prop
+    params.sortOrder = sortState.order === 'ascending' ? 'ASC' : 'DESC'
+  }
   return {
     ...params,
     page: page.value,
     pageSize: pageSize.value
   }
+}
+
+const handleSortChange = ({ prop, order }) => {
+  if (!prop || !order) return
+  sortState.prop = prop
+  sortState.order = order
+  page.value = 1
+  loadItems()
 }
 
 const loadItems = async () => {

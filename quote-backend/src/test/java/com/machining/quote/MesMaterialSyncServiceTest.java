@@ -219,6 +219,42 @@ class MesMaterialSyncServiceTest extends MesMaterialSyncTestSupport {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void syncMaterialNoMarksConflictingRootAndDataBizIdsAsUnknown() {
+        MesMaterialSyncService service = syncService();
+        OrderDeliveryTicketMapper ticketMapper = mock(OrderDeliveryTicketMapper.class);
+        OrderDeliveryTicketMesRequestMapper mesRequestMapper = mock(OrderDeliveryTicketMesRequestMapper.class);
+        OrderRfqMapper orderMapper = mock(OrderRfqMapper.class);
+        ItemQuoteVersionMapper itemMapper = mock(ItemQuoteVersionMapper.class);
+        MesMaterialClient client = mock(MesMaterialClient.class);
+        AuditService auditService = mock(AuditService.class);
+        OrderDeliveryTicket ticket = ticket();
+        when(ticketMapper.selectById(123)).thenReturn(ticket);
+        when(orderMapper.selectById(88)).thenReturn(order());
+        when(itemMapper.selectById(77)).thenReturn(item("/uploads/drawings/p100.pdf"));
+        when(ticketMapper.update(any(OrderDeliveryTicket.class), any())).thenReturn(1);
+        when(client.resolveMaterial(any())).thenAnswer(invocation -> {
+            MesMaterialResolveReq req = invocation.getArgument(0);
+            MesMaterialResolveResp response = new MesMaterialResolveResp();
+            response.setCode(0);
+            response.setBizId(req.getBizId());
+            MesMaterialResolveResp.Data data = new MesMaterialResolveResp.Data();
+            data.setBizId("OTHER-BIZ-ID");
+            response.setData(data);
+            return response;
+        });
+        wireSyncService(service, ticketMapper, orderMapper, itemMapper, client, auditService);
+        ReflectionTestUtils.setField(service, "mesRequestMapper", mesRequestMapper);
+
+        assertThatThrownBy(() -> service.syncMaterialNo(123, 9007L))
+                .hasMessageContaining("请求ID不匹配");
+        ArgumentCaptor<OrderDeliveryTicket> updateCaptor = ArgumentCaptor.forClass(OrderDeliveryTicket.class);
+        verify(ticketMapper).updateById(updateCaptor.capture());
+        assertThat(updateCaptor.getValue().getMesSyncStatus()).isEqualTo("RESULT_UNKNOWN");
+        assertThat(updateCaptor.getValue().getMaterialNo()).isNull();
+    }
+
+    @Test
     void syncMaterialNoWritesConfirmedMaterialBackToSalesOrderItemForSalesOrderTicket() {
         MesMaterialSyncService service = syncService();
         OrderDeliveryTicketMapper ticketMapper = mock(OrderDeliveryTicketMapper.class);

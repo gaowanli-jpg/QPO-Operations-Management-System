@@ -12,6 +12,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 class MesMaterialDedupMigrationCharacterizationTest {
     private static final Path MIGRATION = Path.of(
             "src", "main", "resources", "db", "migration", "V1__qpo_baseline_schema.sql");
+    private static final Path RESULT_UNKNOWN_MIGRATION = Path.of(
+            "src", "main", "resources", "db", "migration", "V70__mes_material_result_unknown_state.sql");
     private static final Path ORDER_DELIVERY_TICKET = Path.of(
             "src", "main", "java", "com", "machining", "quote", "entity", "OrderDeliveryTicket.java");
     private static final Path MES_REQUEST_ENTITY = Path.of(
@@ -57,6 +59,17 @@ class MesMaterialDedupMigrationCharacterizationTest {
         assertThat(migration)
                 .contains("uk_order_delivery_ticket_mes_request_id")
                 .contains("CREATE TABLE order_delivery_ticket_mes_waiter");
+    }
+
+    @Test
+    void resultUnknownMigrationKeepsMaterialRequestsActiveForSafeReconciliation() throws IOException {
+        assertThat(RESULT_UNKNOWN_MIGRATION).exists();
+        assertThat(read(RESULT_UNKNOWN_MIGRATION))
+                .contains("'RESULT_UNKNOWN'")
+                .contains("DROP CONSTRAINT IF EXISTS chk_delivery_mes_request_status")
+                .contains("DROP INDEX IF EXISTS uk_delivery_mes_request_active_dedup")
+                .contains("request_status IN ('PROCESSING', 'CALLBACK_PENDING', 'RESULT_UNKNOWN')")
+                .contains("CREATE UNIQUE INDEX uk_delivery_mes_request_active_dedup");
     }
 
     @Test

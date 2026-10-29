@@ -156,6 +156,58 @@ class MesProductionBatchDispatchIntegrationTest {
     }
 
     @Test
+    void missingOrMismatchedResponseBizIdIsResultUnknown() {
+        Map<String, Object> missingBizId = dispatchSingleLineWithResponseBizId(71, null);
+        assertThat(missingBizId)
+                .containsEntry("unknownCount", 1)
+                .containsEntry("failedCount", 0);
+
+        Map<String, Object> mismatchedBizId = dispatchSingleLineWithResponseBizId(72, "QPO-DEM-OTHER");
+        assertThat(mismatchedBizId)
+                .containsEntry("unknownCount", 1)
+                .containsEntry("failedCount", 0);
+    }
+
+    @Test
+    void matchingRootRequestIdCannotHideConflictingDataBizId() {
+        Fixture fixture = fixture();
+        OrderDeliveryTicketAllocation allocation = allocation(73, 243, "MAT-73", 4, 9773L);
+        when(fixture.allocationMapper.selectById(73)).thenReturn(allocation);
+        when(fixture.salesItemMapper.selectByIdForUpdate(9773L))
+                .thenReturn(salesItem(9773L, 783, 3001L, null, 73L, "MAT-73", 4));
+        when(fixture.headerMapper.selectById(3001L)).thenReturn(header(3001L, "SO-CONFLICT"));
+        String submittedBizId = "QPO-DEM-CONFLICT-73";
+        mockReserve(fixture, submittedBizId,
+                List.of(line(73, "QPO-DEML-CONFLICT-73", "MAT-73")));
+        MesProductionDispatchResp response = success("OTHER-BIZ-ID",
+                item("SO-CONFLICT", "783", "MAT-73", "PLAN-73"));
+        response.setRequestId(submittedBizId);
+        when(fixture.client.dispatch(any())).thenReturn(response);
+
+        Map<String, Object> result = fixture.service.dispatchBatch(List.of(73), 9973L);
+
+        assertThat(result).containsEntry("unknownCount", 1).containsEntry("successCount", 0).containsEntry("failedCount", 0);
+    }
+
+    private Map<String, Object> dispatchSingleLineWithResponseBizId(int allocationId, String responseBizId) {
+        Fixture fixture = fixture();
+        OrderDeliveryTicketAllocation allocation = allocation(
+                allocationId, 170 + allocationId, "MAT-" + allocationId, 4, 9700L + allocationId);
+        when(fixture.allocationMapper.selectById(allocationId)).thenReturn(allocation);
+        when(fixture.salesItemMapper.selectByIdForUpdate(9700L + allocationId))
+                .thenReturn(salesItem(9700L + allocationId, 710 + allocationId, 3001L,
+                        null, (long) allocationId, "MAT-" + allocationId, 4));
+        when(fixture.headerMapper.selectById(3001L)).thenReturn(header(3001L, "SO-IDENTITY"));
+        String submittedBizId = "QPO-DEM-IDENTITY-" + allocationId;
+        mockReserve(fixture, submittedBizId,
+                List.of(line(allocationId, "QPO-DEML-IDENTITY-" + allocationId, "MAT-" + allocationId)));
+        when(fixture.client.dispatch(any())).thenReturn(success(responseBizId,
+                item("SO-IDENTITY", String.valueOf(710 + allocationId), "MAT-" + allocationId, "PLAN-" + allocationId)));
+
+        return fixture.service.dispatchBatch(List.of(allocationId), 9970L + allocationId);
+    }
+
+    @Test
     void dispatchesSalesOrderItemWithMaterialNoWhenBomSnapshotIsMissing() {
         Fixture fixture = fixture();
         OrderDeliveryTicketAllocation allocation = allocation(16, 116, "MAT-NO-BOM", 3, 9816L);

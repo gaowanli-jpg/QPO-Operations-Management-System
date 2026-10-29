@@ -16,10 +16,14 @@ import com.machining.quote.mapper.OrderRfqMapper;
 import com.machining.quote.mapper.SalesOrderHeaderMapper;
 import com.machining.quote.mapper.SalesOrderItemMapper;
 import com.machining.quote.service.AuditService;
+import com.machining.quote.service.DataCenterCallException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.client.HttpStatusCodeException;
+import org.springframework.web.client.ResourceAccessException;
 
 import java.math.BigInteger;
 import java.security.SecureRandom;
@@ -54,13 +58,17 @@ public class ProductionItemMaterialNoRefreshService {
     public static final String TASK_TYPE = "MES_MATERIAL_NO_REFRESH";
     static final String STATUS_SUCCESS = "SUCCESS";
     static final String STATUS_FAILED = "FAILED";
+    static final String STATUS_RESULT_UNKNOWN = "RESULT_UNKNOWN";
 
     private static final String REQUEST_STATUS_PROCESSING = "PROCESSING";
+    private static final String REQUEST_STATUS_CALLBACK_PENDING = "CALLBACK_PENDING";
+    private static final String REQUEST_STATUS_RESULT_UNKNOWN = "RESULT_UNKNOWN";
     private static final String MES_PRODUCTION_SUCCESS = "SUCCESS";
     private static final java.util.Set<String> IN_FLIGHT_PRODUCTION_STATUSES =
             java.util.Set.of("PROCESSING", "SUBMITTING", "RESULT_UNKNOWN");
     private static final int MAX_REFRESH_BATCH_SIZE = 200;
     private static final int MAX_REASON_LENGTH = 200;
+    public static final String REQUEST_MESSAGE_PREFIX = "刷新料号（异常修复）：";
     private static final DateTimeFormatter BIZ_DATE = DateTimeFormatter.BASIC_ISO_DATE;
     private static final char[] CROCKFORD32 = "0123456789ABCDEFGHJKMNPQRSTVWXYZ".toCharArray();
     private static final SecureRandom RANDOM = new SecureRandom();
@@ -119,10 +127,14 @@ public class ProductionItemMaterialNoRefreshService {
 
         List<OrderDeliveryTicketAllocation> allocations = allocationMapper.selectBatchIds(normalizedIds);
         Map<Integer, List<Integer>> allocationIdsByTicketId = new LinkedHashMap<>();
+        java.util.Set<Integer> foundAllocationIds = new java.util.LinkedHashSet<>();
         if (allocations != null) {
             for (OrderDeliveryTicketAllocation allocation : allocations) {
                 if (allocation == null || allocation.getTicketId() == null) {
                     continue;
+                }
+                if (allocation.getId() != null) {
+                    foundAllocationIds.add(allocation.getId());
                 }
                 allocationIdsByTicketId
                         .computeIfAbsent(allocation.getTicketId(), ignored -> new ArrayList<>())
@@ -131,6 +143,12 @@ public class ProductionItemMaterialNoRefreshService {
         }
 
         List<Map<String, Object>> rows = new ArrayList<>();
+        for (Integer allocationId : normalizedIds) {
+            if (!foundAllocationIds.contains(allocationId)) {
+                rows.add(failedRow(null, List.of(allocationId), null, null,
+                        "所选待产零件不存在或已删除", null));
+            }
+        }
         for (Map.Entry<Integer, List<Integer>> entry : allocationIdsByTicketId.entrySet()) {
             Integer ticketId = entry.getKey();
             List<Integer> ticketAllocationIds = entry.getValue();
@@ -138,13 +156,19 @@ public class ProductionItemMaterialNoRefreshService {
                 rows.add(refreshOne(ticketId, ticketAllocationIds, normalizedReason, taskId));
             } catch (RuntimeException error) {
                 String message = safeMessage(error);
-                Map<String, Object> failed = failedRow(ticketId, ticketAllocationIds, null, null, message, null);
+                boolean resultUnknown = error instanceof MesMaterialRefreshResultUnknownException;
+                String bizId = resultUnknown ? ((MesMaterialRefreshResultUnknownException) error).bizId() : null;
+                Map<String, Object> failed = resultUnknown
+                        ? resultUnknownRow(ticketId, ticketAllocationIds, bizId, message)
+                        : failedRow(ticketId, ticketAllocationIds, null, null, message, null);
                 recordAudit(
-                        "PRODUCTION_ITEM_MATERIAL_NO_REFRESH_FAILED",
+                        resultUnknown
+                                ? "PRODUCTION_ITEM_MATERIAL_NO_REFRESH_RESULT_UNKNOWN"
+                                : "PRODUCTION_ITEM_MATERIAL_NO_REFRESH_FAILED",
                         ticketId,
                         ticketAllocationIds,
                         buildAuditSummary(ticketId, ticketAllocationIds, null, null,
-                                normalizedReason, null, taskId, null),
+                                normalizedReason, bizId, taskId, null),
                         message);
                 log.warn("MES material no refresh failed ticketId={} taskId={} allocationIds={} reason={} message={}",
                         ticketId, taskId, ticketAllocationIds, normalizedReason, message);
@@ -170,6 +194,7 @@ public class ProductionItemMaterialNoRefreshService {
         }
         List<OrderDeliveryTicketAllocation> ticketAllocations = allocationMapper.selectByTicketId(ticketId);
         assertNoBlockingProductionRows(ticketAllocations);
+        assertNoActiveMaterialRequest(ticketId);
 
         SalesOrderItem salesItem = resolveSalesOrderItem(ticket);
         String previousMaterialNo = firstNonBlank(
@@ -185,23 +210,34 @@ public class ProductionItemMaterialNoRefreshService {
         try {
             resp = mesMaterialClient.resolveMaterial(buildRequest(ticket, bizId));
         } catch (RuntimeException error) {
-            updateMesRequest(bizId, STATUS_FAILED, null, null, safeMessage(error));
+            boolean resultUnknown = isResultUnknown(error);
+            updateMesRequest(bizId, resultUnknown ? REQUEST_STATUS_RESULT_UNKNOWN : STATUS_FAILED,
+                    null, null, safeMessage(error));
+            if (resultUnknown) {
+                throw new MesMaterialRefreshResultUnknownException(bizId, safeMessage(error), error);
+            }
             throw error;
         }
         try {
             validateResponse(resp, bizId);
         } catch (RuntimeException error) {
-            // MES 业务拒绝（success=false，如「已存在物料准备任务」）也必须落失败原因，
-            // 否则请求流水会永远停在 PROCESSING，事后无法从库里查到原因。
-            updateMesRequest(bizId, STATUS_FAILED, null,
+            // 明确业务拒绝可安全重试；缺少身份或成功状态时，下游可能已经创建物料，
+            // 必须保留原 bizId 并等待核对。
+            boolean resultUnknown = isResultUnknown(error);
+            updateMesRequest(bizId, resultUnknown ? REQUEST_STATUS_RESULT_UNKNOWN : STATUS_FAILED, null,
                     resp == null ? null : resp.getExternalTraceId(), safeMessage(error));
+            if (resultUnknown) {
+                throw new MesMaterialRefreshResultUnknownException(bizId, safeMessage(error), error);
+            }
             throw error;
         }
         String newMaterialNo = trimToNull(resp.getMaterialNo());
         if (newMaterialNo == null) {
-            String message = "MES 未返回料号";
-            updateMesRequest(bizId, STATUS_FAILED, null, resp.getExternalTraceId(), message);
-            throw new IllegalStateException(message);
+            String message = isCallbackPendingResponse(resp)
+                    ? "MES 已受理料号刷新并将异步回调；此操作不会自动覆盖已确认料号，请按原 bizId 核对"
+                    : "MES 响应未返回料号或明确待回调状态";
+            updateMesRequest(bizId, REQUEST_STATUS_RESULT_UNKNOWN, null, resp.getExternalTraceId(), message);
+            throw new MesMaterialRefreshResultUnknownException(bizId, message);
         }
         if (newMaterialNo.equals(previousMaterialNo)) {
             String message = "MES 返回料号与当前一致（" + previousMaterialNo + "），料号未发生变化，请先到 MES 确认";
@@ -327,15 +363,64 @@ public class ProductionItemMaterialNoRefreshService {
     }
 
     private void validateResponse(MesMaterialResolveResp resp, String bizId) {
-        if (resp == null || !Boolean.TRUE.equals(resp.getSuccess())) {
-            throw new IllegalStateException(resp == null || isBlank(resp.getMessage())
+        if (resp == null) {
+            throw new MesMaterialRefreshResultUnknownException(bizId, "MES 响应为空");
+        }
+        if (Boolean.FALSE.equals(resp.getSuccess())) {
+            throw new IllegalStateException(isBlank(resp.getMessage())
                     ? "MES 返回失败"
                     : resp.getMessage().trim());
         }
-        String responseBizId = trimToNull(resp.getMesRequestId());
-        if (responseBizId != null && !responseBizId.equals(bizId)) {
-            throw new IllegalStateException("MES 返回的 bizId 与请求不一致");
+        if (!Boolean.TRUE.equals(resp.getSuccess())) {
+            throw new MesMaterialRefreshResultUnknownException(bizId, "MES 响应缺少成功状态");
         }
+        String responseBizId = trimToNull(resp.getMesRequestId());
+        if (responseBizId == null) {
+            throw new MesMaterialRefreshResultUnknownException(bizId, "MES 响应缺少 bizId");
+        }
+        if (!resp.matchesRequestId(bizId)) {
+            throw new MesMaterialRefreshResultUnknownException(bizId, "MES 返回的 bizId 与请求不一致");
+        }
+    }
+
+    private boolean isCallbackPendingResponse(MesMaterialResolveResp resp) {
+        if (Boolean.TRUE.equals(resp.getCallbackRequired())) {
+            return true;
+        }
+        String status = trimToNull(resp.getStatus());
+        if (status == null) {
+            return false;
+        }
+        String normalized = status.toUpperCase(Locale.ROOT);
+        return "CALLBACK_PENDING".equals(normalized)
+                || "PENDING_CREATE".equals(normalized)
+                || "PENDING".equals(normalized)
+                || "ACCEPTED".equals(normalized);
+    }
+
+    private boolean isResultUnknown(RuntimeException error) {
+        if (error instanceof DataCenterCallException dataCenterError) {
+            return dataCenterError.getCertainty() == DataCenterCallException.FailureCertainty.RESULT_UNKNOWN;
+        }
+        for (Throwable current = error; current != null; current = current.getCause()) {
+            if (current instanceof HttpMessageNotReadableException) {
+                return true;
+            }
+            if (current instanceof ResourceAccessException) {
+                String message = String.valueOf(current.getMessage()).toLowerCase(Locale.ROOT);
+                return message.contains("read timed out")
+                        || message.contains("connection reset")
+                        || message.contains("unexpected end")
+                        || message.contains("premature")
+                        || message.contains("broken pipe")
+                        || message.contains("timed out");
+            }
+            if (current instanceof HttpStatusCodeException statusError
+                    && statusError.getStatusCode().is5xxServerError()) {
+                return true;
+            }
+        }
+        return error instanceof MesMaterialRefreshResultUnknownException;
     }
 
     private void insertMesRequest(OrderDeliveryTicket ticket,
@@ -352,7 +437,7 @@ public class ProductionItemMaterialNoRefreshService {
         request.setSystemTaskId(taskId);
         request.setRequestStatus(REQUEST_STATUS_PROCESSING);
         request.setMaterialNo(previousMaterialNo);
-        request.setRequestMessage(abbreviate("刷新料号（异常修复）：原料号=" + previousMaterialNo + "；原因=" + reason, 500));
+        request.setRequestMessage(abbreviate(REQUEST_MESSAGE_PREFIX + "原料号=" + previousMaterialNo + "；原因=" + reason, 500));
         request.setRequestedAt(LocalDateTime.now());
         mesRequestMapper.insert(request);
     }
@@ -388,6 +473,7 @@ public class ProductionItemMaterialNoRefreshService {
         summary.put("totalCount", rows.size());
         summary.put("successCount", count(rows, STATUS_SUCCESS));
         summary.put("failedCount", count(rows, STATUS_FAILED));
+        summary.put("unknownCount", count(rows, REQUEST_STATUS_RESULT_UNKNOWN));
         summary.put("rows", rows);
         return summary;
     }
@@ -430,6 +516,34 @@ public class ProductionItemMaterialNoRefreshService {
         return row;
     }
 
+    private Map<String, Object> resultUnknownRow(Integer ticketId,
+                                                 List<Integer> allocationIds,
+                                                 String bizId,
+                                                 String message) {
+        Map<String, Object> row = failedRow(ticketId, allocationIds, null, null, message, bizId);
+        row.put("status", REQUEST_STATUS_RESULT_UNKNOWN);
+        row.put("mesRequestId", bizId);
+        row.put("bizId", bizId);
+        return row;
+    }
+
+    private void assertNoActiveMaterialRequest(Integer ticketId) {
+        if (mesRequestMapper == null || ticketId == null) {
+            return;
+        }
+        com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<OrderDeliveryTicketMesRequest> wrapper =
+                new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<>();
+        wrapper.eq("ticket_id", ticketId)
+                .in("request_status", REQUEST_STATUS_PROCESSING, REQUEST_STATUS_CALLBACK_PENDING,
+                        REQUEST_STATUS_RESULT_UNKNOWN)
+                .last("LIMIT 1");
+        OrderDeliveryTicketMesRequest active = mesRequestMapper.selectOne(wrapper);
+        if (active != null) {
+            throw new IllegalStateException("该零件已有 MES 料号请求正在处理或等待核对，请先处理原 bizId="
+                    + active.getMesRequestId());
+        }
+    }
+
     private Map<String, Object> buildAuditSummary(Integer ticketId,
                                                   List<Integer> allocationIds,
                                                   String previousMaterialNo,
@@ -460,7 +574,8 @@ public class ProductionItemMaterialNoRefreshService {
         if (auditService == null) {
             return;
         }
-        boolean failed = errorMessage != null;
+        boolean unknown = action != null && action.endsWith("_RESULT_UNKNOWN");
+        boolean failed = errorMessage != null && !unknown;
         auditService.record(
                 action,
                 "order_delivery_ticket",
@@ -468,7 +583,7 @@ public class ProductionItemMaterialNoRefreshService {
                 null,
                 summary,
                 "DELIVERY",
-                failed ? STATUS_FAILED : STATUS_SUCCESS,
+                unknown ? REQUEST_STATUS_RESULT_UNKNOWN : failed ? STATUS_FAILED : STATUS_SUCCESS,
                 AuditService.labelForAction(action) + " ticketId=" + ticketId
                         + " allocationIds=" + allocationIds,
                 errorMessage);
@@ -562,5 +677,23 @@ public class ProductionItemMaterialNoRefreshService {
             return null;
         }
         return text.length() <= maxLength ? text : text.substring(0, maxLength);
+    }
+
+    private static final class MesMaterialRefreshResultUnknownException extends RuntimeException {
+        private final String bizId;
+
+        private MesMaterialRefreshResultUnknownException(String bizId, String message) {
+            super(message);
+            this.bizId = bizId;
+        }
+
+        private MesMaterialRefreshResultUnknownException(String bizId, String message, Throwable cause) {
+            super(message, cause);
+            this.bizId = bizId;
+        }
+
+        private String bizId() {
+            return bizId;
+        }
     }
 }

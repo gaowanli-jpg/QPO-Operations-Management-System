@@ -173,7 +173,29 @@ public interface OrderDeliveryTicketMapper extends BaseMapper<OrderDeliveryTicke
             LEFT JOIN sales_order_item rfq_sales_item ON rfq_sales_item.source_ticket_id = ticket.id
             LEFT JOIN sales_order_header rfq_sales_order ON rfq_sales_order.id = rfq_sales_item.sales_order_id
             ${ew.customSqlSegment}
-            ORDER BY ticket.id DESC
+            <choose>
+                <when test="sortBy == null">
+                    ORDER BY ticket.id DESC
+                </when>
+                <otherwise>
+                    ORDER BY
+                    <choose>
+                        <when test="sortBy == 'deliveryDate'">delivery_date</when>
+                        <when test="sortBy == 'discardedAt'">discarded_at</when>
+                        <otherwise>created_at</otherwise>
+                    </choose>
+                    <choose>
+                        <when test="sortAsc">ASC</when>
+                        <otherwise>DESC</otherwise>
+                    </choose>
+                    NULLS LAST,
+                    ticket.id
+                    <choose>
+                        <when test="sortAsc">ASC</when>
+                        <otherwise>DESC</otherwise>
+                    </choose>
+                </otherwise>
+            </choose>
             LIMIT #{limit} OFFSET #{offset}
             </script>
             """)
@@ -189,7 +211,9 @@ public interface OrderDeliveryTicketMapper extends BaseMapper<OrderDeliveryTicke
     List<DeliveredItemDTO> selectDeliveredItems(
             @Param(Constants.WRAPPER) Wrapper<DeliveredItemDTO> query,
             @Param("limit") int limit,
-            @Param("offset") long offset);
+            @Param("offset") long offset,
+            @Param("sortBy") String sortBy,
+            @Param("sortAsc") boolean sortAsc);
 
     @Select("""
             <script>

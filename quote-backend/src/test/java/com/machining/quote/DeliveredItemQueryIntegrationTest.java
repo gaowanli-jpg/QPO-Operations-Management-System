@@ -4,6 +4,8 @@ import com.machining.quote.config.AuthContext;
 import com.machining.quote.dto.DeliveredItemDTO;
 import com.machining.quote.dto.DeliveredItemQueryReq;
 import com.machining.quote.dto.LockedItemDTO;
+import com.machining.quote.dto.LockedItemPageDTO;
+import com.machining.quote.dto.LockedItemQueryReq;
 import com.machining.quote.dto.PageResult;
 import com.machining.quote.service.DeliveredItemService;
 import com.machining.quote.service.LockedItemService;
@@ -272,6 +274,139 @@ class DeliveredItemQueryIntegrationTest {
         assertThatThrownBy(() -> deliveredItemService.getTicket(completed))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("No data permission");
+    }
+
+    @Test
+    void deliveredTicketsSortByDeliveryDateAndCreationTimeOnServerSide() {
+        int legacyUserId = uniqueLegacyId();
+        long roleId = insertRole("ALL");
+        long userId = insertUser(legacyUserId);
+        linkUserRole(userId, roleId);
+        AuthContext.set(new AuthContext.SessionUser(legacyUserId, "delivered-sort", "Delivered Sort", "MARKET"));
+
+        int late = createTicket("QPO-DI-SORT-LATE-" + UUID.randomUUID(), "SortCustomer", "SORT-LATE", "A", null, null);
+        int early = createTicket("QPO-DI-SORT-EARLY-" + UUID.randomUUID(), "SortCustomer", "SORT-EARLY", "A", null, null);
+        int middle = createTicket("QPO-DI-SORT-MIDDLE-" + UUID.randomUUID(), "SortCustomer", "SORT-MIDDLE", "A", null, null);
+        stampTicket(late, "2026-03-10", "2026-03-10 09:00:00");
+        stampTicket(early, "2026-01-05", "2026-01-05 09:00:00");
+        stampTicket(middle, "2026-02-20", "2026-02-20 09:00:00");
+
+        DeliveredItemQueryReq deliveryAsc = new DeliveredItemQueryReq();
+        deliveryAsc.setPage(1);
+        deliveryAsc.setPageSize(50);
+        deliveryAsc.setSortBy("deliveryDate");
+        deliveryAsc.setSortOrder("ASC");
+        assertThat(sortedPartNos(deliveredItemService.listTickets(deliveryAsc)))
+                .containsExactly("SORT-EARLY", "SORT-MIDDLE", "SORT-LATE");
+
+        DeliveredItemQueryReq deliveryDesc = new DeliveredItemQueryReq();
+        deliveryDesc.setPage(1);
+        deliveryDesc.setPageSize(50);
+        deliveryDesc.setSortBy("deliveryDate");
+        deliveryDesc.setSortOrder("DESC");
+        assertThat(sortedPartNos(deliveredItemService.listTickets(deliveryDesc)))
+                .containsExactly("SORT-LATE", "SORT-MIDDLE", "SORT-EARLY");
+
+        DeliveredItemQueryReq createdAsc = new DeliveredItemQueryReq();
+        createdAsc.setPage(1);
+        createdAsc.setPageSize(50);
+        createdAsc.setSortBy("createdAt");
+        createdAsc.setSortOrder("ASC");
+        assertThat(sortedPartNos(deliveredItemService.listTickets(createdAsc)))
+                .containsExactly("SORT-EARLY", "SORT-MIDDLE", "SORT-LATE");
+
+        DeliveredItemQueryReq unknownSort = new DeliveredItemQueryReq();
+        unknownSort.setPage(1);
+        unknownSort.setPageSize(50);
+        unknownSort.setSortBy("drop table order_delivery_ticket");
+        unknownSort.setSortOrder("ASC");
+        assertThat(sortedPartNos(deliveredItemService.listTickets(unknownSort)))
+                .as("未知排序列回退到默认顺序，不允许拼接进 SQL")
+                .containsExactlyInAnyOrder("SORT-EARLY", "SORT-MIDDLE", "SORT-LATE");
+
+        // 已废弃视图按废弃时间排序，同样走服务端白名单。
+        stampTicketDiscarded(early, "2026-04-10 09:00:00");
+        stampTicketDiscarded(late, "2026-04-01 09:00:00");
+        stampTicketDiscarded(middle, "2026-04-20 09:00:00");
+        DeliveredItemQueryReq discardedAsc = new DeliveredItemQueryReq();
+        discardedAsc.setPage(1);
+        discardedAsc.setPageSize(50);
+        discardedAsc.setDiscarded(true);
+        discardedAsc.setSortBy("discardedAt");
+        discardedAsc.setSortOrder("ASC");
+        assertThat(sortedPartNos(deliveredItemService.listTickets(discardedAsc)))
+                .containsExactly("SORT-LATE", "SORT-EARLY", "SORT-MIDDLE");
+    }
+
+    @Test
+    void lockedItemsSortByCreationTimeAndAccept1000RowsPerPage() {
+        int legacyUserId = uniqueLegacyId();
+        long roleId = insertRole("ALL");
+        long userId = insertUser(legacyUserId);
+        linkUserRole(userId, roleId);
+        AuthContext.set(new AuthContext.SessionUser(legacyUserId, "locked-sort", "Locked Sort", "MARKET"));
+
+        String customerName = "LockedSortCustomer";
+        int late = createTicket("QPO-LI-SORT-LATE-" + UUID.randomUUID(), customerName, "LSORT-LATE", "A", "MAT-LSORT-LATE", null,
+                "SUCCESS", "SUCCESS");
+        int early = createTicket("QPO-LI-SORT-EARLY-" + UUID.randomUUID(), customerName, "LSORT-EARLY", "A", "MAT-LSORT-EARLY", null,
+                "SUCCESS", "SUCCESS");
+        int lateAllocation = createAllocation(late, "MAT-LSORT-LATE", "LSORT-LATE", "A", customerName);
+        int earlyAllocation = createAllocation(early, "MAT-LSORT-EARLY", "LSORT-EARLY", "A", customerName);
+        stampAllocation(lateAllocation, "2026-03-10 09:00:00");
+        stampAllocation(earlyAllocation, "2026-01-05 09:00:00");
+
+        LockedItemQueryReq createdAsc = new LockedItemQueryReq();
+        createdAsc.setPage(1);
+        createdAsc.setPageSize(1000);
+        createdAsc.setSortBy("createdAt");
+        createdAsc.setSortOrder("ASC");
+        LockedItemPageDTO page = lockedItemService.listAllocations(createdAsc);
+
+        assertThat(page.getPageSize())
+                .as("锁库零件列表单页上限与待产零件一致，放到 1000 行")
+                .isEqualTo(1000);
+        assertThat(page.getRecords().stream()
+                .map(LockedItemDTO::getPartNo)
+                .filter(partNo -> partNo != null && partNo.startsWith("LSORT-"))
+                .toList())
+                .containsExactly("LSORT-EARLY", "LSORT-LATE");
+
+        LockedItemQueryReq createdDesc = new LockedItemQueryReq();
+        createdDesc.setPage(1);
+        createdDesc.setPageSize(1000);
+        createdDesc.setSortBy("createdAt");
+        createdDesc.setSortOrder("DESC");
+        assertThat(lockedItemService.listAllocations(createdDesc).getRecords().stream()
+                .map(LockedItemDTO::getPartNo)
+                .filter(partNo -> partNo != null && partNo.startsWith("LSORT-"))
+                .toList())
+                .containsExactly("LSORT-LATE", "LSORT-EARLY");
+    }
+
+    private void stampTicket(int ticketId, String deliveryDate, String createdAt) {
+        jdbcTemplate.update(
+                "UPDATE order_delivery_ticket SET delivery_date = CAST(? AS DATE), created_at = CAST(? AS TIMESTAMP) WHERE id = ?",
+                deliveryDate, createdAt, ticketId);
+    }
+
+    private void stampTicketDiscarded(int ticketId, String discardedAt) {
+        jdbcTemplate.update(
+                "UPDATE order_delivery_ticket SET discarded = TRUE, discarded_at = CAST(? AS TIMESTAMP) WHERE id = ?",
+                discardedAt, ticketId);
+    }
+
+    private void stampAllocation(int allocationId, String createdAt) {
+        jdbcTemplate.update(
+                "UPDATE order_delivery_ticket_allocation SET created_at = CAST(? AS TIMESTAMP) WHERE id = ?",
+                createdAt, allocationId);
+    }
+
+    private List<String> sortedPartNos(PageResult<DeliveredItemDTO> page) {
+        return page.getRecords().stream()
+                .map(DeliveredItemDTO::getPartNo)
+                .filter(partNo -> partNo != null && partNo.startsWith("SORT-"))
+                .toList();
     }
 
     private int createTicket(String rfqNo, String customerName, String partNo, String version, String materialNo, String drawingUrl) {

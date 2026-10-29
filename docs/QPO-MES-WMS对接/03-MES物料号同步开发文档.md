@@ -857,6 +857,7 @@ npm run build
   - 没有 `PROCESSING` / `SUBMITTING` / `RESULT_UNKNOWN`（在途请求）；
   - 当前料号非空（空料号应走「批量获取物料号」）；
   - `reason` 必填（≤200 字符）。
+- 请求结果处理：MES 明确拒绝记为 `FAILED`；超时、5xx、解析失败、缺少/不匹配 `bizId` 或没有可确认料号记为 `RESULT_UNKNOWN`。不确定结果会保留原 `bizId` 并阻止同一提单再次刷新；待回调响应不会自动覆盖当前确认料号。
 - 写回：四张表统一覆盖为新料号，`material_no_status=已确认`，`material_no_source=MES_REFRESH`，`material_no_message` 记录「异常修复刷新料号：旧号 → 新号；原因：...」。
 - 幂等保护：MES 返回料号与当前一致时不写库并提示「料号未发生变化」。
 - 按提单去重：一个提单拆成多行 allocation 时只发一次 MES 请求，同一提单下的所有待产行一起刷新，避免新旧料号并存。
@@ -868,11 +869,12 @@ npm run build
 
 ### 14.5 测试
 
-- `ProductionItemMaterialNoRefreshServiceTest`（7 例）：覆盖成功刷新、按图号+版本组装请求、拒绝已成功下发、拒绝在途、料号未变化、同提单多行合并、原因必填。
-- `ProductionItemMaterialNoRefreshWriterTest`（4 例）：覆盖四表写回、RFQ 来源同时写 RFQ 与派生销售订单行、拒绝已成功下发、拒绝废弃提单。
-- `SalesOrderLinkedChangeNoticeMigrationTest`：全局迁移版本门禁已抬到 67。
+- `ProductionItemMaterialNoRefreshServiceTest`：覆盖成功刷新、请求组装、拒绝已成功下发/在途、料号未变化、同提单多行合并、原因必填、未知结果保留和重试拦截。
+- `ProductionItemMaterialNoRefreshWriterTest`：覆盖四表写回、RFQ 来源同时写 RFQ 与派生销售订单行、拒绝已成功下发、拒绝废弃提单。
+- `SalesOrderLinkedChangeNoticeMigrationTest`：全局迁移版本门禁须与最新迁移版本号一致（当前 V70）。
+- `MesMaterialDedupMigrationCharacterizationTest`：断言 V70 已把 `RESULT_UNKNOWN` 写进状态约束与活动去重索引。
 
-### 14.6 常见报错：响应无法反序列化（2026-10-28 修复）
+### 14.6 常见报错：响应无法反序列化（2026-10-29 加固）
 
 **现象**
 
@@ -883,25 +885,27 @@ Data center call failed message=Error while extracting response for type
 
 **含义**：HTTP 状态是 2xx、返回的确实是 JSON，但响应体无法映射到 `MesMaterialResolveResp`。属于解析层失败，业务代码还没执行——和「料号不存在」「权限不足」这类业务失败不是一回事。
 
-**三类触发原因**（均已实测复现）
+**常见触发原因**（均有回归覆盖）
 
 | 原因 | 例子 | 旧行为 |
 | --- | --- | --- |
 | 响应里多出 DTO 未声明的字段 | `"traceId"`、`"timestamp"`、`"path"` | `UnrecognizedPropertyException` |
 | `data` 不是对象 | `"data": []`、`"data": ""`、`"data": 0` | `MismatchedInputException`，MES 的真实 msg 被埋掉 |
-| `items[].taskId` / `productId` 是字符串 | `"taskId": "T20261028001"` | `InvalidFormatException` |
+| 单条 `items` 被序列化成对象，或空结果被序列化成字符串/数字 | `"items": { ... }`、`"items": ""` | `MismatchedInputException` |
+| 标识字段类型变化 | `"taskId": "T20261028001"`、数字/布尔状态值 | `InvalidFormatException` 或业务误判 |
+| 响应字段被序列化成对象/数组 | `"productCode": { ... }` | `MismatchedInputException` |
 
 **修复内容**
 
-1. `DataCenterIntegrationClient.restTemplate` 关闭 `FAIL_ON_UNKNOWN_PROPERTIES`。原配置只 `disable(WRITE_DATES_AS_TIMESTAMPS)`，Jackson 默认严格模式，MES 加一个字段整条调用就失败——这是所有数据中心接口共用的客户端，影响面覆盖 U9/WMS/MES 全部对接。
-2. `MesMaterialResolveResp` 及 `Data`/`Item` 加 `@JsonIgnoreProperties(ignoreUnknown = true)`，不依赖调用方配置。
-3. `data` 改由 `LenientDataDeserializer` 处理：非对象一律降级为 `null`，让上层正常读到 `msg`，直接显示「以下料号不存在：xxx」这类 MES 原文。
-4. `Item.taskId` / `Item.productId` 由 `Long` 改 `String`。两处调用点本来就 `String.valueOf(...)` 落库，类型放宽不影响语义。
-5. 解析失败时把最深一层 cause 拼进错误信息（`| cause=Unrecognized field "traceId" ...`）。原来只有 Spring 的外层文案，线上完全无法定位。
+1. `MesMaterialResolveResp` 及 `Data`/`Item` 忽略未知字段；`data`、`items` 和文本标识字段按常见 MES 序列化差异做有限兼容，空行或无法识别的行会在业务层进入待核对，不会伪造成功。
+2. `code` 只有数值为零才表示成功；缺少成功码、`bizId` 缺失/不匹配、明细缺行/重复行均进入 `RESULT_UNKNOWN`。根级和 `data.bizId` 同时返回时两个值都必须匹配本次请求。
+3. Data Center 对该写入接口返回 5xx、响应解析失败、读超时或连接中断时也标记为 `RESULT_UNKNOWN`，因为 MES 可能已经接收请求；4xx 和明确业务拒绝仍是 `FAILED`。
+4. Data Center 解析失败时把最深一层 cause 摘要拼进日志（`| cause=...`），避免线上只看到 Spring 的外层包装文案。
+5. `RESULT_UNKNOWN` 保留原请求 ID，并在去重活动状态中占位；同图号版本不能换新 `bizId` 重发。刷新料号也会把不确定结果写入任务行和请求流水，并拦截对同一提单的再次刷新。刷新料号的待回调结果不会自动覆盖已确认料号，应按原 `bizId` 核对后处理。
 
 **回归**
 
-`MesMaterialResolveRespDeserializationTest`（7 例，用严格默认 `ObjectMapper` 验证 DTO 自身容错）：未知字段、`data` 为 `[]`/`""`/`0`/缺失、字符串 `taskId`、正常响应、`materialNo` 回退 `items[0].productCode`。
+`MesMaterialResolveRespDeserializationTest`（用严格默认 `ObjectMapper` 验证 DTO 自身容错）：未知字段、非对象 `data`、单对象 `items`、空/非对象明细、数字和字符串布尔标志、结构化错误字段、字符串标识，以及 `materialNo` 回退 `items[0].productCode`。
 
 ### 14.7 常见报错：已存在物料准备任务（2026-10-28 记录）
 
@@ -929,5 +933,5 @@ WHERE mes_external_task_id = 'MP202610270002';
 3. 查不到 → 任务由 MES 侧其他入口创建，同样要 MES 侧先清理。
 4. MES 已建好新料号但无法通过解析取回时，当前版本没有手工填写入口，只能由 MES 确认新料号后人工修复。
 
-**排查提示**：失败原因同时写入两处——审计日志（动作「刷新料号失败」）和 `order_delivery_ticket_mes_request.response_message`。后者自 2026-10-28 起才对 `success=false` 生效；此前该分支漏写，请求会永远停在 `PROCESSING` 且 `response_message` 为空。
+**排查提示**：明确失败写入审计日志（动作「刷新料号失败」）和 `order_delivery_ticket_mes_request.response_message`；请求/响应结果不确定时使用「刷新料号结果待核对」审计动作与 `request_status=RESULT_UNKNOWN`，保留原 `bizId`，不允许用新请求覆盖不确定结果。MES 对该刷新请求的晚到回调不会被误标记为 `STALE`，但也不会自动覆盖当前确认料号。
 

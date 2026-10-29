@@ -143,6 +143,8 @@ QPO 不再向 MES 传 `ticketId`、`sourceType`、`rfqId`、`orderNo`、`rfqNo`�
 
 ## 4. MES 响应要求
 
+兼容性说明：正式契约中的 `data.items` 是数组；为兼容数据中心或 MES 把单行数组序列化为单个对象的情况，QPO 会把对象按单元素数组处理。`success` 和 `callbackRequired` 如被返回，可使用 JSON 布尔值或 `0` / `1`（包括字符串 `"0"` / `"1"`）；生产端仍建议按约定返回数组和布尔值。其他字段的业务校验（尤其 `bizId`、图号版本与物料号）不会因该兼容而放宽。
+
 ### 4.1 即时返回物料号响应
 
 HTTP 状态码建议返回 `200`，响应体：
@@ -263,7 +265,9 @@ QPO 失败判定：
 - `code=0` 但既没有 `productCode`，也没有 `callbackRequired=true` 或明确待回调状态；
 - `productCode` 长度超过 100。
 
-失败后 QPO 会把该已提零件的 MES 状态标记为 `FAILED`，用户可重新触发。
+MES 明确返回业务失败（非 `0` 的 `code` 或行级 `status=FAILED`）时，QPO 才把该零件标记为 `FAILED`，用户可以在确认 MES 未创建任务后重新触发。
+
+响应解析失败、响应体为空、`bizId` 缺失或不匹配、响应行缺失/重复、读超时或连接中断等情况，QPO 标记为 `RESULT_UNKNOWN`。根级和 `data.bizId` 同时返回时两个值都必须匹配本次请求。这表示请求可能已经到达 MES，不能换新 `bizId` 重试；必须先按原 `bizId` 核对或使用同一请求身份恢复。
 
 ## 5. 批量选择时的处理方式
 
@@ -348,8 +352,8 @@ QPO 正常情况下不会在已成功拿到物料号后重复提交同一行；�
 | 重复相同回调 | 相同 `mesRequestId + drawingNo + drawingVersion` + 相同 `productCode` | QPO 返回成功，数据不重复变更。 |
 | 冲突回调 | 相同 `mesRequestId + drawingNo + drawingVersion` + 不同 `productCode` | QPO 拒绝覆盖，记录冲突。 |
 | 图纸不可识别 | 非 `0` 的 `code` + `msg` | QPO 状态 `FAILED`，显示失败原因。 |
-| MES 内部异常 | HTTP 500 或业务失败 | QPO 状态 `FAILED`。 |
-| 响应超时 | 无响应超过超时时间 | QPO 状态 `FAILED`，用户可重试。 |
+| MES 内部异常 | HTTP 500 或业务失败 | 明确失败可为 `FAILED`；若调用结果无法确认则为 `RESULT_UNKNOWN`。 |
+| 响应超时 / 连接中断 | 请求可能已经写入数据中心或 MES | QPO 状态 `RESULT_UNKNOWN`，使用原 `bizId` 核对或重放，禁止换新 ID。 |
 | `productCode` 为空且无待回调标识 | `code=0` 但无物料号、无待回调状态 | QPO 状态 `FAILED`。 |
 | 统一 token 错误 | 未带或带错 `QPO_OPEN_API_TOKEN` | QPO 拒绝。 |
 

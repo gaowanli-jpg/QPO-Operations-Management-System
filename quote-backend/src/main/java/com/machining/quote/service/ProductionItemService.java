@@ -25,6 +25,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 @Service
 public class ProductionItemService {
@@ -33,6 +34,7 @@ public class ProductionItemService {
     private static final String STATUS_PROCESSING = "PROCESSING";
     private static final String STATUS_FAILED = "FAILED";
     private static final String STATUS_CALLBACK_PENDING = "CALLBACK_PENDING";
+    private static final Set<String> LIST_SORT_FIELDS = Set.of("salesOrderDate", "deliveryDate", "createdAt", "discardedAt");
 
     @Autowired
     private OrderDeliveryTicketAllocationMapper allocationMapper;
@@ -56,7 +58,8 @@ public class ProductionItemService {
             return LockedItemPageDTO.of(List.of(), 0, safePage, safePageSize);
         }
         List<LockedItemDTO> records = allocationMapper.selectLockedItems(
-                query, safePageSize, (safePage - 1L) * safePageSize);
+                query, safePageSize, (safePage - 1L) * safePageSize,
+                normalizeSortBy(effectiveReq.getSortBy()), isAscending(effectiveReq.getSortOrder()));
         return LockedItemPageDTO.of(records, total, safePage, safePageSize);
     }
 
@@ -401,6 +404,18 @@ public class ProductionItemService {
             return 100;
         }
         return Math.min(pageSize, 1000);
+    }
+
+    private String normalizeSortBy(String sortBy) {
+        if (sortBy == null) {
+            return null;
+        }
+        String normalized = sortBy.trim();
+        return LIST_SORT_FIELDS.contains(normalized) ? normalized : null;
+    }
+
+    private boolean isAscending(String sortOrder) {
+        return sortOrder != null && "ASC".equalsIgnoreCase(sortOrder.trim());
     }
 
     private int normalizePageSize(Integer pageSize) {

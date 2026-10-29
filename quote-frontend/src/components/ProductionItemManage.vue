@@ -195,11 +195,12 @@
           height="600"
           v-loading="loading"
           @selection-change="handleSelectionChange"
+          @sort-change="handleSortChange"
         >
           <el-table-column type="selection" width="46" fixed align="center" />
           <el-table-column prop="id" label="分配ID" width="96" fixed align="center" show-overflow-tooltip />
           <el-table-column prop="ticketId" label="提单ID" width="96" fixed align="center" show-overflow-tooltip />
-          <el-table-column prop="salesOrderDate" label="下单日期" width="120" fixed align="center" show-overflow-tooltip>
+          <el-table-column prop="salesOrderDate" label="下单日期" width="130" fixed align="center" show-overflow-tooltip sortable="custom" :sort-orders="SORT_ORDERS">
             <template #default="{ row }">{{ formatDash(row.salesOrderDate) }}</template>
           </el-table-column>
           <el-table-column prop="partNo" label="图号" min-width="150" fixed show-overflow-tooltip />
@@ -209,7 +210,7 @@
           <el-table-column prop="materialNo" label="物料号" min-width="150" show-overflow-tooltip>
             <template #default="{ row }">{{ formatDash(row.materialNo) }}</template>
           </el-table-column>
-          <el-table-column prop="createdAt" label="创建时间" width="160" show-overflow-tooltip>
+          <el-table-column prop="createdAt" label="创建时间" width="160" show-overflow-tooltip sortable="custom" :sort-orders="SORT_ORDERS">
             <template #default="{ row }">{{ formatDateTime(row.createdAt) }}</template>
           </el-table-column>
           <el-table-column prop="itemType" label="零件类型" width="100" align="center" show-overflow-tooltip>
@@ -258,7 +259,7 @@
           <el-table-column label="工艺路线" min-width="220" show-overflow-tooltip>
             <template #default="{ row }">{{ formatProcessRoute(row.processRoute) }}</template>
           </el-table-column>
-          <el-table-column prop="deliveryDate" label="交货日期" width="120">
+          <el-table-column prop="deliveryDate" label="交货日期" width="130" sortable="custom" :sort-orders="SORT_ORDERS">
             <template #default="{ row }">{{ formatDash(row.deliveryDate) }}</template>
           </el-table-column>
           <el-table-column prop="description" label="材料描述" min-width="180" show-overflow-tooltip>
@@ -273,7 +274,7 @@
           <el-table-column v-if="viewMode === 'DISCARDED'" prop="discardReason" label="废弃原因" min-width="180" show-overflow-tooltip>
             <template #default="{ row }">{{ formatDash(row.discardReason) }}</template>
           </el-table-column>
-          <el-table-column v-if="viewMode === 'DISCARDED'" prop="discardedAt" label="废弃时间" width="160" show-overflow-tooltip>
+          <el-table-column v-if="viewMode === 'DISCARDED'" prop="discardedAt" label="废弃时间" width="160" show-overflow-tooltip sortable="custom" :sort-orders="SORT_ORDERS">
             <template #default="{ row }">{{ formatDateTime(row.discardedAt) }}</template>
           </el-table-column>
           <el-table-column v-if="viewMode === 'DISCARDED'" prop="discardedBy" label="废弃人" width="110" align="center" show-overflow-tooltip>
@@ -625,6 +626,9 @@ const loading = ref(false)
 const page = ref(1)
 const pageSize = ref(100)
 const total = ref(0)
+const SORT_ORDERS = ['descending', 'ascending']
+// 未点击表头时不传排序参数，保持后端默认顺序（id 倒序），点击后在正序/倒序之间切换。
+const sortState = reactive({ prop: '', order: '' })
 const customerPickerVisible = ref(false)
 const ticketDetailVisible = ref(false)
 const selectedTicketDetail = ref(null)
@@ -817,6 +821,10 @@ const buildParams = () => {
   if (dateFrom) params.dateFrom = dateFrom
   if (dateTo) params.dateTo = dateTo
   params.discarded = viewMode.value === 'DISCARDED'
+  if (sortState.prop) {
+    params.sortBy = sortState.prop
+    params.sortOrder = sortState.order === 'ascending' ? 'ASC' : 'DESC'
+  }
   return {
     ...params,
     page: page.value,
@@ -824,12 +832,42 @@ const buildParams = () => {
   }
 }
 
+const handleSortChange = ({ prop, order }) => {
+  if (!prop || !order) return
+  sortState.prop = prop
+  sortState.order = order
+  page.value = 1
+  loadItems()
+}
+
+const sortValueOf = (row) => {
+  if (sortState.prop === 'salesOrderDate') return row?.salesOrderDate || ''
+  if (sortState.prop === 'deliveryDate') return row?.deliveryDate || ''
+  if (sortState.prop === 'discardedAt') return row?.discardedAt || ''
+  return row?.createdAt || ''
+}
+
+// 按提单反查时是前端本地分页，排序也要在本地生效，保持与后端一致：空值永远排在最后。
+const sortRowsLocally = (rows) => {
+  if (!sortState.prop) return rows
+  const direction = sortState.order === 'ascending' ? 1 : -1
+  return [...rows].sort((left, right) => {
+    const leftValue = sortValueOf(left)
+    const rightValue = sortValueOf(right)
+    if (!leftValue && !rightValue) return Number(right?.id || 0) - Number(left?.id || 0)
+    if (!leftValue) return 1
+    if (!rightValue) return -1
+    if (leftValue === rightValue) return (Number(right?.id || 0) - Number(left?.id || 0)) * direction
+    return leftValue < rightValue ? -direction : direction
+  })
+}
+
 const loadItems = async () => {
   loading.value = true
   try {
     if (route.query.ticketId) {
       const records = await listTicketAllocations(route.query.ticketId)
-      const filteredRecords = filterProductionRows(records)
+      const filteredRecords = sortRowsLocally(filterProductionRows(records))
       total.value = filteredRecords.length
       const lastPage = Math.max(1, Math.ceil(total.value / pageSize.value))
       page.value = Math.min(page.value, lastPage)

@@ -102,8 +102,11 @@ public class DataCenterIntegrationClient {
             throw e;
         } catch (HttpStatusCodeException e) {
             String message = "Data center call failed status=" + e.getStatusCode().value();
+            boolean mesWriteServerError = isMesWriteEndpoint(normalizedEndpointCode)
+                    && e.getStatusCode().is5xxServerError();
             DataCenterCallException.FailureCertainty certainty = isSalesChangeNotice(endpointCode)
                     && e.getStatusCode().is5xxServerError()
+                    || mesWriteServerError
                     ? DataCenterCallException.FailureCertainty.RESULT_UNKNOWN
                     : DataCenterCallException.FailureCertainty.DEFINITE_FAILURE;
             log.warn(
@@ -137,13 +140,16 @@ public class DataCenterIntegrationClient {
             throw failure(normalizedEndpointCode, certainty, null, "Data center call failed message=network error", e);
         } catch (RuntimeException e) {
             boolean salesChangeNotice = isSalesChangeNotice(endpointCode);
+            boolean mesWriteResponseUnparseable = isMesWriteEndpoint(normalizedEndpointCode)
+                    && hasCause(e, HttpMessageNotReadableException.class);
             String message = salesChangeNotice
                     ? hasCause(e, HttpMessageNotReadableException.class)
                     ? "sales change notice response could not be parsed"
                     : "sales change notice integration call failed"
                     : sanitize(describeFailure(e), token, config);
-            DataCenterCallException.FailureCertainty certainty = salesChangeNotice
-                    && hasCause(e, HttpMessageNotReadableException.class)
+            DataCenterCallException.FailureCertainty certainty = (salesChangeNotice
+                    && hasCause(e, HttpMessageNotReadableException.class))
+                    || mesWriteResponseUnparseable
                     ? DataCenterCallException.FailureCertainty.RESULT_UNKNOWN
                     : DataCenterCallException.FailureCertainty.DEFINITE_FAILURE;
             log.warn(
@@ -232,6 +238,11 @@ public class DataCenterIntegrationClient {
     private boolean isSalesChangeNotice(String endpointCode) {
         return DataCenterEndpointRegistry.MES_SALES_ORDER_CHANGE_NOTICE.equalsIgnoreCase(
                 endpointCode == null ? "" : endpointCode.trim());
+    }
+
+    private boolean isMesWriteEndpoint(String endpointCode) {
+        return DataCenterEndpointRegistry.MES_MATERIAL_RESOLVE.equalsIgnoreCase(endpointCode)
+                || DataCenterEndpointRegistry.MES_PRODUCTION_DISPATCH.equalsIgnoreCase(endpointCode);
     }
 
     private boolean hasCause(Throwable error, Class<? extends Throwable> type) {

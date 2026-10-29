@@ -414,7 +414,30 @@ public interface OrderDeliveryTicketAllocationMapper extends BaseMapper<OrderDel
             ) sales_item ON TRUE
             LEFT JOIN sales_order_header sales_header ON sales_header.id = sales_item.sales_order_id
             ${ew.customSqlSegment}
-            ORDER BY alloc.id DESC
+            <choose>
+                <when test="sortBy == null">
+                    ORDER BY alloc.id DESC
+                </when>
+                <otherwise>
+                    ORDER BY
+                    <choose>
+                        <when test="sortBy == 'salesOrderDate'">sales_order_date</when>
+                        <when test="sortBy == 'deliveryDate'">delivery_date</when>
+                        <when test="sortBy == 'discardedAt'">discarded_at</when>
+                        <otherwise>created_at</otherwise>
+                    </choose>
+                    <choose>
+                        <when test="sortAsc">ASC</when>
+                        <otherwise>DESC</otherwise>
+                    </choose>
+                    NULLS LAST,
+                    alloc.id
+                    <choose>
+                        <when test="sortAsc">ASC</when>
+                        <otherwise>DESC</otherwise>
+                    </choose>
+                </otherwise>
+            </choose>
             LIMIT #{limit} OFFSET #{offset}
             </script>
             """)
@@ -439,7 +462,9 @@ public interface OrderDeliveryTicketAllocationMapper extends BaseMapper<OrderDel
     List<LockedItemDTO> selectLockedItems(
             @Param(Constants.WRAPPER) Wrapper<LockedItemDTO> query,
             @Param("limit") int limit,
-            @Param("offset") long offset);
+            @Param("offset") long offset,
+            @Param("sortBy") String sortBy,
+            @Param("sortAsc") boolean sortAsc);
 
     @Select("""
             <script>

@@ -17,6 +17,8 @@ import com.machining.quote.mapper.SystemRoleDataScopeCustomerMapper;
 import com.machining.quote.mapper.SystemRoleDataScopeDeptMapper;
 import com.machining.quote.mapper.SystemRoleMapper;
 import com.machining.quote.mapper.SystemRolePermissionMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,6 +35,7 @@ import java.util.Set;
 
 @Service
 public class SystemRoleService {
+    private static final Logger log = LoggerFactory.getLogger(SystemRoleService.class);
     private static final Set<String> DATA_SCOPES = Set.of("ALL", "SELF", "CUSTOMER", "NONE");
     private static final List<PermissionGroup> PERMISSION_GROUPS = List.of(
             new PermissionGroup("market", "市场", 100),
@@ -450,9 +453,10 @@ public class SystemRoleService {
         if (parentId != null && parentId > 0) {
             SystemPermission parent = permissionMapper.selectById(parentId);
             if (parent == null) {
-                throw new RuntimeException("Parent permission does not exist");
-            }
-            if (isAssignable(parent)) {
+                // 父权限数据缺失时只记录告警并降级，不能让一条脏数据把整份角色授权保存卡死。
+                log.warn("Permission parent missing, assigning without parent permissionCode={} parentId={}",
+                        permission.getPermissionCode(), parentId);
+            } else if (isAssignable(parent)) {
                 addPermissionWithParents(permissionsByCode, parent);
             }
         }

@@ -73,6 +73,15 @@ describe('DeliveredItemManage foundation page', () => {
     expect(source).toContain('formatDateTime(row.createdAt)')
   })
 
+  test('sorts delivered items by delivery date or creation time and allows 1000 rows per page', () => {
+    expect(source).toContain('@sort-change="handleSortChange"')
+    expect(source).toContain("const SORT_ORDERS = ['descending', 'ascending']")
+    expect(source).toContain('prop="createdAt" label="创建时间" width="160" show-overflow-tooltip sortable="custom"')
+    expect(source).toContain('prop="deliveryDate" label="交货日期" width="130" sortable="custom"')
+    expect(source).toContain("params.sortOrder = sortState.order === 'ascending' ? 'ASC' : 'DESC'")
+    expect(source).toContain(':page-sizes="[20, 50, 100, 300, 500, 1000]"')
+  })
+
   test('does not expose removed customer demand snapshot beside delivered item remarks', () => {
     const removedField = 'customer' + 'Requirement'
     expect(source).not.toContain(`prop="${removedField}"`)

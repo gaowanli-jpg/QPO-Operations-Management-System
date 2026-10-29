@@ -173,12 +173,13 @@ class MesMaterialBatchOrchestrationServiceTest {
 
         assertThat(result)
                 .containsEntry("successCount", 1)
-                .containsEntry("failedCount", 1);
+                .containsEntry("failedCount", 0)
+                .containsEntry("unknownCount", 1);
         List<Map<String, Object>> rows = (List<Map<String, Object>>) result.get("results");
         assertThat(rows).extracting(row -> row.get("ticketId"))
                 .containsExactly(621, 622);
         assertThat(rows).extracting(row -> row.get("status"))
-                .containsExactly("SUCCESS", "FAILED");
+                .containsExactly("SUCCESS", "RESULT_UNKNOWN");
         assertThat(rows.get(1).get("message")).asString().contains("missing row");
         verify(fixture.sourceSync).syncConfirmedMaterialNo(ok, "MAT-OK-621", "MES material resolved");
         verify(fixture.sourceSync, times(1)).syncConfirmedMaterialNo(any(), anyString(), anyString());
@@ -206,15 +207,39 @@ class MesMaterialBatchOrchestrationServiceTest {
 
         assertThat(result)
                 .containsEntry("successCount", 1)
-                .containsEntry("failedCount", 1);
+                .containsEntry("failedCount", 0)
+                .containsEntry("unknownCount", 1);
         List<Map<String, Object>> rows = (List<Map<String, Object>>) result.get("results");
         assertThat(rows).extracting(row -> row.get("ticketId"))
                 .containsExactly(631, 632);
         assertThat(rows).extracting(row -> row.get("status"))
-                .containsExactly("FAILED", "SUCCESS");
+                .containsExactly("RESULT_UNKNOWN", "SUCCESS");
         assertThat(rows.get(0).get("message")).asString().contains("duplicate rows");
         verify(fixture.sourceSync).syncConfirmedMaterialNo(ok, "MAT-OK-632", "MES material resolved");
         verify(fixture.sourceSync, times(1)).syncConfirmedMaterialNo(any(), anyString(), anyString());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void conflictingRootAndDataBizIdsMakeMaterialResultUnknown() {
+        Fixture fixture = fixture();
+        OrderDeliveryTicket ticket = ticket(641, "P-CONFLICT-BIZ", "A", "IP-BIZ-CONFLICT");
+        fixture.withTicket(ticket);
+        when(fixture.client.resolveMaterial(any())).thenAnswer(invocation -> {
+            MesMaterialResolveReq req = invocation.getArgument(0);
+            MesMaterialResolveResp response = response(req,
+                    item("P-CONFLICT-BIZ", "A", "EXISTING_PRODUCT", "MAT-CONFLICT", "TASK-CONFLICT"));
+            response.setMesRequestId(req.getBizId());
+            response.getData().setBizId("OTHER-BIZ-ID");
+            return response;
+        });
+
+        Map<String, Object> result = fixture.batchService.syncMesMaterialBatch(List.of(641), 9641L);
+
+        assertThat(result).containsEntry("successCount", 0).containsEntry("failedCount", 0).containsEntry("unknownCount", 1);
+        List<Map<String, Object>> rows = (List<Map<String, Object>>) result.get("results");
+        assertThat(rows).singleElement().satisfies(row -> assertThat(row.get("status")).isEqualTo("RESULT_UNKNOWN"));
+        verify(fixture.sourceSync, org.mockito.Mockito.never()).syncConfirmedMaterialNo(any(), anyString(), anyString());
     }
 
     private Fixture fixture() {

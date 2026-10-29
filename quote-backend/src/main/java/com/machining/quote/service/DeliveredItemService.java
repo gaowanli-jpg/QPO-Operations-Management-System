@@ -22,6 +22,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Service
 public class DeliveredItemService {
@@ -33,6 +34,7 @@ public class DeliveredItemService {
     private static final String FLOW_STAGE_MES_CALLBACK_PENDING = "MES_CALLBACK_PENDING";
     private static final String FLOW_STAGE_MES_FAILED = "MES_FAILED";
     private static final String STATUS_CALLBACK_PENDING = "CALLBACK_PENDING";
+    private static final Set<String> LIST_SORT_FIELDS = Set.of("deliveryDate", "createdAt", "discardedAt");
 
     @Autowired
     private OrderDeliveryTicketMapper ticketMapper;
@@ -48,7 +50,7 @@ public class DeliveredItemService {
     public PageResult<DeliveredItemDTO> listTickets(DeliveredItemQueryReq req) {
         DeliveredItemQueryReq effectiveReq = req == null ? new DeliveredItemQueryReq() : req;
         int safePage = normalizePage(effectiveReq.getPage());
-        int safePageSize = normalizePageSize(effectiveReq.getPageSize());
+        int safePageSize = normalizeListPageSize(effectiveReq.getPageSize());
         QueryWrapper<DeliveredItemDTO> query = buildQuery(effectiveReq);
 
         long total = ticketMapper.countDeliveredItems(query);
@@ -56,7 +58,8 @@ public class DeliveredItemService {
             return PageResult.of(List.of(), 0, safePage, safePageSize);
         }
         List<DeliveredItemDTO> records = ticketMapper.selectDeliveredItems(
-                query, safePageSize, (safePage - 1L) * safePageSize);
+                query, safePageSize, (safePage - 1L) * safePageSize,
+                normalizeSortBy(effectiveReq.getSortBy()), isAscending(effectiveReq.getSortOrder()));
         return PageResult.of(records, total, safePage, safePageSize);
     }
 
@@ -406,6 +409,26 @@ public class DeliveredItemService {
             return 20;
         }
         return Math.min(pageSize, 100);
+    }
+
+    /** 列表分页与待产零件保持一致，最大单页 1000 行；客户下拉等辅助分页仍按 100 限制。 */
+    private int normalizeListPageSize(Integer pageSize) {
+        if (pageSize == null || pageSize < 1) {
+            return 20;
+        }
+        return Math.min(pageSize, 1000);
+    }
+
+    private String normalizeSortBy(String sortBy) {
+        if (sortBy == null) {
+            return null;
+        }
+        String normalized = sortBy.trim();
+        return LIST_SORT_FIELDS.contains(normalized) ? normalized : null;
+    }
+
+    private boolean isAscending(String sortOrder) {
+        return sortOrder != null && "ASC".equalsIgnoreCase(sortOrder.trim());
     }
 
     private <T> PageResult<T> pageRows(List<T> allRows, Integer page, Integer pageSize) {

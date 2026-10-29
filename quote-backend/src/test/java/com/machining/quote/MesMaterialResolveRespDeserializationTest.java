@@ -104,6 +104,93 @@ class MesMaterialResolveRespDeserializationTest {
         assertThat(resp.getExternalTraceId()).isEqualTo("T20261028001");
     }
 
+    @Test
+    @DisplayName("单行 items 被上游压成对象且布尔标志返回 0/1 时仍可解析")
+    void toleratesUnwrappedSingleItemAndNumericBooleanFlags() {
+        String json = """
+                {"success":1,"callbackRequired":0,
+                 "data":{"bizId":"B4","items":{"taskId":12,"drawingNo":"P-4",
+                   "drawingVersion":"A","status":"SUCCESS","productCode":"M4"}}}
+                """;
+
+        MesMaterialResolveResp resp = read(json);
+
+        assertThat(resp.getSuccess()).isTrue();
+        assertThat(resp.getCallbackRequired()).isFalse();
+        assertThat(resp.getMesRequestId()).isEqualTo("B4");
+        assertThat(resp.getData().getItems()).hasSize(1);
+        assertThat(resp.getMaterialNo()).isEqualTo("M4");
+    }
+
+    @Test
+    @DisplayName("字符串布尔标志按常见 0/1、true/false 表示解析")
+    void toleratesStringBooleanFlags() {
+        MesMaterialResolveResp resp = read("""
+                {"success":"true","callbackRequired":"1",
+                 "data":{"bizId":"B5","items":[]}}
+                """);
+
+        assertThat(resp.getSuccess()).isTrue();
+        assertThat(resp.getCallbackRequired()).isTrue();
+    }
+
+    @Test
+    @DisplayName("items 的空标量和非对象行降级为空结果，由业务层标记待核对")
+    void toleratesEmptyOrMalformedItemsContainer() {
+        assertThat(read("{\"code\":0,\"data\":{\"bizId\":\"B6\",\"items\":\"\"}}")
+                .getData().getItems()).isEmpty();
+        assertThat(read("{\"code\":0,\"data\":{\"bizId\":\"B7\",\"items\":[null,7,\"bad\"]}}")
+                .getData().getItems()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("字段被错误序列化成对象时不应遮住 bizId 或让整份响应解析失败")
+    void toleratesStructuredValuesInTextFields() {
+        MesMaterialResolveResp resp = read("""
+                {"code":0,"msg":{"detail":"ignored"},"data":{"bizId":"B8",
+                 "items":[{"drawingNo":{},"status":[],"productCode":{"code":"M8"}}]}}
+                """);
+
+        assertThat(resp.getMesRequestId()).isEqualTo("B8");
+        assertThat(resp.getMessage()).isNull();
+        assertThat(resp.getData().getItems()).hasSize(1);
+        assertThat(resp.getData().getItems().get(0).getProductCode()).isNull();
+    }
+
+    @Test
+    @DisplayName("非整数数字状态码不能因截断小数被误认成成功")
+    void doesNotTreatFractionalCodeAsSuccess() {
+        assertThat(read("{\"code\":0.5,\"bizId\":\"B9\"}").getSuccess()).isFalse();
+    }
+
+    @Test
+    @DisplayName("根级 bizId 与 data.bizId 同时存在时不能互相冲突")
+    void rejectsConflictingRequestIdsEvenWhenThePreferredIdMatches() {
+        MesMaterialResolveResp resp = read("""
+                {"code":0,"bizId":"B10","data":{"bizId":"OTHER"}}
+                """);
+
+        assertThat(resp.getMesRequestId()).isEqualTo("B10");
+        assertThat(resp.matchesRequestId("B10")).isFalse();
+    }
+
+    @Test
+    @DisplayName("根级 bizId 与旧字段 mesRequestId 冲突时也必须拒绝")
+    void rejectsConflictingRootIdentityAliases() {
+        MesMaterialResolveResp resp = read("""
+                {"code":0,"bizId":"B10A","mesRequestId":"OTHER"}
+                """);
+
+        assertThat(resp.matchesRequestId("B10A")).isFalse();
+    }
+
+    @Test
+    @DisplayName("兼容只在一个位置返回请求 ID 的响应")
+    void acceptsRequestIdFromEitherSupportedLocation() {
+        assertThat(read("{\"code\":0,\"bizId\":\"B11\"}").matchesRequestId("B11")).isTrue();
+        assertThat(read("{\"code\":0,\"data\":{\"bizId\":\"B12\"}}").matchesRequestId("B12")).isTrue();
+    }
+
     private MesMaterialResolveResp read(String json) {
         try {
             return mapper.readValue(json, MesMaterialResolveResp.class);

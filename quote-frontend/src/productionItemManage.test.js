@@ -48,6 +48,15 @@ describe('ProductionItemManage split workbench', () => {
     expect(pageSource).toContain('formatDateTime(row.createdAt)')
   })
 
+  test('sorts production items by order date, delivery date or creation time', () => {
+    expect(pageSource).toContain('@sort-change="handleSortChange"')
+    expect(pageSource).toContain("const SORT_ORDERS = ['descending', 'ascending']")
+    expect(pageSource).toContain('prop="salesOrderDate" label="下单日期" width="130" fixed align="center" show-overflow-tooltip sortable="custom"')
+    expect(pageSource).toContain('prop="deliveryDate" label="交货日期" width="130" sortable="custom"')
+    expect(pageSource).toContain("params.sortOrder = sortState.order === 'ascending' ? 'ASC' : 'DESC'")
+    expect(pageSource).toContain('sortRowsLocally(filterProductionRows(records))')
+  })
+
   test('offers larger page sizes while keeping MES selection within the task limit', () => {
     expect(pageSource).toContain(':page-sizes="[20, 50, 100, 300, 500, 1000]"')
     expect(pageSource).toContain('const pageSize = ref(100)')

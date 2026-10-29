@@ -179,8 +179,60 @@ class PermissionRoleTreeServiceTest {
     }
 
     @Test
-    void assignPermissionsRejectsUnknownPermissionCodes() {
+    void assignPermissionsKeepsSavingWhenParentPermissionRowIsMissing() {
         SystemRoleMapper roleMapper = mock(SystemRoleMapper.class);
+        SystemPermissionMapper permissionMapper = mock(SystemPermissionMapper.class);
+        SystemRolePermissionMapper rolePermissionMapper = mock(SystemRolePermissionMapper.class);
+        SystemRoleService service = service(roleMapper, permissionMapper, rolePermissionMapper, mock(AuditService.class));
+
+        when(roleMapper.selectById(20L)).thenReturn(role(20L, "MARKET_USER"));
+        when(rolePermissionMapper.selectPermissionCodesByRoleId(20L)).thenReturn(List.of());
+        when(permissionMapper.selectByPermissionCodes(List.of(
+                "market:production-item:mes-production-schedule",
+                "market:production-item:material-no-refresh")))
+                .thenReturn(List.of(
+                        permission(239L, 199L, "BUTTON", "market:production-item:mes-production-schedule", "待产零件定时下发策略", false, true, 132),
+                        permission(240L, 199L, "BUTTON", "market:production-item:material-no-refresh", "待产零件刷新料号", false, true, 133)
+                ));
+        // 199 是 Java 权限目录里的父菜单 id，真实库里不存在；此时不能整份授权失败。
+        when(permissionMapper.selectById(199L)).thenReturn(null);
+
+        RolePermissionAssignReq req = new RolePermissionAssignReq();
+        req.setPermissionCodes(List.of(
+                "market:production-item:mes-production-schedule",
+                "market:production-item:material-no-refresh"));
+
+        assertThat(service.assignPermissions(20L, req)).containsExactly(
+                "market:production-item:mes-production-schedule",
+                "market:production-item:material-no-refresh");
+        verify(rolePermissionMapper).insertIgnore(20L, 239L);
+        verify(rolePermissionMapper).insertIgnore(20L, 240L);
+    }
+
+    @Test
+    void permissionParentIdsAreResolvedByPermissionCodeNotHardcodedIds() throws Exception {
+        String migration = Files.readString(
+                Path.of("src/main/resources/db/migration/V69__repair_permission_parent_ids.sql"),
+                StandardCharsets.UTF_8
+        );
+
+        assertThat(migration)
+                .as("V57/V66/V67 写死的 parent_id(190/199) 在真实库里不存在，必须按 permission_code 重新解析")
+                .contains(
+                        "('market:sales-order:wms-allocate', 'market:sales-order:view')",
+                        "('market:production-item:mes-production-schedule', 'market:production-item:view')",
+                        "('market:production-item:material-no-refresh', 'market:production-item:view')",
+                        "FROM system_permission parent",
+                        "SET parent_id = parent.id"
+                );
+        assertThat(migration)
+                .as("兜底：任何仍指向不存在父权限的行都要置空，避免再次阻断角色授权保存")
+                .contains("SET parent_id = NULL")
+                .contains("WHERE parent.id = child.parent_id");
+    }
+
+    @Test
+    void assignPermissionsRejectsUnknownPermissionCodes() {        SystemRoleMapper roleMapper = mock(SystemRoleMapper.class);
         SystemPermissionMapper permissionMapper = mock(SystemPermissionMapper.class);
         SystemRolePermissionMapper rolePermissionMapper = mock(SystemRolePermissionMapper.class);
         SystemRoleService service = service(roleMapper, permissionMapper, rolePermissionMapper, mock(AuditService.class));

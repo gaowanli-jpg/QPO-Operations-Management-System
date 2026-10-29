@@ -29,6 +29,7 @@ public class MesMaterialProcessingRecoveryService {
     private static final String STATUS_FAILED = "FAILED";
     private static final String STATUS_PROCESSING = "PROCESSING";
     private static final String STATUS_CALLBACK_PENDING = "CALLBACK_PENDING";
+    private static final String STATUS_RESULT_UNKNOWN = "RESULT_UNKNOWN";
     private static final String STATUS_SKIPPED = "SKIPPED";
     private static final String STATUS_STALE = "STALE";
     private static final String STATUS_IGNORED = "IGNORED";
@@ -73,6 +74,15 @@ public class MesMaterialProcessingRecoveryService {
             markCurrentWaiter(context.waiter, STATUS_CALLBACK_PENDING, null, message);
             return RecoveryResult.handled(STATUS_CALLBACK_PENDING, message,
                     recoverySummary("REQUEST_CALLBACK_PENDING", taskId, context.request));
+        }
+        if (STATUS_RESULT_UNKNOWN.equals(requestStatus)) {
+            String message = firstNonBlank(context.request.getResponseMessage(),
+                    "MES material request result is unknown; reconcile the original bizId before retrying");
+            markTicketResultUnknown(ticket, context.request, message);
+            log.warn("MES material processing recovered as result unknown ticketId={} taskId={} mesRequestId={}",
+                    ticket.getId(), taskId, context.request.getMesRequestId());
+            return RecoveryResult.handled(STATUS_RESULT_UNKNOWN, message,
+                    recoverySummary("REQUEST_RESULT_UNKNOWN", taskId, context.request));
         }
         if (STATUS_FAILED.equals(requestStatus) || STATUS_STALE.equals(requestStatus) || STATUS_IGNORED.equals(requestStatus)) {
             String message = firstNonBlank(context.request.getCallbackMessage(), context.request.getResponseMessage(),
@@ -215,6 +225,23 @@ public class MesMaterialProcessingRecoveryService {
         update.setId(ticket.getId());
         update.setMesSyncStatus(STATUS_FAILED);
         update.setMesSyncMessage(abbreviate(message));
+        ticketMapper.updateById(update);
+    }
+
+    private void markTicketResultUnknown(
+            OrderDeliveryTicket ticket,
+            OrderDeliveryTicketMesRequest request,
+            String message) {
+        if (ticketMapper == null || ticket == null || ticket.getId() == null) {
+            return;
+        }
+        OrderDeliveryTicket update = new OrderDeliveryTicket();
+        update.setId(ticket.getId());
+        update.setMesSyncStatus(STATUS_RESULT_UNKNOWN);
+        update.setMesSyncMessage(abbreviate(message));
+        update.setMesRequestId(firstNonBlank(ticket.getMesRequestId(),
+                request == null ? null : request.getMesRequestId()));
+        update.setMesExternalTaskId(request == null ? null : trimToNull(request.getMesExternalTaskId()));
         ticketMapper.updateById(update);
     }
 

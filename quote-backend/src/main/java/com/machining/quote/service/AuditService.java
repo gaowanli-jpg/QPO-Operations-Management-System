@@ -442,6 +442,7 @@ public class AuditService {
             case "DELIVERY_MES_MATERIAL_SYNC_SUCCESS" -> "MES物料号同步成功";
             case "DELIVERY_MES_MATERIAL_SYNC_ACCEPTED" -> "MES物料号已受理待回调";
             case "DELIVERY_MES_MATERIAL_SYNC_FAILED" -> "MES物料号同步失败";
+            case "DELIVERY_MES_MATERIAL_SYNC_RESULT_UNKNOWN" -> "MES物料号结果待核对";
             case "DELIVERY_MES_MATERIAL_CALLBACK_SUCCESS" -> "MES物料号回调成功";
             case "DELIVERY_MES_MATERIAL_CALLBACK_FAILED" -> "MES物料号回调失败";
             case "DELIVERY_MES_MATERIAL_CALLBACK_CONFLICT" -> "MES物料号回调冲突";
@@ -465,9 +466,11 @@ public class AuditService {
             case "PRODUCTION_ITEM_AUTO_DISPATCH_CONFIG_UPDATE" -> "更新待产零件定时下发策略";
             case "PRODUCTION_ITEM_MES_PRODUCTION_SUCCESS", "LOCKED_ITEM_MES_PRODUCTION_SUCCESS" -> "MES生产下发成功";
             case "PRODUCTION_ITEM_MES_PRODUCTION_FAILED", "LOCKED_ITEM_MES_PRODUCTION_FAILED" -> "MES生产下发失败";
+            case "PRODUCTION_ITEM_MES_PRODUCTION_RESULT_UNKNOWN", "LOCKED_ITEM_MES_PRODUCTION_RESULT_UNKNOWN" -> "MES生产下发结果待核对";
             case "PRODUCTION_ITEM_MATERIAL_NO_REFRESH_SUBMIT" -> "提交刷新料号";
             case "PRODUCTION_ITEM_MATERIAL_NO_REFRESH_SUCCESS" -> "刷新料号成功";
             case "PRODUCTION_ITEM_MATERIAL_NO_REFRESH_FAILED" -> "刷新料号失败";
+            case "PRODUCTION_ITEM_MATERIAL_NO_REFRESH_RESULT_UNKNOWN" -> "刷新料号结果待核对";
             case "LOCKED_ITEM_STOCK_PICKING_SUBMIT" -> "提交提库存工单";
             case "LOCKED_ITEM_STOCK_PICKING_SUCCESS" -> "提库存工单下发成功";
             case "LOCKED_ITEM_STOCK_PICKING_FAILED" -> "提库存工单下发失败";
