@@ -32,6 +32,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -68,7 +69,7 @@ class MesMaterialDedupServiceTest {
     void syncMaterialNoFollowsActiveCallbackPendingMasterWithoutCallingMes() {
         Fixture fixture = fixture(ticket(202, "P-100", "A", "PENDING"));
         when(fixture.ticketMapper.selectList(any())).thenReturn(List.of());
-        OrderDeliveryTicketMesRequest master = activeMaster(101, "MES-MASTER-101", "CALLBACK_PENDING", "P-100|A");
+        OrderDeliveryTicketMesRequest master = activeMaster(101, "MES-MASTER-101", "CALLBACK_PENDING", "v3|5:P-100|1:A|0:");
         when(fixture.mesRequestMapper.selectOne(any())).thenReturn(master);
         when(fixture.ticketMapper.updateById(any())).thenReturn(1);
         when(fixture.waiterMapper.insert(any())).thenReturn(1);
@@ -81,7 +82,7 @@ class MesMaterialDedupServiceTest {
                 .containsEntry("status", "CALLBACK_PENDING")
                 .containsEntry("dedupResult", "FOLLOW_EXISTING_ACTIVE")
                 .containsEntry("mesRequestId", "MES-MASTER-101")
-                .containsEntry("dedupKey", "P-100|A");
+                .containsEntry("dedupKey", "v3|5:P-100|1:A|0:");
         verify(fixture.client, never()).resolveMaterial(any());
         verify(fixture.mesRequestMapper, never()).insert(any());
         ArgumentCaptor<OrderDeliveryTicketMesWaiter> waiterCaptor = ArgumentCaptor.forClass(OrderDeliveryTicketMesWaiter.class);
@@ -125,13 +126,13 @@ class MesMaterialDedupServiceTest {
         verify(fixture.client).resolveMaterial(any());
         ArgumentCaptor<OrderDeliveryTicketMesRequest> requestCaptor = ArgumentCaptor.forClass(OrderDeliveryTicketMesRequest.class);
         verify(fixture.mesRequestMapper).insert(requestCaptor.capture());
-        assertThat(requestCaptor.getValue().getDedupKey()).isEqualTo("P-100|A");
+        assertThat(requestCaptor.getValue().getDedupKey()).isEqualTo("v3|5:P-100|1:A|0:");
         assertThat(requestCaptor.getValue().getRequestRole()).isEqualTo("MASTER");
         ArgumentCaptor<OrderDeliveryTicket> processingCaptor = ArgumentCaptor.forClass(OrderDeliveryTicket.class);
         verify(fixture.ticketMapper).update(processingCaptor.capture(), any());
         assertThat(processingCaptor.getValue().getMesSyncStatus()).isEqualTo("PROCESSING");
         assertThat(processingCaptor.getValue().getMesRequestRole()).isEqualTo("MASTER");
-        assertThat(processingCaptor.getValue().getMesDedupKey()).isEqualTo("P-100|A");
+        assertThat(processingCaptor.getValue().getMesDedupKey()).isEqualTo("v3|5:P-100|1:A|0:");
     }
 
     @Test
@@ -157,15 +158,17 @@ class MesMaterialDedupServiceTest {
         verify(fixture.client).resolveMaterial(any());
         ArgumentCaptor<OrderDeliveryTicketMesRequest> requestCaptor = ArgumentCaptor.forClass(OrderDeliveryTicketMesRequest.class);
         verify(fixture.mesRequestMapper).insert(requestCaptor.capture());
-        assertThat(requestCaptor.getValue().getDedupKey()).isEqualTo("P-100|B");
+        assertThat(requestCaptor.getValue().getDedupKey()).isEqualTo("v3|5:P-100|1:B|0:");
     }
 
     @Test
     void activeMasterUniqueConflictConvertsCurrentTicketToFollowerWithoutCallingMes() {
         Fixture fixture = fixture(ticket(205, "P-200", "C", "PENDING"));
         when(fixture.ticketMapper.selectList(any())).thenReturn(List.of());
-        OrderDeliveryTicketMesRequest master = activeMaster(105, "MES-MASTER-105", "PROCESSING", "P-200|C");
-        when(fixture.mesRequestMapper.selectOne(any())).thenReturn(null, master);
+        OrderDeliveryTicketMesRequest master = activeMaster(105, "MES-MASTER-105", "PROCESSING", "v3|5:P-200|1:C|0:");
+        // 依次是：三字段键查空、旧两字段键查空、按 ticket 查空 → 才能走到 insert 撞唯一键；
+        // 撞键后 followActiveMaster 再按三字段键查一次，拿到胜者。
+        when(fixture.mesRequestMapper.selectOne(any())).thenReturn(null, null, null, master);
         when(fixture.mesRequestMapper.insert(any()))
                 .thenThrow(new DuplicateKeyException("uk_delivery_mes_request_active_dedup"));
         when(fixture.ticketMapper.updateById(any())).thenReturn(1);
@@ -179,7 +182,7 @@ class MesMaterialDedupServiceTest {
                 .containsEntry("status", "PROCESSING")
                 .containsEntry("dedupResult", "FOLLOW_EXISTING_ACTIVE")
                 .containsEntry("mesRequestId", "MES-MASTER-105")
-                .containsEntry("dedupKey", "P-200|C");
+                .containsEntry("dedupKey", "v3|5:P-200|1:C|0:");
         verify(fixture.client, never()).resolveMaterial(any());
         ArgumentCaptor<OrderDeliveryTicketMesWaiter> waiterCaptor = ArgumentCaptor.forClass(OrderDeliveryTicketMesWaiter.class);
         verify(fixture.waiterMapper).insert(waiterCaptor.capture());
@@ -192,12 +195,219 @@ class MesMaterialDedupServiceTest {
     }
 
     @Test
-    void dedupKeyUsesPartNumberAndVersionOnly() {
+    void dedupKeyUsesPartNumberVersionAndMaterialWithLengthPrefixes() {
         MesMaterialDedupService service = new MesMaterialDedupService();
 
-        assertThat(service.buildDedupKey(ticket(1, " P-100 ", " A ", "PENDING"))).isEqualTo("P-100|A");
-        assertThat(service.buildDedupKey(ticket(2, "P-100", "B", "PENDING"))).isEqualTo("P-100|B");
-        assertThat(service.buildDedupKey(ticket(3, "P-100", null, "PENDING"))).isEqualTo("P-100|-");
+        assertThat(service.buildDedupKey(ticket(1, " P-100 ", " A ", "PENDING")))
+                .isEqualTo("v3|5:P-100|1:A|0:");
+        assertThat(service.buildDedupKey(ticket(2, "P-100", "B", "PENDING")))
+                .isEqualTo("v3|5:P-100|1:B|0:");
+        assertThat(service.buildDedupKey(ticket(3, "P-100", null, "PENDING")))
+                .isEqualTo("v3|5:P-100|0:|0:");
+
+        // 同图号版本、不同材质必须是不同身份，否则会互相 fan-out 抢同一个 MES 任务。
+        OrderDeliveryTicket steel = ticket(4, "P-100", "A", "PENDING");
+        steel.setMaterialName("Q235");
+        OrderDeliveryTicket aluminium = ticket(5, "P-100", "A", "PENDING");
+        aluminium.setMaterialName("6061-T6");
+        assertThat(service.buildDedupKey(steel)).isNotEqualTo(service.buildDedupKey(aluminium));
+        assertThat(service.buildDedupKey(steel)).isEqualTo("v3|5:P-100|1:A|4:Q235");
+
+        // 材质只 trim，不折叠大小写；图号版本仍 uppercase。
+        OrderDeliveryTicket lowerMaterial = ticket(6, "p-100", "a", "PENDING");
+        lowerMaterial.setMaterialName(" 6061-t6 ");
+        assertThat(service.buildDedupKey(lowerMaterial)).isEqualTo("v3|5:P-100|1:A|7:6061-t6");
+
+        // 长度前缀让含分隔符的原值不再有歧义。
+        OrderDeliveryTicket piped = ticket(7, "A|B", "C", "PENDING");
+        OrderDeliveryTicket pipedSplit = ticket(8, "A", "B|C", "PENDING");
+        assertThat(service.buildDedupKey(piped)).isNotEqualTo(service.buildDedupKey(pipedSplit));
+
+        // 旧两字段键与新的三字段键格式互斥，混合查询才能同时接受两者。
+        assertThat(service.buildLegacyDedupKey(ticket(9, "P-100", null, "PENDING")))
+                .isEqualTo("P-100|-");
+    }
+
+    /**
+     * 「刷新料号」写入的台账行没有 request_role。共享身份查询若继续按 MASTER 过滤，
+     * 批量入口就看不见这条在途请求，会对同一物料身份再发一次 POST。
+     */
+    @Test
+    void refreshMaterialRequestBlocksBatchEntryInsteadOfCreatingFollower() {
+        OrderDeliveryTicket ticket = ticket(206, "P-REFRESH", "A", "PENDING");
+        Fixture fixture = fixture(ticket);
+        OrderDeliveryTicketMesRequest refresh =
+                activeMaster(101, "QPO-MATR-01J5ABCDEF", "PROCESSING", "v3|9:P-REFRESH|1:A|0:");
+        refresh.setRequestRole(null);
+        when(fixture.mesRequestMapper.selectOne(any())).thenReturn(refresh);
+
+        MesMaterialDedupService.DedupResolveResult result = fixture.dedupService.resolveBeforeMes(ticket, 9106L);
+
+        assertThat(result.getType()).isEqualTo(MesMaterialDedupService.RESULT_ACTIVE_REQUEST_EXISTS);
+        assertThat(result.isActiveRequestExists()).isTrue();
+        assertThat(result.isFollowExistingActive()).isFalse();
+        assertThat(result.getMasterMesRequestId()).isEqualTo("QPO-MATR-01J5ABCDEF");
+        assertThat(result.getStatus()).isEqualTo("PROCESSING");
+        verify(fixture.waiterMapper, never()).insert(any());
+        verify(fixture.ticketMapper, never()).updateById(any());
+    }
+
+    /**
+     * 本提单自身已有在途请求时不能建 follower（会变成自己等自己），只回在途状态。
+     */
+    @Test
+    void ownActiveRequestIsReportedAsActiveInsteadOfSelfFollower() {
+        OrderDeliveryTicket ticket = ticket(207, "P-SELF", "A", "PENDING");
+        Fixture fixture = fixture(ticket);
+        OrderDeliveryTicketMesRequest own =
+                activeMaster(207, "QPO-MATL-01J5SELF", "CALLBACK_PENDING", "v3|6:P-SELF|1:A|0:");
+        when(fixture.mesRequestMapper.selectOne(any())).thenReturn(own);
+
+        MesMaterialDedupService.DedupResolveResult result = fixture.dedupService.resolveBeforeMes(ticket, 9107L);
+
+        assertThat(result.getType()).isEqualTo(MesMaterialDedupService.RESULT_ACTIVE_REQUEST_EXISTS);
+        assertThat(result.getStatus()).isEqualTo("CALLBACK_PENDING");
+        verify(fixture.waiterMapper, never()).insert(any());
+        verify(fixture.ticketMapper, never()).updateById(any());
+    }
+
+    /**
+     * 三字段键与旧两字段键必须分成两次查询：只有三字段键能证明材质一致、才允许建 follower。
+     * 混成一次 `dedup_key IN (新, 旧)` 会让调用方分不清命中的是哪一类键。
+     */
+    @Test
+    void activeRequestLookupQueriesThreeFieldKeyBeforeLegacyTwoFieldKey() {
+        OrderDeliveryTicket ticket = ticket(208, "P-MIXED", "A", "PENDING");
+        Fixture fixture = fixture(ticket);
+        when(fixture.mesRequestMapper.selectOne(any())).thenReturn(null);
+
+        fixture.dedupService.resolveBeforeMes(ticket, 9108L);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<OrderDeliveryTicketMesRequest>>
+                captor = ArgumentCaptor.forClass(
+                        (Class) com.baomidou.mybatisplus.core.conditions.query.QueryWrapper.class);
+        // 三字段键 → 旧两字段键 → ticket_id，共三次。
+        verify(fixture.mesRequestMapper, times(3)).selectOne(captor.capture());
+        List<com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<OrderDeliveryTicketMesRequest>> lookups =
+                captor.getAllValues();
+        String threeFieldKey = MesMaterialDedupService.identityKey("P-MIXED", "A", null);
+        assertThat(lookupParams(lookups.get(0)))
+                .contains(threeFieldKey)
+                .doesNotContain("P-MIXED|A");
+        assertThat(lookupParams(lookups.get(1)))
+                .contains("P-MIXED|A")
+                .doesNotContain(threeFieldKey);
+    }
+
+    /** {@code in(column, collection)} 会把整个集合塞进一个参数位；先渲染 SQL 再展平参数。 */
+    private List<Object> lookupParams(
+            com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<?> wrapper) {
+        wrapper.getSqlSegment();
+        List<Object> values = new java.util.ArrayList<>();
+        for (Object value : wrapper.getParamNameValuePairs().values()) {
+            if (value instanceof java.util.Collection<?> collection) {
+                values.addAll(collection);
+            } else {
+                values.add(value);
+            }
+        }
+        return values;
+    }
+
+    /**
+     * 旧两字段键只含图号+版本，材质不可证明。命中它时把本提单挂成 follower，
+     * 会让同图号版本、不同材质的零件永远等不到自己的料号（MES 里是两个独立任务）。
+     * 因此只回在途状态，不建立任何等待关系。
+     */
+    @Test
+    void legacyTwoFieldKeyMatchReportsActiveRequestWithoutCreatingFollower() {
+        OrderDeliveryTicket ticket = ticket(209, "P-LEGACY", "A", "PENDING");
+        ticket.setMaterialName("Q235");
+        Fixture fixture = fixture(ticket);
+        OrderDeliveryTicketMesRequest legacyMaster =
+                activeMaster(500, "QPO-MATL-OLD", "CALLBACK_PENDING", "P-LEGACY|A");
+        when(fixture.mesRequestMapper.selectOne(any()))
+                .thenReturn(null)          // 三字段键没有命中
+                .thenReturn(legacyMaster); // 旧两字段键命中
+
+        MesMaterialDedupService.DedupResolveResult result =
+                fixture.dedupService.resolveBeforeMes(ticket, 9209L);
+
+        assertThat(result.getType()).isEqualTo(MesMaterialDedupService.RESULT_ACTIVE_REQUEST_EXISTS);
+        assertThat(result.isActiveRequestExists()).isTrue();
+        assertThat(result.isFollowExistingActive()).isFalse();
+        assertThat(result.getMasterMesRequestId()).isEqualTo("QPO-MATL-OLD");
+        assertThat(result.getStatus()).isEqualTo("CALLBACK_PENDING");
+        verify(fixture.waiterMapper, never()).insert(any());
+        verify(fixture.ticketMapper, never()).updateById(any());
+    }
+
+    /**
+     * 结果未知不是死状态：MES 按「图号+版本+材质」全局判重，换新 bizId 重发不会造出第二个
+     * 物料准备任务，只会明确回「已存在带料号」或「还在待建料」。所以重新获取前先把旧台账行
+     * 收口成 STALE 释放身份去重位，再走正常提交。
+     */
+    @Test
+    void retiresUnresolvedLedgerRowThenResubmitsForUnknownResult() {
+        Fixture fixture = fixture(ticket(301, "P-300", "A", "RESULT_UNKNOWN"));
+        when(fixture.mesRequestMapper.selectList(any()))
+                .thenReturn(List.of(unresolvedRow(9001L, 301, "QPO-MAT-OLD")));
+        when(fixture.mesRequestMapper.update(any(OrderDeliveryTicketMesRequest.class), any())).thenReturn(1);
+        when(fixture.mesRequestMapper.selectOne(any())).thenReturn(null);
+        when(fixture.mesRequestMapper.insert(any())).thenReturn(1);
+        when(fixture.ticketMapper.updateById(any())).thenReturn(1);
+        MesMaterialResolveResp response = successResponse("MES-RETRY");
+        when(fixture.client.resolveMaterial(any())).thenAnswer(invocation -> {
+            MesMaterialResolveReq req = invocation.getArgument(0);
+            response.setMesRequestId(req.getMesRequestId());
+            return response;
+        });
+
+        Map<String, Object> result = fixture.syncService.syncMaterialNo(301, 9301L);
+
+        assertThat(result).containsEntry("status", "SUCCESS").containsEntry("materialNo", "MES-RETRY");
+        ArgumentCaptor<OrderDeliveryTicketMesRequest> updateCaptor =
+                ArgumentCaptor.forClass(OrderDeliveryTicketMesRequest.class);
+        verify(fixture.mesRequestMapper, org.mockito.Mockito.atLeastOnce())
+                .update(updateCaptor.capture(), any());
+        assertThat(updateCaptor.getAllValues())
+                .anySatisfy(row -> {
+                    assertThat(row.getRequestStatus()).isEqualTo("STALE");
+                    assertThat(row.getCompletedAt()).isNotNull();
+                });
+        verify(fixture.auditService).record(
+                eq("DELIVERY_MES_MATERIAL_SYNC_RETRY_AFTER_UNKNOWN"),
+                eq("order_delivery_ticket"),
+                eq(301),
+                isNull(),
+                any(),
+                eq("DELIVERY"),
+                eq("PROCESSING"),
+                anyString(),
+                isNull());
+    }
+
+    /** 回调抢先把台账行写成 SUCCESS 时，收口必须让路，不能把真结果改成 STALE。 */
+    @Test
+    void retireUnresolvedRequestsSkipsRowAlreadyResolvedByLateCallback() {
+        Fixture fixture = fixture(ticket(302, "P-301", "A", "RESULT_UNKNOWN"));
+        when(fixture.mesRequestMapper.selectList(any()))
+                .thenReturn(List.of(unresolvedRow(9002L, 302, "QPO-MAT-LATE")));
+        when(fixture.mesRequestMapper.update(any(OrderDeliveryTicketMesRequest.class), any())).thenReturn(0);
+
+        List<String> retired = fixture.dedupService.retireUnresolvedRequests(ticket(302, "P-301", "A", "RESULT_UNKNOWN"));
+
+        assertThat(retired).isEmpty();
+    }
+
+    private OrderDeliveryTicketMesRequest unresolvedRow(Long id, Integer ticketId, String mesRequestId) {
+        OrderDeliveryTicketMesRequest row = new OrderDeliveryTicketMesRequest();
+        row.setId(id);
+        row.setTicketId(ticketId);
+        row.setMesRequestId(mesRequestId);
+        row.setRequestStatus("RESULT_UNKNOWN");
+        return row;
     }
 
     private Fixture fixture(OrderDeliveryTicket ticket) {

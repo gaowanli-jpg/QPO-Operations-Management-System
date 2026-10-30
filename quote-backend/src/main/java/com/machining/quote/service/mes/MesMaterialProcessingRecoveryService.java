@@ -30,6 +30,7 @@ public class MesMaterialProcessingRecoveryService {
     private static final String STATUS_PROCESSING = "PROCESSING";
     private static final String STATUS_CALLBACK_PENDING = "CALLBACK_PENDING";
     private static final String STATUS_RESULT_UNKNOWN = "RESULT_UNKNOWN";
+    private static final String STATUS_WAITING = "WAITING";
     private static final String STATUS_SKIPPED = "SKIPPED";
     private static final String STATUS_STALE = "STALE";
     private static final String STATUS_IGNORED = "IGNORED";
@@ -97,13 +98,19 @@ public class MesMaterialProcessingRecoveryService {
             return RecoveryResult.handled(STATUS_SKIPPED, message,
                     recoverySummary("REQUEST_STILL_ACTIVE", taskId, context.request));
         }
-        String message = "MES material task was interrupted; please retry";
-        closeRequestAsFailed(context.request, message);
-        markTicketFailed(ticket, message);
-        markCurrentWaiter(context.waiter, STATUS_FAILED, null, message);
-        log.warn("MES material processing recovered as failed ticketId={} taskId={} mesRequestId={} reason=interrupted",
+        // 本地任务已停止但台账仍是 PROCESSING：外部 POST 可能已经发出去了，
+        // 无法区分「发出前崩溃」和「发出后没收到响应」。按结果待核对处理，
+        // 保留原 bizId 与身份去重位，不能关成可重试的普通失败（否则会重复提交）。
+        String message = "MES material request was interrupted; the result is unknown, "
+                + "reconcile the original bizId before retrying";
+        markRequestResultUnknown(context.request, message);
+        markTicketResultUnknown(ticket, context.request, message);
+        // waiter 表的状态约束没有 RESULT_UNKNOWN，等待关系继续以 WAITING 活跃，
+        // 待原 bizId 核对完成后由主请求 fan-out 结束等待。
+        markCurrentWaiter(context.waiter, STATUS_WAITING, null, message);
+        log.warn("MES material processing recovered as result unknown ticketId={} taskId={} mesRequestId={} reason=interrupted",
                 ticket.getId(), taskId, context.request.getMesRequestId());
-        return RecoveryResult.handled(STATUS_FAILED, message,
+        return RecoveryResult.handled(STATUS_RESULT_UNKNOWN, message,
                 recoverySummary("REQUEST_INTERRUPTED", taskId, context.request));
     }
 
@@ -120,12 +127,13 @@ public class MesMaterialProcessingRecoveryService {
         String message = firstNonBlank(context.request.getCallbackMessage(), context.request.getResponseMessage(),
                 "MES material status recovered");
         if (sourceSyncService != null) {
-            sourceSyncService.syncConfirmedMaterialNo(ticket, materialNo, message);
+            // 料号以最后一次获取为准：这条 SUCCESS 结果属于本提单自己的请求，允许覆盖旧料号。
+            sourceSyncService.syncConfirmedMaterialNo(ticket, materialNo, message, true);
         }
         String mesRequestId = firstNonBlank(ticket.getMesRequestId(), context.request.getMesRequestId());
         if (productionAllocationLifecycleService != null) {
             productionAllocationLifecycleService.recordMaterialSuccess(
-                    ticket.getId(), materialNo, message, mesRequestId, context.request.getMesExternalTaskId(), false);
+                    ticket.getId(), materialNo, message, mesRequestId, context.request.getMesExternalTaskId(), false, true);
         } else {
             OrderDeliveryTicket update = new OrderDeliveryTicket();
             update.setId(ticket.getId());
@@ -200,6 +208,21 @@ public class MesMaterialProcessingRecoveryService {
         }
         String status = normalizeStatus(task.getStatus());
         return TASK_PENDING.equals(status) || TASK_RUNNING.equals(status);
+    }
+
+    private void markRequestResultUnknown(OrderDeliveryTicketMesRequest request, String message) {
+        if (requestMapper == null || request == null || isBlank(request.getMesRequestId())) {
+            return;
+        }
+        OrderDeliveryTicketMesRequest update = new OrderDeliveryTicketMesRequest();
+        update.setRequestStatus(STATUS_RESULT_UNKNOWN);
+        update.setResponseMessage(abbreviate(message));
+        update.setUpdatedAt(LocalDateTime.now());
+        // 刻意不写 completed_at：该行仍然活跃，继续占住身份去重位。
+        UpdateWrapper<OrderDeliveryTicketMesRequest> wrapper = new UpdateWrapper<>();
+        wrapper.eq("mes_request_id", request.getMesRequestId())
+                .in("request_status", STATUS_PROCESSING, STATUS_CALLBACK_PENDING);
+        requestMapper.update(update, wrapper);
     }
 
     private void closeRequestAsFailed(OrderDeliveryTicketMesRequest request, String message) {

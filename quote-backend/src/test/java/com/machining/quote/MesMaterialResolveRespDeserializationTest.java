@@ -191,6 +191,38 @@ class MesMaterialResolveRespDeserializationTest {
         assertThat(read("{\"code\":0,\"data\":{\"bizId\":\"B12\"}}").matchesRequestId("B12")).isTrue();
     }
 
+    @Test
+    @DisplayName("缺 bizId 的「已存在」响应带着料号时不算矛盾")
+    void doesNotTreatMissingRequestIdAsContradictionWhenPayloadIsPresent() {
+        MesMaterialResolveResp resp = read("""
+                {"code":"1_030_900_002","success":false,
+                 "data":{"items":[{"drawingNo":"P-1","drawingVersion":"A","productCode":"M-1"}]}}
+                """);
+
+        assertThat(resp.matchesRequestId("B13")).isFalse();
+        assertThat(resp.contradictsRequestId("B13")).isFalse();
+        assertThat(resp.hasMaterialNo()).isTrue();
+    }
+
+    @Test
+    @DisplayName("显式声明了与请求不一致的 bizId 仍然算矛盾")
+    void treatsExplicitlyDifferentRequestIdAsContradiction() {
+        MesMaterialResolveResp resp = read("""
+                {"code":"1_030_900_002","success":false,"data":{"bizId":"OTHER",
+                 "items":[{"productCode":"M-1"}]}}
+                """);
+
+        assertThat(resp.contradictsRequestId("B14")).isTrue();
+    }
+
+    @Test
+    @DisplayName("只有根级 materialNo 也算带料号")
+    void treatsRootMaterialNoAsPayload() {
+        assertThat(read("{\"code\":\"1_030_900_002\",\"materialNo\":\"M-2\"}").hasMaterialNo()).isTrue();
+        assertThat(read("{\"code\":\"1030900008\",\"data\":{\"items\":[{\"taskNo\":\"T-1\"}]}}")
+                .hasMaterialNo()).isFalse();
+    }
+
     private MesMaterialResolveResp read(String json) {
         try {
             return mapper.readValue(json, MesMaterialResolveResp.class);

@@ -502,7 +502,7 @@ class SalesOrderDeliveryTicketWorkflowTest {
                 .contains(
                         "SourceItemMaterialNoSyncService",
                         "sourceItemMaterialNoSyncService",
-                        "syncSourceItemMaterialNo(ticket, materialNo, syncMessage)",
+                        "syncSourceItemMaterialNo(ticket, materialNo, syncMessage, true)",
                         "return sourceItemMaterialNoSyncService.syncConfirmedMaterialNo(ticket, materialNo, message)",
                         "SalesOrderItemMapper",
                         "salesOrderItemMapper"

@@ -77,7 +77,7 @@ class MesMaterialSyncServiceTest extends MesMaterialSyncTestSupport {
             return response;
         });
         when(ticketMapper.update(any(OrderDeliveryTicket.class), any())).thenReturn(1);
-        when(sourceSyncService.syncConfirmedMaterialNo(any(), eq("MES-7788"), eq("created")))
+        when(sourceSyncService.syncConfirmedMaterialNo(any(), eq("MES-7788"), eq("created"), eq(true)))
                 .thenReturn(new SourceItemMaterialNoSyncService.MaterialNoSyncResult(1, 1, 1, 1, 0));
         wireSyncService(service, ticketMapper, orderMapper, itemMapper, client, auditService);
         ReflectionTestUtils.setField(service, "mesRequestMapper", mesRequestMapper);

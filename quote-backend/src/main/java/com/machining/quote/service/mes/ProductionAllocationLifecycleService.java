@@ -31,6 +31,20 @@ public class ProductionAllocationLifecycleService {
                                       String mesRequestId,
                                       String externalTraceId,
                                       boolean callbackReceived) {
+        recordMaterialSuccess(ticketId, materialNo, message, mesRequestId, externalTraceId, callbackReceived, false);
+    }
+
+    /**
+     * @param allowOverwrite 当前有效的 MES 结果允许覆盖已确认的旧料号（MES 是料号权威来源）。
+     *                       只有经过 bizId + taskNo 校验的批次回调才允许传 true；其他入口一律 false。
+     */
+    public void recordMaterialSuccess(Integer ticketId,
+                                      String materialNo,
+                                      String message,
+                                      String mesRequestId,
+                                      String externalTraceId,
+                                      boolean callbackReceived,
+                                      boolean allowOverwrite) {
         String normalizedMaterialNo = materialNo == null ? null : materialNo.trim();
         if (ticketId == null || normalizedMaterialNo == null || normalizedMaterialNo.isEmpty()) {
             throw new IllegalArgumentException("ticketId and confirmed materialNo are required");
@@ -39,7 +53,8 @@ public class ProductionAllocationLifecycleService {
         if (ticket == null) {
             throw new IllegalStateException("delivery ticket not found ticketId=" + ticketId);
         }
-        if (ticket.getMaterialNo() != null && !ticket.getMaterialNo().isBlank()
+        if (!allowOverwrite
+                && ticket.getMaterialNo() != null && !ticket.getMaterialNo().isBlank()
                 && !normalizedMaterialNo.equals(ticket.getMaterialNo().trim())) {
             throw new IllegalStateException("confirmed material number changed ticketId=" + ticketId);
         }

@@ -48,6 +48,28 @@ class MesMaterialDedupDocumentationCharacterizationTest {
     }
 
     @Test
+    void dedupDocUsesPartVersionMaterialIdentityInsteadOfPartVersionOnly() throws IOException {
+        String doc = read(DEDUP_DOC);
+
+        assertThat(doc)
+                .contains("图号 + 版本 + 材质")
+                .contains("长度前缀")
+                .contains("v3|")
+                // 一个请求内图号版本必须唯一，否则响应无法对应到材质
+                .contains("一个 MES 请求内图号版本必须唯一")
+                .contains("uk_mes_material_batch_key")
+                // 刷新料号共享同一身份锁，且不再按 request_role 过滤
+                .contains("刷新料号共享同一身份锁")
+                .contains("不再按 `request_role = MASTER` 过滤")
+                // 存量键升级与部署前检查
+                .contains("V71__mes_material_identity_material.sql")
+                .contains("mes-material-identity-preflight.sql")
+                // 旧的两字段口径不得再被描述为当前口径
+                .doesNotContain("去重键固定为 **图号 + 版本**，")
+                .doesNotContain("dedupKey = normalize(part_no) + \"|\" + normalize(version)");
+    }
+
+    @Test
     void logAndPermissionDocsKeepActiveDedupWithoutNewPermissionOrSensitivePayloads() throws IOException {
         assertThat(read(LOG_OPS_DOC))
                 .contains(

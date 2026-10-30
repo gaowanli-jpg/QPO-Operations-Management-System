@@ -62,6 +62,34 @@ public class MesMaterialSyncService {
     private static final String STATUS_RESULT_UNKNOWN = "RESULT_UNKNOWN";
     private static final String BATCH_STATUS_PARTIAL_PENDING = "PARTIAL_PENDING";
     private static final int MATERIAL_CALLBACK_MAX_ITEMS = 100;
+    /**
+     * 单批次明细上限，必须 ≤ 回调上限。
+     *
+     * <p>MES 可能把整批结果一次回调回来。若一批超过回调上限，那次回调会被我们以
+     * 400 拒收，MES 反复重试也进不来，这批行就永远停在 {@code CALLBACK_PENDING}
+     * ——而 {@code assertCanStart} 又会拦住重试，只能人工改库。</p>
+     */
+    private static final int MATERIAL_BATCH_MAX_ITEMS = MATERIAL_CALLBACK_MAX_ITEMS;
+    /*
+     * MES 物料接口的错误码，统一存纯数字形态。MES 同一个码在两种格式间摇摆
+     * （1_030_900_002 与 1030900008），比较前先去掉非数字，否则换一种写法就漏判。
+     *
+     * 契约（MES 2026-10-30 确认）分两层：
+     *   1. 行级状态：code=0，items 逐行带 status，EXISTING_PRODUCT 直接取料号、PENDING_CREATE 等回调，
+     *      一行「已存在」不影响同批其它行。
+     *   2. 批级回滚：非 0 code + data=null，MES 侧 @Transactional 整包回滚，一条都没建。
+     * 因此 002/003 之外的非 0 code 都意味着「什么都没发生」，重发不会造重复任务。
+     */
+    /** 旧契约的「已存在物料准备任务」批级码（新契约已改为行状态 EXISTING_PRODUCT）。 */
+    private static final String MES_CODE_MATERIAL_EXISTS = "1030900002";
+    /** 旧契约的「已有处理中的物料准备任务」批级码。 */
+    private static final String MES_CODE_MATERIAL_PROCESSING = "1030900003";
+    /** 某行命中已有任务、仍在待建料：整批回滚。 */
+    private static final String MES_CODE_MATERIAL_TASK_PENDING = "1030900008";
+    /** 同一包内两条明细图号+版本+材质重复：整批回滚。 */
+    private static final String MES_CODE_BATCH_DUPLICATE_ITEM = "1030900011";
+    /** 某行图纸转存失败：整批回滚。 */
+    private static final String MES_CODE_DRAWING_TRANSFER_FAILED = "1030900012";
     private static final DateTimeFormatter BIZ_DATE = DateTimeFormatter.BASIC_ISO_DATE;
     private static final char[] CROCKFORD32 = "0123456789ABCDEFGHJKMNPQRSTVWXYZ".toCharArray();
     private static final SecureRandom RANDOM = new SecureRandom();
@@ -149,7 +177,7 @@ public class MesMaterialSyncService {
             if (materialNo.equals(ticket.getMaterialNo().trim())) {
                 SourceItemMaterialNoSyncService.MaterialNoSyncResult sourceSyncResult =
                         syncSourceItemMaterialNoForCallback(
-                                ticket, materialNo, req.getMessage(), request, req);
+                                ticket, materialNo, req.getMessage(), request, req, false);
                 if (dedupService != null) {
                     dedupService.completeMasterSuccess(mesRequestId, materialNo, req.getMessage(), externalTraceId);
                 }
@@ -169,7 +197,7 @@ public class MesMaterialSyncService {
         }
         SourceItemMaterialNoSyncService.MaterialNoSyncResult sourceSyncResult =
                 syncSourceItemMaterialNoForCallback(
-                        ticket, materialNo, req.getMessage(), request, req);
+                        ticket, materialNo, req.getMessage(), request, req, false);
         markCallbackSuccess(ticket, mesRequestId, materialNo, req.getMessage(), externalTraceId);
         updateMesRequestFromCallback(mesRequestId, STATUS_SUCCESS, materialNo, externalTraceId, req.getMessage(), true);
         if (dedupService != null) {
@@ -203,32 +231,28 @@ public class MesMaterialSyncService {
         }
         MesIntegrationBatch batch = loadMaterialBatch(envelope.bizId());
         List<MesMaterialBatchItem> batchItems = loadMaterialBatchItems(batch);
-        Map<String, MesMaterialBatchItem> itemByKey = indexBatchItems(batchItems);
+        BatchItemIndex itemIndex = indexBatchItems(batchItems);
         List<MaterialBatchCallbackApplication> applications = new ArrayList<>();
         Map<Long, String> projectedStatuses = projectedStatusMap(batchItems);
         int duplicateCount = 0;
 
         for (MaterialBatchCallbackRow row : envelope.rows()) {
-            MesMaterialBatchItem batchItem = itemByKey.get(row.itemKey());
-            if (batchItem == null) {
-                throw callbackError(HttpStatus.CONFLICT,
-                        "MES material callback row does not match current QPO batch item");
-            }
+            MesMaterialBatchItem batchItem = resolveBatchItem(itemIndex, row);
             OrderDeliveryTicketMesRequest request = loadMesRequest(batchItem.getLineRequestId());
             OrderDeliveryTicket ticket = loadTicket(batchItem.getTicketId());
             validateMaterialBatchCallbackAssociation(batch, batchItem, request, ticket, row);
-            if (hasConfirmedMaterialNo(ticket)) {
-                duplicateCount++;
-                continue;
-            }
+            // 必须先校验完 bizId / taskNo / 行归属，再判断「是否已有料号」：
+            // 反过来会把 taskNo 不匹配的脏回调静默当成幂等成功吞掉。
+            boolean superseded = isSupersededLineRequest(batchItem, ticket);
             validateCurrentMaterialCallbackRequest(batchItem, request, ticket, row);
-            BatchCallbackDisposition disposition = disposition(batchItem, row, ticket);
+            BatchCallbackDisposition disposition = disposition(batchItem, row, ticket, superseded);
             if (disposition.duplicate()) {
                 duplicateCount++;
                 continue;
             }
             applications.add(new MaterialBatchCallbackApplication(
-                    row, batchItem, request, ticket, disposition.reviveFailed()));
+                    row, batchItem, request, ticket,
+                    disposition.reviveFailed(), disposition.overwrite(), disposition.previousMaterialNo()));
             projectedStatuses.put(batchItem.getId(), row.success() ? STATUS_SUCCESS : STATUS_FAILED);
         }
 
@@ -271,6 +295,7 @@ public class MesMaterialSyncService {
             throw callbackError(HttpStatus.BAD_REQUEST, "MES material callback items exceed 100 rows");
         }
         List<MaterialBatchCallbackRow> rows = new ArrayList<>();
+        Set<String> callbackTaskNos = new HashSet<>();
         Set<String> callbackKeys = new HashSet<>();
         for (int index = 0; index < items.size(); index++) {
             MesMaterialCallbackReq.Item item = items.get(index);
@@ -292,6 +317,10 @@ public class MesMaterialSyncService {
             }
             if (STATUS_FAILED.equals(status) && isBlank(message)) {
                 throw callbackError(HttpStatus.BAD_REQUEST, "items[" + index + "].message cannot be blank when status is FAILED");
+            }
+            // taskNo 是 callback 定位批次行的唯一键，重复即无法判定归属，必须显式拒绝。
+            if (!callbackTaskNos.add(taskNo)) {
+                throw callbackError(HttpStatus.BAD_REQUEST, "MES material callback contains duplicate taskNo");
             }
             String itemKey = materialItemKey(drawingNo, drawingVersion);
             if (!callbackKeys.add(itemKey)) {
@@ -355,16 +384,63 @@ public class MesMaterialSyncService {
         return items;
     }
 
-    private Map<String, MesMaterialBatchItem> indexBatchItems(List<MesMaterialBatchItem> items) {
-        Map<String, MesMaterialBatchItem> result = new LinkedHashMap<>();
+    /**
+     * 批次行索引：taskNo 是 callback 的定位键，图号+版本键只用于旧批次兼容。
+     */
+    private BatchItemIndex indexBatchItems(List<MesMaterialBatchItem> items) {
+        Map<String, MesMaterialBatchItem> byTaskNo = new LinkedHashMap<>();
+        Set<String> duplicateTaskNos = new HashSet<>();
+        Map<String, List<MesMaterialBatchItem>> byItemKey = new LinkedHashMap<>();
         for (MesMaterialBatchItem item : items) {
-            String key = trimToNull(item.getItemKey());
-            if (key == null) {
-                key = materialItemKey(item.getDrawingNo(), item.getDrawingVersion());
+            String taskNo = trimToNull(item.getMesTaskNo());
+            if (taskNo != null && byTaskNo.putIfAbsent(taskNo, item) != null) {
+                duplicateTaskNos.add(taskNo);
             }
-            result.put(key, item);
+            byItemKey.computeIfAbsent(batchItemKey(item), ignored -> new ArrayList<>()).add(item);
         }
-        return result;
+        return new BatchItemIndex(byTaskNo, duplicateTaskNos, byItemKey);
+    }
+
+    private String batchItemKey(MesMaterialBatchItem item) {
+        String key = trimToNull(item.getItemKey());
+        return key == null ? materialItemKey(item.getDrawingNo(), item.getDrawingVersion()) : key;
+    }
+
+    /**
+     * 先按 taskNo 定位批次行，再用图号/版本交叉校验。
+     *
+     * <p>旧批次（没有 mes_task_no）走兼容路径：仅当图号+版本候选行唯一、
+     * 且该行确实还没有 taskNo 时才匹配；有歧义就安全拒绝，不猜。
+     * 该唯一性由 uk_mes_material_batch_key (batch_id, item_key) 保证。</p>
+     */
+    private MesMaterialBatchItem resolveBatchItem(BatchItemIndex index, MaterialBatchCallbackRow row) {
+        String taskNo = trimToNull(row.taskNo());
+        if (taskNo != null && index.duplicateTaskNos().contains(taskNo)) {
+            throw callbackError(HttpStatus.CONFLICT,
+                    "MES material batch contains duplicate taskNo; the row cannot be located");
+        }
+        MesMaterialBatchItem byTaskNo = taskNo == null ? null : index.byTaskNo().get(taskNo);
+        if (byTaskNo != null) {
+            if (!row.itemKey().equals(batchItemKey(byTaskNo))) {
+                throw callbackError(HttpStatus.CONFLICT,
+                        "MES material callback drawing/version does not match the batch row of this taskNo");
+            }
+            return byTaskNo;
+        }
+        List<MesMaterialBatchItem> candidates = index.byItemKey().getOrDefault(row.itemKey(), List.of());
+        if (candidates.isEmpty()) {
+            throw callbackError(HttpStatus.CONFLICT, "MES material callback taskNo does not belong to this batch");
+        }
+        if (candidates.size() > 1) {
+            throw callbackError(HttpStatus.CONFLICT,
+                    "MES material callback drawing/version is ambiguous inside this batch");
+        }
+        MesMaterialBatchItem candidate = candidates.get(0);
+        String savedTaskNo = trimToNull(candidate.getMesTaskNo());
+        if (savedTaskNo != null && !savedTaskNo.equals(taskNo)) {
+            throw callbackError(HttpStatus.CONFLICT, "MES material callback taskNo mismatch");
+        }
+        return candidate;
     }
 
     private Map<Long, String> projectedStatusMap(List<MesMaterialBatchItem> items) {
@@ -395,12 +471,6 @@ public class MesMaterialSyncService {
         }
     }
 
-    private boolean hasConfirmedMaterialNo(OrderDeliveryTicket ticket) {
-        return ticket != null
-                && STATUS_SUCCESS.equalsIgnoreCase(trimToNull(ticket.getMesSyncStatus()))
-                && !isBlank(ticket.getMaterialNo());
-    }
-
     /**
      * 批次回调只校验「这条回调是否属于本批次行记录的那个 MES 任务」，不再比对 lineRequestId。
      *
@@ -409,9 +479,10 @@ public class MesMaterialSyncService {
      * 会被判为 stale 永久拒绝。MES 对同一「图号+版本+材质」只允许一个物料准备任务，重发必然被拒，
      * 一旦发生「A 失败 → 重发 B 被 MES 拒绝 → A 的成功回调到达」，料号就再也拿不回来。
      *
-     * 执行到这里时 hasConfirmedMaterialNo(ticket) 已为 false，提单还没有确认料号，接受 MES 的料号
-     * 不存在「旧结果覆盖新结果」的风险；MES 是料号的权威来源。定位链条也已保证不会串行：
-     * 批次行必须属于本批次、请求流水必须指向本批次行、request.ticketId 必须等于 batchItem.ticketId。
+     * 提单还没有确认料号时接受 MES 的料号不存在「旧结果覆盖新结果」的风险，MES 是料号的权威来源。
+     * 提单已有确认料号时，是否允许覆盖由 {@link #disposition} 按「是否已被更新的有效请求取代」判断。
+     * 定位链条已保证不会串行：批次行必须属于本批次、请求流水必须指向本批次行、
+     * request.ticketId 必须等于 batchItem.ticketId。
      *
      * taskNo 校验保留：它才是「这条回调确实对应本行那个 MES 任务」的证据。
      */
@@ -433,42 +504,112 @@ public class MesMaterialSyncService {
         }
     }
 
+    /**
+     * 记录「有效 MES 结果覆盖旧料号」。旧值、新值和请求标识必须同时留痕，
+     * 否则事后无法判断料号是何时被改的。
+     */
+    private void recordMaterialOverwriteAudit(
+            OrderDeliveryTicket ticket,
+            OrderDeliveryTicketMesRequest request,
+            MaterialBatchCallbackRow row,
+            String previousMaterialNo) {
+        if (auditService == null) {
+            return;
+        }
+        Integer ticketId = ticket == null ? null : ticket.getId();
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("ticketId", ticketId);
+        summary.put("mesRequestId", request == null ? null : request.getMesRequestId());
+        summary.put("taskNo", row.taskNo());
+        summary.put("status", STATUS_SUCCESS);
+        summary.put("previousMaterialNo", previousMaterialNo);
+        summary.put("materialNo", row.productCode());
+        if (ticket != null) {
+            summary.put("partNo", ticket.getPartNo());
+            summary.put("version", ticket.getVersion());
+            summary.put("sourceType", ticket.getSourceType());
+            summary.put("sourceOrderId", ticket.getSourceOrderId());
+            summary.put("sourceItemId", ticket.getSourceItemId());
+        }
+        auditService.record(
+                "DELIVERY_MES_MATERIAL_CALLBACK_OVERWRITE",
+                "order_delivery_ticket",
+                ticketId,
+                null,
+                summary,
+                "DELIVERY",
+                STATUS_SUCCESS,
+                AuditService.labelForAction("DELIVERY_MES_MATERIAL_CALLBACK_OVERWRITE")
+                        + " ticketId=" + ticketId
+                        + " previousMaterialNo=" + previousMaterialNo
+                        + " materialNo=" + row.productCode(),
+                null
+        );
+    }
+
+    private boolean isSupersededLineRequest(MesMaterialBatchItem batchItem, OrderDeliveryTicket ticket) {
+        String currentLineRequestId = trimToNull(ticket == null ? null : ticket.getMesRequestId());
+        return currentLineRequestId != null && !currentLineRequestId.equals(batchItem.getLineRequestId());
+    }
+
     private BatchCallbackDisposition disposition(MesMaterialBatchItem batchItem,
                                                  MaterialBatchCallbackRow row,
-                                                 OrderDeliveryTicket ticket) {
+                                                 OrderDeliveryTicket ticket,
+                                                 boolean superseded) {
         String currentStatus = normalizeCallbackExistingStatus(batchItem.getStatus());
         String currentProductCode = normalizeMaterialNo(batchItem.getProductCode());
-        if (STATUS_SUCCESS.equals(currentStatus)) {
-            if (row.success() && row.productCode().equals(currentProductCode)) {
+        String confirmedMaterialNo = normalizeMaterialNo(ticket == null ? null : ticket.getMaterialNo());
+        boolean ticketConfirmed = !isBlank(confirmedMaterialNo);
+
+        if (!row.success()) {
+            // 失败回调永远不降级已经成功的结果；重复失败回调按幂等处理。
+            if (STATUS_SUCCESS.equals(currentStatus) || STATUS_FAILED.equals(currentStatus)) {
                 return BatchCallbackDisposition.duplicateResult();
             }
-            throw callbackError(HttpStatus.CONFLICT, "MES material callback productCode conflicts with confirmed result");
+            return BatchCallbackDisposition.applyResult();
+        }
+
+        if (ticketConfirmed && !confirmedMaterialNo.equals(row.productCode())) {
+            if (superseded) {
+                // 已确认料号属于另一个更新的有效请求，旧请求的迟到回调不得覆盖它。
+                throw callbackError(HttpStatus.CONFLICT,
+                        "MES material callback comes from a superseded request and cannot overwrite "
+                                + "the confirmed material number");
+            }
+            // 当前有效请求给出了新的有效结果：允许覆盖并审计（MES 是料号的权威来源）。
+            return BatchCallbackDisposition.overwriteResult(confirmedMaterialNo);
+        }
+        if (ticketConfirmed) {
+            if (STATUS_SUCCESS.equals(currentStatus)) {
+                return BatchCallbackDisposition.duplicateResult();
+            }
+            // 同值，但批次行还停在待回调/待核对：补一次写入把行状态收口。
+            return BatchCallbackDisposition.applyResult();
+        }
+        if (STATUS_SUCCESS.equals(currentStatus)) {
+            if (row.productCode().equals(currentProductCode)) {
+                return BatchCallbackDisposition.duplicateResult();
+            }
+            return BatchCallbackDisposition.overwriteResult(currentProductCode);
         }
         if (STATUS_FAILED.equals(currentStatus)) {
-            if (!row.success()) {
-                return BatchCallbackDisposition.duplicateResult();
-            }
             // MES 是料号的权威来源。批次行先前被判 FAILED（超时、响应解析失败或 MES 当时拒绝），
-            // 但 MES 后续仍产出了料号并回调成功。执行到这里之前已校验：批次行属于本批次、本批次行属于
-            // 本提单、提单行尚未确认料号、taskNo 与本行记录的 MES 任务一致，因此不可能是别的任务的回调
-            // 串进来。允许成功回调纠正失败判定，否则该零件的料号再也拿不回来——重新解析会被
-            // MES 的「已存在物料准备任务」挡住，形成双向死锁。
-            String existingMaterialNo = normalizeMaterialNo(ticket == null ? null : ticket.getMaterialNo());
-            if (!isBlank(existingMaterialNo) && !existingMaterialNo.equals(row.productCode())) {
-                throw callbackError(HttpStatus.CONFLICT,
-                        "MES material callback productCode conflicts with existing ticket material number");
-            }
+            // 但 MES 后续仍产出了料号并回调成功。执行到这里之前已校验：批次行属于本批次、
+            // 本批次行属于本提单、taskNo 与本行记录的 MES 任务一致，因此不可能是别的任务串进来。
             return BatchCallbackDisposition.reviveResult();
         }
-        if (row.success() && !isBlank(currentProductCode) && !row.productCode().equals(currentProductCode)) {
-            throw callbackError(HttpStatus.CONFLICT, "MES material callback productCode conflicts with existing row value");
+        if (!isBlank(currentProductCode) && !row.productCode().equals(currentProductCode)) {
+            return BatchCallbackDisposition.overwriteResult(currentProductCode);
         }
         return BatchCallbackDisposition.applyResult();
     }
 
-    private String normalizeCallbackExistingStatus(String status) {
-        String normalized = trimToNull(status);
-        return normalized == null ? STATUS_PROCESSING : normalized.toUpperCase(Locale.ROOT);
+    static String normalizeCallbackExistingStatus(String status) {
+        if (status == null) {
+            return STATUS_PROCESSING;
+        }
+        String normalized = status.trim();
+        return normalized.isEmpty() ? STATUS_PROCESSING : normalized.toUpperCase(Locale.ROOT);
     }
 
     private SourceItemMaterialNoSyncService.MaterialNoSyncResult applyMaterialBatchCallbackRow(
@@ -477,9 +618,11 @@ public class MesMaterialSyncService {
         MesMaterialCallbackReq adapter = legacyCallbackAdapter(application.batchItem().getLineRequestId(), row);
         if (row.success()) {
             SourceItemMaterialNoSyncService.MaterialNoSyncResult sourceSyncResult = syncSourceItemMaterialNoForCallback(
-                    application.ticket(), row.productCode(), row.message(), application.request(), adapter);
+                    application.ticket(), row.productCode(), row.message(), application.request(), adapter,
+                    application.overwrite());
             markCallbackSuccess(
-                    application.ticket(), application.batchItem().getLineRequestId(), row.productCode(), row.message(), row.taskNo());
+                    application.ticket(), application.batchItem().getLineRequestId(), row.productCode(),
+                    row.message(), row.taskNo(), application.overwrite());
             updateMesRequestFromCallback(
                     application.batchItem().getLineRequestId(), STATUS_SUCCESS, row.productCode(), row.taskNo(), row.message(), true);
             updateMaterialBatchItemFromCallback(application.batchItem(), row, STATUS_SUCCESS, true);
@@ -507,6 +650,10 @@ public class MesMaterialSyncService {
                         STATUS_SUCCESS,
                         null,
                         sourceSyncResult);
+            }
+            if (application.overwrite()) {
+                recordMaterialOverwriteAudit(
+                        application.ticket(), auditedRequest, row, application.previousMaterialNo());
             }
             return sourceSyncResult;
         }
@@ -573,7 +720,7 @@ public class MesMaterialSyncService {
         mesIntegrationBatchMapper.updateById(update);
     }
 
-    private String summarizeMaterialBatchStatus(List<String> statuses) {
+    static String summarizeMaterialBatchStatus(List<String> statuses) {
         boolean hasPending = false;
         boolean hasFailed = false;
         boolean hasUnknown = false;
@@ -634,11 +781,15 @@ public class MesMaterialSyncService {
         long startedAt = System.currentTimeMillis();
         OrderDeliveryTicket ticket = loadTicket(ticketId);
         assertCanStart(ticket);
+        retireUnresolvedRequests(ticket, taskId);
         MesMaterialDedupService.DedupResolveResult dedupResult = dedupService == null
                 ? null
                 : dedupService.resolveBeforeMes(ticket, taskId);
         if (dedupResult != null && dedupResult.isFollowExistingActive()) {
             return completeDedupFollow(ticket, taskId, dedupResult, startedAt);
+        }
+        if (dedupResult != null && dedupResult.isActiveRequestExists()) {
+            return batchActiveRequestRow(ticket, taskId, dedupResult);
         }
         String mesRequestId = generateMesRequestId(ticket.getId());
         log.info("MES material sync started ticketId={} taskId={} rfqId={} partNo={}",
@@ -666,6 +817,7 @@ public class MesMaterialSyncService {
             if (!isBlank(materialNo)) {
                 SourceItemMaterialNoSyncService.MaterialNoSyncResult sourceSyncResult = markSuccess(
                         ticket,
+                        taskId,
                         mesRequestId,
                         materialNo,
                         resp == null ? null : resp.getMessage(),
@@ -749,18 +901,20 @@ public class MesMaterialSyncService {
         for (OrderDeliveryTicket ticket : tickets) {
             try {
                 OrderDeliveryTicket current = ticket == null ? null : loadTicket(ticket.getId());
-                if (STATUS_RESULT_UNKNOWN.equalsIgnoreCase(current.getMesSyncStatus())) {
-                    rows.add(batchUnknownRow(current, taskId, current.getMesRequestId(),
-                            "MES material sync result is waiting for reconciliation"));
-                    continue;
-                }
                 assertCanStart(current);
+                // 结果未知的行允许重新获取：MES 按身份全局判重，重发不会造出第二个任务，
+                // 只会明确回「已存在带料号」或「任务还在待建料」。重试前先把旧台账行收口。
+                retireUnresolvedRequests(current, taskId);
                 MaterialBatchPlan plan = buildBatchPlan(current);
                 MesMaterialDedupService.DedupResolveResult dedupResult = dedupService == null
                         ? null
                         : dedupService.resolveBeforeMes(current, taskId);
                 if (dedupResult != null && dedupResult.isFollowExistingActive()) {
                     rows.add(batchDedupFollowRow(current, taskId, dedupResult));
+                    continue;
+                }
+                if (dedupResult != null && dedupResult.isActiveRequestExists()) {
+                    rows.add(batchActiveRequestRow(current, taskId, dedupResult));
                     continue;
                 }
                 groups.computeIfAbsent(plan.groupKey(), ignored -> new ArrayList<>()).add(plan);
@@ -790,24 +944,98 @@ public class MesMaterialSyncService {
                 null);
         appendDedupSummary(result, dedupResult);
         result.put("submittedToMes", false);
-        result.put("message", "Follow active MES material request for same part/version");
+        result.put("message", "Follow active MES material request for same part/version/material");
         return result;
     }
 
+    /**
+     * 同一物料身份已有在途请求，但它不是本流程的批量主请求（刷新料号台账行，
+     * 或本提单自身的旧请求）。不建 follower、不发 POST，只把在途状态回给用户。
+     */
+    private Map<String, Object> batchActiveRequestRow(
+            OrderDeliveryTicket ticket,
+            Long taskId,
+            MesMaterialDedupService.DedupResolveResult dedupResult) {
+        boolean unknown = STATUS_RESULT_UNKNOWN.equals(dedupResult.getStatus());
+        Map<String, Object> result = summary(
+                ticket,
+                taskId,
+                dedupResult.getMasterMesRequestId(),
+                null,
+                dedupResult.getStatus(),
+                null);
+        appendDedupSummary(result, dedupResult);
+        result.put("status", unknown ? STATUS_RESULT_UNKNOWN : STATUS_CALLBACK_PENDING);
+        result.put("submittedToMes", false);
+        result.put("message", unknown
+                ? "同一图号版本材质已有结果待核对的 MES 请求，请按原 bizId 核对后再处理"
+                : "同一图号版本材质已有在途 MES 请求，等待其完成后重试");
+        return result;
+    }
+
+    /**
+     * 一个客户/项目分组内的物料请求。
+     *
+     * <p>组内先按三字段身份（图号+版本+材质）归并 master/follower。MES 创建响应不带材质，
+     * 所以同一个请求内「图号+版本」必须唯一，否则响应无法对应到具体材质。同一图号版本
+     * 出现多种材质时，拆成多个请求（各自一个 bizId），而不是把不同材质并成 follower。</p>
+     */
     private List<Map<String, Object>> syncMaterialPlanGroup(List<MaterialBatchPlan> group, Long taskId) {
-        Map<String, MaterialBatchPlan> mastersByKey = new LinkedHashMap<>();
-        Map<String, List<MaterialBatchPlan>> followersByKey = new LinkedHashMap<>();
+        Map<String, MaterialBatchPlan> mastersByIdentity = new LinkedHashMap<>();
+        Map<String, List<MaterialBatchPlan>> followersByIdentity = new LinkedHashMap<>();
         for (MaterialBatchPlan plan : group) {
-            MaterialBatchPlan master = mastersByKey.putIfAbsent(plan.itemKey(), plan);
-            if (master != null) {
-                followersByKey.computeIfAbsent(plan.itemKey(), ignored -> new ArrayList<>()).add(plan);
+            if (mastersByIdentity.putIfAbsent(plan.identityKey(), plan) != null) {
+                followersByIdentity
+                        .computeIfAbsent(plan.identityKey(), ignored -> new ArrayList<>())
+                        .add(plan);
             }
         }
-        List<MaterialBatchPlan> masters = new ArrayList<>(mastersByKey.values());
+        List<List<MaterialBatchPlan>> waves = splitIntoIdentitySafeWaves(
+                new ArrayList<>(mastersByIdentity.values()));
         Map<Integer, Map<String, Object>> resultByTicketId = new LinkedHashMap<>();
-        Map<Integer, PreparedMaterialPlan> preparedByTicketId = new LinkedHashMap<>();
+        for (List<MaterialBatchPlan> wave : waves) {
+            submitMaterialWave(wave, followersByIdentity, resultByTicketId, taskId);
+        }
+        // 各波次已把各自的 bizId 写进结果行，这里不能再统一覆盖。
+        return orderedBatchRows(group, resultByTicketId, taskId, null);
+    }
+
+    /**
+     * 按「同一请求内图号+版本唯一」把 master 列表切成若干波次。
+     *
+     * <p>同图号版本存在多种材质时才会产生多个波次；另外每波不超过
+     * {@link #MATERIAL_BATCH_MAX_ITEMS} 条，否则整批回调会超过我们的接收上限。</p>
+     */
+    private List<List<MaterialBatchPlan>> splitIntoIdentitySafeWaves(List<MaterialBatchPlan> masters) {
+        List<List<MaterialBatchPlan>> waves = new ArrayList<>();
+        for (MaterialBatchPlan plan : masters) {
+            List<MaterialBatchPlan> target = null;
+            for (List<MaterialBatchPlan> wave : waves) {
+                boolean full = wave.size() >= MATERIAL_BATCH_MAX_ITEMS;
+                boolean clashes = wave.stream()
+                        .anyMatch(item -> item.itemKey().equals(plan.itemKey()));
+                if (!full && !clashes) {
+                    target = wave;
+                    break;
+                }
+            }
+            if (target == null) {
+                target = new ArrayList<>();
+                waves.add(target);
+            }
+            target.add(plan);
+        }
+        return waves;
+    }
+
+    private void submitMaterialWave(
+            List<MaterialBatchPlan> masters,
+            Map<String, List<MaterialBatchPlan>> followersByIdentity,
+            Map<Integer, Map<String, Object>> resultByTicketId,
+            Long taskId) {
         String bizId = newMaterialBizId();
         MesMaterialResolveReq req;
+        Map<Integer, PreparedMaterialPlan> preparedByTicketId = new LinkedHashMap<>();
         try {
             MaterialBatchPlan first = masters.get(0);
             req = batchRequestAssembler.assemble(
@@ -817,11 +1045,14 @@ public class MesMaterialSyncService {
                     first.internalProjectNo(),
                     masters.stream().map(MaterialBatchPlan::requestItem).toList());
             String requestFingerprint = batchFingerprintService.fingerprint(req);
-            preparedByTicketId.putAll(reserveMaterialMasters(bizId, masters, taskId, requestFingerprint));
+            // 预留是逐条写库的（每条一个台账行），中途失败时前面几条已经落库。
+            // 必须把「已落库的那几条」带回给 catch 收尾，否则它们会永远停在 PROCESSING，
+            // 一直占着身份去重位，后续重试全被「已有在途请求」挡住，只能人工改库。
+            reserveMaterialMasters(bizId, masters, taskId, requestFingerprint, preparedByTicketId);
         } catch (RuntimeException error) {
-            String message = error.getMessage() == null ? error.getClass().getSimpleName() : error.getMessage();
+            String message = reservationFailureMessage(error);
             log.error("MES material batch reservation failed bizId={} taskId={} itemCount={} reason={}",
-                    bizId, taskId, group.size(), message, error);
+                    bizId, taskId, masters.size(), message, error);
             for (MaterialBatchPlan master : masters) {
                 PreparedMaterialPlan prepared = preparedByTicketId.get(master.ticket().getId());
                 Map<String, Object> masterResult = prepared == null
@@ -829,10 +1060,10 @@ public class MesMaterialSyncService {
                         : applyBatchFailure(prepared, taskId, message, false);
                 resultByTicketId.put(master.ticket().getId(), withBizId(masterResult, bizId));
                 applyFollowerFailures(master, prepared == null ? null : prepared.lineRequestId(),
-                        followersByKey, resultByTicketId, taskId, bizId, message);
+                        followersByIdentity, resultByTicketId, taskId, bizId, message);
             }
             updateMaterialBatchStatus(batchId(preparedByTicketId), STATUS_FAILED, null, message, true);
-            return orderedBatchRows(group, resultByTicketId, taskId, bizId);
+            return;
         }
 
         Long batchId = batchId(preparedByTicketId);
@@ -846,7 +1077,7 @@ public class MesMaterialSyncService {
             boolean unknown = isResultUnknown(error);
             String status = unknown ? STATUS_RESULT_UNKNOWN : STATUS_FAILED;
             log.error("MES material batch group failed bizId={} taskId={} itemCount={} status={} reason={}",
-                    bizId, taskId, group.size(), status, message, error);
+                    bizId, taskId, masters.size(), status, message, error);
             for (MaterialBatchPlan master : masters) {
                 PreparedMaterialPlan prepared = preparedByTicketId.get(master.ticket().getId());
                 Map<String, Object> masterResult = prepared == null
@@ -859,17 +1090,17 @@ public class MesMaterialSyncService {
                 resultByTicketId.put(master.ticket().getId(), withBizId(masterResult, bizId));
                 if (unknown) {
                     applyFollowerUnknown(master, prepared == null ? null : prepared.lineRequestId(),
-                            followersByKey, resultByTicketId, taskId, bizId, message);
+                            followersByIdentity, resultByTicketId, taskId, bizId, message);
                 } else {
                     applyFollowerFailures(master, prepared == null ? null : prepared.lineRequestId(),
-                            followersByKey, resultByTicketId, taskId, bizId, message);
+                            followersByIdentity, resultByTicketId, taskId, bizId, message);
                 }
             }
             updateMaterialBatchStatus(batchId, status, responseCode(resp), message, !unknown);
-            return orderedBatchRows(group, resultByTicketId, taskId, bizId);
+            return;
         }
 
-        ResponseIndex responseIndex = indexMaterialResponse(resp, mastersByKey.keySet());
+        ResponseIndex responseIndex = indexMaterialResponse(resp, masters);
         for (MaterialBatchPlan master : masters) {
             PreparedMaterialPlan prepared = preparedByTicketId.get(master.ticket().getId());
             if (prepared == null) {
@@ -881,7 +1112,15 @@ public class MesMaterialSyncService {
                 String message = "MES returned duplicate rows for drawing/version";
                 resultByTicketId.put(master.ticket().getId(), withBizId(
                         applyBatchResultUnknown(prepared, taskId, message, true), bizId));
-                applyFollowerUnknown(master, prepared.lineRequestId(), followersByKey,
+                applyFollowerUnknown(master, prepared.lineRequestId(), followersByIdentity,
+                        resultByTicketId, taskId, bizId, message);
+                continue;
+            }
+            if (responseIndex.mismatchedKeys().contains(master.itemKey())) {
+                String message = "MES 回传的图号/版本与请求不一致，无法确认这一行归属";
+                resultByTicketId.put(master.ticket().getId(), withBizId(
+                        applyBatchResultUnknown(prepared, taskId, message, true), bizId));
+                applyFollowerUnknown(master, prepared.lineRequestId(), followersByIdentity,
                         resultByTicketId, taskId, bizId, message);
                 continue;
             }
@@ -890,13 +1129,21 @@ public class MesMaterialSyncService {
                 String message = "MES response missing row for drawing/version";
                 resultByTicketId.put(master.ticket().getId(), withBizId(
                         applyBatchResultUnknown(prepared, taskId, message, true), bizId));
-                applyFollowerUnknown(master, prepared.lineRequestId(), followersByKey,
+                applyFollowerUnknown(master, prepared.lineRequestId(), followersByIdentity,
+                        resultByTicketId, taskId, bizId, message);
+                continue;
+            }
+            if (responseIndex.duplicateTaskNos().contains(trimToNull(item.getTaskNo()))) {
+                String message = "MES returned duplicate taskNo inside one bizId";
+                resultByTicketId.put(master.ticket().getId(), withBizId(
+                        applyBatchResultUnknown(prepared, taskId, message, true), bizId));
+                applyFollowerUnknown(master, prepared.lineRequestId(), followersByIdentity,
                         resultByTicketId, taskId, bizId, message);
                 continue;
             }
             if (isExplicitMaterialFailure(item)) {
                 String message = firstNonBlank(item.getMessage(), "MES material row failed");
-                applyFollowerFailures(master, prepared.lineRequestId(), followersByKey,
+                applyFollowerFailures(master, prepared.lineRequestId(), followersByIdentity,
                         resultByTicketId, taskId, bizId, message);
                 resultByTicketId.put(master.ticket().getId(), withBizId(
                         applyBatchFailure(prepared, taskId, message, true), bizId));
@@ -907,19 +1154,19 @@ public class MesMaterialSyncService {
                 String message = "MES response row has no material number or pending status";
                 resultByTicketId.put(master.ticket().getId(), withBizId(
                         applyBatchResultUnknown(prepared, taskId, message, true), bizId));
-                applyFollowerUnknown(master, prepared.lineRequestId(), followersByKey,
+                applyFollowerUnknown(master, prepared.lineRequestId(), followersByIdentity,
                         resultByTicketId, taskId, bizId, message);
                 continue;
             }
             try {
                 Map<String, Object> masterResult = withBizId(applyBatchItem(prepared, item, taskId, true), bizId);
                 resultByTicketId.put(master.ticket().getId(), masterResult);
-                applyFollowerResult(prepared, followersByKey, item, resultByTicketId, taskId, bizId);
+                applyFollowerResult(prepared, followersByIdentity, item, resultByTicketId, taskId, bizId);
             } catch (RuntimeException error) {
                 String message = error.getMessage() == null ? error.getClass().getSimpleName() : error.getMessage();
                 resultByTicketId.put(master.ticket().getId(), withBizId(
                         applyBatchResultUnknown(prepared, taskId, message, true), bizId));
-                applyFollowerUnknown(master, prepared.lineRequestId(), followersByKey,
+                applyFollowerUnknown(master, prepared.lineRequestId(), followersByIdentity,
                         resultByTicketId, taskId, bizId, message);
             }
         }
@@ -930,7 +1177,26 @@ public class MesMaterialSyncService {
                 .toList());
         updateMaterialBatchStatus(batchId, batchStatus, responseCode(resp), resp.getMessage(),
                 STATUS_SUCCESS.equals(batchStatus) || STATUS_FAILED.equals(batchStatus));
-        return orderedBatchRows(group, resultByTicketId, taskId, bizId);
+    }
+
+    /**
+     * 预留阶段撞 {@code uk_mes_material_batch_key} 说明拆分逻辑漏了同图号版本多材质，
+     * 把唯一键异常翻译成业务原因，不要让它原样冒到前端。
+     */
+    private String reservationFailureMessage(RuntimeException error) {
+        String message = error.getMessage() == null ? error.getClass().getSimpleName() : error.getMessage();
+        // 身份去重位已被占：可能是并发提交，也可能是同一物料身份的另一张提单正在等回调。
+        // 这不是数据错误，要说成业务原因，别把 Postgres 原文丢给用户。
+        boolean identityHeld = message.contains("uk_delivery_mes_request_active_dedup");
+        if (identityHeld) {
+            return "该图号版本材质已有在途 MES 请求，请先按原 bizId 核对结果";
+        }
+        boolean batchItemKeyClash = message.contains("uk_mes_material_batch_key")
+                || (error instanceof DataIntegrityViolationException && message.contains("mes_material_batch_item"));
+        if (batchItemKeyClash) {
+            return "同一图号版本存在多种材质，MES 批次行键冲突；请确认后按图号版本分别获取物料号";
+        }
+        return message;
     }
 
     private List<Map<String, Object>> orderedBatchRows(
@@ -998,7 +1264,8 @@ public class MesMaterialSyncService {
         String customerCode = resolveCustomerCode(ticket, order);
         String customerName = order == null ? ticket.getCustomerName() : order.getCustomerName();
         String drawingNo = required(ticket.getPartNo(), "Drawing number cannot be blank");
-        String drawingVersion = ticket.getVersion() == null ? "" : ticket.getVersion().trim();
+        // MES 不接受空版本（整批 400 退回，同批其它零件一起失败），所以在打包前就拦住这一行。
+        String drawingVersion = required(ticket.getVersion(), "版本为空，MES 不接受无版本明细；请先补版本");
         MesMaterialResolveReq.Item item = new MesMaterialResolveReq.Item();
         item.setDrawingNo(drawingNo.trim());
         item.setDrawingVersion(drawingVersion);
@@ -1016,15 +1283,23 @@ public class MesMaterialSyncService {
                 internalProjectNo.trim(),
                 item,
                 materialItemKey(drawingNo, drawingVersion),
+                MesMaterialDedupService.identityKey(
+                        ticket.getPartNo(), ticket.getVersion(), ticket.getMaterialName()),
                 groupKey);
     }
 
-    private Map<Integer, PreparedMaterialPlan> reserveMaterialMasters(
+    /**
+     * 逐条预留台账行，成功的直接写进调用方传进来的 {@code prepared}。
+     *
+     * <p>不用返回值是为了让中途失败时调用方仍能看到「已经预留成功的那几条」并收尾成
+     * {@code FAILED}——否则那些台账行会永远停在 {@code PROCESSING}、占住身份去重位。</p>
+     */
+    private void reserveMaterialMasters(
             String bizId,
             List<MaterialBatchPlan> masters,
             Long taskId,
-            String requestFingerprint) {
-        Map<Integer, PreparedMaterialPlan> prepared = new LinkedHashMap<>();
+            String requestFingerprint,
+            Map<Integer, PreparedMaterialPlan> prepared) {
         if (mesBatchStateService != null) {
             MesBatchStateService.MaterialBatchReservation reservation = new MesBatchStateService.MaterialBatchReservation(
                     taskId,
@@ -1052,20 +1327,19 @@ public class MesMaterialSyncService {
                     throw new RuntimeException("MES batch reservation did not return item for ticket " + plan.ticket().getId());
                 }
                 OrderDeliveryTicketMesRequest request = insertBatchMesRequest(
-                        plan.ticket(), taskId, item.getLineRequestId(), plan.itemKey(), batch.getId(), item.getId());
+                        plan.ticket(), taskId, item.getLineRequestId(), plan.identityKey(), batch.getId(), item.getId());
                 linkBatchItemToRequest(item, request);
                 prepared.put(plan.ticket().getId(), new PreparedMaterialPlan(plan, item.getLineRequestId(), item.getId(), batch.getId()));
             }
-            return prepared;
+            return;
         }
 
         for (MaterialBatchPlan plan : masters) {
             String lineRequestId = newMaterialLineRequestId();
-            markProcessing(plan.ticket(), lineRequestId, MesMaterialDedupService.DedupResolveResult.master(plan.itemKey()));
-            insertBatchMesRequest(plan.ticket(), taskId, lineRequestId, plan.itemKey(), null, null);
+            markProcessing(plan.ticket(), lineRequestId, MesMaterialDedupService.DedupResolveResult.master(plan.identityKey()));
+            insertBatchMesRequest(plan.ticket(), taskId, lineRequestId, plan.identityKey(), null, null);
             prepared.put(plan.ticket().getId(), new PreparedMaterialPlan(plan, lineRequestId, null, null));
         }
-        return prepared;
     }
 
     private Map<String, Object> applyBatchItem(
@@ -1079,6 +1353,7 @@ public class MesMaterialSyncService {
         if (!isBlank(materialNo)) {
             SourceItemMaterialNoSyncService.MaterialNoSyncResult sourceSyncResult = markSuccess(
                     prepared.plan().ticket(),
+                    taskId,
                     prepared.lineRequestId(),
                     materialNo,
                     message,
@@ -1097,6 +1372,15 @@ public class MesMaterialSyncService {
             return result;
         }
         if (isPendingMaterialItem(item)) {
+            // 需要后续回调的行必须有 taskNo：callback 只带 bizId + taskNo，缺了就无法定位到
+            // 具体批次行，只能保留原 bizId 等人工核对，不能记成「已受理待回调」。
+            String pendingTaskNo = trimToNull(item.getTaskNo());
+            if (pendingTaskNo == null) {
+                return applyBatchResultUnknown(
+                        prepared, taskId,
+                        "MES accepted the request without taskNo; reconcile the original bizId",
+                        submittedToMes);
+            }
             String pendingMessage = "MES accepted, waiting for material callback";
             markCallbackPending(prepared.plan().ticket(), prepared.lineRequestId(), externalTraceId, pendingMessage);
             updateMesRequest(prepared.lineRequestId(), STATUS_CALLBACK_PENDING, null, externalTraceId, pendingMessage, false);
@@ -1117,18 +1401,18 @@ public class MesMaterialSyncService {
 
     private void applyFollowerResult(
             PreparedMaterialPlan master,
-            Map<String, List<MaterialBatchPlan>> followersByKey,
+            Map<String, List<MaterialBatchPlan>> followersByIdentity,
             MesMaterialResolveResp.Item item,
             Map<Integer, Map<String, Object>> resultByTicketId,
             Long taskId,
             String bizId) {
-        List<MaterialBatchPlan> followers = followersByKey.getOrDefault(master.plan().itemKey(), List.of());
+        List<MaterialBatchPlan> followers = followersByIdentity.getOrDefault(master.plan().identityKey(), List.of());
         for (MaterialBatchPlan follower : followers) {
             if (dedupService != null && isPendingMaterialItem(item)) {
                 MesMaterialDedupService.DedupResolveResult dedupResult = dedupService.registerBatchFollower(
                         follower.ticket(),
                         taskId,
-                        follower.itemKey(),
+                        follower.identityKey(),
                         master.plan().ticket().getId(),
                         master.lineRequestId(),
                         STATUS_CALLBACK_PENDING);
@@ -1149,7 +1433,7 @@ public class MesMaterialSyncService {
             PreparedMaterialPlan prepared = new PreparedMaterialPlan(follower, followerLineId, null, null);
             Map<String, Object> result = applyBatchItem(prepared, item, taskId, false);
             result.put("dedupResult", MesMaterialDedupService.RESULT_FOLLOW_EXISTING_ACTIVE);
-            result.put("dedupKey", follower.itemKey());
+            result.put("dedupKey", follower.identityKey());
             resultByTicketId.put(follower.ticket().getId(), withBizId(result, bizId));
         }
     }
@@ -1157,12 +1441,12 @@ public class MesMaterialSyncService {
     private void applyFollowerFailures(
             MaterialBatchPlan master,
             String masterLineRequestId,
-            Map<String, List<MaterialBatchPlan>> followersByKey,
+            Map<String, List<MaterialBatchPlan>> followersByIdentity,
             Map<Integer, Map<String, Object>> resultByTicketId,
             Long taskId,
             String bizId,
             String message) {
-        for (MaterialBatchPlan follower : followersByKey.getOrDefault(master.itemKey(), List.of())) {
+        for (MaterialBatchPlan follower : followersByIdentity.getOrDefault(master.identityKey(), List.of())) {
             resultByTicketId.put(follower.ticket().getId(),
                     withBizId(batchFailureRow(follower.ticket(), taskId, newMaterialLineRequestId(), message, false), bizId));
         }
@@ -1171,16 +1455,16 @@ public class MesMaterialSyncService {
     private void applyFollowerUnknown(
             MaterialBatchPlan master,
             String masterLineRequestId,
-            Map<String, List<MaterialBatchPlan>> followersByKey,
+            Map<String, List<MaterialBatchPlan>> followersByIdentity,
             Map<Integer, Map<String, Object>> resultByTicketId,
             Long taskId,
             String bizId,
             String message) {
-        for (MaterialBatchPlan follower : followersByKey.getOrDefault(master.itemKey(), List.of())) {
+        for (MaterialBatchPlan follower : followersByIdentity.getOrDefault(master.identityKey(), List.of())) {
             MesMaterialDedupService.DedupResolveResult dedupResult = null;
             if (dedupService != null && !isBlank(masterLineRequestId)) {
                 dedupResult = dedupService.registerBatchFollower(
-                        follower.ticket(), taskId, follower.itemKey(), master.ticket().getId(),
+                        follower.ticket(), taskId, follower.identityKey(), master.ticket().getId(),
                         masterLineRequestId, STATUS_RESULT_UNKNOWN);
             } else {
                 markResultUnknown(follower.ticket(), masterLineRequestId, message);
@@ -1289,6 +1573,10 @@ public class MesMaterialSyncService {
         if (resp == null) {
             throw new MesMaterialResponseUnknownException("MES material response is empty");
         }
+        if (acceptMaterialPayload(resp, bizId)) {
+            return;
+        }
+        rejectKnownMesErrorCode(resp);
         if (Boolean.FALSE.equals(resp.getSuccess())) {
             throw new RuntimeException(isBlank(resp.getMessage()) ? "MES returned failure" : resp.getMessage());
         }
@@ -1303,9 +1591,25 @@ public class MesMaterialSyncService {
         }
     }
 
-    private ResponseIndex indexMaterialResponse(MesMaterialResolveResp resp, Set<String> expectedKeys) {
+    /**
+     * 把 MES 响应的明细行对回本次请求的批次行。
+     *
+     * <p>MES 的契约是「{@code items} 与请求 {@code items} 严格一一对应，请用下标对齐」，
+     * 所以行数相等时按位置映射，图号/版本只做交叉校验：MES 明确回了但和请求对不上的行
+     * 视为不可信（{@code mismatchedKeys}），宁可记结果待核对也不能写错料号。</p>
+     *
+     * <p>行数不等时（MES 只回了部分行）退回按图号+版本匹配——按位置配会整体错位，
+     * 那比丢几行危险得多。匹配不上的行由调用方记结果待核对。</p>
+     */
+    private ResponseIndex indexMaterialResponse(MesMaterialResolveResp resp, List<MaterialBatchPlan> masters) {
         Map<String, MesMaterialResolveResp.Item> itemsByKey = new LinkedHashMap<>();
         Set<String> duplicateKeys = new HashSet<>();
+        Set<String> duplicateTaskNos = new HashSet<>();
+        Set<String> mismatchedKeys = new HashSet<>();
+        Set<String> seenTaskNos = new HashSet<>();
+        Set<String> expectedKeys = masters.stream()
+                .map(MaterialBatchPlan::itemKey)
+                .collect(java.util.stream.Collectors.toCollection(HashSet::new));
         List<MesMaterialResolveResp.Item> items = resp.getData() == null || resp.getData().getItems() == null
                 ? List.of()
                 : resp.getData().getItems();
@@ -1316,6 +1620,25 @@ public class MesMaterialSyncService {
             synthetic.setProductCode(resp.getMaterialNo());
             synthetic.setTaskNo(resp.getExternalTraceId());
             items = List.of(synthetic);
+        }
+        for (MesMaterialResolveResp.Item item : items) {
+            String taskNo = trimToNull(item == null ? null : item.getTaskNo());
+            if (taskNo != null && !seenTaskNos.add(taskNo)) {
+                // 同一 bizId 内 taskNo 必须唯一，否则 callback 无法定位到具体行。
+                duplicateTaskNos.add(taskNo);
+            }
+        }
+        if (items.size() == masters.size()) {
+            for (int index = 0; index < items.size(); index++) {
+                MaterialBatchPlan plan = masters.get(index);
+                MesMaterialResolveResp.Item item = items.get(index);
+                if (!matchesRequestedIdentity(item, plan)) {
+                    mismatchedKeys.add(plan.itemKey());
+                    continue;
+                }
+                itemsByKey.put(plan.itemKey(), item);
+            }
+            return new ResponseIndex(itemsByKey, duplicateKeys, duplicateTaskNos, mismatchedKeys);
         }
         for (MesMaterialResolveResp.Item item : items) {
             String key = materialItemKey(item == null ? null : item.getDrawingNo(), item == null ? null : item.getDrawingVersion());
@@ -1329,7 +1652,25 @@ public class MesMaterialSyncService {
                 duplicateKeys.add(key);
             }
         }
-        return new ResponseIndex(itemsByKey, duplicateKeys);
+        return new ResponseIndex(itemsByKey, duplicateKeys, duplicateTaskNos, mismatchedKeys);
+    }
+
+    /**
+     * 交叉校验：MES 回传的图号/版本（声明了才比）是否就是这一行请求的图号/版本。
+     *
+     * <p>两个都没声明时无法校验，按位置信任——MES 的契约就是下标对齐。</p>
+     */
+    private boolean matchesRequestedIdentity(MesMaterialResolveResp.Item item, MaterialBatchPlan plan) {
+        if (item == null) {
+            return false;
+        }
+        MesMaterialResolveReq.Item requested = plan.requestItem();
+        if (!isBlank(item.getDrawingNo())
+                && !normalizeKeyPart(item.getDrawingNo()).equals(normalizeKeyPart(requested.getDrawingNo()))) {
+            return false;
+        }
+        return isBlank(item.getDrawingVersion())
+                || normalizeKeyPart(item.getDrawingVersion()).equals(normalizeKeyPart(requested.getDrawingVersion()));
     }
 
     private boolean isPendingMaterialItem(MesMaterialResolveResp.Item item) {
@@ -1503,20 +1844,36 @@ public class MesMaterialSyncService {
             MesMaterialBatchItem batchItem,
             OrderDeliveryTicketMesRequest request,
             OrderDeliveryTicket ticket,
-            boolean reviveFailed) {
+            boolean reviveFailed,
+            boolean overwrite,
+            String previousMaterialNo) {
     }
 
-    private record BatchCallbackDisposition(boolean duplicate, boolean reviveFailed) {
+    private record BatchItemIndex(
+            Map<String, MesMaterialBatchItem> byTaskNo,
+            Set<String> duplicateTaskNos,
+            Map<String, List<MesMaterialBatchItem>> byItemKey) {
+    }
+
+    private record BatchCallbackDisposition(
+            boolean duplicate,
+            boolean reviveFailed,
+            boolean overwrite,
+            String previousMaterialNo) {
         private static BatchCallbackDisposition applyResult() {
-            return new BatchCallbackDisposition(false, false);
+            return new BatchCallbackDisposition(false, false, false, null);
         }
 
         private static BatchCallbackDisposition duplicateResult() {
-            return new BatchCallbackDisposition(true, false);
+            return new BatchCallbackDisposition(true, false, false, null);
         }
 
         private static BatchCallbackDisposition reviveResult() {
-            return new BatchCallbackDisposition(false, true);
+            return new BatchCallbackDisposition(false, true, false, null);
+        }
+
+        private static BatchCallbackDisposition overwriteResult(String previousMaterialNo) {
+            return new BatchCallbackDisposition(false, false, true, previousMaterialNo);
         }
     }
 
@@ -1542,6 +1899,7 @@ public class MesMaterialSyncService {
             String internalProjectNo,
             MesMaterialResolveReq.Item requestItem,
             String itemKey,
+            String identityKey,
             String groupKey) {
     }
 
@@ -1554,7 +1912,10 @@ public class MesMaterialSyncService {
 
     private record ResponseIndex(
             Map<String, MesMaterialResolveResp.Item> itemsByKey,
-            Set<String> duplicateKeys) {
+            Set<String> duplicateKeys,
+            Set<String> duplicateTaskNos,
+            /** 按下标对齐时，MES 回传的图号/版本与请求对不上的行：不可信，按结果待核对处理。 */
+            Set<String> mismatchedKeys) {
     }
 
     private OrderDeliveryTicket loadTicket(Integer ticketId) {
@@ -1579,9 +1940,53 @@ public class MesMaterialSyncService {
         if (STATUS_CALLBACK_PENDING.equalsIgnoreCase(status)) {
             throw new RuntimeException("MES material sync is waiting for callback");
         }
-        if (STATUS_RESULT_UNKNOWN.equalsIgnoreCase(status)) {
-            throw new RuntimeException("MES material sync result is waiting for reconciliation");
+        // RESULT_UNKNOWN 刻意不拦：MES 按「图号+版本+材质」全局判重，换新 bizId 重发不会建出
+        // 第二个物料准备任务，只会明确回 EXISTING_PRODUCT（带料号）或 1030900008（仍在待建料）。
+        // 所以「结果未知」靠重新获取一次就能得到明确答案，不需要人工核对数据。
+    }
+
+    /**
+     * 重新获取前把本物料身份下「结果未知」的台账行收口，释放身份去重位。
+     *
+     * <p>不做这一步，旧行仍然占着 {@code uk_delivery_mes_request_active_dedup}，新请求插不进去。</p>
+     */
+    private void retireUnresolvedRequests(OrderDeliveryTicket ticket, Long taskId) {
+        if (dedupService == null || ticket == null) {
+            return;
         }
+        List<String> retired = dedupService.retireUnresolvedRequests(ticket);
+        if (retired == null || retired.isEmpty()) {
+            return;
+        }
+        recordRetryAfterUnknownAudit(ticket, taskId, retired);
+    }
+
+    /** 「结果未知后重新获取」必须留痕，否则事后看到料号变了查不到原因。 */
+    private void recordRetryAfterUnknownAudit(
+            OrderDeliveryTicket ticket,
+            Long taskId,
+            List<String> retiredBizIds) {
+        if (auditService == null) {
+            return;
+        }
+        Integer ticketId = ticket == null ? null : ticket.getId();
+        Map<String, Object> auditSummary = summary(
+                ticket, taskId, null, null, STATUS_PROCESSING, null);
+        auditSummary.put("retiredMesRequestIds", retiredBizIds);
+        auditSummary.put("retiredCount", retiredBizIds.size());
+        auditService.record(
+                "DELIVERY_MES_MATERIAL_SYNC_RETRY_AFTER_UNKNOWN",
+                "order_delivery_ticket",
+                ticketId,
+                null,
+                auditSummary,
+                "DELIVERY",
+                STATUS_PROCESSING,
+                AuditService.labelForAction("DELIVERY_MES_MATERIAL_SYNC_RETRY_AFTER_UNKNOWN")
+                        + " ticketId=" + ticketId
+                        + " retired=" + String.join(",", retiredBizIds),
+                null
+        );
     }
 
     private Map<String, Object> completeDedupFollow(
@@ -1643,6 +2048,10 @@ public class MesMaterialSyncService {
         if (resp == null) {
             throw new MesMaterialResponseUnknownException("MES 响应为空");
         }
+        if (acceptMaterialPayload(resp, mesRequestId)) {
+            return;
+        }
+        rejectKnownMesErrorCode(resp);
         if (Boolean.FALSE.equals(resp.getSuccess())) {
             throw new RuntimeException(isBlank(resp.getMessage()) ? "MES 返回失败" : resp.getMessage());
         }
@@ -1659,6 +2068,110 @@ public class MesMaterialSyncService {
 
     private String normalizeMaterialNo(MesMaterialResolveResp resp) {
         return normalizeMaterialNo(resp == null ? null : resp.getMaterialNo());
+    }
+
+    /**
+     * 「取到料号即写回」：料号是本流程唯一要拿的成果物。
+     *
+     * <p>新契约里「已存在」是行状态 {@code EXISTING_PRODUCT}、code=0，本来就按正常路径写回。
+     * 这里只兜旧契约：老版本 MES 用 {@code 1_030_900_002} 这种批级码回「已存在」，
+     * 同时把料号带在 {@code data.items[].productCode} 里。除此之外的非 0 code
+     * 都是整批回滚、data 为空，即使带了 items 也不可信，一律不写。</p>
+     *
+     * @return true 表示已按料号放行，调用方不必再判外层状态
+     */
+    private boolean acceptMaterialPayload(MesMaterialResolveResp resp, String requestId) {
+        if (resp == null || Boolean.TRUE.equals(resp.getSuccess()) || !resp.hasMaterialNo()) {
+            return false;
+        }
+        if (!isMesMaterialUncertainCode(resp.getCode())) {
+            return false;
+        }
+        if (resp.contradictsRequestId(requestId)) {
+            throw new MesMaterialResponseUnknownException("MES 响应带着料号但 bizId 与请求不一致");
+        }
+        return true;
+    }
+
+    /**
+     * 旧契约里「MES 侧已有同一物料身份的任务」的两个码。
+     *
+     * <p>新契约已把「已存在」改成行状态、把「待建料」改成 {@code 1030900008} 整批回滚，
+     * 所以这两个码正常不会再出现。真出现说明对端还是老版本、行为不可知，
+     * 只能保守处理：保留原 bizId、占住身份去重位、等人工核对。</p>
+     */
+    static boolean isMesMaterialUncertainCode(Object code) {
+        String normalized = normalizeMesMaterialCode(code);
+        return MES_CODE_MATERIAL_EXISTS.equals(normalized)
+                || MES_CODE_MATERIAL_PROCESSING.equals(normalized);
+    }
+
+    /**
+     * 非 0 code 且不是上面两个旧码，代表 MES 已整批回滚（{@code @Transactional}），本批一条都没建。
+     *
+     * <p>这一点很关键：既然什么都没建，重发就不会造出重复的物料准备任务，
+     * 因此可以放心记成「可重试失败」，不必让用户卡在「结果待核对」里手工改状态。</p>
+     */
+    static boolean isMesMaterialRolledBack(Object code) {
+        return normalizeMesMaterialCode(code) != null && !isMesMaterialUncertainCode(code);
+    }
+
+    /** 批级回滚给人看的说明：说清 MES 为什么拒、这批有没有留下东西、下一步该做什么。 */
+    static String mesMaterialRollbackMessage(Object code) {
+        String normalized = normalizeMesMaterialCode(code);
+        String reason;
+        String nextStep = "可稍后重新获取";
+        if (MES_CODE_MATERIAL_TASK_PENDING.equals(normalized)) {
+            // MES 确认过：这个码不会自动出料号，必须人工在 MES 建料，所以不能提示「等一等再重试」。
+            reason = "MES 侧有零件的物料准备任务停在待建料，不会自动产出料号";
+            nextStep = "请到 MES 处理该物料准备任务后再重新获取";
+        } else if (MES_CODE_BATCH_DUPLICATE_ITEM.equals(normalized)) {
+            reason = "MES 判定同一包内存在重复的图号+版本+材质明细";
+            nextStep = "属 QPO 分包问题，请联系开发排查";
+        } else if (MES_CODE_DRAWING_TRANSFER_FAILED.equals(normalized)) {
+            reason = "MES 图纸转存失败";
+        } else {
+            reason = "MES 拒绝了本批请求";
+        }
+        return reason + "（code=" + code + "），本批未提交成功，" + nextStep;
+    }
+
+    /**
+     * 批级错误码统一出口：能归类的给出人话，归不了类的交给上层按 MES 原文记失败。
+     */
+    private void rejectKnownMesErrorCode(MesMaterialResolveResp resp) {
+        String code = materialErrorCode(resp);
+        if (code == null) {
+            return;
+        }
+        String raw = String.valueOf(resp.getCode()).trim();
+        if (isMesMaterialUncertainCode(resp.getCode())) {
+            if (MES_CODE_MATERIAL_PROCESSING.equals(code)) {
+                throw new MesMaterialDuplicateSubmitException(
+                        "MES 已有处理中的物料准备任务（" + raw + "），请按原 bizId 核对后再处理");
+            }
+            throw new MesMaterialDuplicateSubmitException(
+                    "MES 已存在同一物料准备任务（" + raw + "），请按原 bizId 核对后再处理");
+        }
+        // 其余非 0 code 都是整批回滚，一条都没建：记可重试失败，不占身份去重位。
+        throw new RuntimeException(mesMaterialRollbackMessage(resp.getCode()));
+    }
+
+    /**
+     * 取纯数字形态的错误码用于比较；0 或取不到数字时返回 null。
+     *
+     * <p>{@code 1_030_900_002}、{@code 1030900002}、{@code 1030900002.0} 归一后同码。</p>
+     */
+    private String materialErrorCode(MesMaterialResolveResp resp) {
+        return normalizeMesMaterialCode(resp == null ? null : resp.getCode());
+    }
+
+    static String normalizeMesMaterialCode(Object code) {
+        if (code == null) {
+            return null;
+        }
+        String digits = String.valueOf(code).replaceAll("[^0-9]", "").replaceFirst("^0+", "");
+        return digits.isEmpty() ? null : digits;
     }
 
     private String normalizeMaterialNo(String value) {
@@ -1719,16 +2232,22 @@ public class MesMaterialSyncService {
 
     private SourceItemMaterialNoSyncService.MaterialNoSyncResult markSuccess(
             OrderDeliveryTicket ticket,
+            Long taskId,
             String mesRequestId,
             String materialNo,
             String message,
             String externalTraceId) {
         String syncMessage = isBlank(message) ? "MES material resolved" : message.trim();
+        // 料号以最后一次获取为准（MES 是料号的权威来源），同步响应同样允许覆盖已确认的旧料号。
+        // previousMaterialNo 取的是本次提交开始时读到的提单行快照，用于留痕「被谁改成了什么」。
+        // 这里用 trimToNull 而不是 normalizeMaterialNo：旧值只用于比较和留痕，
+        // 不能因为历史脏数据超长就把一次成功的 MES 结果判成失败。
+        String previousMaterialNo = trimToNull(ticket == null ? null : ticket.getMaterialNo());
         SourceItemMaterialNoSyncService.MaterialNoSyncResult sourceSyncResult =
-                syncSourceItemMaterialNo(ticket, materialNo, syncMessage);
+                syncSourceItemMaterialNo(ticket, materialNo, syncMessage, true);
         if (productionAllocationLifecycleService != null) {
             productionAllocationLifecycleService.recordMaterialSuccess(
-                    ticket.getId(), materialNo, syncMessage, mesRequestId, externalTraceId, false);
+                    ticket.getId(), materialNo, syncMessage, mesRequestId, externalTraceId, false, true);
         } else {
             OrderDeliveryTicket update = new OrderDeliveryTicket();
             update.setId(ticket.getId());
@@ -1740,7 +2259,41 @@ public class MesMaterialSyncService {
             update.setMesExternalTaskId(trimToNull(externalTraceId));
             ticketMapper.updateById(update);
         }
+        String currentMaterialNo = trimToNull(materialNo);
+        if (previousMaterialNo != null && !previousMaterialNo.equals(currentMaterialNo)) {
+            recordSyncOverwriteAudit(ticket, taskId, mesRequestId, previousMaterialNo, currentMaterialNo);
+        }
         return sourceSyncResult;
+    }
+
+    /** 记录「同步响应覆盖旧料号」：旧值、新值、请求标识同时留痕，否则事后无法判断料号何时被改。 */
+    private void recordSyncOverwriteAudit(
+            OrderDeliveryTicket ticket,
+            Long taskId,
+            String mesRequestId,
+            String previousMaterialNo,
+            String materialNo) {
+        if (auditService == null) {
+            return;
+        }
+        Integer ticketId = ticket == null ? null : ticket.getId();
+        Map<String, Object> summary = summary(ticket, taskId, mesRequestId, materialNo, STATUS_SUCCESS, null);
+        summary.put("previousMaterialNo", previousMaterialNo);
+        summary.put("materialNo", materialNo);
+        auditService.record(
+                "DELIVERY_MES_MATERIAL_SYNC_OVERWRITE",
+                "order_delivery_ticket",
+                ticketId,
+                null,
+                summary,
+                "DELIVERY",
+                STATUS_SUCCESS,
+                AuditService.labelForAction("DELIVERY_MES_MATERIAL_SYNC_OVERWRITE")
+                        + " ticketId=" + ticketId
+                        + " previousMaterialNo=" + previousMaterialNo
+                        + " materialNo=" + materialNo,
+                null
+        );
     }
 
     private void markCallbackPending(OrderDeliveryTicket ticket, String mesRequestId, String externalTraceId, String message) {
@@ -1754,10 +2307,20 @@ public class MesMaterialSyncService {
     }
 
     private void markCallbackSuccess(OrderDeliveryTicket ticket, String mesRequestId, String materialNo, String message, String externalTraceId) {
+        markCallbackSuccess(ticket, mesRequestId, materialNo, message, externalTraceId, false);
+    }
+
+    private void markCallbackSuccess(
+            OrderDeliveryTicket ticket,
+            String mesRequestId,
+            String materialNo,
+            String message,
+            String externalTraceId,
+            boolean allowOverwrite) {
         String callbackMessage = isBlank(message) ? "MES material callback resolved" : message.trim();
         if (productionAllocationLifecycleService != null) {
             productionAllocationLifecycleService.recordMaterialSuccess(
-                    ticket.getId(), materialNo, callbackMessage, mesRequestId, externalTraceId, true);
+                    ticket.getId(), materialNo, callbackMessage, mesRequestId, externalTraceId, true, allowOverwrite);
         } else {
             OrderDeliveryTicket update = new OrderDeliveryTicket();
             update.setId(ticket.getId());
@@ -1778,9 +2341,10 @@ public class MesMaterialSyncService {
             String materialNo,
             String message,
             OrderDeliveryTicketMesRequest request,
-            MesMaterialCallbackReq req) {
+            MesMaterialCallbackReq req,
+            boolean allowOverwrite) {
         try {
-            return syncSourceItemMaterialNo(ticket, materialNo, message);
+            return syncSourceItemMaterialNo(ticket, materialNo, message, allowOverwrite);
         } catch (SourceItemMaterialNoSyncService.MaterialNoConflictException error) {
             recordCallbackAudit(
                     "DELIVERY_MES_MATERIAL_CALLBACK_CONFLICT",
@@ -1796,9 +2360,14 @@ public class MesMaterialSyncService {
     private SourceItemMaterialNoSyncService.MaterialNoSyncResult syncSourceItemMaterialNo(
             OrderDeliveryTicket ticket,
             String materialNo,
-            String message) {
+            String message,
+            boolean allowOverwrite) {
         if (sourceItemMaterialNoSyncService == null) {
             return SourceItemMaterialNoSyncService.MaterialNoSyncResult.empty();
+        }
+        if (allowOverwrite) {
+            return sourceItemMaterialNoSyncService.syncConfirmedMaterialNo(
+                    ticket, materialNo, message, true);
         }
         return sourceItemMaterialNoSyncService.syncConfirmedMaterialNo(ticket, materialNo, message);
     }
@@ -1843,7 +2412,8 @@ public class MesMaterialSyncService {
                 return true;
             }
         }
-        return error instanceof MesMaterialResponseUnknownException;
+        return error instanceof MesMaterialResponseUnknownException
+                || error instanceof MesMaterialDuplicateSubmitException;
     }
 
     private OrderDeliveryTicketMesRequest loadMesRequest(String mesRequestId) {
@@ -2168,6 +2738,18 @@ public class MesMaterialSyncService {
 
     private static final class MesMaterialResponseUnknownException extends RuntimeException {
         private MesMaterialResponseUnknownException(String message) {
+            super(message);
+        }
+    }
+
+    /**
+     * MES 明确表示「同一物料身份已有任务」（已存在 / 处理中）。
+     *
+     * <p>这两种响应不是可以重试的失败：MES 侧确实存在任务，只是不属于本次请求。
+     * 必须保留原 bizId 等人工核对，否则会形成「失败 → 重发 → 再失败」的死循环。</p>
+     */
+    private static final class MesMaterialDuplicateSubmitException extends RuntimeException {
+        private MesMaterialDuplicateSubmitException(String message) {
             super(message);
         }
     }

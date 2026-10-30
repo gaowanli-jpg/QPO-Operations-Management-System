@@ -285,7 +285,8 @@ class RfqItemMaterialNoConfirmationStage3Test {
     private OrderDeliveryTicketMesWaiter waiter(Long id, Integer ticketId) {
         OrderDeliveryTicketMesWaiter waiter = new OrderDeliveryTicketMesWaiter();
         waiter.setId(id);
-        waiter.setDedupKey("P-100|A");
+        // V71 回填后等待行存三字段键；fan-out 会拿它与 follower 当前身份比对。
+        waiter.setDedupKey("v3|5:P-100|1:A|0:");
         waiter.setMasterTicketId(123);
         waiter.setMasterMesRequestId("MES-REQ-123");
         waiter.setWaiterTicketId(ticketId);

@@ -131,8 +131,12 @@ class MesMaterialBatchCallbackWorkflowTest {
         verify(fixture.salesOrderItemMapper, never()).updateById(any());
     }
 
+    /**
+     * 已确认料号不能成为「先跳过再校验」的挡箭牌：taskNo 与本行记录的 MES 任务不一致时，
+     * 必须报冲突，而不是当成幂等成功吞掉。
+     */
     @Test
-    void staleSuccessfulCallbackIsAcknowledgedWhenTicketAlreadyHasConfirmedMaterialNo() {
+    void staleSuccessfulCallbackWithMismatchedTaskNoIsRejectedEvenWhenTicketHasMaterialNo() {
         Fixture fixture = fixture();
         MesMaterialBatchItem item = batchItem("FAILED", null);
         item.setMesTaskNo("MP-OLD-TASK");
@@ -144,13 +148,11 @@ class MesMaterialBatchCallbackWorkflowTest {
         MesMaterialCallbackReq.Item callback = successItem("MAT-OLD");
         callback.setTaskNo("MP-UNRELATED-TASK");
 
-        MesMaterialCallbackResp response = fixture.service.handleMaterialBatchCallback(batchCallback(callback));
+        assertThatThrownBy(() -> fixture.service.handleMaterialBatchCallback(batchCallback(callback)))
+                .isInstanceOf(MesMaterialCallbackException.class)
+                .hasMessageContaining("taskNo mismatch")
+                .satisfies(error -> assertThat(((MesMaterialCallbackException) error).getStatus()).isEqualTo(HttpStatus.CONFLICT));
 
-        assertThat(response.getSuccess()).isTrue();
-        assertThat(response.getCode()).isEqualTo(0);
-        assertThat(response.getData())
-                .containsEntry("appliedCount", 0)
-                .containsEntry("duplicateCount", 1);
         verify(fixture.batchMapper, never()).updateById(any());
         verify(fixture.batchItemMapper, never()).updateById(any());
         verify(fixture.ticketMapper, never()).updateById(any());
@@ -187,6 +189,7 @@ class MesMaterialBatchCallbackWorkflowTest {
         Fixture fixture = fixture();
         MesMaterialBatchItem first = batchItem("CALLBACK_PENDING", null);
         MesMaterialBatchItem second = batchItem(21L, 124, "QPO-MATL-OTHER", "P-200|A", "P-200", "A", "CALLBACK_PENDING", null);
+        second.setMesTaskNo("MP202608120002");
         when(fixture.batchMapper.selectOne(any(Wrapper.class))).thenReturn(batch("PARTIAL_PENDING"));
         when(fixture.batchItemMapper.selectList(any(Wrapper.class))).thenReturn(List.of(first, second));
         when(fixture.requestMapper.selectOne(any(Wrapper.class))).thenReturn(request("CALLBACK_PENDING"));
@@ -278,48 +281,127 @@ class MesMaterialBatchCallbackWorkflowTest {
         assertThat(actionCaptor.getAllValues()).contains("DELIVERY_MES_MATERIAL_CALLBACK_REVIVE");
     }
 
+    /**
+     * 当前有效请求给出新的有效结果时允许覆盖旧料号，并留下旧值/新值审计。
+     */
     @Test
-    void successfulCallbackCannotReviveFailedRowWhenTicketAlreadyHoldsAnotherMaterialNo() {
+    void successfulCallbackOverwritesTicketMaterialNoWhenCurrentRequestProvesIt() {
         Fixture fixture = fixture();
+        AuditService auditService = mock(AuditService.class);
+        ReflectionTestUtils.setField(fixture.service, "auditService", auditService);
         when(fixture.batchMapper.selectOne(any(Wrapper.class))).thenReturn(batch("PARTIAL_PENDING"));
         when(fixture.batchItemMapper.selectList(any(Wrapper.class))).thenReturn(List.of(batchItem("FAILED", null)));
         when(fixture.requestMapper.selectOne(any(Wrapper.class))).thenReturn(request("FAILED"));
         when(fixture.ticketMapper.selectById(123)).thenReturn(ticket("FAILED", "MAT-OLD", LINE_ID));
-
-        assertThatThrownBy(() -> fixture.service.handleMaterialBatchCallback(batchCallback(successItem("MAT-NEW"))))
-                .isInstanceOf(MesMaterialCallbackException.class)
-                .hasMessageContaining("conflicts with existing ticket material number");
-
-        verify(fixture.batchItemMapper, never()).updateById(any());
-        verify(fixture.ticketMapper, never()).updateById(any());
-    }
-
-    @Test
-    void differentProductCodeIsIgnoredWhenTicketAlreadyHasConfirmedMaterialNo() {
-        Fixture fixture = fixture();
-        when(fixture.batchMapper.selectOne(any(Wrapper.class))).thenReturn(batch("SUCCESS"));
-        when(fixture.batchItemMapper.selectList(any(Wrapper.class))).thenReturn(List.of(batchItem("SUCCESS", "MAT-OLD")));
-        when(fixture.requestMapper.selectOne(any(Wrapper.class))).thenReturn(request("SUCCESS"));
-        when(fixture.ticketMapper.selectById(123)).thenReturn(ticket("SUCCESS", "MAT-OLD", LINE_ID));
+        when(fixture.salesOrderItemMapper.selectByIdForUpdate(5001L)).thenReturn(new SalesOrderItem());
 
         MesMaterialCallbackResp response = fixture.service.handleMaterialBatchCallback(batchCallback(successItem("MAT-NEW")));
 
         assertThat(response.getSuccess()).isTrue();
-        assertThat(response.getCode()).isEqualTo(0);
-        assertThat(response.getData()).containsEntry("appliedCount", 0).containsEntry("duplicateCount", 1);
+        assertThat(response.getData()).containsEntry("appliedCount", 1);
+
+        ArgumentCaptor<OrderDeliveryTicket> ticketCaptor = ArgumentCaptor.forClass(OrderDeliveryTicket.class);
+        verify(fixture.ticketMapper).updateById(ticketCaptor.capture());
+        assertThat(ticketCaptor.getValue().getMesSyncStatus()).isEqualTo("SUCCESS");
+        assertThat(ticketCaptor.getValue().getMaterialNo()).isEqualTo("MAT-NEW");
+
+        ArgumentCaptor<String> actionCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<Object> summaryCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(auditService, atLeastOnce()).record(
+                actionCaptor.capture(), any(), any(), any(), summaryCaptor.capture(), any(), any(), any(), any());
+        int overwriteIndex = actionCaptor.getAllValues().indexOf("DELIVERY_MES_MATERIAL_CALLBACK_OVERWRITE");
+        assertThat(overwriteIndex).isGreaterThanOrEqualTo(0);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> overwriteSummary = (Map<String, Object>) summaryCaptor.getAllValues().get(overwriteIndex);
+        assertThat(overwriteSummary)
+                .containsEntry("previousMaterialNo", "MAT-OLD")
+                .containsEntry("materialNo", "MAT-NEW")
+                .containsEntry("mesRequestId", LINE_ID);
+    }
+
+    /**
+     * 已确认料号属于另一个更新的有效请求时，旧请求的迟到成功回调不得覆盖。
+     */
+    @Test
+    void supersededRequestCannotOverwriteMaterialNoConfirmedByNewerRequest() {
+        Fixture fixture = fixture();
+        when(fixture.batchMapper.selectOne(any(Wrapper.class))).thenReturn(batch("SUCCESS"));
+        when(fixture.batchItemMapper.selectList(any(Wrapper.class))).thenReturn(List.of(batchItem("SUCCESS", "MAT-OLD")));
+        when(fixture.requestMapper.selectOne(any(Wrapper.class))).thenReturn(request("SUCCESS"));
+        when(fixture.ticketMapper.selectById(123)).thenReturn(ticket("SUCCESS", "MAT-CURRENT", "QPO-MATL-NEWER"));
+
+        assertThatThrownBy(() -> fixture.service.handleMaterialBatchCallback(batchCallback(successItem("MAT-OLD"))))
+                .isInstanceOf(MesMaterialCallbackException.class)
+                .hasMessageContaining("superseded request")
+                .satisfies(error -> assertThat(((MesMaterialCallbackException) error).getStatus()).isEqualTo(HttpStatus.CONFLICT));
+
         verify(fixture.batchItemMapper, never()).updateById(any());
         verify(fixture.ticketMapper, never()).updateById(any());
         verify(fixture.requestMapper, never()).update(any(), any());
         verify(fixture.salesOrderItemMapper, never()).updateById(any());
     }
 
+    /**
+     * 同一有效请求回不同物料号时允许覆盖并审计，不再返回 409。
+     */
     @Test
-    void duplicateDrawingVersionInSameCallbackIsRejectedBeforeAnyDatabaseLookup() {
+    void differentProductCodeFromCurrentRequestOverwritesConfirmedMaterialNo() {
+        Fixture fixture = fixture();
+        AuditService auditService = mock(AuditService.class);
+        ReflectionTestUtils.setField(fixture.service, "auditService", auditService);
+        when(fixture.batchMapper.selectOne(any(Wrapper.class))).thenReturn(batch("SUCCESS"));
+        when(fixture.batchItemMapper.selectList(any(Wrapper.class))).thenReturn(List.of(batchItem("SUCCESS", "MAT-OLD")));
+        when(fixture.requestMapper.selectOne(any(Wrapper.class))).thenReturn(request("SUCCESS"));
+        when(fixture.ticketMapper.selectById(123)).thenReturn(ticket("SUCCESS", "MAT-OLD", LINE_ID));
+        when(fixture.salesOrderItemMapper.selectByIdForUpdate(5001L)).thenReturn(new SalesOrderItem());
+
+        MesMaterialCallbackResp response = fixture.service.handleMaterialBatchCallback(batchCallback(successItem("MAT-NEW")));
+
+        assertThat(response.getSuccess()).isTrue();
+        assertThat(response.getCode()).isEqualTo(0);
+        assertThat(response.getData()).containsEntry("appliedCount", 1).containsEntry("duplicateCount", 0);
+
+        ArgumentCaptor<OrderDeliveryTicket> ticketCaptor = ArgumentCaptor.forClass(OrderDeliveryTicket.class);
+        verify(fixture.ticketMapper).updateById(ticketCaptor.capture());
+        assertThat(ticketCaptor.getValue().getMaterialNo()).isEqualTo("MAT-NEW");
+        assertThat(ticketCaptor.getValue().getMesSyncStatus()).isEqualTo("SUCCESS");
+
+        ArgumentCaptor<String> actionCaptor = ArgumentCaptor.forClass(String.class);
+        verify(auditService, atLeastOnce()).record(
+                actionCaptor.capture(), any(), any(), any(), any(), any(), any(), any(), any());
+        assertThat(actionCaptor.getAllValues()).contains("DELIVERY_MES_MATERIAL_CALLBACK_OVERWRITE");
+    }
+
+    /**
+     * 回调必须按 bizId + taskNo 定位批次行。taskNo 重复时无法判定归属，
+     * 必须在任何数据库写入前整体拒绝，而不是静默覆盖批次索引。
+     */
+    @Test
+    void duplicateTaskNoInSameCallbackIsRejectedBeforeAnyDatabaseLookup() {
         Fixture fixture = fixture();
 
         assertThatThrownBy(() -> fixture.service.handleMaterialBatchCallback(batchCallback(
                 successItem("MAT-NEW"), successItem("MAT-NEW-2"))))
                 .isInstanceOf(MesMaterialCallbackException.class)
+                .hasMessageContaining("duplicate taskNo")
+                .satisfies(error -> assertThat(((MesMaterialCallbackException) error).getStatus()).isEqualTo(HttpStatus.BAD_REQUEST));
+
+        verifyNoInteractions(fixture.batchMapper);
+        verifyNoInteractions(fixture.batchItemMapper);
+        verifyNoInteractions(fixture.ticketMapper);
+        verifyNoInteractions(fixture.requestMapper);
+    }
+
+    @Test
+    void duplicateDrawingVersionWithDistinctTaskNoIsRejectedBeforeAnyDatabaseLookup() {
+        Fixture fixture = fixture();
+        MesMaterialCallbackReq.Item other = successItem("MAT-NEW-2");
+        other.setTaskNo("MP202608120002");
+
+        assertThatThrownBy(() -> fixture.service.handleMaterialBatchCallback(batchCallback(
+                successItem("MAT-NEW"), other)))
+                .isInstanceOf(MesMaterialCallbackException.class)
+                .hasMessageContaining("duplicate drawing/version")
                 .satisfies(error -> assertThat(((MesMaterialCallbackException) error).getStatus()).isEqualTo(HttpStatus.BAD_REQUEST));
 
         verifyNoInteractions(fixture.batchMapper);

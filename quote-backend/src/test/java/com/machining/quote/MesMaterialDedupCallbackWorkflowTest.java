@@ -236,6 +236,46 @@ class MesMaterialDedupCallbackWorkflowTest {
         verify(fixture.salesOrderItemMapper, never()).updateById(any());
     }
 
+    /**
+     * follower 的来源行残留别的料号时，主请求的结果仍然必须写进去。
+     * 默认的写回口径会抛「已确认料号冲突」，fan-out 被 catch 掉只记一条失败审计，
+     * 结果就是主提单更新成功、follower 永远停在旧料号上。
+     */
+    @Test
+    void fanOutOverwritesFollowerSourceMaterialNoHeldByMasterRequest() {
+        Fixture fixture = fixture(masterTicket("CALLBACK_PENDING", null));
+        OrderDeliveryTicket follower = salesOrderFollowerTicket(206, 6006L, "CALLBACK_PENDING");
+        when(fixture.ticketMapper.selectById(123)).thenReturn(fixture.masterTicket);
+        when(fixture.ticketMapper.selectById(206)).thenReturn(follower);
+        when(fixture.requestMapper.selectOne(any(Wrapper.class))).thenReturn(masterRequest("CALLBACK_PENDING"));
+        when(fixture.waiterMapper.selectList(any())).thenReturn(List.of(waiter(706L, 206, "CALLBACK_PENDING")));
+        SalesOrderItem masterItem = new SalesOrderItem();
+        masterItem.setId(5001L);
+        SalesOrderItem followerItem = new SalesOrderItem();
+        followerItem.setId(6006L);
+        followerItem.setMaterialNo("MAT-STALE");
+        followerItem.setMaterialNoStatus("\u5df2\u786e\u8ba4");
+        when(fixture.salesOrderItemMapper.selectByIdForUpdate(5001L)).thenReturn(masterItem);
+        when(fixture.salesOrderItemMapper.selectByIdForUpdate(6006L)).thenReturn(followerItem);
+        when(fixture.ticketMapper.updateById(any())).thenReturn(1);
+        when(fixture.waiterMapper.update(any(), any())).thenReturn(1);
+
+        fixture.syncService.handleMaterialCallback(callback("MAT-FANOUT"));
+
+        ArgumentCaptor<SalesOrderItem> salesCaptor = ArgumentCaptor.forClass(SalesOrderItem.class);
+        verify(fixture.salesOrderItemMapper, org.mockito.Mockito.atLeast(2)).updateById(salesCaptor.capture());
+        assertThat(salesCaptor.getAllValues())
+                .anySatisfy(update -> {
+                    assertThat(update.getId()).isEqualTo(6006L);
+                    assertThat(update.getMaterialNo()).isEqualTo("MAT-FANOUT");
+                });
+        ArgumentCaptor<OrderDeliveryTicketMesWaiter> waiterCaptor =
+                ArgumentCaptor.forClass(OrderDeliveryTicketMesWaiter.class);
+        verify(fixture.waiterMapper).update(waiterCaptor.capture(), any());
+        assertThat(waiterCaptor.getValue().getWaitStatus()).isEqualTo("SUCCESS");
+        assertThat(waiterCaptor.getValue().getMaterialNo()).isEqualTo("MAT-FANOUT");
+    }
+
     private Fixture fixture(OrderDeliveryTicket masterTicket) {
         Fixture fixture = new Fixture();
         fixture.masterTicket = masterTicket;
@@ -333,7 +373,8 @@ class MesMaterialDedupCallbackWorkflowTest {
     private OrderDeliveryTicketMesWaiter waiter(Long id, Integer ticketId, String status) {
         OrderDeliveryTicketMesWaiter waiter = new OrderDeliveryTicketMesWaiter();
         waiter.setId(id);
-        waiter.setDedupKey("P-100|A");
+        // V71 回填后 waiter 存的是三字段键；fan-out 会用它与 follower 当前身份比对。
+        waiter.setDedupKey("v3|5:P-100|1:A|0:");
         waiter.setMasterTicketId(123);
         waiter.setMasterMesRequestId("MES-REQ-123");
         waiter.setWaiterTicketId(ticketId);

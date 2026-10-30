@@ -28,7 +28,7 @@ class MesMaterialDedupHistoryGuardTest {
         MesMaterialDedupService.DedupResolveResult result = service.resolveBeforeMes(ticket(), 9501L);
 
         assertThat(result.getType()).isEqualTo(MesMaterialDedupService.RESULT_MASTER_CREATED);
-        assertThat(result.getDedupKey()).isEqualTo("P-STAGE5|A");
+        assertThat(result.getDedupKey()).isEqualTo("v3|8:P-STAGE5|1:A|0:");
         verify(ticketMapper, never()).selectList(any());
     }
 

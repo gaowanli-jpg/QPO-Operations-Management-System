@@ -69,6 +69,48 @@ public class MesMaterialResolveResp {
                 && (dataId == null || expected.equals(dataId));
     }
 
+    /**
+     * 只判断「显式声明了但与请求矛盾」，不要求必须声明。
+     *
+     * <p>MES 对同一物料身份重复提交时返回的「已存在」响应往往不带 bizId，
+     * 但响应体带着行内料号；料号本身已足以证明身份，不能因为缺 bizId 就丢掉。
+     * 反过来，只要任何一处显式声明了 bizId 且与请求不一致，仍然视为矛盾。</p>
+     */
+    public boolean contradictsRequestId(String expectedRequestId) {
+        String expected = trimToNull(expectedRequestId);
+        if (expected == null) {
+            return true;
+        }
+        return contradicts(expected, trimToNull(bizId))
+                || contradicts(expected, trimToNull(mesRequestId))
+                || contradicts(expected, trimToNull(data == null ? null : data.getBizId()));
+    }
+
+    private boolean contradicts(String expected, String declared) {
+        return declared != null && !expected.equals(declared);
+    }
+
+    /**
+     * 响应是否带料号：根字段 {@code materialNo} 或任一行的 {@code data.items[].productCode}。
+     *
+     * <p>料号是本流程唯一要拿的成果物，因此这里按「任意一行带到就算带到」判断，
+     * 供「取到料号即写回」在外层判定处放行，逐行成败仍由调用方按行判断。</p>
+     */
+    public boolean hasMaterialNo() {
+        if (trimToNull(materialNo) != null) {
+            return true;
+        }
+        if (data == null || data.getItems() == null) {
+            return false;
+        }
+        for (Item item : data.getItems()) {
+            if (item != null && trimToNull(item.getProductCode()) != null) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public String getStatus() {
         return firstNonBlank(status, firstItem() == null ? null : firstItem().getStatus());
     }

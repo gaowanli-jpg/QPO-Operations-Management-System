@@ -186,9 +186,9 @@ CREATE INDEX IF NOT EXISTS idx_delivery_mes_request_external_task
 | `STALE` | 本次请求已不是该 ticket 的最新请求，后续回调不得覆盖当前结果。 |
 | `IGNORED` | 重复回调或无效回调已安全忽略。 |
 
-### 5.3 同图号版本去重引用
+### 5.3 同图号版本材质去重引用
 
-第 19 号文档 `19-MES物料号同图号版本去重开发文档.md` 在本回调模型之上补充同图号版本去重能力。去重键 `dedupKey` 固定为 **图号 + 版本**，不区分客户、订单、图纸文件或内部项目号。
+第 19 号文档 `19-MES物料号同图号版本去重开发文档.md` 在本回调模型之上补充同图号版本材质去重能力。去重键 `dedupKey` 固定为 **图号 + 版本 + 材质**（`v3|` 长度前缀编码），不区分客户、订单、图纸文件或内部项目号。
 
 阶段 1 新增 `order_delivery_ticket_mes_waiter` 用于记录 follower 等待关系。MES 只回调主请求，QPO fan-out 写回等待行：
 
@@ -203,6 +203,70 @@ CREATE INDEX IF NOT EXISTS idx_delivery_mes_request_external_task
 原 `mes_request_id` 仍只表示当前 ticket 自己真实发起的 MES 请求；follower 行不得共用主请求的 `mes_request_id`，只能通过 `mes_master_request_id` 和等待表追溯主请求。
 
 当前去重边界只包含活动主请求和 follower：没有活动主请求时创建新的主请求，并由数据库唯一约束兜底并发；存在活动主请求时建立 follower。历史成功提单行不参与本阶段查询，历史确认物料号由前置匹配和提单继承负责。
+
+### 5.3.1 批次回调的定位与覆盖口径
+
+批次回调按 **根级 `bizId` + 行级 `taskNo`** 定位批次行，图号/版本只做交叉校验：
+
+- 同一回调内 `taskNo` 重复、批内 `taskNo` 重复、`taskNo` 不属于本 `bizId`、图号/版本与 `taskNo` 对应行不符，一律拒绝写回，不做猜测。
+- 旧批次（没有 `mes_task_no`）仅在「图号 + 版本」候选行唯一且该行确实没有 `taskNo` 时匹配；该唯一性由 `uk_mes_material_batch_key (batch_id, item_key)` 保证。
+- 先校验 `bizId`、`taskNo` 和行归属，再判断「是否已有料号」。顺序颠倒会把 `taskNo` 不匹配的脏回调当成幂等成功吞掉。
+- 相同有效请求的重复同值回调幂等；当前有效请求给出不同物料号时允许覆盖提单行及其 RFQ / 销售订单来源记录，并写 `DELIVERY_MES_MATERIAL_CALLBACK_OVERWRITE` 记录旧值、新值和请求标识。
+- **料号以最后一次获取为准**（MES 是料号的权威来源），所以同步响应路径也允许覆盖已确认的旧料号，覆盖时写 `DELIVERY_MES_MATERIAL_SYNC_OVERWRITE`（旧值、新值、`mesRequestId`、`taskId` 同时留痕）。进程恢复（`PROCESSING → SUCCESS`）与 follower fan-out 同理，都传 `allowOverwrite = true`。
+- 若已确认料号属于另一个更新的有效请求（`ticket.mes_request_id` 已指向别的请求），旧请求的迟到回调不得覆盖。
+- **响应行按下标对齐**：MES 明确 `items` 与请求 `items` 严格一一对应，行数相等时按位置映射，图号/版本只做交叉校验；MES 回了但和请求对不上的行记 `RESULT_UNKNOWN`（宁可待核对也不写错料号）。行数不等时退回按「图号 + 版本」匹配，匹配不上的行同样记 `RESULT_UNKNOWN`。
+- **版本不可为空**：MES 对无版本明细整批 HTTP 400 退回，会把同批其它零件一起拖失败。因此打包阶段就用 `required(ticket.getVersion(), ...)` 拦住该行，只让这一行失败。
+- 需要后续回调的响应行必须带非空 `taskNo`；缺失、重复或与请求不匹配时保留原 `bizId` 并进入 `RESULT_UNKNOWN`，不生成新请求掩盖结果。
+- **MES 物料接口是两层契约**：① 行级状态——`code = 0`，`data.items` 与请求 `items` 严格一一对应，逐行看 `status`：`EXISTING_PRODUCT` 直接取 `productCode` 写回，`PENDING_CREATE` 挂起等回调；一行「已存在」不影响同批其它行，一个包里混合返回是正常情况。② 批级回滚——非 0 `code` 且 `data = null`，MES 侧 `@Transactional` 整包回滚，**一条都没建**。
+- 批级回滚既然一条都没建，重发不会造出重复的物料准备任务，因此一律记**可重试失败**（`FAILED`），不占身份去重位，也不落「结果待核对」。按码给人话：`1030900008` 某行命中已有任务、仍在待建料（**MES 确认这个码不会自动出料号，必须人工到 MES 建料，提示语写「请到 MES 处理该物料准备任务后再重新获取」**）；`1030900011` 同一包内图号+版本+材质重复（QPO 按身份拆波次后不该出现，属分包问题需排查）；`1030900012` 图纸转存失败；其它非 0 码与 HTTP 400 透传 MES 原文。
+- 例外是旧契约的 `1_030_900_002`（已存在）/ `1_030_900_003`（处理中）：新契约不再返回这两个码，真出现说明对端版本不可知，按「结果待核对」保留原 `bizId`。其中 `002` 若同时带 `productCode` 则按料号写回——老版本会把料号塞在批级错误响应里。
+- 错误码比较前先去除非数字再比对：MES 同一个码会出现 `1_030_900_002` 与 `1030900002` 两种写法，按原文精确匹配会漏判。
+
+### 5.3.2 进程恢复口径
+
+本地任务已不活跃、而 MES 请求台账仍为 `PROCESSING` 时，无法区分「外部 POST 发出前崩溃」和「发出后没收到响应」。这类请求按 `RESULT_UNKNOWN` 处理，保留原 `bizId` 与身份去重位，不能关成可重试的普通失败；只有能证明 MES POST 尚未发生的本地预留失败（没有台账行）才允许直接失败重试。
+
+### 5.3.3 fan-out 写回 follower 的口径
+
+主请求拿到料号后，`MesMaterialDedupService.fanOut` 逐条更新等待行对应的 follower 提单及其来源记录。
+
+写回时传 `allowOverwrite = true`：follower 的料号本来就该由主请求结果决定。若沿用默认的严格口径，follower 来源行残留的旧料号会让 `syncConfirmedMaterialNo` 抛冲突，异常被 fan-out 的 catch 吞掉、只记一条失败审计——主提单更新成功，follower 永远停在旧值上，且界面上看不出异常。
+
+### 5.3.4 回调超时兜底
+
+MES 明确：回调 `status` 只有 `SUCCESS`，没有 `FAILED`，**失败不会回调**。这意味着一次请求如果最终没产出料号，QPO 永远收不到任何回调，提单行会一直停在「待回调」——既不会成功也不会失败，用户点「重新获取」还会被「有在途请求」挡住。
+
+因此必须自建超时兜底（`MesMaterialCallbackTimeoutService` + `MesMaterialCallbackTimeoutScheduler`）：
+
+- 扫描 `order_delivery_ticket_mes_request` 中 `request_status = 'CALLBACK_PENDING'` 且 `COALESCE(responded_at, updated_at, created_at) < now - 阈值` 的行，阈值默认 **4 小时**（`ERP_MES_MATERIAL_CALLBACK_TIMEOUT_HOURS`），轮询间隔默认 10 分钟（`ERP_MES_MATERIAL_CALLBACK_TIMEOUT_CHECK_MS`），单次最多处理 200 行，可用 `ERP_MES_MATERIAL_CALLBACK_TIMEOUT_ENABLED=false` 关闭。
+- 收口成 **`RESULT_UNKNOWN`，不是 `FAILED`**：`FAILED` 的含义是「MES 明确说这批没成」，而超时是「不知道成没成、料可能已经建出来了」。两者对账口径不同——记成失败会让运维以为不需要再看原 `bizId`。重试本身是安全的（见 5.3.5），但状态必须如实反映「未知」。
+- `RESULT_UNKNOWN` 仍在 `uk_delivery_mes_request_active_dedup` 的覆盖范围内，继续占住身份去重位，防止在没人确认之前被后台流程重复提交；用户主动重新获取时，由 5.3.5 的收口动作把它释放掉。
+- 收口顺序是先条件更新台账行（`WHERE request_status = 'CALLBACK_PENDING'`），命中 0 行说明回调已经抢先写成 `SUCCESS`，直接放弃——不能把真结果改成待核对。提单行与批次行同样只在仍是待回调时才改。
+- 收口后批次台账状态按行重算，避免页面一直显示「部分待回调」；审计动作 `DELIVERY_MES_MATERIAL_CALLBACK_TIMEOUT`（MES物料号回调超时未达）。
+- 超时后如果回调迟到，仍按正常回调处理：批次行停在 `RESULT_UNKNOWN` 时 `disposition` 走「应用结果」分支，料号会照常写回。
+
+### 5.3.5 结果未知允许重新获取
+
+`RESULT_UNKNOWN` **不是死状态**，可以直接再点一次「批量获取物料号」拿到明确答案。
+
+依据：MES 按 **图号 + 版本 + 材质** 全局判重（与 `bizId` 无关）。换一个新 `bizId` 重发**不会**建出第二个物料准备任务，只会明确返回三种结果之一：
+
+| 重试后 MES 返回 | 真实含义 | QPO 落点 |
+| --- | --- | --- |
+| `EXISTING_PRODUCT` + `productCode` | 上次其实建成了 | `SUCCESS`，料号写回 |
+| `1030900008` | 任务还停在待建料，得人工去 MES 建料 | `FAILED`「去 MES 处理」 |
+| `PENDING_CREATE` + `taskNo` | 上次没建成，这次正常受理 | `CALLBACK_PENDING` |
+
+实现要点：
+
+- 重试前必须先**收口旧台账行**：`RESULT_UNKNOWN → STALE`，写 `completed_at`。不收口的话 `uk_delivery_mes_request_active_dedup` 仍把它当活跃行占着 `dedup_key`，新请求插不进去。收口只改状态、保留整行，事后仍能看到原 `bizId` 与当时的失败原因。
+- 收口用条件更新（`WHERE request_status = 'RESULT_UNKNOWN'`）：回调在同一时刻把它写成 `SUCCESS` 时命中 0 行，直接跳过，绝不覆盖真结果。
+- 同一身份下**其他提单**的未知行也要一起收口，否则唯一索引一样会挡住本次提交。
+- 收口范围：本提单的全部未知行 + 同三字段身份键（含旧两字段键）的其他提单未知行。
+- 有收口就记审计 `DELIVERY_MES_MATERIAL_SYNC_RETRY_AFTER_UNKNOWN`（带被收口的 `bizId` 列表），刷新料号对应 `PRODUCTION_ITEM_MATERIAL_NO_REFRESH_RETRY_AFTER_UNKNOWN`。
+- `assertCanStart` 不再拦 `RESULT_UNKNOWN`；批量入口不再对未知行短路跳过；刷新料号的在途拦截在收口之后执行。
+- **不设重试次数上限**：每次重试都是人工点一次批量请求，频率天然很低；设上限反而会在问题被发现时已经卡死。
+- 重试期间旧请求的迟到回调仍然安全：`ticket.mes_request_id` 已指向新请求时，旧回调被判为 `superseded`，`disposition` 会拒绝它覆盖已确认料号并记 `CALLBACK_CONFLICT`。
 
 ### 5.4 销售订单物料号回写字段
 
@@ -537,6 +601,11 @@ POST /api/integrations/mes/material-callback
 ```env
 ERP_MES_CALLBACK_TOKEN=
 ERP_MES_CALLBACK_TOKEN_ENABLED=true
+# 回调只有 SUCCESS、失败不回调，等不到的回调必须自己收口成「结果待核对」。
+ERP_MES_MATERIAL_CALLBACK_TIMEOUT_ENABLED=true
+ERP_MES_MATERIAL_CALLBACK_TIMEOUT_HOURS=4
+ERP_MES_MATERIAL_CALLBACK_TIMEOUT_CHECK_MS=600000
+ERP_MES_MATERIAL_CALLBACK_TIMEOUT_BATCH_SIZE=200
 ```
 
 如果系统对接配置页面已承载 MES 配置，后续可以扩展入库配置：
@@ -660,6 +729,9 @@ MES 回调接口不使用用户登录态，不使用前端权限。
 | `DELIVERY_MES_MATERIAL_CALLBACK_FAILED` | `DELIVERY` | `order_delivery_ticket` | MES 回调失败或业务拒绝。 |
 | `DELIVERY_MES_MATERIAL_CALLBACK_CONFLICT` | `DELIVERY` | `order_delivery_ticket` | MES 回调物料号与已确认值冲突。 |
 | `DELIVERY_MES_MATERIAL_CALLBACK_REVIVE` | `DELIVERY` | `order_delivery_ticket` | 批次行原为 `FAILED`，被 MES 成功回调纠正为 `SUCCESS`（2026-10-28 新增）。 |
+| `DELIVERY_MES_MATERIAL_CALLBACK_OVERWRITE` | `DELIVERY` | `order_delivery_ticket` | 回调覆盖已确认的旧料号，记录 `previousMaterialNo`。 |
+| `DELIVERY_MES_MATERIAL_SYNC_OVERWRITE` | `DELIVERY` | `order_delivery_ticket` | 同步响应覆盖已确认的旧料号，记录 `previousMaterialNo`。 |
+| `DELIVERY_MES_MATERIAL_CALLBACK_TIMEOUT` | `DELIVERY` | `order_delivery_ticket_mes_request` | 超过阈值仍未收到回调，转「结果待核对」。 |
 
 摘要允许记录：
 

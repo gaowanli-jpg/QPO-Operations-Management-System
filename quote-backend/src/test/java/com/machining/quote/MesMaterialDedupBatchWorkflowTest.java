@@ -64,6 +64,8 @@ class MesMaterialDedupBatchWorkflowTest {
         pending.setStatus("CALLBACK_PENDING");
         pending.setCallbackRequired(true);
         pending.setMessage("accepted");
+        // 待回调响应必须带 taskNo，否则只能按结果待核对处理。
+        pending.setExternalTraceId("MP202608120001");
         when(fixture.client.resolveMaterial(any())).thenAnswer(invocation -> {
             MesMaterialResolveReq req = invocation.getArgument(0);
             pending.setMesRequestId(req.getMesRequestId());
@@ -89,7 +91,7 @@ class MesMaterialDedupBatchWorkflowTest {
         Map<String, Object> followerResult = (Map<String, Object>) rows.get(1).get("result");
         assertThat(followerResult)
                 .containsEntry("dedupResult", "FOLLOW_EXISTING_ACTIVE")
-                .containsEntry("dedupKey", "P-DUP|A");
+                .containsEntry("dedupKey", "v3|5:P-DUP|1:A|0:");
         verify(fixture.client, times(1)).resolveMaterial(any());
         verify(fixture.waiterMapper, times(1)).insert(any());
     }
@@ -102,7 +104,7 @@ class MesMaterialDedupBatchWorkflowTest {
         OrderDeliveryTicket normal = ticket(312, "P-NORMAL", "A");
         when(fixture.ticketMapper.selectById(311)).thenReturn(follower);
         when(fixture.ticketMapper.selectById(312)).thenReturn(normal);
-        OrderDeliveryTicketMesRequest activeMaster = activeMaster(201, "MES-MASTER-201", "CALLBACK_PENDING", "P-ACTIVE|A");
+        OrderDeliveryTicketMesRequest activeMaster = activeMaster(201, "MES-MASTER-201", "CALLBACK_PENDING", "v3|8:P-ACTIVE|1:A|0:");
         when(fixture.mesRequestMapper.selectOne(any())).thenReturn(activeMaster).thenReturn(null);
         when(fixture.ticketMapper.update(any(OrderDeliveryTicket.class), any())).thenReturn(1);
         when(fixture.ticketMapper.updateById(any(OrderDeliveryTicket.class))).thenReturn(1);
@@ -156,7 +158,7 @@ class MesMaterialDedupBatchWorkflowTest {
                 "status", "SUCCESS",
                 "materialNo", "MAT-401",
                 "dedupResult", "MASTER_CREATED",
-                "dedupKey", "P-REUSE|A"
+                "dedupKey", "v3|7:P-REUSE|1:A|0:"
         )));
 
         Map<String, Object> result = batchService.syncMesMaterialBatch(List.of(401, 402), 9202L);
@@ -172,6 +174,88 @@ class MesMaterialDedupBatchWorkflowTest {
                 .extracting(row -> row.get("status"))
                 .containsExactly("SUCCESS", "SUCCESS");
         assertThat(rows.get(1).get("message")).asString().contains("MES 物料号同步成功");
+    }
+
+    /**
+     * 同一图号版本、不同材质是两个不同的 MES 物料身份：不能并成 follower，
+     * 必须拆成两个请求（MES 创建响应不带材质，一个请求内图号+版本只能唯一）。
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void mesBatchSplitsSameDrawingVersionWithDifferentMaterialIntoTwoRequests() {
+        Fixture fixture = fixture();
+        OrderDeliveryTicket steel = ticket(321, "P-SPLIT", "A");
+        steel.setMaterialName("Q235");
+        OrderDeliveryTicket aluminium = ticket(322, "P-SPLIT", "A");
+        aluminium.setMaterialName("6061-T6");
+        when(fixture.ticketMapper.selectById(321)).thenReturn(steel);
+        when(fixture.ticketMapper.selectById(322)).thenReturn(aluminium);
+        when(fixture.mesRequestMapper.selectOne(any())).thenReturn(null);
+        when(fixture.mesRequestMapper.insert(any(OrderDeliveryTicketMesRequest.class))).thenReturn(1);
+        when(fixture.ticketMapper.update(any(OrderDeliveryTicket.class), any())).thenReturn(1);
+        when(fixture.ticketMapper.updateById(any(OrderDeliveryTicket.class))).thenReturn(1);
+        java.util.concurrent.atomic.AtomicInteger counter = new java.util.concurrent.atomic.AtomicInteger();
+        when(fixture.client.resolveMaterial(any())).thenAnswer(invocation -> {
+            MesMaterialResolveReq req = invocation.getArgument(0);
+            MesMaterialResolveResp resp = new MesMaterialResolveResp();
+            resp.setSuccess(true);
+            resp.setStatus("SUCCESS");
+            resp.setMaterialNo("MAT-SPLIT-" + counter.incrementAndGet());
+            resp.setMesRequestId(req.getMesRequestId());
+            return resp;
+        });
+
+        Map<String, Object> result = fixture.batchService.syncMesMaterialBatch(List.of(321, 322), 9204L);
+
+        verify(fixture.client, times(2)).resolveMaterial(any());
+        assertThat(result)
+                .containsEntry("successCount", 2)
+                .containsEntry("dedupFollowerCount", 0)
+                .containsEntry("submittedToMesCount", 2)
+                .containsEntry("batchCount", 2);
+        List<Map<String, Object>> rows = (List<Map<String, Object>>) result.get("results");
+        assertThat(rows).extracting(row -> row.get("status")).containsExactly("SUCCESS", "SUCCESS");
+        // 两个请求的 bizId 必须不同，否则就是被合并成一个请求了。
+        assertThat(rows.get(0).get("result")).asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.MAP)
+                .doesNotContainKey("dedupResult");
+        Object firstBizId = ((Map<String, Object>) rows.get(0).get("result")).get("bizId");
+        Object secondBizId = ((Map<String, Object>) rows.get(1).get("result")).get("bizId");
+        assertThat(firstBizId).isNotNull().isNotEqualTo(secondBizId);
+    }
+
+    /**
+     * 「刷新料号」写入的台账行 {@code request_role} 为空。批量入口若继续按 MASTER 过滤，
+     * 就看不见这条在途请求，会对同一物料身份再发一次 POST 并撞 MES 的「已存在物料准备任务」。
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void mesBatchReportsActiveRefreshRequestInsteadOfSubmittingTheSameIdentity() {
+        Fixture fixture = fixture();
+        OrderDeliveryTicket ticket = ticket(331, "P-REFRESH", "A");
+        when(fixture.ticketMapper.selectById(331)).thenReturn(ticket);
+        when(fixture.ticketMapper.selectList(any())).thenReturn(List.of());
+        OrderDeliveryTicketMesRequest refreshRequest =
+                activeMaster(999, "QPO-MATR-01J5REFRESH", "PROCESSING", "v3|9:P-REFRESH|1:A|0:");
+        refreshRequest.setRequestRole(null);
+        when(fixture.mesRequestMapper.selectOne(any())).thenReturn(refreshRequest);
+
+        Map<String, Object> result = fixture.batchService.syncMesMaterialBatch(List.of(331), 9205L);
+
+        assertThat(result)
+                .containsEntry("submittedToMesCount", 0)
+                .containsEntry("dedupFollowerCount", 0);
+        List<Map<String, Object>> rows = (List<Map<String, Object>>) result.get("results");
+        assertThat(rows).hasSize(1);
+        assertThat(rows.get(0))
+                .containsEntry("status", "CALLBACK_PENDING")
+                .containsEntry("submittedToMes", false);
+        assertThat(rows.get(0).get("message")).asString().contains("已有在途 MES 请求");
+        assertThat(((Map<String, Object>) rows.get(0).get("result")))
+                .containsEntry("dedupResult", "ACTIVE_REQUEST_EXISTS")
+                .containsEntry("mesRequestId", "QPO-MATR-01J5REFRESH");
+        // 既不能发 POST，也不能把刷新行当主请求去建 follower。
+        verify(fixture.client, times(0)).resolveMaterial(any());
+        verify(fixture.waiterMapper, times(0)).insert(any());
     }
 
     private Fixture fixture() {

@@ -24,6 +24,7 @@ public class DeliveryIntegrationBatchService {
     private static final String STATUS_SKIPPED = "SKIPPED";
     private static final String STATUS_SUCCESS = "SUCCESS";
     private static final String DEDUP_FOLLOW_EXISTING_ACTIVE = "FOLLOW_EXISTING_ACTIVE";
+    private static final String DEDUP_ACTIVE_REQUEST_EXISTS = "ACTIVE_REQUEST_EXISTS";
 
     @Autowired
     private OrderDeliveryTicketMapper ticketMapper;
@@ -220,6 +221,14 @@ public class DeliveryIntegrationBatchService {
             return row;
         }
         String status = resultStatus(result);
+        if (DEDUP_ACTIVE_REQUEST_EXISTS.equals(dedupResult)) {
+            // 同一物料身份已有在途请求，但它不是本流程的批量主请求（例如「刷新料号」台账行）。
+            // 不建 follower、不发 POST，只把在途状态回给用户。
+            String rowStatus = STATUS_RESULT_UNKNOWN.equals(status) ? STATUS_RESULT_UNKNOWN : STATUS_CALLBACK_PENDING;
+            Map<String, Object> row = row(ticketId, rowStatus, resultMessage(result), result);
+            row.put("submittedToMes", false);
+            return row;
+        }
         if (STATUS_FAILED.equals(status)) {
             Map<String, Object> row = row(ticketId, STATUS_FAILED, resultMessage(result), result);
             row.put("submittedToMes", submittedToMes(result));

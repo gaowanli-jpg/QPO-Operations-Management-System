@@ -20,6 +20,7 @@ import com.machining.quote.service.DataCenterCallException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.client.HttpStatusCodeException;
@@ -93,6 +94,8 @@ public class ProductionItemMaterialNoRefreshService {
     private MesProductionDispatchService mesProductionDispatchService;
     @Autowired(required = false)
     private AuditService auditService;
+    @Autowired(required = false)
+    private MesMaterialDedupService dedupService;
 
     public List<Integer> normalizeAllocationIds(List<Integer> allocationIds) {
         if (allocationIds == null) {
@@ -194,7 +197,11 @@ public class ProductionItemMaterialNoRefreshService {
         }
         List<OrderDeliveryTicketAllocation> ticketAllocations = allocationMapper.selectByTicketId(ticketId);
         assertNoBlockingProductionRows(ticketAllocations);
+        // 结果未知允许重新刷新：MES 按「图号+版本+材质」全局判重，重发不会造出第二个任务，
+        // 只会明确回「已存在带料号」或「任务还在待建料」。先收口旧台账行，释放身份去重位。
+        retireUnresolvedRequests(ticket, taskId);
         assertNoActiveMaterialRequest(ticketId);
+        assertNoActiveIdentityRequest(ticket);
 
         SalesOrderItem salesItem = resolveSalesOrderItem(ticket);
         String previousMaterialNo = firstNonBlank(
@@ -366,6 +373,23 @@ public class ProductionItemMaterialNoRefreshService {
         if (resp == null) {
             throw new MesMaterialRefreshResultUnknownException(bizId, "MES 响应为空");
         }
+        // 取到料号即写回：旧契约的「已存在」批级码会把料号一起带回来，料号就是本流程要的结果。
+        if (!Boolean.TRUE.equals(resp.getSuccess()) && resp.hasMaterialNo()
+                && MesMaterialSyncService.isMesMaterialUncertainCode(resp.getCode())) {
+            if (resp.contradictsRequestId(bizId)) {
+                throw new MesMaterialRefreshResultUnknownException(bizId, "MES 响应带着料号但 bizId 与请求不一致");
+            }
+            return;
+        }
+        // 旧契约的「已存在 / 处理中」：对端版本不可知，保守处理成结果待核对。
+        if (MesMaterialSyncService.isMesMaterialUncertainCode(resp.getCode())) {
+            throw new MesMaterialRefreshResultUnknownException(bizId,
+                    "MES 侧已有同一物料身份的任务（" + resp.getCode() + "），请按原 bizId 核对后再处理");
+        }
+        // 其余非 0 code 是整批回滚，一条都没建：可安全重试，给出人话原因而不是「MES 返回失败」。
+        if (MesMaterialSyncService.isMesMaterialRolledBack(resp.getCode())) {
+            throw new IllegalStateException(MesMaterialSyncService.mesMaterialRollbackMessage(resp.getCode()));
+        }
         if (Boolean.FALSE.equals(resp.getSuccess())) {
             throw new IllegalStateException(isBlank(resp.getMessage())
                     ? "MES 返回失败"
@@ -439,7 +463,17 @@ public class ProductionItemMaterialNoRefreshService {
         request.setMaterialNo(previousMaterialNo);
         request.setRequestMessage(abbreviate(REQUEST_MESSAGE_PREFIX + "原料号=" + previousMaterialNo + "；原因=" + reason, 500));
         request.setRequestedAt(LocalDateTime.now());
-        mesRequestMapper.insert(request);
+        // 写入与批量入口相同的三字段身份键，让两边共享 uk_delivery_mes_request_active_dedup。
+        // 角色留空：这一行不是批量主请求，批量入口看到它时只回在途状态，不建 follower。
+        if (dedupService != null && !isBlank(ticket.getPartNo())) {
+            request.setDedupKey(dedupService.buildDedupKey(ticket));
+        }
+        try {
+            mesRequestMapper.insert(request);
+        } catch (DuplicateKeyException error) {
+            throw new IllegalStateException(
+                    "该图号版本材质已有在途 MES 请求（并发提交），请先按原 bizId 核对结果", error);
+        }
     }
 
     private void updateMesRequest(String bizId,
@@ -527,8 +561,27 @@ public class ProductionItemMaterialNoRefreshService {
         return row;
     }
 
-    private void assertNoActiveMaterialRequest(Integer ticketId) {
-        if (mesRequestMapper == null || ticketId == null) {
+    /**
+     * 重新刷新前把本身份「结果未知」的台账行收口，释放身份去重位；有收口就说明这是重试，要留痕。
+     */
+    private void retireUnresolvedRequests(OrderDeliveryTicket ticket, Long taskId) {
+        if (dedupService == null || ticket == null) {
+            return;
+        }
+        List<String> retired = dedupService.retireUnresolvedRequests(ticket);
+        if (retired == null || retired.isEmpty()) {
+            return;
+        }
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("ticketId", ticket.getId());
+        summary.put("taskId", taskId);
+        summary.put("retiredMesRequestIds", retired);
+        summary.put("retiredCount", retired.size());
+        recordAudit("PRODUCTION_ITEM_MATERIAL_NO_REFRESH_RETRY_AFTER_UNKNOWN",
+                ticket.getId(), null, summary, null);
+    }
+
+    private void assertNoActiveMaterialRequest(Integer ticketId) {        if (mesRequestMapper == null || ticketId == null) {
             return;
         }
         com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<OrderDeliveryTicketMesRequest> wrapper =
@@ -541,6 +594,34 @@ public class ProductionItemMaterialNoRefreshService {
         if (active != null) {
             throw new IllegalStateException("该零件已有 MES 料号请求正在处理或等待核对，请先处理原 bizId="
                     + active.getMesRequestId());
+        }
+    }
+
+    /**
+     * 与「批量获取物料号」共享同一物料身份锁。
+     *
+     * <p>只看 ticket_id 不够：同一图号版本材质的另一个零件可能正在被批量入口提交，
+     * 两边各自发 POST 会撞 MES 的「已存在物料准备任务」。这里按三字段身份再拦一次。</p>
+     */
+    private void assertNoActiveIdentityRequest(OrderDeliveryTicket ticket) {
+        if (mesRequestMapper == null || dedupService == null || ticket == null || isBlank(ticket.getPartNo())) {
+            return;
+        }
+        String identityKey = dedupService.buildDedupKey(ticket);
+        String legacyKey = dedupService.buildLegacyDedupKey(ticket);
+        java.util.List<String> keys = legacyKey == null
+                ? java.util.List.of(identityKey)
+                : java.util.List.of(identityKey, legacyKey);
+        com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<OrderDeliveryTicketMesRequest> wrapper =
+                new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<>();
+        wrapper.in("dedup_key", keys)
+                .in("request_status", REQUEST_STATUS_PROCESSING, REQUEST_STATUS_CALLBACK_PENDING,
+                        REQUEST_STATUS_RESULT_UNKNOWN)
+                .last("LIMIT 1");
+        OrderDeliveryTicketMesRequest active = mesRequestMapper.selectOne(wrapper);
+        if (active != null) {
+            throw new IllegalStateException("该图号版本材质已有在途 MES 请求，请先按原 bizId="
+                    + active.getMesRequestId() + " 核对结果");
         }
     }
 

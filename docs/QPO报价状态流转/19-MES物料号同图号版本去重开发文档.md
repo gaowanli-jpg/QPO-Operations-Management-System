@@ -27,12 +27,14 @@ RFQ 重复件核价 / 销售订单导入自动快照补全
 
 核心结论：
 
-- 去重键固定为 **图号 + 版本**，不区分客户、订单、图纸文件或内部项目号。
+- 去重键固定为 **图号 + 版本 + 材质**，不区分客户、订单、图纸文件或内部项目号。
 - 同一 `dedupKey` 同一时间只允许一个活动主请求。
 - 存在活动主请求时，后续提单行成为 follower，不调用 MES。
+- 同图号版本、不同材质是两个不同身份，不互相 fan-out。
 - 不查询 `order_delivery_ticket` 历史成功行，也不从其他成功提单行复制物料号。
 - 没有活动主请求时创建新的 MES 主请求，由数据库唯一约束处理并发竞争。
 - MES 只处理主请求；QPO 负责即时成功或回调成功后的 follower fan-out。
+- 「刷新料号」与「批量获取物料号」共享同一物料身份锁。
 - 不新增用户权限，继续使用 `market:delivered-item:mes-sync`。
 
 ## 2. 前置物料号复用边界
@@ -68,12 +70,45 @@ order_delivery_ticket.mes_sync_status = SUCCESS
 ### 3.1 去重键
 
 ```text
-dedupKey = normalize(part_no) + "|" + normalize(version)
+dedupKey = "v3|" + len(part_no) + ":" + normalize(part_no)
+        + "|" + len(version) + ":" + normalize(version)
+        + "|" + len(material) + ":" + trim(material)
 ```
 
-- 图号和版本去除首尾空格并统一大写。
-- 空版本统一为 `-`。
+- 图号和版本去除首尾空格并统一大写；材质只 trim，不折叠大小写。
+- 空版本、空材质统一为空串。
+- 长度前缀按字符（码点）计数，避免图号/版本/材质本身含 `|` 或 `:` 时产生歧义。
+- 前缀 `v3|` 与旧的两字段键格式互斥（旧键以大写图号开头），因此两类键可以在同一次查询里一起查——但**必须分开查**，见下条。
 - 不拼接客户、订单、图纸或项目号。
+
+材质进入身份的判据来自 MES：物料准备任务按「图号 + 版本 + 材质」创建，同一图号版本换材质必须重新建号。只按图号+版本去重会把后者并成 follower，它永远拿不到自己的料号。
+
+**旧两字段键只能回在途状态，不能建 follower。** 旧键只有图号+版本，无法证明那条在途请求是同一物料身份。命中旧键时把本提单挂成 follower，会让同图号版本、不同材质的零件永远等不到自己的料号（MES 里是两个独立任务）。因此 `resolveBeforeMes` 分两次查：先三字段键（可建 follower），再旧两字段键（只回 `ACTIVE_REQUEST_EXISTS`）。`followActiveMaster` 同理，唯一冲突后只认三字段键的胜者。
+
+### 3.1.1 一个 MES 请求内图号版本必须唯一
+
+MES 的创建响应只有图号、版本、状态和料号，**不带材质**。因此同一请求内「图号 + 版本」重复时，响应行无法对应到具体材质。
+
+处理方式：同一分组内先按三字段身份归并 master/follower，再把 master 按「同图号版本唯一」切成多个波次，每波各自一个 `bizId` 串行提交。只有同图号版本存在多种材质时才会拆成多个请求。拆分漏了会在预留阶段撞 `uk_mes_material_batch_key`，该异常会被翻译成业务原因，不会原样冒到前端。
+
+`mes_material_batch_item.item_key` 继续保存两字段键（不把长键塞进 220 字符列）；callback 行匹配改用已持久化的 `mes_task_no`。
+
+### 3.1.2 刷新料号共享同一身份锁
+
+「刷新料号」写入的台账行使用同一三字段 `dedup_key`，`request_role` 留空（它不是批量主请求）。因此：
+
+- 批量入口看到刷新请求时只返回在途/待核对状态，不创建 follower、不发 POST；
+- 刷新入口遇到同身份的批量请求时同样不发 POST；
+- 活动请求查询**不再按 `request_role = MASTER` 过滤**，否则批量入口看不见刷新请求，共享身份锁等于没做。
+
+### 3.1.3 存量键升级（V71）
+
+`V71__mes_material_identity_material.sql` 把三处去重键列从 220 扩到 512，并把仍处于 `PROCESSING` / `CALLBACK_PENDING` / `RESULT_UNKNOWN` 的台账行、提单行和等待行回填成三字段键。回填用 SQL 侧同一编码函数重算，与 Java `buildDedupKey` 逐字节等价。
+
+- 回填只处理活动行，不改历史成功/失败行。
+- 刷新料号台账行按提单当前身份推定回填（留空等于身份仲裁失效，比推定更危险）。
+- 部署前复跑 `docs/ops/mes-material-identity-preflight.sql` 看 Q2/Q3：Q2 必须 0 行；Q3 出现 `UNPROVABLE` 的批次说明请求期间提单被改过，按该批次的实际材质人工确认后再发。这是部署前的人工检查项，不写进迁移。
+- Q2/Q4 的空白归一化字符集必须与 V71 的 `qpo_mes_material_identity()` 一致，不要用裸 `btrim()`，否则会出现「预检说 0 行、迁移却撞唯一索引」。
 
 ### 3.2 主请求
 
@@ -100,7 +135,7 @@ follower 是同一 `dedupKey` 下关联活动主请求、等待其结果的提�
 
 | 字段 | 说明 |
 | --- | --- |
-| `mes_dedup_key` | 规范化后的图号版本去重键。 |
+| `mes_dedup_key` | 规范化后的图号+版本+材质去重键（`v3|` 长度前缀编码）。 |
 | `mes_request_role` | 当前只产生 `MASTER` 或 `FOLLOWER`。 |
 | `mes_master_ticket_id` | follower 关联的主提单行 ID。 |
 | `mes_master_request_id` | follower 关联的主请求 ID。 |
@@ -109,7 +144,7 @@ follower 是同一 `dedupKey` 下关联活动主请求、等待其结果的提�
 
 - `order_delivery_ticket_mes_request` 保存真实主请求流水及状态。
 - `order_delivery_ticket_mes_waiter` 保存 follower 与主请求的等待关系。
-- 活动主请求唯一约束只覆盖 `PROCESSING`、`CALLBACK_PENDING`，保证同一 `dedupKey` 同时只有一个活动主请求。
+- 活动主请求唯一约束覆盖 `PROCESSING`、`CALLBACK_PENDING`、`RESULT_UNKNOWN`，保证同一 `dedupKey` 同时只有一个活动主请求；结果待核对的请求继续占用身份位。
 - 等待表必须保证同一 `master_mes_request_id + waiter_ticket_id` 不重复。
 - 保留活动主请求和 waiter 查询索引；不新增用于扫描历史成功提单行的索引。
 

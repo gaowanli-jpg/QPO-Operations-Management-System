@@ -1,5 +1,6 @@
 package com.machining.quote;
 
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.machining.quote.dto.mes.MesMaterialResolveReq;
 import com.machining.quote.dto.mes.MesMaterialResolveResp;
 import com.machining.quote.entity.OrderDeliveryTicket;
@@ -13,11 +14,13 @@ import com.machining.quote.mapper.SalesOrderItemMapper;
 import com.machining.quote.service.AuditService;
 import com.machining.quote.service.DataCenterCallException;
 import com.machining.quote.service.mes.MesMaterialClient;
+import com.machining.quote.service.mes.MesMaterialDedupService;
 import com.machining.quote.service.mes.MesProductionDispatchService;
 import com.machining.quote.service.mes.ProductionItemMaterialNoRefreshService;
 import com.machining.quote.service.mes.ProductionItemMaterialNoRefreshWriter;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
@@ -46,6 +49,8 @@ class ProductionItemMaterialNoRefreshServiceTest {
     private final ProductionItemMaterialNoRefreshWriter refreshWriter = mock(ProductionItemMaterialNoRefreshWriter.class);
     private final MesProductionDispatchService dispatchService = mock(MesProductionDispatchService.class);
     private final AuditService auditService = mock(AuditService.class);
+    /** 生产环境一定注入；显式放入 fixture，让共享身份锁在每条刷新用例里都真实生效。 */
+    private final MesMaterialDedupService dedupService = new MesMaterialDedupService();
 
     @Test
     void refreshOverwritesConfirmedMaterialNoAndKeepsAuditTrail() {
@@ -225,6 +230,67 @@ class ProductionItemMaterialNoRefreshServiceTest {
         assertThat(captor.getValue().getResponseMessage()).contains("已存在物料准备任务");
     }
 
+    /**
+     * MES 对重复提交返回「已存在」时仍带着料号，料号就是刷新的结果，必须写回。
+     */
+    @Test
+    void refreshWritesBackMaterialNoWhenMesReportsExistingTaskWithProductCode() {
+        stubTicket(1, "CS-OLD-001");
+        when(allocationMapper.selectBatchIds(any())).thenReturn(List.of(allocation(11, 1, "PENDING")));
+        when(allocationMapper.selectByTicketId(1)).thenReturn(List.of(allocation(11, 1, "PENDING")));
+        when(salesOrderItemMapper.selectBySourceTicketIdForUpdate(1)).thenReturn(salesItem(101L, "CS-OLD-001"));
+        when(mesMaterialClient.resolveMaterial(any())).thenAnswer(invocation -> {
+            MesMaterialResolveReq req = invocation.getArgument(0);
+            MesMaterialResolveResp response = successResponse(req.getBizId(), "CS-NEW-002");
+            response.setCode("1_030_900_002");
+            response.setSuccess(false);
+            response.setMessage("已存在物料准备任务：MP202610270002");
+            return response;
+        });
+        when(refreshWriter.apply(eq(1), eq("CS-NEW-002"), anyString(), anyString(), any(), any()))
+                .thenReturn(new ProductionItemMaterialNoRefreshWriter.RefreshWriteResult("CS-OLD-001", "CS-NEW-002", 1, 1, 0));
+
+        Map<String, Object> result = service().refreshBatch(List.of(11), "MES 重建后重新取号", 99L);
+
+        assertThat(result).containsEntry("successCount", 1).containsEntry("failedCount", 0);
+        verify(refreshWriter).apply(eq(1), eq("CS-NEW-002"), anyString(), anyString(), any(), any());
+    }
+
+    /**
+     * 1030900008 = 某行命中已有任务、仍在待建料。MES 整批回滚，一条都没建，
+     * 所以刷新可以安全重试；消息要说清在等什么，而不是「MES 返回失败」。
+     */
+    @Test
+    void refreshTreatsMesTaskPendingCodeAsRetryableFailure() {
+        stubTicket(1, "CS-OLD-001");
+        when(allocationMapper.selectBatchIds(any())).thenReturn(List.of(allocation(11, 1, "PENDING")));
+        when(allocationMapper.selectByTicketId(1)).thenReturn(List.of(allocation(11, 1, "PENDING")));
+        when(salesOrderItemMapper.selectBySourceTicketIdForUpdate(1)).thenReturn(salesItem(101L, "CS-OLD-001"));
+        when(mesMaterialClient.resolveMaterial(any())).thenAnswer(invocation -> {
+            MesMaterialResolveReq req = invocation.getArgument(0);
+            MesMaterialResolveResp response = new MesMaterialResolveResp();
+            response.setCode("1030900008");
+            response.setMesRequestId(req.getBizId());
+            return response;
+        });
+
+        Map<String, Object> result = service().refreshBatch(List.of(11), "重新取号", 100L);
+
+        assertThat(result).containsEntry("successCount", 0).containsEntry("failedCount", 1).containsEntry("unknownCount", 0);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> rows = (List<Map<String, Object>>) result.get("rows");
+        // MES 确认 1030900008 不会自动出料号，必须人工到 MES 建料，提示语要指向「去 MES 处理」。
+        assertThat(String.valueOf(rows.get(0).get("message")))
+                .contains("MES 处理")
+                .contains("1030900008");
+        verify(refreshWriter, never()).apply(any(), anyString(), anyString(), anyString(), any(), any());
+        ArgumentCaptor<OrderDeliveryTicketMesRequest> updateCaptor =
+                ArgumentCaptor.forClass(OrderDeliveryTicketMesRequest.class);
+        verify(mesRequestMapper).update(updateCaptor.capture(), any());
+        assertThat(updateCaptor.getValue().getRequestStatus()).isEqualTo("FAILED");
+        assertThat(updateCaptor.getValue().getResponseMessage()).contains("1030900008");
+    }
+
     @Test
     void refreshPreservesUnknownResultAndBlocksAnotherMesRequest() {
         stubTicket(1, "CS-OLD-001");
@@ -234,7 +300,17 @@ class ProductionItemMaterialNoRefreshServiceTest {
         OrderDeliveryTicketMesRequest activeUnknown = new OrderDeliveryTicketMesRequest();
         activeUnknown.setMesRequestId("QPO-MATR-ORIGINAL");
         activeUnknown.setRequestStatus("RESULT_UNKNOWN");
-        when(mesRequestMapper.selectOne(any())).thenReturn(null, activeUnknown);
+        // 刷新入口查两次活动行：先按 ticket_id，再按三字段身份。
+        // 第一次提交时两者都为空；第二次提交时该 ticket 已有在途 RESULT_UNKNOWN 行。
+        java.util.concurrent.atomic.AtomicBoolean firstTicketLookup =
+                new java.util.concurrent.atomic.AtomicBoolean(true);
+        when(mesRequestMapper.selectOne(any())).thenAnswer(invocation -> {
+            QueryWrapper<?> wrapper = invocation.getArgument(0);
+            if (isIdentityLookup(wrapper)) {
+                return null;
+            }
+            return firstTicketLookup.getAndSet(false) ? null : activeUnknown;
+        });
         doThrow(new DataCenterCallException(
                 "MES_MATERIAL_RESOLVE",
                 DataCenterCallException.FailureCertainty.RESULT_UNKNOWN,
@@ -288,6 +364,80 @@ class ProductionItemMaterialNoRefreshServiceTest {
         assertThat(updateCaptor.getValue().getRequestStatus()).isEqualTo("RESULT_UNKNOWN");
     }
 
+    @Test
+    void refreshDoesNotSubmitWhenSameMaterialIdentityAlreadyHasActiveBatchRequest() {
+        stubTicket(1, "CS-OLD-001");
+        when(allocationMapper.selectBatchIds(any())).thenReturn(List.of(allocation(11, 1, "PENDING")));
+        when(allocationMapper.selectByTicketId(1)).thenReturn(List.of(allocation(11, 1, "PENDING")));
+        // 同一「图号 + 版本 + 材质」的另一个零件正被批量入口提交（request_role = MASTER）。
+        OrderDeliveryTicketMesRequest batchActive = new OrderDeliveryTicketMesRequest();
+        batchActive.setMesRequestId("QPO-MATL-202610290001");
+        batchActive.setRequestStatus("CALLBACK_PENDING");
+        when(mesRequestMapper.selectOne(any())).thenAnswer(invocation -> {
+            QueryWrapper<?> wrapper = invocation.getArgument(0);
+            return isIdentityLookup(wrapper) ? batchActive : null;
+        });
+
+        Map<String, Object> result = service().refreshBatch(List.of(11), "MES 已重建物料号", 100L);
+
+        assertThat(result).containsEntry("successCount", 0).containsEntry("failedCount", 1);
+        verify(mesMaterialClient, never()).resolveMaterial(any());
+        verify(mesRequestMapper, never()).insert(any());
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> rows = (List<Map<String, Object>>) result.get("rows");
+        assertThat(String.valueOf(rows.get(0).get("message")))
+                .contains("已有在途 MES 请求")
+                .contains("QPO-MATL-202610290001");
+    }
+
+    @Test
+    void refreshWritesSharedIdentityDedupKeyOnTheRequestRow() {
+        stubTicket(1, "CS-OLD-001");
+        when(allocationMapper.selectBatchIds(any())).thenReturn(List.of(allocation(11, 1, "PENDING")));
+        when(allocationMapper.selectByTicketId(1)).thenReturn(List.of(allocation(11, 1, "PENDING")));
+        when(salesOrderItemMapper.selectBySourceTicketIdForUpdate(1)).thenReturn(salesItem(101L, "CS-OLD-001"));
+        when(mesMaterialClient.resolveMaterial(any())).thenAnswer(invocation -> {
+            MesMaterialResolveReq req = invocation.getArgument(0);
+            return successResponse(req.getBizId(), "CS-NEW-002");
+        });
+        when(refreshWriter.apply(any(), anyString(), anyString(), anyString(), any(), any()))
+                .thenReturn(new ProductionItemMaterialNoRefreshWriter.RefreshWriteResult("CS-OLD-001", "CS-NEW-002", 1, 1, 0));
+
+        service().refreshBatch(List.of(11), "MES 已重建物料号", 101L);
+
+        ArgumentCaptor<OrderDeliveryTicketMesRequest> captor =
+                ArgumentCaptor.forClass(OrderDeliveryTicketMesRequest.class);
+        verify(mesRequestMapper).insert(captor.capture());
+        // 与批量入口共用同一把身份锁；材质为空时按 0 长度编码。
+        assertThat(captor.getValue().getDedupKey())
+                .isEqualTo(MesMaterialDedupService.identityKey("DWG-001", "A", null));
+        // 刷新行不是批量主请求，角色必须留空，批量入口才会按「在途」而不是 follower 处理。
+        assertThat(captor.getValue().getRequestRole()).isNull();
+    }
+
+    @Test
+    void refreshReportsConcurrentIdentityConflictWithoutSubmittingASecondRequest() {
+        stubTicket(1, "CS-OLD-001");
+        when(allocationMapper.selectBatchIds(any())).thenReturn(List.of(allocation(11, 1, "PENDING")));
+        when(allocationMapper.selectByTicketId(1)).thenReturn(List.of(allocation(11, 1, "PENDING")));
+        when(salesOrderItemMapper.selectBySourceTicketIdForUpdate(1)).thenReturn(salesItem(101L, "CS-OLD-001"));
+        // 预检查看到的是空，插入时被 uk_delivery_mes_request_active_dedup 拦下。
+        when(mesRequestMapper.insert(any()))
+                .thenThrow(new DuplicateKeyException("uk_delivery_mes_request_active_dedup"));
+
+        Map<String, Object> result = service().refreshBatch(List.of(11), "MES 已重建物料号", 102L);
+
+        assertThat(result).containsEntry("successCount", 0).containsEntry("failedCount", 1);
+        verify(mesMaterialClient, never()).resolveMaterial(any());
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> rows = (List<Map<String, Object>>) result.get("rows");
+        assertThat(String.valueOf(rows.get(0).get("message"))).contains("并发提交");
+    }
+
+    private boolean isIdentityLookup(QueryWrapper<?> wrapper) {
+        return wrapper.getSqlSegment() != null && wrapper.getSqlSegment().contains("dedup_key");
+    }
+
     private ProductionItemMaterialNoRefreshService service() {
         ProductionItemMaterialNoRefreshService service = new ProductionItemMaterialNoRefreshService();
         ReflectionTestUtils.setField(service, "allocationMapper", allocationMapper);
@@ -298,6 +448,7 @@ class ProductionItemMaterialNoRefreshServiceTest {
         ReflectionTestUtils.setField(service, "refreshWriter", refreshWriter);
         ReflectionTestUtils.setField(service, "mesProductionDispatchService", dispatchService);
         ReflectionTestUtils.setField(service, "auditService", auditService);
+        ReflectionTestUtils.setField(service, "dedupService", dedupService);
         return service;
     }
 

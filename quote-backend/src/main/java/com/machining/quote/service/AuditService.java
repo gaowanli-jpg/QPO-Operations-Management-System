@@ -443,10 +443,14 @@ public class AuditService {
             case "DELIVERY_MES_MATERIAL_SYNC_ACCEPTED" -> "MES物料号已受理待回调";
             case "DELIVERY_MES_MATERIAL_SYNC_FAILED" -> "MES物料号同步失败";
             case "DELIVERY_MES_MATERIAL_SYNC_RESULT_UNKNOWN" -> "MES物料号结果待核对";
+            case "DELIVERY_MES_MATERIAL_SYNC_OVERWRITE" -> "MES物料号同步覆盖旧料号";
+            case "DELIVERY_MES_MATERIAL_SYNC_RETRY_AFTER_UNKNOWN" -> "MES物料号结果未知后重新获取";
             case "DELIVERY_MES_MATERIAL_CALLBACK_SUCCESS" -> "MES物料号回调成功";
             case "DELIVERY_MES_MATERIAL_CALLBACK_FAILED" -> "MES物料号回调失败";
             case "DELIVERY_MES_MATERIAL_CALLBACK_CONFLICT" -> "MES物料号回调冲突";
             case "DELIVERY_MES_MATERIAL_CALLBACK_REVIVE" -> "MES物料号回调纠正失败判定";
+            case "DELIVERY_MES_MATERIAL_CALLBACK_OVERWRITE" -> "MES物料号回调覆盖旧料号";
+            case "DELIVERY_MES_MATERIAL_CALLBACK_TIMEOUT" -> "MES物料号回调超时未达";
             case "DELIVERY_MES_MATERIAL_DEDUP_REUSE" -> "复用同图号版本MES物料号";
             case "DELIVERY_MES_MATERIAL_DEDUP_FOLLOW" -> "关联同图号版本MES主请求";
             case "DELIVERY_MES_MATERIAL_DEDUP_FANOUT" -> "分发同图号版本MES物料号";
@@ -471,6 +475,7 @@ public class AuditService {
             case "PRODUCTION_ITEM_MATERIAL_NO_REFRESH_SUCCESS" -> "刷新料号成功";
             case "PRODUCTION_ITEM_MATERIAL_NO_REFRESH_FAILED" -> "刷新料号失败";
             case "PRODUCTION_ITEM_MATERIAL_NO_REFRESH_RESULT_UNKNOWN" -> "刷新料号结果待核对";
+            case "PRODUCTION_ITEM_MATERIAL_NO_REFRESH_RETRY_AFTER_UNKNOWN" -> "刷新料号结果未知后重新刷新";
             case "LOCKED_ITEM_STOCK_PICKING_SUBMIT" -> "提交提库存工单";
             case "LOCKED_ITEM_STOCK_PICKING_SUCCESS" -> "提库存工单下发成功";
             case "LOCKED_ITEM_STOCK_PICKING_FAILED" -> "提库存工单下发失败";

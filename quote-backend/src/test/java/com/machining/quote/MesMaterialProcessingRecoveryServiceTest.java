@@ -16,6 +16,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -37,7 +38,7 @@ class MesMaterialProcessingRecoveryServiceTest {
         assertThat(result.isHandled()).isTrue();
         assertThat(result.getStatus()).isEqualTo("SUCCESS");
         assertThat(result.getMessage()).contains("recovered");
-        verify(fixture.sourceSyncService).syncConfirmedMaterialNo(eq(ticket), eq("MAT-101"), any());
+        verify(fixture.sourceSyncService).syncConfirmedMaterialNo(eq(ticket), eq("MAT-101"), any(), eq(true));
         ArgumentCaptor<OrderDeliveryTicket> updateCaptor = ArgumentCaptor.forClass(OrderDeliveryTicket.class);
         verify(fixture.ticketMapper).updateById(updateCaptor.capture());
         assertThat(updateCaptor.getValue().getId()).isEqualTo(101);
@@ -46,7 +47,7 @@ class MesMaterialProcessingRecoveryServiceTest {
     }
 
     @Test
-    void convertsInterruptedProcessingRequestToFailedSoUserCanRetry() {
+    void convertsInterruptedProcessingRequestToResultUnknownInsteadOfRetryableFailure() {
         Fixture fixture = fixture();
         OrderDeliveryTicket ticket = processingTicket(102, "MES-102");
         when(fixture.requestMapper.selectOne(any(Wrapper.class)))
@@ -57,14 +58,19 @@ class MesMaterialProcessingRecoveryServiceTest {
                 fixture.service.recoverProcessing(ticket, 9100L);
 
         assertThat(result.isHandled()).isTrue();
-        assertThat(result.getStatus()).isEqualTo("FAILED");
-        assertThat(result.getMessage()).contains("interrupted");
-        verify(fixture.sourceSyncService, never()).syncConfirmedMaterialNo(any(), any(), any());
+        assertThat(result.getStatus()).isEqualTo("RESULT_UNKNOWN");
+        assertThat(result.getMessage()).contains("interrupted").contains("unknown");
+        verify(fixture.sourceSyncService, never()).syncConfirmedMaterialNo(any(), any(), any(), anyBoolean());
         ArgumentCaptor<OrderDeliveryTicket> ticketCaptor = ArgumentCaptor.forClass(OrderDeliveryTicket.class);
         verify(fixture.ticketMapper).updateById(ticketCaptor.capture());
         assertThat(ticketCaptor.getValue().getId()).isEqualTo(102);
-        assertThat(ticketCaptor.getValue().getMesSyncStatus()).isEqualTo("FAILED");
-        verify(fixture.requestMapper).update(any(OrderDeliveryTicketMesRequest.class), any(Wrapper.class));
+        assertThat(ticketCaptor.getValue().getMesSyncStatus()).isEqualTo("RESULT_UNKNOWN");
+        // 台账行必须继续活跃（不写 completed_at），否则身份去重位被释放、会重复提交。
+        ArgumentCaptor<OrderDeliveryTicketMesRequest> requestCaptor =
+                ArgumentCaptor.forClass(OrderDeliveryTicketMesRequest.class);
+        verify(fixture.requestMapper).update(requestCaptor.capture(), any(Wrapper.class));
+        assertThat(requestCaptor.getValue().getRequestStatus()).isEqualTo("RESULT_UNKNOWN");
+        assertThat(requestCaptor.getValue().getCompletedAt()).isNull();
     }
 
     @Test
@@ -83,7 +89,7 @@ class MesMaterialProcessingRecoveryServiceTest {
         assertThat(result.getMessage()).contains("processing");
         verify(fixture.ticketMapper, never()).updateById(any());
         verify(fixture.requestMapper, never()).update(any(), any());
-        verify(fixture.sourceSyncService, never()).syncConfirmedMaterialNo(any(), any(), any());
+        verify(fixture.sourceSyncService, never()).syncConfirmedMaterialNo(any(), any(), any(), anyBoolean());
     }
 
     @Test
@@ -119,7 +125,7 @@ class MesMaterialProcessingRecoveryServiceTest {
         fixture.waiterMapper = mock(OrderDeliveryTicketMesWaiterMapper.class);
         fixture.taskMapper = mock(SystemTaskMapper.class);
         fixture.sourceSyncService = mock(SourceItemMaterialNoSyncService.class);
-        when(fixture.sourceSyncService.syncConfirmedMaterialNo(any(), any(), any()))
+        when(fixture.sourceSyncService.syncConfirmedMaterialNo(any(), any(), any(), eq(true)))
                 .thenReturn(SourceItemMaterialNoSyncService.MaterialNoSyncResult.empty());
         ReflectionTestUtils.setField(fixture.service, "ticketMapper", fixture.ticketMapper);
         ReflectionTestUtils.setField(fixture.service, "requestMapper", fixture.requestMapper);

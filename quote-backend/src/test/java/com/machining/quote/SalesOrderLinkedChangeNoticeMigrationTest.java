@@ -50,7 +50,7 @@ class SalesOrderLinkedChangeNoticeMigrationTest {
                     .max().orElse(0);
         }
         // 全局迁移版本门禁：新增迁移后必须同步抬高这里的期望值，避免漏掉迁移或出现版本回退。
-        assertThat(maxVersion).isEqualTo(70);
+        assertThat(maxVersion).isEqualTo(71);
 
         Path migration = MIGRATION_DIR.resolve("V56__sales_order_linked_change_notice_filter_fields.sql");
         assertThat(migration).exists();

@@ -107,6 +107,13 @@ erp:
     timeout-ms: ${ERP_MES_TIMEOUT_MS:60000}
     callback-token: ${ERP_MES_CALLBACK_TOKEN:}
     callback-token-enabled: ${ERP_MES_CALLBACK_TOKEN_ENABLED:true}
+    # MES 物料回调只有 SUCCESS，失败不回调：超过 hours 仍是待回调的请求转「结果待核对」。
+    # 首次扫描延后一个 check-ms，避免应用刚启动就把正常等待中的请求误判。
+    material-callback-timeout:
+      enabled: ${ERP_MES_MATERIAL_CALLBACK_TIMEOUT_ENABLED:true}
+      hours: ${ERP_MES_MATERIAL_CALLBACK_TIMEOUT_HOURS:4}
+      check-ms: ${ERP_MES_MATERIAL_CALLBACK_TIMEOUT_CHECK_MS:600000}
+      batch-size: ${ERP_MES_MATERIAL_CALLBACK_TIMEOUT_BATCH_SIZE:200}
   task:
     core-pool-size: ${ERP_TASK_CORE_POOL_SIZE:2}
     max-pool-size: ${ERP_TASK_MAX_POOL_SIZE:4}

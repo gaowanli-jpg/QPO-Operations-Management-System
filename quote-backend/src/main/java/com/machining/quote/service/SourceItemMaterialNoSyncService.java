@@ -37,9 +37,21 @@ public class SourceItemMaterialNoSyncService {
 
     @Transactional
     public MaterialNoSyncResult syncConfirmedMaterialNo(OrderDeliveryTicket ticket, String materialNo, String message) {
+        return syncConfirmedMaterialNo(ticket, materialNo, message, false);
+    }
+
+    /**
+     * @param allowOverwrite 已确认的旧料号允许被当前有效的 MES 结果覆盖。
+     *                       只有经过 bizId + taskNo 校验的批次回调才传 true。
+     */
+    @Transactional
+    public MaterialNoSyncResult syncConfirmedMaterialNo(
+            OrderDeliveryTicket ticket, String materialNo, String message, boolean allowOverwrite) {
         String normalizedMaterialNo = normalizeMaterialNo(materialNo);
         LockedTargets targets = lockTargets(ticket);
-        assertTargetsWritable(targets, normalizedMaterialNo);
+        if (!allowOverwrite) {
+            assertTargetsWritable(targets, normalizedMaterialNo);
+        }
         if (targets.isEmpty()) {
             return MaterialNoSyncResult.empty();
         }

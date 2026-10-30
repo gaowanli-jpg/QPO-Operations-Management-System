@@ -14,6 +14,8 @@ class MesMaterialDedupMigrationCharacterizationTest {
             "src", "main", "resources", "db", "migration", "V1__qpo_baseline_schema.sql");
     private static final Path RESULT_UNKNOWN_MIGRATION = Path.of(
             "src", "main", "resources", "db", "migration", "V70__mes_material_result_unknown_state.sql");
+    private static final Path MATERIAL_IDENTITY_MIGRATION = Path.of(
+            "src", "main", "resources", "db", "migration", "V71__mes_material_identity_material.sql");
     private static final Path ORDER_DELIVERY_TICKET = Path.of(
             "src", "main", "java", "com", "machining", "quote", "entity", "OrderDeliveryTicket.java");
     private static final Path MES_REQUEST_ENTITY = Path.of(
@@ -70,6 +72,34 @@ class MesMaterialDedupMigrationCharacterizationTest {
                 .contains("DROP INDEX IF EXISTS uk_delivery_mes_request_active_dedup")
                 .contains("request_status IN ('PROCESSING', 'CALLBACK_PENDING', 'RESULT_UNKNOWN')")
                 .contains("CREATE UNIQUE INDEX uk_delivery_mes_request_active_dedup");
+    }
+
+    @Test
+    void materialIdentityMigrationWidensDedupKeysAndBackfillsActiveRows() throws IOException {
+        assertThat(MATERIAL_IDENTITY_MIGRATION).exists();
+        String migration = read(MATERIAL_IDENTITY_MIGRATION);
+
+        assertThat(migration)
+                .contains("ALTER TABLE order_delivery_ticket")
+                .contains("ALTER TABLE order_delivery_ticket_mes_request")
+                .contains("ALTER TABLE order_delivery_ticket_mes_waiter")
+                .contains("TYPE character varying(512)")
+                .contains("CREATE OR REPLACE FUNCTION qpo_mes_material_identity")
+                .contains("DROP FUNCTION qpo_mes_material_identity(text, text, text)")
+                .contains("'v3|'")
+                // 只回填仍在活动的行，不能改历史成功/失败行
+                .contains("request_status IN ('PROCESSING', 'CALLBACK_PENDING', 'RESULT_UNKNOWN')")
+                .contains("mes_sync_status IN ('PROCESSING', 'CALLBACK_PENDING', 'RESULT_UNKNOWN')")
+                .contains("wait_status IN ('WAITING', 'PROCESSING', 'CALLBACK_PENDING')")
+                // 回填长度与格式闸门
+                .contains("length(dedup_key) > 512")
+                .contains("dedup_key NOT LIKE 'v3|%'")
+                // 非 ASCII 闸门：upper() 与 toUpperCase(Locale.ROOT) 对非 ASCII 不保证一致
+                .contains("requires ASCII drawing number/version");
+
+        // V1/V2/V70 不得被改动：三字段键只在新迁移里引入。
+        assertThat(read(MIGRATION)).doesNotContain("v3|");
+        assertThat(read(RESULT_UNKNOWN_MIGRATION)).doesNotContain("v3|");
     }
 
     @Test
@@ -133,14 +163,16 @@ class MesMaterialDedupMigrationCharacterizationTest {
     }
 
     @Test
-    void callbackDocumentReferencesPartVersionDedupDesign() throws IOException {
+    void callbackDocumentReferencesPartVersionMaterialDedupDesign() throws IOException {
         assertThat(read(CALLBACK_DOC))
                 .contains(
-                        "同图号版本去重",
+                        "同图号版本材质去重",
+                        "图号 + 版本 + 材质",
                         "dedupKey",
                         "order_delivery_ticket_mes_waiter",
                         "MES 只回调主请求",
-                        "QPO fan-out 写回等待行");
+                        "QPO fan-out 写回等待行")
+                .contains("taskNo", "DELIVERY_MES_MATERIAL_CALLBACK_OVERWRITE", "1_030_900_003");
     }
 
     private static String read(Path path) throws IOException {
