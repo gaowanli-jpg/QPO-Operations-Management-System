@@ -242,7 +242,8 @@ public class DataCenterIntegrationClient {
 
     private boolean isMesWriteEndpoint(String endpointCode) {
         return DataCenterEndpointRegistry.MES_MATERIAL_RESOLVE.equalsIgnoreCase(endpointCode)
-                || DataCenterEndpointRegistry.MES_PRODUCTION_DISPATCH.equalsIgnoreCase(endpointCode);
+                || DataCenterEndpointRegistry.MES_PRODUCTION_DISPATCH.equalsIgnoreCase(endpointCode)
+                || DataCenterEndpointRegistry.MES_DEMAND_DELETE.equalsIgnoreCase(endpointCode);
     }
 
     private boolean hasCause(Throwable error, Class<? extends Throwable> type) {

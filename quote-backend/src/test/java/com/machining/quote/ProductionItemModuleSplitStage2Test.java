@@ -108,10 +108,12 @@ class ProductionItemModuleSplitStage2Test {
                 .contains(
                         "query.eq(\"alloc.allocation_type\", PRODUCTION_REQUIRED_TYPE)",
                         "applyProductionStatusScope(query, req.getMesProductionStatus())",
-                        "COALESCE(NULLIF(TRIM(alloc.mes_production_status), ''), 'PENDING') <> 'SUCCESS'",
+                        "COALESCE(NULLIF(TRIM(alloc.mes_production_status), ''), 'PENDING') NOT IN ('SUCCESS', 'CANCELLED')",
                         "COALESCE(NULLIF(TRIM(alloc.mes_production_status), ''), 'PENDING') = 'PENDING'",
                         "query.eq(\"alloc.mes_production_status\", STATUS_PROCESSING)",
                         "query.eq(\"alloc.mes_production_status\", STATUS_FAILED)",
+                        "case STATUS_CANCELLED -> query.eq(\"alloc.mes_production_status\", STATUS_CANCELLED)",
+                        "case STATUS_CANCEL_FAILED -> query.eq(\"alloc.mes_production_status\", STATUS_CANCEL_FAILED)",
                         "countLockedItems(query)",
                         "selectLockedItems(",
                         "dataScopeService.applyDeliveryTicketScope(query, \"ticket\")"

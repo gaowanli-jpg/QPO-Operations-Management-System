@@ -18,6 +18,7 @@ import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketAllocationMapper;
 import com.machining.quote.mapper.SalesOrderHeaderMapper;
 import com.machining.quote.mapper.SalesOrderItemMapper;
+import com.machining.quote.service.mes.MesDemandCancelService;
 import com.machining.quote.util.DrawingPartNoResolver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -72,6 +73,8 @@ public class SalesOrderManageService {
     private BusinessFileService businessFileService;
     @Autowired(required = false)
     private ProcessRouteSnapshotService processRouteSnapshotService = new ProcessRouteSnapshotService();
+    @Autowired(required = false)
+    private MesDemandCancelService mesDemandCancelService;
 
     public List<CustomerOptionDTO> listCustomerOptions(String field, String keyword) {
         if (customerMasterService != null) {
@@ -922,6 +925,16 @@ public class SalesOrderManageService {
                         message,
                         null
                 );
+            }
+
+            if (mesDemandCancelService != null) {
+                if (ACTION_DISCARD.equals(auditAction)) {
+                    // 事务提交后再调 MES：MES 失败不能回滚本地废弃。
+                    mesDemandCancelService.scheduleAfterCommit(salesOrderId, "销售订单废弃");
+                } else if (ACTION_RESTORE.equals(auditAction)) {
+                    // 恢复即这单还要做，撤销结果归零，是否重新下发由业务决定。
+                    mesDemandCancelService.reopenCancelled(salesOrderId);
+                }
             }
 
             OrderStatusChangeResult result = new OrderStatusChangeResult();

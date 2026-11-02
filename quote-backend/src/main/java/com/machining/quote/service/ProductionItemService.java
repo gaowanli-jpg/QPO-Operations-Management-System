@@ -33,6 +33,8 @@ public class ProductionItemService {
     private static final String STATUS_PENDING = "PENDING";
     private static final String STATUS_PROCESSING = "PROCESSING";
     private static final String STATUS_FAILED = "FAILED";
+    private static final String STATUS_CANCELLED = "CANCELLED";
+    private static final String STATUS_CANCEL_FAILED = "CANCEL_FAILED";
     private static final String STATUS_CALLBACK_PENDING = "CALLBACK_PENDING";
     private static final Set<String> LIST_SORT_FIELDS = Set.of("salesOrderDate", "deliveryDate", "createdAt", "discardedAt");
 
@@ -349,6 +351,9 @@ public class ProductionItemService {
             case STATUS_PENDING -> query.apply("COALESCE(NULLIF(TRIM(alloc.mes_production_status), ''), 'PENDING') = 'PENDING'");
             case STATUS_PROCESSING -> query.eq("alloc.mes_production_status", STATUS_PROCESSING);
             case STATUS_FAILED -> query.eq("alloc.mes_production_status", STATUS_FAILED);
+            // 已撤销的行被 active scope 排除，筛选时必须单独处理，否则用户永远查不到。
+            case STATUS_CANCELLED -> query.eq("alloc.mes_production_status", STATUS_CANCELLED);
+            case STATUS_CANCEL_FAILED -> query.eq("alloc.mes_production_status", STATUS_CANCEL_FAILED);
             default -> {
                 applyProductionActiveScope(query);
                 query.eq("alloc.mes_production_status", normalized);
@@ -357,7 +362,7 @@ public class ProductionItemService {
     }
 
     private void applyProductionActiveScope(QueryWrapper<LockedItemDTO> query) {
-        query.apply("COALESCE(NULLIF(TRIM(alloc.mes_production_status), ''), 'PENDING') <> 'SUCCESS'");
+        query.apply("COALESCE(NULLIF(TRIM(alloc.mes_production_status), ''), 'PENDING') NOT IN ('SUCCESS', 'CANCELLED')");
     }
 
     private void applyCustomerPresentScope(QueryWrapper<LockedItemDTO> query) {

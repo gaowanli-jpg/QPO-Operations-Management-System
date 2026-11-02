@@ -23,6 +23,7 @@ public class DataCenterProperties {
     private String u9CommonEntityQueryPath = "";
     private String mesProductionDispatchPath = "/api/v1/mes/openapi/demand/create";
     private String mesStockPickingOrderCreatePath = "/api/v1/mes/openapi/production-order/create";
+    private String mesDemandDeletePath = "/api/v1/mes/openapi/demand/delete";
 
     public boolean isEnabled() {
         return enabled;
@@ -158,5 +159,13 @@ public class DataCenterProperties {
 
     public void setMesStockPickingOrderCreatePath(String mesStockPickingOrderCreatePath) {
         this.mesStockPickingOrderCreatePath = mesStockPickingOrderCreatePath;
+    }
+
+    public String getMesDemandDeletePath() {
+        return mesDemandDeletePath;
+    }
+
+    public void setMesDemandDeletePath(String mesDemandDeletePath) {
+        this.mesDemandDeletePath = mesDemandDeletePath;
     }
 }

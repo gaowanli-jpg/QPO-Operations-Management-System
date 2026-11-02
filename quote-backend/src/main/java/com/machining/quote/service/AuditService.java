@@ -269,6 +269,7 @@ public class AuditService {
             case "SALES_ORDER_CHANGE_NOTICE_HIDE" -> "隐藏销售变更通知";
             case "SALES_ORDER_CHANGE_NOTICE_RESTORE" -> "恢复销售变更通知";
             case "SALES_ORDER_CHANGE_MODE_UPDATE" -> "修改销售变更发送模式";
+            case "SALES_ORDER_MES_DEMAND_CANCEL" -> "同步撤销MES需求任务";
             case "AUTH_LOGIN_SUCCESS" -> "登录成功";
             case "AUTH_LOGIN_FAILED" -> "登录失败";
             case "AUTH_ACCOUNT_LOCKED" -> "账号锁定";

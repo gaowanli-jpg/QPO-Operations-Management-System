@@ -1453,6 +1453,12 @@ public class MesProductionDispatchService {
         if (STATUS_RESULT_UNKNOWN.equalsIgnoreCase(status)) {
             return "MES production dispatch result is waiting for reconciliation";
         }
+        if (MesDemandCancelService.STATUS_CANCELLED.equalsIgnoreCase(status)) {
+            return "该行 MES 需求任务已撤销，恢复销售订单后才能重新下发";
+        }
+        if (MesDemandCancelService.STATUS_CANCEL_FAILED.equalsIgnoreCase(status)) {
+            return "该行 MES 需求任务未撤销成功，请先在 MES 处理或恢复订单后重试";
+        }
         if (context == null || context.error() != null || !context.allocationLinked()
                 || context.item() == null || context.header() == null) {
             return context == null || context.error() == null

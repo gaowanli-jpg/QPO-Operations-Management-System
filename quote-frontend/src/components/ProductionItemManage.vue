@@ -612,7 +612,9 @@ const mesProductionStatusOptions = [
   { value: 'PROCESSING', label: '下发中' },
   { value: 'RESULT_UNKNOWN', label: '结果待核对' },
   { value: 'SUCCESS', label: '已下发' },
-  { value: 'FAILED', label: '下发失败' }
+  { value: 'FAILED', label: '下发失败' },
+  { value: 'CANCELLED', label: '已撤销' },
+  { value: 'CANCEL_FAILED', label: '撤销失败' }
 ]
 const viewModeOptions = [
   { label: '待处理', value: 'ACTIVE' },
@@ -926,7 +928,11 @@ const handleCustomerClear = async () => {
 const filterProductionRows = (records) => (Array.isArray(records) ? records : [])
   .filter(row => row?.allocationType === 'PRODUCTION_REQUIRED')
   .filter(row => Boolean(row?.discarded) === (viewMode.value === 'DISCARDED'))
-  .filter(row => String(row?.mesProductionStatus || 'PENDING').toUpperCase() !== 'SUCCESS')
+  // 默认视图隐藏已下发/已撤销；用户主动按状态筛选时交给后端，否则筛「已撤销」会永远空列表。
+  .filter(row => {
+    if (String(filters.mesProductionStatus || '').trim()) return true
+    return !['SUCCESS', 'CANCELLED'].includes(String(row?.mesProductionStatus || 'PENDING').toUpperCase())
+  })
 
 const handleSelectionChange = (rows) => {
   selectedRows.value = rows || []
@@ -1052,6 +1058,14 @@ const productionDispatchPreview = computed(() => {
     }
     if (status === 'RESULT_UNKNOWN') {
       addBlocked('结果待核对')
+      return
+    }
+    if (status === 'CANCELLED') {
+      addBlocked('已撤销')
+      return
+    }
+    if (status === 'CANCEL_FAILED') {
+      addBlocked('撤销失败')
       return
     }
     if (!row?.materialNo) {

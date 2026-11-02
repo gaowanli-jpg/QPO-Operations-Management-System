@@ -1203,7 +1203,7 @@ const SALES_ORDER_STATUS_ACTIONS = [
     errorMessage: '废弃销售订单失败。',
     confirmTitle: '废弃销售订单',
     confirmButtonText: '确认废弃',
-    confirmMessage: (row) => `确认废弃销售订单「${row.salesOrderNo || row.id}」吗？系统只调整销售订单头和零件状态，不清空价格、数量、交期、图纸、提单快照或物料号。`
+    confirmMessage: (row) => `确认废弃销售订单「${row.salesOrderNo || row.id}」吗？系统只调整销售订单头和零件状态，不清空价格、数量、交期、图纸、提单快照或物料号；同时会同步撤销该订单已下发到 MES 的需求任务，撤销失败的行请在待产零件页筛选「撤销失败」处理。`
   },
   {
     status: '废弃',
@@ -2283,7 +2283,7 @@ const handleLinkedStatusAction = async (row) => {
         inputPlaceholder: '请输入关联废弃原因',
         successMessage: '销售订单及关联下游零件已废弃。',
         errorMessage: '整单关联废弃销售订单失败。',
-        message: `确认关联废弃销售订单「${row.salesOrderNo || row.id}」吗？系统将废弃订单全部零件，并处理仍在已提、待产、锁库工作池中的关联零件。`
+        message: `确认关联废弃销售订单「${row.salesOrderNo || row.id}」吗？系统将废弃订单全部零件，并处理仍在已提、待产、锁库工作池中的关联零件；同时会同步撤销该订单已下发到 MES 的需求任务，撤销失败的行请在待产零件页筛选「撤销失败」处理。`
       }
   let reason = ''
   try {

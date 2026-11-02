@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.core.toolkit.Constants;
 import com.machining.quote.config.JsonbTypeHandler;
 import com.machining.quote.dto.LockedItemDTO;
 import com.machining.quote.dto.SalesOrderLinkedDiscardRelation;
+import com.machining.quote.dto.mes.MesDemandCancelTarget;
 import com.machining.quote.entity.OrderDeliveryTicketAllocation;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -532,6 +533,7 @@ public interface OrderDeliveryTicketAllocationMapper extends BaseMapper<OrderDel
      * 待产零件定时自动下发的候选行。
      * 口径与 MesProductionDispatchService.skipReason / SalesOrderAllocationContextLoader 保持一致：
      * 只取 PENDING（含状态为空）、未废弃、ACTIVE、直连销售订单行（sales_order_item.allocation_id = alloc.id）、
+     * 所属销售订单未废弃（header.status &lt;&gt; '废弃'，否则废弃订单里的待产行会被反复重新下发）、
      * 销售订单行归属订单与 allocation.source_order_id 一致（source_order_id 为空时不做该限制）、
      * 销售订单行数量大于 0 且物料号非空的待产行。
      * 这里校验 sales_order_id 是为了避免把"关联到别的销售订单"的错位行选进来：
@@ -552,6 +554,7 @@ public interface OrderDeliveryTicketAllocationMapper extends BaseMapper<OrderDel
                   FROM sales_order_item item
                   JOIN sales_order_header header ON header.id = item.sales_order_id
                   WHERE item.allocation_id = alloc.id
+                    AND header.status <> '废弃'
                     AND (alloc.source_order_id IS NULL OR item.sales_order_id = alloc.source_order_id)
                     AND COALESCE(item.qty, 0) > 0
                     AND item.material_no IS NOT NULL
@@ -575,6 +578,7 @@ public interface OrderDeliveryTicketAllocationMapper extends BaseMapper<OrderDel
                   FROM sales_order_item item
                   JOIN sales_order_header header ON header.id = item.sales_order_id
                   WHERE item.allocation_id = alloc.id
+                    AND header.status <> '废弃'
                     AND (alloc.source_order_id IS NULL OR item.sales_order_id = alloc.source_order_id)
                     AND COALESCE(item.qty, 0) > 0
                     AND item.material_no IS NOT NULL
@@ -582,4 +586,91 @@ public interface OrderDeliveryTicketAllocationMapper extends BaseMapper<OrderDel
               )
             """)
     long countAutoDispatchCandidates();
+
+    /**
+     * 销售订单废弃时要撤销的 MES 需求任务：该订单全部成功下发的台账行。
+     *
+     * <p>从 mes_production_batch_item 取而不是 allocation 上的 external_id，
+     * 因为同一待产行历史上可能重复下发过，allocation 上只保留最后一次的 id，会漏删。
+     * 归属判定与 SalesOrderLinkedDiscardService.lockOrderRelations 保持一致：
+     * 新链 sales_order_item.allocation_id，旧链 allocation.source_order_id。
+     *
+     * <p>状态取 SUCCESS + CANCEL_FAILED：撤销失败的行在"废弃→恢复→再次废弃"时要再试一次，
+     * 只取 SUCCESS 会让那条 MES 任务永远没人管。已确认撤销的 CANCELLED 不再重复调 MES。
+     */
+    @Select("""
+            SELECT bi.id AS batch_item_id,
+                   bi.allocation_id,
+                   bi.mes_record_id,
+                   bi.mes_plan_no,
+                   b.biz_id,
+                   bi.sale_order_no,
+                   bi.sale_order_item_no
+            FROM mes_production_batch_item bi
+            JOIN mes_integration_batch b ON b.id = bi.batch_id
+            WHERE bi.status IN ('SUCCESS', 'CANCEL_FAILED')
+              AND COALESCE(NULLIF(TRIM(bi.mes_record_id), ''), '') <> ''
+              AND bi.allocation_id IN (
+                  SELECT alloc.id
+                  FROM order_delivery_ticket_allocation alloc
+                  WHERE alloc.allocation_type = 'PRODUCTION_REQUIRED'
+                    AND (
+                        EXISTS (
+                            SELECT 1
+                            FROM sales_order_item item
+                            WHERE item.allocation_id = alloc.id
+                              AND item.sales_order_id = #{salesOrderId}
+                        )
+                        OR (alloc.source_type = 'SALES_ORDER'
+                            AND alloc.source_order_id = #{salesOrderId})
+                    )
+              )
+            ORDER BY bi.id
+            """)
+    List<MesDemandCancelTarget> selectMesDemandCancelTargets(@Param("salesOrderId") Long salesOrderId);
+
+    /**
+     * 写回单条待产行的撤销结果。
+     *
+     * <p>不限定前置状态必须是 SUCCESS：同一待产行可能有多条历史下发记录，最后一次失败时
+     * allocation 上是 FAILED，但台账里仍有 SUCCESS 行要删。若这里只更新 SUCCESS，
+     * 会出现"MES 任务已删除、QPO 状态没改"，该行还能被重新下发，形成删了又建。
+     * 只挡住已经是 CANCELLED 的行，避免覆盖并发写入。
+     */
+    @Update("""
+            UPDATE order_delivery_ticket_allocation
+            SET mes_production_status = #{status},
+                mes_production_message = #{message},
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = #{allocationId}
+              AND COALESCE(NULLIF(TRIM(mes_production_status), ''), 'PENDING') <> 'CANCELLED'
+            """)
+    int markMesDemandCancelStatus(@Param("allocationId") Integer allocationId,
+                                  @Param("status") String status,
+                                  @Param("message") String message);
+
+    /**
+     * 订单恢复时把撤销结果改回待下发，由业务决定是否重新下发。
+     */
+    @Update("""
+            UPDATE order_delivery_ticket_allocation
+            SET mes_production_status = 'PENDING',
+                mes_production_message = NULL,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE mes_production_status IN ('CANCELLED', 'CANCEL_FAILED')
+              AND allocation_type = 'PRODUCTION_REQUIRED'
+              AND id IN (
+                  SELECT alloc.id
+                  FROM order_delivery_ticket_allocation alloc
+                  WHERE EXISTS (
+                      SELECT 1
+                      FROM sales_order_item item
+                      WHERE item.allocation_id = alloc.id
+                        AND item.sales_order_id = #{salesOrderId}
+                  )
+                  OR (alloc.source_type = 'SALES_ORDER'
+                      AND alloc.source_order_id = #{salesOrderId})
+              )
+            """)
+    int reopenMesDemandCancelled(@Param("salesOrderId") Long salesOrderId);
 }

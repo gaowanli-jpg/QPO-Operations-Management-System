@@ -20,6 +20,7 @@ import com.machining.quote.mapper.SalesOrderHeaderMapper;
 import com.machining.quote.mapper.SalesOrderItemMapper;
 import com.machining.quote.mapper.WmsReservationBatchMapper;
 import com.machining.quote.mapper.WmsReservationTicketMapper;
+import com.machining.quote.service.mes.MesDemandCancelService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -71,6 +72,8 @@ public class SalesOrderLinkedDiscardService {
     private SalesOrderLinkedChangeNoticeService linkedChangeNoticeService;
     @Autowired(required = false)
     private SalesOrderChangeNoticeService salesOrderChangeNoticeService;
+    @Autowired(required = false)
+    private MesDemandCancelService mesDemandCancelService;
 
     @Transactional
     public SalesOrderLinkedDiscardResult discard(Long salesOrderId, Long itemId, OrderStatusChangeReq req) {
@@ -343,6 +346,10 @@ public class SalesOrderLinkedDiscardService {
                 reason,
                 "销售订单及仍在工作池中的关联零件已整单废弃");
         recordBatchAudit(order, result, ACTION_BATCH_DISCARD);
+        if (mesDemandCancelService != null) {
+            // 关联废弃会跳过已成功下发的行，所以撤销范围按订单独立捞取，不依赖本次废弃的行集合。
+            mesDemandCancelService.scheduleAfterCommit(order.getId(), reason);
+        }
         return result;
     }
 
@@ -421,6 +428,9 @@ public class SalesOrderLinkedDiscardService {
                 reason,
                 "销售订单及本次关联废弃的下游零件已整单恢复");
         recordBatchAudit(order, result, ACTION_BATCH_RESTORE);
+        if (mesDemandCancelService != null) {
+            mesDemandCancelService.reopenCancelled(order.getId());
+        }
         return result;
     }
 
